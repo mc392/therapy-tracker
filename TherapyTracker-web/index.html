@@ -289,6 +289,18 @@ summary{font-weight:600;cursor:pointer}
 .pbar>i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--brand),var(--hi));width:0;
   transition:width 1.1s cubic-bezier(.2,.85,.25,1)}
 .pbar.done>i{background:var(--good)}
+
+/* ===== client retention funnel ===== */
+.funnel{display:flex;flex-direction:column;gap:13px}
+.funnel .ftop{display:flex;justify-content:space-between;gap:8px;font-size:13px;margin-bottom:5px;color:var(--muted)}
+.funnel .ftop b{color:var(--brand-dark)}
+.funnel .fbar{height:24px;border-radius:9px;background:var(--soft);overflow:hidden}
+.funnel .fbar>i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,var(--brand),var(--hi));transition:width 1.05s cubic-bezier(.2,.85,.25,1)}
+
+/* ===== grouped client chips (supervision clients-discussed) ===== */
+.cgrp{margin-top:9px}
+.cglab{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;margin-bottom:5px}
+.cgchips{display:flex;flex-wrap:wrap;gap:8px}
 </style>
 <link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon-180.png"></head>
 <body>
@@ -591,6 +603,8 @@ function gameShow(m,f){ f=f||{}; const g=ensureGame(); const st=computeStreak();
   else if(st.status==="none"&&g.seenStreak!==0){g.seenStreak=0;saveGameQuiet();}
   if(f.recCleared){celebrate({emoji:"🏆",title:"New record!",sub:"Cleared "+f.recCleared+" in one sweep — your best ever.",ribbon:"Personal best",level:"mega",sound:"record"});return;}
   if(f.recAmount){celebrate({emoji:"🏆",title:"New record!",sub:"Biggest catch-up yet — "+gbp(f.recAmount)+" collected.",ribbon:"Personal best",level:"mega",sound:"record"});return;}
+  if(m.milestone){celebrate({emoji:"💞",title:m.milestone+" sessions with "+m.milestoneClient+"!",sub:"A deep, lasting therapeutic relationship — beautiful, steady work.",ribbon:"Relationship milestone",level:"big",sound:"fanfare"});
+    if(streakUp)setTimeout(()=>toast("🔥 "+st.count+"-week streak!"),600);return;}
   if(m.allClear){celebrate({emoji:m.allClearEmoji||"✨",title:m.allClearTitle||"All caught up!",sub:m.allClearSub||"",level:"big",sound:"fanfare"});
     if(streakUp)setTimeout(()=>toast("🔥 "+st.count+"-week streak!"),500);return;}
   if(m.bigEffort){celebrate({emoji:"💪",title:"Great effort!",sub:m.bigEffortSub||((m.batch||"")+" updated at once"),level:"big",sound:"fanfare"});return;}
@@ -602,6 +616,34 @@ function gameShow(m,f){ f=f||{}; const g=ensureGame(); const st=computeStreak();
 (function(){const b=$("#soundBtn");if(b){const upd=()=>{b.textContent=Sfx.on?"🔊":"🔇";b.classList.toggle("muted",!Sfx.on);};upd();
   b.onclick=()=>{const nowOn=Sfx.toggle();upd();if(nowOn){Sfx.prime();Sfx.pop();toast("Sound on");}else toast("Sound muted");};}
   window.addEventListener("pointerdown",function pr(){Sfx.prime();},{once:true});})();
+
+/* ============ Longevity / funnel / sparkline helpers ============ */
+function clientSessionCounts(){const m={};S.sessions.forEach(s=>{const k=(s.client||"").toLowerCase();if(k)m[k]=(m[k]||0)+1;});return m;}
+function clientAddedDate(c){if(c.created)return c.created;
+  const rs=(S.rateHistory||[]).filter(r=>(r.client||"").toLowerCase()===(c.code||"").toLowerCase()).map(r=>r.effectiveFrom).filter(Boolean).sort();
+  if(rs.length)return rs[0];
+  const ss=S.sessions.filter(s=>(s.client||"").toLowerCase()===(c.code||"").toLowerCase()).map(s=>s.date).filter(Boolean).sort();
+  return ss.length?ss[0]:null;}
+function sparkline(vals,opt){opt=opt||{};const w=opt.w||300,h=opt.h||46,pad=3,n=vals.length;
+  if(!n)return '<p class="muted small">Not enough data yet.</p>';
+  const max=Math.max(1,...vals),min=Math.min(0,...vals),rng=(max-min)||1;
+  const xs=i=>pad+(n<=1?(w-2*pad)/2:i*(w-2*pad)/(n-1));
+  const ys=val=>h-pad-(val-min)/rng*(h-2*pad);
+  const pts=vals.map((v,i)=>[xs(i),ys(v)]);
+  const line=pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+  const area="M"+pts[0][0].toFixed(1)+" "+(h-pad)+" "+pts.map(p=>"L"+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ")+" L"+pts[n-1][0].toFixed(1)+" "+(h-pad)+" Z";
+  return '<svg viewBox="0 0 '+w+' '+h+'" width="100%" height="'+h+'" preserveAspectRatio="none" style="display:block;margin-top:4px">'+
+    '<path d="'+area+'" fill="color-mix(in srgb,var(--brand) 14%,transparent)"></path>'+
+    '<path d="'+line+'" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"></path></svg>';}
+function celebrateNewClient(c){
+  const prior=S.clients.filter(x=>x._id!==c._id).map(clientAddedDate).filter(Boolean).sort();
+  const lastAdd=prior.length?prior[prior.length-1]:null;
+  const gap=lastAdd?Math.floor((today()-parseD(lastAdd))/86400000):null;
+  const total=S.clients.length;
+  if(total===1)celebrate({emoji:"🌱",title:"Your very first client!",sub:c.code+" is the start of your practice — exciting times ahead.",ribbon:"Day one",level:"mega",sound:"record"});
+  else if(gap!=null&&gap>=30)celebrate({emoji:"🌟",title:"A wonderful new beginning!",sub:"Welcome "+c.code+" — your first new client in "+gap+" days. Lovely to be growing again.",ribbon:"Fresh start",level:"mega",sound:"record"});
+  else celebrate({emoji:"🌱",title:"New client welcomed!",sub:c.code+" joins your practice — that's "+total+" clients in your care. Beautiful work.",level:"big",sound:"fanfare"});
+}
 
 /* ============ Router ============ */
 const TABS=[
@@ -652,20 +694,32 @@ VIEWS.home=function(){
     ringSVG(goals.compPct,goals.incomplete>0?(goals.incomplete+" session"+(goals.incomplete===1?"":"s")+" to complete"):"Notes & room all done ✓")+
     '</div>'+((goals.over>0||goals.incomplete>0)?'<p class="small muted center" style="margin:10px 0 0">'+(goals.over>0?'<span class="taxlink" id="goPay">Collect payments ›</span>':"")+(goals.over>0&&goals.incomplete>0?' &nbsp;·&nbsp; ':"")+(goals.incomplete>0?'<span class="taxlink" id="goInc">Complete sessions ›</span>':"")+'</p>':"")+'</div>';
   const mk=(emoji,val,lab,locked)=>'<div class="bdg'+(locked?" locked":"")+'"><span class="be">'+emoji+'</span><div><div class="bv">'+val+'</div><div class="bl">'+lab+'</div></div></div>';
+  const cCounts=clientSessionCounts();
+  const maxRel=Math.max(0,...S.clients.map(c=>cCounts[c.code.toLowerCase()]||0));
+  const inCare=S.clients.filter(c=>clientCategory(c.status)==="Active").length;
   const recCard='<div class="card"><h2>Records</h2><div class="badgegrid">'+
     mk("🔥",(rec.longestStreak||0)+(rec.longestStreak===1?" wk":" wks"),"Longest streak",!rec.longestStreak)+
+    mk("💞",maxRel?(maxRel+" sess"):"0","Deepest relationship",!maxRel)+
+    mk("🌱",inCare,"Clients in care",!inCare)+
     mk("⚡",(rec.mostClearedAtOnce||0),"Most cleared at once",!rec.mostClearedAtOnce)+
     mk("💷",gbp(rec.biggestCatchup||0),"Biggest catch-up",!rec.biggestCatchup)+
     mk("✅",goals.complete,"Sessions completed",!goals.complete)+
     '</div></div>';
+  const topClients=S.clients.map(c=>({code:c.code,_id:c._id,n:cCounts[c.code.toLowerCase()]||0,status:c.status})).filter(x=>x.n>=6).sort((a,b)=>b.n-a.n).slice(0,5);
+  const loyalCard=topClients.length?'<div class="card"><h2>Longstanding relationships 💞</h2><p class="small muted" style="margin:0 0 4px">Clients you’ve walked a long way with — lovely, steady work.</p>'+topClients.map((x,i)=>{const medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":"💞";return '<div class="list-item" data-cid="'+x._id+'"><div class="li-main"><div class="li-title">'+medal+' '+esc(x.code)+'</div><div class="li-sub">'+esc(x.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>';}).join("")+'</div>':'';
+  const monthSeries=periodSeries("month");
+  const sparkVals=monthSeries.map(d=>d.revenue);
+  const lastM=monthSeries[monthSeries.length-1];
+  const sparkCard=S.sessions.length?'<div class="card"><div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Revenue trend</h2><span class="small muted">'+(lastM?esc(lastM.l):"")+'</span></div>'+sparkline(sparkVals)+'<div class="row small muted" style="justify-content:space-between;margin-top:4px"><span>'+(monthSeries[0]?esc(monthSeries[0].l):"")+'</span><span><b style="color:var(--brand-dark)">'+gbp(lastM?lastM.revenue:0)+'</b> this month</span></div></div>':'';
   v.innerHTML=(S.sessions.length?"":'<div class="hint" style="font-size:14px">👋 Welcome! No data yet. Tap <b>Backup</b> below → <b>Restore from backup</b>, and choose your <b>therapy-tracker-data.json</b> file to load everything.</div>')+
    streakCard+`
    <div class="kpis mb">
      <div class="kpi"><div class="v" data-to="${billed}" data-fmt="m">${gbp(billed)}</div><div class="l">Billed this tax year</div></div>
      <div class="kpi good"><div class="v" data-to="${received}" data-fmt="m">${gbp(received)}</div><div class="l">Received</div></div>
      <div class="kpi clk ${outstanding?'bad':''}" id="kOut"><div class="v" data-to="${outstanding}" data-fmt="m">${gbp(outstanding)}</div><div class="l">Outstanding now ›</div></div>
-     <div class="kpi"><div class="v" data-to="${next7.length}">${next7.length}</div><div class="l">Sessions next 7 days</div></div>
+     <div class="kpi clk" id="kNext7"><div class="v" data-to="${next7.length}">${next7.length}</div><div class="l">Sessions next 7 days ›</div></div>
    </div>`+
+   sparkCard+
    goalsCard+`
    <div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Quick add</h2></div>
      <div class="row mt" style="flex-wrap:wrap;gap:8px">
@@ -674,7 +728,7 @@ VIEWS.home=function(){
        <button class="btn sec" id="qSup">＋ Supervision</button>
      </div></div>
    <div class="card"><h2>Coming up</h2><div id="up"></div></div>`+
-   recCard;
+   loyalCard+recCard;
   const up=v.querySelector("#up");
   if(!upcoming.length)up.innerHTML='<p class="muted small">No future sessions logged.</p>';
   else up.innerHTML=upcoming.slice(0,12).map(x=>{const d=x.d;
@@ -685,6 +739,8 @@ VIEWS.home=function(){
       <div class="li-right">${gbp(d.rate)}</div></div>`}).join("");
   up.querySelectorAll(".list-item").forEach(li=>li.onclick=()=>sessionForm(S.sessions.find(s=>s._id===li.dataset.id)));
   const kb=v.querySelector("#kOut");if(kb)kb.onclick=()=>{sessFilter.view="list";sessFilter.seg="unpaid";go("sessions");};
+  const kn=v.querySelector("#kNext7");if(kn)kn.onclick=()=>{sessFilter.view="list";sessFilter.seg="upcoming";go("sessions");};
+  v.querySelectorAll(".list-item[data-cid]").forEach(li=>li.onclick=()=>clientForm(S.clients.find(c=>c._id===li.dataset.cid)));
   v.querySelector("#qNew").onclick=()=>sessionForm(null);
   v.querySelector("#qRepeat").onclick=()=>repeatPicker();
   v.querySelector("#qSup").onclick=()=>supervisionForm(null);
@@ -993,7 +1049,7 @@ VIEWS.sessions=function(){
 let cliTab="clients";
 VIEWS.clients=function(){
   const v=el('<div class="view active"></div>');
-  v.innerHTML='<div class="seg mb" id="crtab" style="display:inline-flex"><button data-t="clients" class="'+(cliTab==="clients"?"on":"")+'">Clients</button><button data-t="rooms" class="'+(cliTab==="rooms"?"on":"")+'">Rooms</button></div><div id="crbody"></div>';
+  v.innerHTML='<div class="seg mb" id="crtab" style="display:inline-flex"><button data-t="clients" class="'+(cliTab==="clients"?"on":"")+'">Clients</button><button data-t="funnel" class="'+(cliTab==="funnel"?"on":"")+'">Funnel</button><button data-t="rooms" class="'+(cliTab==="rooms"?"on":"")+'">Rooms</button></div><div id="crbody"></div>';
   const body=v.querySelector("#crbody");
   function renderClients(){
     body.innerHTML='<div class="toolbar"><button class="btn sm" id="addC">＋ New client</button></div><div class="search"><input id="cq" placeholder="Search clients…"></div><div id="clist"></div>';
@@ -1020,7 +1076,27 @@ VIEWS.clients=function(){
     };
     body.querySelector("#addR").onclick=()=>roomForm(null); r();
   }
-  const route=()=>cliTab==="rooms"?renderRooms():renderClients();
+  function renderFunnel(){
+    const counts=clientSessionCounts();
+    const withSess=S.clients.map(c=>({c,n:counts[c.code.toLowerCase()]||0}));
+    const base=withSess.filter(x=>x.n>=1).length;
+    const max=Math.max(1,base);
+    const tiers=[{t:1,l:"In therapy",d:"1+ sessions",e:"🌱"},{t:6,l:"Building",d:"6+ sessions",e:"🌿"},{t:12,l:"Established",d:"12+ sessions",e:"🌳"},{t:20,l:"Deep work",d:"20+ sessions",e:"💞"}];
+    const rows=tiers.map(tr=>{const n=withSess.filter(x=>x.n>=tr.t).length;const pct=base?Math.round(n/base*100):0;const w=Math.round(n/max*100);
+      return '<div class="fr"><div class="ftop"><span>'+tr.e+' <b>'+tr.l+'</b> · '+tr.d+'</span><span>'+n+' '+(n===1?'client':'clients')+(tr.t>1&&base?' · '+pct+'%':'')+'</span></div><div class="fbar"><i data-w="'+w+'" style="width:0"></i></div></div>';}).join("");
+    const deep=withSess.filter(x=>x.n>=20).sort((a,b)=>b.n-a.n);
+    const totalSessions=withSess.reduce((a,x)=>a+x.n,0);
+    const avg=base?Math.round(totalSessions/base*10)/10:0;
+    body.innerHTML='<div class="card"><h2>Client retention funnel</h2><p class="small muted" style="margin:0 0 10px">How your therapeutic relationships deepen over time — every stage is something to be proud of.</p><div class="funnel">'+rows+'</div></div>'+
+      '<div class="kpis mb">'+
+        '<div class="kpi"><div class="v">'+base+'</div><div class="l">Clients seen</div></div>'+
+        '<div class="kpi"><div class="v">'+avg+'</div><div class="l">Avg sessions / client</div></div>'+
+      '</div>'+
+      (deep.length?'<div class="card"><h2>Deep work 💞</h2><p class="small muted" style="margin:0 0 6px">Clients you’ve walked alongside for 20+ sessions.</p>'+deep.map(x=>'<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+'</div><div class="li-sub">'+esc(x.c.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>').join("")+'</div>':'');
+    body.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>clientForm(S.clients.find(c=>c._id===li.dataset.id)));
+    requestAnimationFrame(()=>body.querySelectorAll(".funnel .fbar>i").forEach(i=>{i.style.width=(+i.dataset.w)+"%";}));
+  }
+  const route=()=>cliTab==="rooms"?renderRooms():cliTab==="funnel"?renderFunnel():renderClients();
   v.querySelector("#crtab").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{cliTab=bt.dataset.t;
     v.querySelector("#crtab").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));route();});
   route();return v;
@@ -1402,8 +1478,11 @@ function sessionForm(s){
       if(exists){Object.assign(exists,m);await commit("Edited session: "+m.client+" "+m.date);}
       else{S.sessions.push(m);await commit("Added session: "+m.client+" "+m.date);}
       const dNow=derive(m);const justCompleted=dNow.past&&dNow.complete&&!prevComplete;
+      let milestone=null;
+      if(!exists){const cnt=S.sessions.filter(x=>(x.client||"").toLowerCase()===(m.client||"").toLowerCase()).length;
+        milestone=[6,12,20,30,50,75,100].find(T=>cnt-1<T&&cnt>=T)||null;}
       closeSheet();
-      gameShow({batch:1,completed:justCompleted,toast:justCompleted?"Session complete ✓":(exists?"Saved":"Session logged ✨")},{});
+      gameShow({batch:1,completed:justCompleted,milestone:milestone,milestoneClient:m.client,toast:justCompleted?"Session complete ✓":(exists?"Saved":"Session logged ✨")},{});
       go(cur);};
     if(!isNew)g("#del").onclick=async()=>{if(!confirm("Delete this session?"))return;
       S.sessions=S.sessions.filter(x=>x._id!==m._id);await commit("Deleted session: "+m.client+" "+m.date);closeSheet();toast("Deleted");go(cur);};
@@ -1426,7 +1505,7 @@ function repeatPicker(){
 
 /* ============ Client form + rate change ============ */
 function clientForm(c){
-  const isNew=!c; const m=c?clone(c):{_id:uid(),code:"",status:"Ongoing",frequency:"Weekly",insurance:"N",notes:""};
+  const isNew=!c; const m=c?clone(c):{_id:uid(),code:"",status:"Ongoing",frequency:"Weekly",insurance:"N",notes:"",created:isoD(today())};
   const statuses=[...new Set(S.clientCategories.map(x=>x.status).concat(["Ongoing","Paused","Finished"]))];
   const body=el('<div></div>');
   const rateNow=isNew?"":effRate(m.code,isoD(today()));
@@ -1457,6 +1536,7 @@ function clientForm(c){
       m.rate=rate;S.clients.push(m);
       S.rateHistory.push({_id:uid(),client:m.code,effectiveFrom:isoD(today()),rate:rate});
       await commit("Added client: "+m.code+" @ "+gbp(rate));
+      closeSheet();go(cur);celebrateNewClient(m);return;
     }else{const ex=S.clients.find(x=>x._id===m._id);Object.assign(ex,m);await commit("Edited client: "+m.code);}
     closeSheet();toast("Saved");go(cur);
   };
@@ -1484,15 +1564,17 @@ function supervisionForm(s){
   const body=el('<div></div>');
   const allCodes=clientList();
   const sel=new Set(m.clients||[]);
-  const chips=allCodes.length
-    ? allCodes.map(code=>'<button type="button" class="tgl'+(sel.has(code)?" on":"")+'" data-code="'+esc(code)+'"><span class="tbox"></span>'+esc(code)+'</button>').join("")
+  const groups=statusGroups();
+  const chip=code=>'<button type="button" class="tgl'+(sel.has(code)?" on":"")+'" data-code="'+esc(code)+'"><span class="tbox"></span>'+esc(code)+'</button>';
+  const chips=groups.length
+    ? groups.map(([st,codes])=>'<div class="cgrp"><div class="cglab">'+esc(st)+'</div><div class="cgchips">'+codes.map(chip).join("")+'</div></div>').join("")
     : '<span class="muted small">No clients yet.</span>';
   body.innerHTML=`<div class="field2"><div><label>Date</label><input type="date" id="s_date" value="${esc(m.date)}"></div>
      <div><label>Client hrs</label><input type="number" id="s_cnt" value="${esc(m.count)}"></div></div>
     <label>Supervisor</label><input id="s_sup" value="${esc(m.supervisor||"")}">
     <label>Cost (£)</label><input type="number" id="s_cost" value="${esc(m.cost)}">
     <label>Clients discussed <span class="muted small">(tap to select)</span></label>
-    <div id="s_clients" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">${chips}</div>
+    <div id="s_clients" style="margin-top:2px">${chips}</div>
     <button class="btn full mt" id="sSave">Save</button>
     ${isNew?"":'<button class="btn danger full mt" id="sDel">Delete</button>'}`;
   body.querySelectorAll('#s_clients .tgl[data-code]').forEach(b=>b.onclick=()=>{const code=b.dataset.code;
