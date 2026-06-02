@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="theme-color" content="#5C7A6D" media="(prefers-color-scheme: light)"/>
+<meta name="theme-color" content="#1A2220" media="(prefers-color-scheme: dark)"/>
+<title>Therapy Tracker</title>
+<script>(function(){try{var t=localStorage.getItem('tt_theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
+<style>
+:root{
+  color-scheme:light;
+  --bg:#F7F9FA; --card:#FFFFFF; --soft:#EDF1EF; --ink:#1E2A26; --muted:#6E7E78; --line:#E6ECEA;
+  --brand:#5C7A6D; --brand-dark:#46594F; --accent:#9A8C9E; --accent-ink:#6E5F73;
+  --good:#4E7E63; --bad:#C25C49; --warn:#A8803F; --hi:#16A88E; --hi-ink:#0C6253;
+  --shadow:0 1px 2px rgba(38,54,48,.05),0 3px 10px rgba(38,54,48,.05);
+  --radius:16px;
+}
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#1A2220; --card:#222D2A; --soft:#2A3733; --ink:#E6EDEA; --muted:#9CADA7; --line:#31403B;
+  --brand:#6E9384; --brand-dark:#AFC8BC; --accent:#B0A2B4; --accent-ink:#C7BBCB;
+  --good:#6FAE86; --bad:#E08068; --warn:#CBA66A; --hi:#3FD6BB; --hi-ink:#A6F0E2;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{font-family:"SF Pro Rounded",ui-rounded,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  background:var(--bg);color:var(--ink);font-size:16px;line-height:1.45;
+  padding-bottom:env(safe-area-inset-bottom);transition:background .25s,color .25s}
+h1,h2,h3{margin:0 0 .4em}
+a{color:var(--brand)}
+.app{max-width:780px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+header.top{position:sticky;top:0;z-index:30;background:var(--brand);color:#fff;
+  padding:calc(env(safe-area-inset-top) + 14px) 18px 14px;display:flex;align-items:center;gap:10px}
+header.top h1{font-size:18px;margin:0;font-weight:700;flex:1;letter-spacing:.01em}
+header.top .ty{font-size:12px;opacity:.95;background:rgba(255,255,255,.16);padding:4px 10px;border-radius:20px;max-width:48vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.themebtn{background:rgba(255,255,255,.16);border:0;color:#fff;width:34px;height:34px;border-radius:11px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.themebtn:active{transform:scale(.94)}
+main{flex:1;padding:18px 16px 96px}
+.view{display:none}
+.view.active{display:block;animation:f .2s ease}
+@keyframes f{from{opacity:.3;transform:translateY(5px)}to{opacity:1;transform:none}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin:0 0 14px;box-shadow:var(--shadow)}
+.card h2{font-size:14px;color:var(--brand-dark);letter-spacing:.04em;text-transform:uppercase;font-weight:700}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:15px;box-shadow:var(--shadow)}
+.kpi .v{font-size:23px;font-weight:700;color:var(--brand-dark)}
+.kpi .l{font-size:12px;color:var(--muted);margin-top:3px}
+.kpi.good .v{color:var(--good)} .kpi.bad .v{color:var(--bad)}
+.kpi.clk{cursor:pointer} .kpi.clk:active{transform:scale(.98)}
+.row{display:flex;gap:10px;align-items:center}
+.btn{appearance:none;border:0;border-radius:13px;padding:13px 17px;font-size:15px;font-weight:600;
+  background:var(--brand);color:#fff;cursor:pointer;display:inline-flex;align-items:center;gap:8px;justify-content:center;transition:filter .15s,transform .1s}
+.btn:hover{filter:brightness(1.05)} .btn:active{transform:scale(.98)}
+.btn.sec{background:var(--soft);color:var(--brand-dark);border:1px solid var(--line)}
+.btn.ghost{background:transparent;color:var(--brand);border:1px solid var(--line)}
+.btn.danger{background:var(--bad)}
+.btn.sm{padding:9px 12px;font-size:13px;border-radius:11px}
+.btn.full{width:100%}
+.fab{position:fixed;right:18px;bottom:calc(82px + env(safe-area-inset-bottom));z-index:40;
+  width:60px;height:60px;border-radius:50%;color:#fff;border:0;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;line-height:0;
+  box-shadow:0 8px 20px rgba(92,122,109,.45);background:var(--brand)}
+.fab svg{width:26px;height:26px;display:block;fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round}
+.fab:active{transform:scale(.95)}
+label{display:block;font-size:13px;color:var(--muted);margin:12px 0 5px;font-weight:600}
+input,select,textarea{width:100%;padding:12px 13px;font-size:16px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);font-family:inherit}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 22%,transparent)}
+.field2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.chip{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600}
+.chip.y{background:color-mix(in srgb,var(--good) 22%,transparent);color:var(--good)}
+.chip.n{background:color-mix(in srgb,var(--bad) 22%,transparent);color:var(--bad)}
+.chip.na{background:color-mix(in srgb,var(--muted) 18%,transparent);color:var(--muted)}
+.chip.f{background:color-mix(in srgb,var(--accent) 30%,transparent);color:var(--accent-ink)}
+.chip.s{background:color-mix(in srgb,var(--brand) 16%,transparent);color:var(--brand-dark)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:9px 6px;border-bottom:1px solid var(--line)}
+th{font-size:11px;text-transform:uppercase;color:var(--muted);letter-spacing:.03em}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.list-item{display:flex;gap:10px;align-items:center;padding:13px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+.list-item:last-child{border-bottom:0}
+.list-item:active{background:var(--soft)}
+.li-main{flex:1;min-width:0}
+.li-title{font-weight:600;font-size:15px}
+.li-sub{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li-right{text-align:right;font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)} .small{font-size:12.5px} .mt{margin-top:12px} .mb{margin-bottom:12px}
+.center{text-align:center}
+.search{position:relative;margin-bottom:12px}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.seg{display:flex;background:var(--soft);border-radius:12px;padding:4px;gap:3px;overflow:auto}
+.seg button{border:0;background:transparent;padding:8px 13px;border-radius:9px;font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap;cursor:pointer}
+.seg button.on{background:var(--card);color:var(--brand-dark);box-shadow:var(--shadow)}
+nav.tabs{position:fixed;bottom:0;left:0;right:0;z-index:35;
+  background:color-mix(in srgb,var(--card) 70%,transparent);
+  -webkit-backdrop-filter:blur(22px) saturate(1.7);backdrop-filter:blur(22px) saturate(1.7);
+  border-top:1px solid color-mix(in srgb,var(--line) 55%,transparent);
+  display:flex;justify-content:space-around;gap:4px;padding:8px 8px calc(8px + env(safe-area-inset-bottom));max-width:780px;margin:0 auto}
+nav.tabs button{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:4px;
+  flex:1;color:var(--muted);padding:7px 2px 6px;cursor:pointer;font-weight:600;border-radius:16px;transition:color .2s,background .2s}
+nav.tabs button>span:last-child{font-size:10px;line-height:1.1;text-align:center}
+nav.tabs button .ic{width:24px;height:24px;display:flex;align-items:center;justify-content:center}
+nav.tabs button .ic svg{width:23px;height:23px;display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+nav.tabs button.on{color:var(--brand);
+  background:color-mix(in srgb,var(--brand) 15%,transparent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--brand) 26%,transparent),inset 0 1px 0 color-mix(in srgb,#ffffff 55%,transparent),0 1px 2px rgba(0,0,0,.05)}
+.sheet{position:fixed;inset:0;z-index:50;background:rgba(15,22,20,.5);display:none;align-items:flex-end;justify-content:center}
+.sheet.open{display:flex}
+.sheet-inner{background:var(--bg);width:100%;max-width:780px;max-height:94vh;overflow:auto;border-radius:22px 22px 0 0;
+  padding:8px 18px calc(22px + env(safe-area-inset-bottom));animation:up .24s ease}
+@keyframes up{from{transform:translateY(40px);opacity:.6}to{transform:none;opacity:1}}
+.sheet-head{position:sticky;top:0;background:var(--bg);display:flex;align-items:center;gap:10px;padding:12px 0;z-index:2}
+.sheet-head h2{flex:1;margin:0;font-size:17px;text-transform:none;color:var(--ink)}
+.sheet-inner h3{font-size:14px;margin:0 0 4px;color:var(--brand-dark)}
+.taxlink{color:var(--brand);font-weight:700;cursor:pointer;border-bottom:1px dashed var(--brand)}
+.x{font-size:22px;color:var(--muted);background:none;border:0;cursor:pointer;padding:4px 8px}
+.suggest{font-size:11px;color:var(--accent-ink);font-weight:700;margin-left:6px}
+.hint{background:color-mix(in srgb,var(--brand) 9%,var(--card));border:1px solid color-mix(in srgb,var(--brand) 22%,var(--card));border-radius:12px;padding:10px 12px;font-size:13px;color:var(--brand-dark);margin:10px 0}
+.prev{font-size:11px;color:var(--muted);margin-top:3px}
+.svgwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:6px -4px 0}
+.svgwrap svg{display:block}
+.calnav{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.calnav b{font-size:16px;color:var(--brand-dark)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.cal .dow{font-size:10px;color:var(--muted);text-align:center;font-weight:700;padding:2px 0}
+.cal .cell{min-height:56px;border:1px solid var(--line);border-radius:11px;padding:4px 5px;font-size:11px;background:var(--card);position:relative;cursor:pointer;color:var(--muted)}
+.cal .cell.empty{background:transparent;border:0;cursor:default}
+.cal .cell.today{border-color:var(--hi);box-shadow:0 0 0 1.5px var(--hi)}
+.cal .cell:active{background:var(--soft)}
+.cal .cnt{position:absolute;top:3px;right:4px;font-size:9px;font-weight:700;color:#fff;background:var(--brand);border-radius:8px;padding:0 5px;line-height:15px}
+.cal .cnt.due{background:var(--bad)}
+.cal .cc{display:block;margin-top:16px;font-size:9px;color:var(--brand-dark);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:600}
+.payrow{display:flex;align-items:center;gap:11px;padding:10px 4px;border-bottom:1px solid var(--line)}
+.payrow input[type=checkbox]{width:23px;height:23px;flex:none;accent-color:var(--brand)}
+.payrow input[type=date]{width:135px;padding:8px;font-size:13px;flex:none}
+.payrow .li-main{flex:1;min-width:0;cursor:pointer}
+.paybar{position:sticky;top:0;background:var(--bg);z-index:2;padding:8px 0}
+.legend{display:flex;flex-wrap:wrap;gap:13px;margin:10px 0 2px;font-size:12px;color:var(--muted)}
+.legend .lgi{display:inline-flex;align-items:center;gap:5px}
+.legend .lgi i{width:11px;height:11px;border-radius:3px;display:inline-block}
+.legend .lgi i.line{width:18px;height:0;border-top:3px solid var(--hi);border-radius:0}
+.legend .lgi i.dash{width:18px;height:0;border-top:2px dashed var(--muted);border-radius:0}
+.grphead{background:var(--soft);color:var(--brand-dark);font-weight:700;font-size:12px;padding:8px 10px;border-radius:8px;margin:12px 0 2px}
+.rawscroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+#rtable{font-size:12px;white-space:nowrap;min-width:100%}
+#rtable th{cursor:pointer;position:sticky;top:0;background:var(--card);user-select:none}
+#rtable td,#rtable th{padding:7px 9px}
+.colchk{display:inline-flex;align-items:center;gap:5px;font-size:13px;margin:4px 12px 4px 0;color:var(--ink);font-weight:500}
+optgroup{font-size:12px;color:var(--muted)} optgroup option{font-size:16px;color:var(--ink)}
+.toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--brand);color:#fff;
+  padding:11px 18px;border-radius:24px;font-size:14px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.3)}
+.toast.show{opacity:1}
+.badge{display:inline-flex;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;font-weight:700;align-items:center;justify-content:center}
+details{border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:10px;background:var(--card)}
+summary{font-weight:600;cursor:pointer}
+.audit-row{font-size:12.5px;padding:7px 2px;border-bottom:1px solid var(--line);color:var(--muted)}
+.audit-row b{color:var(--ink)}
+@media(min-width:560px){.kpis{grid-template-columns:repeat(4,1fr)}}
+@media(min-width:900px){
+  body{padding-left:236px}
+  nav.tabs{flex-direction:column;justify-content:flex-start;align-items:stretch;top:0;bottom:0;left:0;right:auto;
+    width:236px;max-width:236px;margin:0;background:var(--brand);border-top:0;border-right:1px solid var(--line);
+    padding:calc(env(safe-area-inset-top) + 20px) 12px 20px;gap:5px}
+  nav.tabs::before{content:"⬡ Therapy Tracker";display:block;color:#fff;font-weight:700;font-size:16px;padding:6px 14px 16px;opacity:.96}
+  nav.tabs button{flex-direction:row;justify-content:flex-start;gap:12px;width:100%;color:rgba(255,255,255,.82);
+    padding:12px 14px;border-radius:12px;font-size:14.5px}
+  nav.tabs button .ic{width:22px;height:22px}
+  nav.tabs button .ic svg{width:21px;height:21px}
+  nav.tabs button>span:last-child{font-size:14.5px;text-align:left;flex:1}
+  nav.tabs button.on{background:rgba(255,255,255,.18);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.16)}
+  .app{max-width:920px;margin:0 auto}
+  header.top{background:var(--card);color:var(--ink);border-bottom:1px solid var(--line)}
+  header.top .ty{background:var(--soft);color:var(--muted)}
+  header.top .themebtn{background:var(--soft);color:var(--ink)}
+  main{padding:22px 26px 60px}
+  .fab{bottom:26px;right:26px}
+  .sheet{align-items:center}
+  .sheet-inner{border-radius:18px;max-width:640px;max-height:88vh}
+}
+
+/* ====================== Gamification & celebration FX ====================== */
+#confetti{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:80;display:none}
+#confetti.on{display:block}
+.celebr{position:fixed;inset:0;z-index:85;display:none;align-items:center;justify-content:center;pointer-events:none;padding:24px}
+.celebr.show{display:flex}
+.celebr .cb{background:var(--card);border:1px solid var(--line);border-radius:26px;padding:26px 30px;text-align:center;
+  box-shadow:0 24px 70px rgba(0,0,0,.4),0 0 0 1px color-mix(in srgb,var(--brand) 20%,transparent);max-width:340px;
+  transform:scale(.6);opacity:0;animation:pop-in .55s cubic-bezier(.18,1.4,.5,1) forwards;position:relative;overflow:hidden}
+.celebr .cb::after{content:"";position:absolute;inset:-40%;background:conic-gradient(from 0deg,transparent 0 80%,color-mix(in srgb,var(--brand) 35%,transparent) 88%,transparent 96%);
+  animation:sweep 2.4s linear infinite;opacity:.5;pointer-events:none}
+.celebr .cb>*{position:relative;z-index:1}
+.celebr .cemoji{font-size:62px;line-height:1;display:block;margin-bottom:6px;animation:bounce-emoji 1s ease 1}
+.celebr .ctitle{font-size:21px;font-weight:800;color:var(--brand-dark);margin:6px 0 2px;letter-spacing:.01em}
+.celebr .csub{font-size:14px;color:var(--muted);line-height:1.4}
+.celebr .cribbon{display:inline-block;margin-top:10px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  color:#fff;background:var(--hi);padding:5px 12px;border-radius:20px}
+@keyframes pop-in{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.06)}100%{transform:scale(1);opacity:1}}
+@keyframes bounce-emoji{0%{transform:translateY(0) scale(.6)}30%{transform:translateY(-16px) scale(1.18)}55%{transform:translateY(0) scale(1)}72%{transform:translateY(-7px)}100%{transform:translateY(0)}}
+@keyframes sweep{to{transform:rotate(360deg)}}
+
+/* floating +reward pill */
+.floatpill{position:fixed;z-index:84;pointer-events:none;font-weight:800;font-size:16px;color:#fff;background:var(--hi);
+  padding:6px 13px;border-radius:20px;box-shadow:0 6px 18px rgba(0,0,0,.3);animation:floatup 1.3s ease-out forwards}
+@keyframes floatup{0%{transform:translateY(0) scale(.7);opacity:0}15%{transform:translateY(-6px) scale(1.05);opacity:1}100%{transform:translateY(-70px) scale(1);opacity:0}}
+
+/* streak flame */
+.streakcard{display:flex;align-items:center;gap:16px}
+.flame{position:relative;width:50px;height:60px;flex:none}
+.flame i{position:absolute;bottom:2px;left:50%;border-radius:0 50% 50% 50%;transform-origin:center bottom}
+.flame .o{width:34px;height:42px;margin-left:-17px;background:linear-gradient(45deg,#ff3d3d,#ff8a1e 55%,#ffd23f);
+  transform:rotate(45deg);animation:flick 1.5s ease-in-out infinite;filter:drop-shadow(0 -2px 9px rgba(255,120,24,.6))}
+.flame .i{width:18px;height:24px;margin-left:-9px;bottom:7px;background:linear-gradient(45deg,#ffcf2e,#fff3b0);
+  transform:rotate(45deg);animation:flick 1.05s ease-in-out infinite reverse}
+.flame.cold .o{background:linear-gradient(45deg,#9aaaa4,#c2ccc8);filter:none;animation-duration:3s;opacity:.8}
+.flame.cold .i{background:linear-gradient(45deg,#b7c2bd,#e3e9e6);animation-duration:3s}
+.flame.risk .o{filter:drop-shadow(0 -2px 9px rgba(255,170,40,.7))}
+@keyframes flick{0%,100%{transform:rotate(45deg) scale(1)}25%{transform:rotate(43deg) scaleY(1.09) scaleX(.96)}50%{transform:rotate(47deg) scaleY(1.04) scaleX(.98)}75%{transform:rotate(44deg) scaleY(1.07) scaleX(.97)}}
+.streakwrap{flex:1;min-width:0}
+.streaknum{font-size:34px;font-weight:800;color:var(--brand-dark);line-height:1}
+.streaknum small{font-size:15px;font-weight:700;color:var(--muted)}
+.streakmsg{font-size:13px;color:var(--muted);margin-top:3px}
+.streakcard.bump .flame{animation:bump .6s ease}
+@keyframes bump{0%{transform:scale(1)}40%{transform:scale(1.22)}100%{transform:scale(1)}}
+
+/* goal progress rings */
+.rings{display:flex;gap:10px;flex-wrap:wrap;justify-content:space-around;margin-top:4px}
+.ring{position:relative;width:104px;text-align:center}
+.ring svg{display:block;margin:0 auto;transform:rotate(-90deg)}
+.ring .rbg{stroke:var(--soft)}
+.ring .rfg{stroke:var(--brand);transition:stroke-dashoffset 1.1s cubic-bezier(.2,.85,.25,1);stroke-linecap:round}
+.ring.done .rfg{stroke:var(--good)}
+.ring .rpct{position:absolute;top:31px;left:0;right:0;font-size:21px;font-weight:800;color:var(--brand-dark);font-variant-numeric:tabular-nums}
+.ring.done .rpct{color:var(--good)}
+.ring .rpct .chk{font-size:24px}
+.ring .rlab{font-size:11.5px;color:var(--muted);margin-top:7px;line-height:1.25}
+.ring.done svg{animation:ringpop .7s cubic-bezier(.18,1.4,.5,1)}
+@keyframes ringpop{0%{transform:rotate(-90deg) scale(1)}45%{transform:rotate(-90deg) scale(1.12)}100%{transform:rotate(-90deg) scale(1)}}
+
+/* badges / records */
+.badgegrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px}
+.bdg{display:flex;align-items:center;gap:10px;background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:11px 12px}
+.bdg .be{font-size:24px;flex:none}
+.bdg .bv{font-size:17px;font-weight:800;color:var(--brand-dark);line-height:1}
+.bdg .bl{font-size:11px;color:var(--muted);margin-top:2px}
+.bdg.locked{opacity:.55}
+.bdg.fresh{animation:freshpop .8s cubic-bezier(.18,1.4,.5,1);border-color:color-mix(in srgb,var(--hi) 55%,transparent)}
+@keyframes freshpop{0%{transform:scale(.85);box-shadow:0 0 0 0 color-mix(in srgb,var(--hi) 50%,transparent)}50%{transform:scale(1.04)}100%{transform:scale(1);box-shadow:0 0 0 0 transparent}}
+
+/* count-up pulse */
+.countup.tick{animation:ctick .25s ease}
+@keyframes ctick{0%{transform:scale(1)}50%{transform:scale(1.08)}100%{transform:scale(1)}}
+
+/* bulk "catch-up" rows (Incomplete tab) */
+.irow{display:flex;flex-direction:column;gap:9px;padding:12px 6px;border-bottom:1px solid var(--line);border-radius:10px;transition:opacity .3s}
+.irow:last-child{border-bottom:0}
+.irow .itop{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.irow .ittl{font-weight:600;font-size:15px}
+.irow .isub{font-size:12.5px;color:var(--muted)}
+.irow .ctrls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.irow .pdate2{width:140px;padding:8px;font-size:13px;flex:none}
+.irow.flash{animation:rowflash 1.1s ease}
+@keyframes rowflash{0%{background:color-mix(in srgb,var(--good) 32%,transparent)}100%{background:transparent}}
+.irow.cleared{opacity:.45}
+.tgl{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line);background:var(--card);color:var(--muted);
+  border-radius:20px;padding:8px 13px;font-size:13px;font-weight:700;cursor:pointer;user-select:none;
+  transition:transform .1s,background .15s,color .15s,border-color .15s}
+.tgl:active{transform:scale(.93)}
+.tgl .tbox{width:16px;height:16px;border-radius:5px;border:2px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:11px}
+.tgl.on{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good);border-color:color-mix(in srgb,var(--good) 50%,transparent)}
+.tgl.on .tbox{background:var(--good);border-color:var(--good);color:#fff}
+.tgl.pop{animation:tglpop .42s cubic-bezier(.18,1.5,.5,1)}
+@keyframes tglpop{0%{transform:scale(1)}45%{transform:scale(1.2)}100%{transform:scale(1)}}
+.bulkbar{position:sticky;top:0;background:var(--bg);z-index:2;padding:8px 0}
+.bulkbar .bbtns{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;align-items:center}
+.savebig{position:relative;overflow:hidden}
+.savebig.ready{animation:readypulse 1.8s ease-in-out infinite}
+@keyframes readypulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--brand) 45%,transparent)}50%{box-shadow:0 0 0 7px transparent}}
+
+/* sound toggle in header (reuses .themebtn) */
+.themebtn.muted{opacity:.6}
+
+/* mini progress bar under KPIs / goals */
+.pbar{height:7px;border-radius:6px;background:var(--soft);overflow:hidden;margin-top:8px}
+.pbar>i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--brand),var(--hi));width:0;
+  transition:width 1.1s cubic-bezier(.2,.85,.25,1)}
+.pbar.done>i{background:var(--good)}
+</style>
+<link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon-180.png"></head>
+<body>
+<div class="app">
+  <header class="top"><h1 id="topTitle">Therapy Tracker</h1><span class="ty" id="topTY"></span><button class="themebtn" id="soundBtn" title="Toggle sound" aria-label="Toggle sound">🔊</button><button class="themebtn" id="themeBtn" title="Toggle dark mode" aria-label="Toggle dark mode">☾</button></header>
+  <main id="main"></main>
+  <nav class="tabs" id="tabs"></nav>
+</div>
+<button class="fab" id="fab" title="Log session" aria-label="Log session"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+<div class="sheet" id="sheet"><div class="sheet-inner"><div class="sheet-head"><h2 id="sheetTitle"></h2><button class="x" id="sheetClose">✕</button></div><div id="sheetBody"></div></div></div>
+<div class="toast" id="toast"></div>
+<canvas id="confetti"></canvas>
+<div class="celebr" id="celebr"><div class="cb"><span class="cemoji" id="celEmoji">🎉</span><div class="ctitle" id="celTitle"></div><div class="csub" id="celSub"></div><div class="cribbon" id="celRibbon" style="display:none"></div></div></div>
+<script>
+window.SEED = {"clients": [], "rooms": [{"location": "At home", "rate": 0, "due": "n/a"}, {"location": "London Bridge", "rate": 12.5, "due": "EOM"}, {"location": "Clapham", "rate": 16, "due": "EOW"}], "sessions": [], "supervision": [], "rateHistory": [], "roomRateHistory": [{"location": "At home", "effectiveFrom": "2000-01-01", "rate": 0}, {"location": "London Bridge", "effectiveFrom": "2000-01-01", "rate": 12.5}, {"location": "Clapham", "effectiveFrom": "2000-01-01", "rate": 16}], "clientCategories": [{"status": "Ongoing", "category": "Active"}, {"status": "Initial session booked", "category": "Active"}, {"status": "Active enquiry", "category": "Pipeline"}, {"status": "Paused", "category": "Pipeline"}, {"status": "Finished", "category": "Finished"}], "meta": {"shell": true}};
+</script>
+
+<script>
+"use strict";
+/* ============ Storage layer (IndexedDB + audit + snapshots) ============ */
+const DBN="TherapyTrackerDB", DBV=1;
+let _db=null;
+function openDB(){return new Promise((res,rej)=>{
+  const rq=indexedDB.open(DBN,DBV);
+  rq.onupgradeneeded=e=>{const db=e.target.result;
+    if(!db.objectStoreNames.contains("state"))db.createObjectStore("state");
+    if(!db.objectStoreNames.contains("audit"))db.createObjectStore("audit",{keyPath:"id",autoIncrement:true});
+    if(!db.objectStoreNames.contains("snapshots"))db.createObjectStore("snapshots",{keyPath:"id",autoIncrement:true});
+  };
+  rq.onsuccess=e=>{_db=e.target.result;res(_db)};
+  rq.onerror=e=>rej(e.target.error);
+})}
+function tx(store,mode){return _db.transaction(store,mode).objectStore(store)}
+function pr(req){return new Promise((res,rej)=>{req.onsuccess=()=>res(req.result);req.onerror=()=>rej(req.error)})}
+async function kvGet(k){return pr(tx("state","readonly").get(k))}
+async function kvPut(k,v){return pr(tx("state","readwrite").put(v,k))}
+async function auditAdd(rec){return pr(tx("audit","readwrite").add(rec))}
+async function auditAll(){return pr(tx("audit","readonly").getAll())}
+async function snapAdd(rec){return pr(tx("snapshots","readwrite").add(rec))}
+async function snapAll(){return pr(tx("snapshots","readonly").getAll())}
+async function snapDel(id){return pr(tx("snapshots","readwrite").delete(id))}
+
+/* localStorage mirror as extra safety net */
+function mirror(state){try{localStorage.setItem("tt_state",JSON.stringify(state));localStorage.setItem("tt_state_ts",new Date().toISOString())}catch(e){}}
+
+/* ============ App state ============ */
+let S=null; // {clients,rooms,sessions,supervision,rateHistory,clientCategories}
+const MAX_SNAP=120;
+
+function clone(o){return JSON.parse(JSON.stringify(o))}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+
+function normalize(st){
+  st.clients=st.clients||[];st.rooms=st.rooms||[];st.sessions=st.sessions||[];
+  st.supervision=st.supervision||[];st.rateHistory=st.rateHistory||[];st.clientCategories=st.clientCategories||[];
+  ["sessions","clients","supervision","rateHistory","rooms"].forEach(k=>st[k].forEach(x=>{if(x&&!x._id)x._id=uid()}));
+  if(!st.roomRateHistory||!st.roomRateHistory.length){
+    st.roomRateHistory=st.rooms.map(r=>({_id:uid(),location:r.location,effectiveFrom:"2000-01-01",rate:r.rate}));
+  }
+  st.roomRateHistory.forEach(x=>{if(!x._id)x._id=uid()});
+  st.game=st.game||{}; st.game.activeWeeks=st.game.activeWeeks||[]; st.game.records=st.game.records||{};
+  const rr=st.game.records; rr.longestStreak=rr.longestStreak||0; rr.mostClearedAtOnce=rr.mostClearedAtOnce||0; rr.biggestCatchup=rr.biggestCatchup||0;
+  if(st.game.seenStreak==null)st.game.seenStreak=0;
+  return st;
+}
+async function loadState(){
+  let st=await kvGet("current"); let seeded=false;
+  if(!st){ st=clone(window.SEED); seeded=true; }
+  normalize(st);
+  if(_db){ try{ await kvPut("current",st);
+    if(seeded){ await snapAdd({ts:new Date().toISOString(),label:"Imported from spreadsheet (initial)",data:clone(st)});
+      await auditAdd({ts:new Date().toISOString(),summary:"Seeded from 'Tracking Spreadsheet May26.xlsx' ("+st.sessions.length+" sessions)"}); }
+  }catch(e){console.warn(e);} }
+  S=st; mirror(S);
+}
+async function commit(summary){
+  try{gameTouch();}catch(e){}      // record weekly activity (streak)
+  mirror(S);                       // localStorage first (always works)
+  if(!_db)return;                  // running in fallback mode
+  try{
+    await kvPut("current",S);
+    await auditAdd({ts:new Date().toISOString(),summary});
+    await snapAdd({ts:new Date().toISOString(),label:summary,data:clone(S)});
+    let snaps=await snapAll();
+    if(snaps.length>MAX_SNAP){snaps.sort((a,b)=>a.id-b.id);for(let i=0;i<snaps.length-MAX_SNAP;i++)await snapDel(snaps[i].id);}
+  }catch(e){console.warn("DB save failed, kept in localStorage",e);}
+}
+async function undo(){
+  if(!_db){toast("Undo needs storage (unavailable)");return false}
+  let snaps=await snapAll(); snaps.sort((a,b)=>a.id-b.id);
+  if(snaps.length<2){toast("Nothing to undo");return false}
+  const cur=snaps[snaps.length-1]; await snapDel(cur.id);
+  const prev=snaps[snaps.length-2];
+  S=clone(prev.data); await kvPut("current",S); mirror(S);
+  await auditAdd({ts:new Date().toISOString(),summary:"↩︎ Undo: reverted '"+cur.label+"'"});
+  return true;
+}
+
+/* ============ Date / money helpers ============ */
+const today=()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),d.getDate())};
+function parseD(s){if(!s)return null;const p=s.split("-");return new Date(+p[0],+p[1]-1,+p[2])}
+function fmtD(d){if(!d)return"";if(typeof d==="string")d=parseD(d);if(!d)return"";
+  return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}
+function fmtDshort(d){if(typeof d==="string")d=parseD(d);if(!d)return"";return d.toLocaleDateString("en-GB",{weekday:"short",day:"2-digit",month:"short"})}
+function fmtDM(d){if(typeof d==="string")d=parseD(d);if(!d)return"";return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"})}
+function isoD(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
+function gbp(n){if(n==null||isNaN(n))return"£0";return"£"+Number(n).toLocaleString("en-GB",{minimumFractionDigits:(n%1?2:0),maximumFractionDigits:2})}
+function taxYear(d){if(typeof d==="string")d=parseD(d);const y=d.getFullYear(),m=d.getMonth()+1,day=d.getDate();
+  const start=y-((m<4||(m===4&&day<6))?1:0);return start+"-"+String(start+1).slice(-2)}
+function curTaxYear(){return taxYear(today())}
+function eomonth(d){return new Date(d.getFullYear(),d.getMonth()+1,0)}
+function weekNum(d){if(typeof d==="string")d=parseD(d);const onejan=new Date(d.getFullYear(),0,1);
+  return Math.ceil((((d-onejan)/86400000)+onejan.getDay()+1)/7)}
+
+/* ============ Derived per-session ============ */
+function effRate(client,dateStr){
+  const d=parseD(dateStr); if(!d)return null; const cl=(client||"").toLowerCase();
+  let best=null;
+  for(const r of S.rateHistory){ if((r.client||"").toLowerCase()!==cl)continue;
+    const ef=parseD(r.effectiveFrom); if(ef<=d){ if(!best||parseD(best.effectiveFrom)<ef)best=r; } }
+  if(best)return best.rate;
+  const c=S.clients.find(c=>(c.code||"").toLowerCase()===cl); return c?c.rate:0;
+}
+function roomFor(loc){return S.rooms.find(r=>(r.location||"").toLowerCase()===(loc||"").toLowerCase())}
+function effRoomRate(loc,dateStr){const d=parseD(dateStr);const L=(loc||"").toLowerCase();let best=null;
+  for(const r of (S.roomRateHistory||[])){ if((r.location||"").toLowerCase()!==L)continue;
+    const ef=parseD(r.effectiveFrom); if(d&&ef<=d){ if(!best||parseD(best.effectiveFrom)<ef)best=r; } }
+  if(best)return best.rate; const rm=roomFor(loc); return rm?rm.rate:0;}
+function derive(s){
+  const t=today(); const d=parseD(s.date);
+  const rate=effRate(s.client,s.date);
+  const room=roomFor(s.location); const roomRate=effRoomRate(s.location,s.date); const due=room?room.due:"n/a";
+  const clientPaid=!!s.paidDate;
+  const past=d?d<t:false;
+  const overdue=past&&!clientPaid;
+  let roomBooked = s.room==="-"||s.location==="At home" ? "n/a" : (s.room?"Y":"N");
+  let roomDue="n/a";
+  if(roomRate>0 && s.roomPaid!=="Y"){
+    if(due==="EOM"){ roomDue = (addDays(eomonth(d),1) < t)?"Y":"N"; }
+    else if(due==="EOW"){ roomDue = ((t - d)/86400000 > 7)?"Y":"N"; }
+  }
+  const cl=S.clients.find(c=>(c.code||"").toLowerCase()===(s.client||"").toLowerCase());
+  const status=cl?cl.status:""; const category=cl?cl.category:"";
+  const complete = (s.notes&&String(s.notes).trim())&&(s.roomPaid&&String(s.roomPaid).trim());
+  let cancelBy=null,canCancel=false;
+  if(d){ const tm=(s.time||"00:00").split(":"); const dt=new Date(d); dt.setHours(+tm[0]||0,+tm[1]||0);
+    cancelBy=addDays(dt,-3); canCancel=cancelBy>new Date(); }
+  return {rate,roomRate,due,clientPaid,past,overdue,roomBooked,roomDue,status,category,complete,cancelBy,canCancel,
+    week:d?weekNum(d):"",year:d?d.getFullYear():"",taxYear:d?taxYear(d):""};
+}
+
+/* ============ UI helpers ============ */
+const $=s=>document.querySelector(s); const main=()=>$("#main");
+function el(html){const t=document.createElement("template");t.innerHTML=html.trim();return t.content.firstElementChild}
+let _toastT;
+function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("show");clearTimeout(_toastT);_toastT=setTimeout(()=>t.classList.remove("show"),2200)}
+function openSheet(title,bodyEl){$("#sheetTitle").textContent=title;const b=$("#sheetBody");b.innerHTML="";b.appendChild(bodyEl);$("#sheet").classList.add("open")}
+function closeSheet(){$("#sheet").classList.remove("open")}
+$("#sheetClose").onclick=closeSheet;
+$("#sheet").addEventListener("click",e=>{if(e.target.id==="sheet")closeSheet()});
+function curTheme(){return document.documentElement.getAttribute("data-theme")==="dark"?"dark":"light";}
+function setTheme(t){document.documentElement.setAttribute("data-theme",t);try{localStorage.setItem("tt_theme",t)}catch(e){} const b=$("#themeBtn");if(b)b.textContent=t==="dark"?"☀":"☾";}
+(function(){const b=$("#themeBtn");if(b){b.textContent=curTheme()==="dark"?"☀":"☾";b.onclick=()=>setTheme(curTheme()==="dark"?"light":"dark");}})();
+function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function opts(arr,sel){return arr.map(o=>`<option value="${esc(o)}"${o===sel?" selected":""}>${esc(o)}</option>`).join("")}
+
+/* ============================================================
+   Gamification layer: sound · confetti · celebration · streak
+   ============================================================ */
+
+/* ---- Sound engine (Web Audio, synthesized, offline) ---- */
+const Sfx=(function(){
+  let ctx=null, on=true;
+  try{on=localStorage.getItem("tt_sound")!=="off";}catch(e){}
+  function ac(){ if(!ctx){ try{const AC=window.AudioContext||window.webkitAudioContext; if(AC)ctx=new AC();}catch(e){ctx=null;} }
+    if(ctx&&ctx.state==="suspended"){try{ctx.resume();}catch(e){}} return ctx; }
+  function tone(freq,start,dur,type,gain){ const c=ac(); if(!c)return; const t0=c.currentTime+start;
+    const o=c.createOscillator(), g=c.createGain();
+    o.type=type||"sine"; o.frequency.setValueAtTime(freq,t0);
+    g.gain.setValueAtTime(0.0001,t0);
+    g.gain.exponentialRampToValueAtTime(gain||0.16,t0+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+    o.connect(g).connect(c.destination); o.start(t0); o.stop(t0+dur+0.03); }
+  function chord(fs,start,dur,type,gain){fs.forEach(f=>tone(f,start,dur,type,gain));}
+  const API={
+    get on(){return on;},
+    set(v){on=!!v;try{localStorage.setItem("tt_sound",on?"on":"off");}catch(e){}},
+    toggle(){API.set(!on);return on;},
+    prime(){ac();},
+    pop(){if(!on)return;tone(660,0,0.09,"triangle",0.14);tone(990,0.02,0.07,"sine",0.09);},
+    tick(){if(!on)return;tone(880,0,0.05,"sine",0.07);},
+    complete(){if(!on)return;[523.25,659.25,783.99].forEach((f,i)=>tone(f,i*0.085,0.16,"sine",0.15));},
+    fanfare(){if(!on)return;[523.25,659.25,783.99,1046.5].forEach((f,i)=>tone(f,i*0.10,0.26,"triangle",0.15));chord([523.25,783.99],0.42,0.5,"sine",0.09);},
+    sparkle(){if(!on)return;[1318.5,1568,1760,2093].forEach((f,i)=>tone(f,i*0.055,0.16,"sine",0.08));},
+    record(){if(!on)return;[392,523.25,659.25,783.99,1046.5].forEach((f,i)=>tone(f,i*0.08,0.3,"triangle",0.16));chord([523.25,659.25,783.99],0.5,0.7,"sine",0.11);},
+    error(){if(!on)return;tone(200,0,0.16,"sine",0.10);}
+  };
+  return API;
+})();
+
+/* ---- Confetti (canvas particle burst, no library) ---- */
+const Confetti=(function(){
+  const cv=document.getElementById("confetti"); let ctx2=null, parts=[], raf=null;
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const COLORS=["#ff6b6b","#ffd23f","#4ecdc4","#5C7A6D","#9A8C9E","#16A88E","#ff8a1e","#6c8cff","#ff5ea8"];
+  function size(){cv.width=Math.floor(innerWidth*dpr);cv.height=Math.floor(innerHeight*dpr);}
+  function spawn(n,o){o=o||{};size();ctx2=cv.getContext("2d");
+    const ox=(o.x!=null?o.x:innerWidth/2), oy=(o.y!=null?o.y:innerHeight*0.4);
+    for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,sp=(o.spread||1)*(4+Math.random()*9);
+      parts.push({x:ox*dpr,y:oy*dpr,vx:Math.cos(a)*sp*dpr,vy:(Math.sin(a)*sp-(o.up||7))*dpr,
+        g:(0.16+Math.random()*0.12)*dpr,rot:Math.random()*6.28,vr:(Math.random()-0.5)*0.34,
+        w:(6+Math.random()*7)*dpr,h:(8+Math.random()*9)*dpr,c:COLORS[(Math.random()*COLORS.length)|0],
+        life:0,max:55+Math.random()*55,shape:Math.random()<0.5?0:1});}
+    cv.classList.add("on"); if(!raf)raf=requestAnimationFrame(loop); }
+  function loop(){ctx2.clearRect(0,0,cv.width,cv.height);
+    for(let i=parts.length-1;i>=0;i--){const p=parts[i];p.vy+=p.g;p.x+=p.vx;p.y+=p.vy;p.vx*=0.99;p.rot+=p.vr;p.life++;
+      ctx2.save();ctx2.globalAlpha=Math.max(0,1-p.life/p.max);ctx2.translate(p.x,p.y);ctx2.rotate(p.rot);ctx2.fillStyle=p.c;
+      if(p.shape){ctx2.beginPath();ctx2.arc(0,0,p.w/2,0,6.283);ctx2.fill();}else ctx2.fillRect(-p.w/2,-p.h/2,p.w,p.h);
+      ctx2.restore();
+      if(p.life>=p.max||p.y>cv.height+50)parts.splice(i,1);}
+    if(parts.length)raf=requestAnimationFrame(loop);
+    else{raf=null;cv.classList.remove("on");ctx2&&ctx2.clearRect(0,0,cv.width,cv.height);} }
+  addEventListener("resize",()=>{if(parts.length)size();});
+  return {burst:spawn};
+})();
+
+/* ---- Celebration overlay + floating reward pill ---- */
+let _celT;
+function celebrate(o){o=o||{};
+  document.getElementById("celEmoji").textContent=o.emoji||"🎉";
+  document.getElementById("celTitle").textContent=o.title||"Nice!";
+  document.getElementById("celSub").textContent=o.sub||"";
+  const rb=document.getElementById("celRibbon");
+  if(o.ribbon){rb.style.display="inline-block";rb.textContent=o.ribbon;}else rb.style.display="none";
+  const cel=document.getElementById("celebr");cel.classList.remove("show");void cel.offsetWidth;cel.classList.add("show");
+  const lvl=o.level||"normal";
+  if(lvl==="mega"){Confetti.burst(70,{x:innerWidth*0.5,y:innerHeight*0.55,up:11,spread:1.4});
+    setTimeout(()=>Confetti.burst(46,{x:innerWidth*0.16,y:innerHeight*0.72,up:12,spread:1}),150);
+    setTimeout(()=>Confetti.burst(46,{x:innerWidth*0.84,y:innerHeight*0.72,up:12,spread:1}),300);}
+  else if(lvl==="big")Confetti.burst(70,{x:innerWidth*0.5,y:innerHeight*0.55,up:10,spread:1.3});
+  else Confetti.burst(38,{x:innerWidth*0.5,y:innerHeight*0.5,up:9,spread:1});
+  if(o.sound==="record")Sfx.record();else if(o.sound==="streak")Sfx.sparkle();else if(o.sound==="fanfare")Sfx.fanfare();else Sfx.complete();
+  clearTimeout(_celT);_celT=setTimeout(()=>cel.classList.remove("show"),o.dur||2700);
+}
+function floatPill(text,x,y){const p=el('<div class="floatpill">'+esc(text)+'</div>');
+  p.style.left=Math.max(8,x-24)+"px";p.style.top=Math.max(8,y-12)+"px";document.body.appendChild(p);
+  setTimeout(()=>p.remove(),1300);}
+
+/* ---- small animation helpers ---- */
+function countUp(node,to,fmt,dur){ if(!node)return; to=+to||0; dur=dur||900; const st=performance.now();
+  (function step(now){let t=Math.min(1,(now-st)/dur);t=1-Math.pow(1-t,3);const val=to*t;
+    node.textContent=fmt?fmt(val):Math.round(val);if(t<1)requestAnimationFrame(step);})(performance.now()); }
+function animateRings(scope){scope.querySelectorAll(".ring").forEach(r=>{const pct=Math.min(100,+r.dataset.pct||0);
+  const fg=r.querySelector(".rfg");if(fg){const C=+fg.dataset.c;requestAnimationFrame(()=>{fg.style.strokeDashoffset=(C*(1-pct/100)).toFixed(1);});}
+  const num=r.querySelector(".rnum");if(num)countUp(num,pct,v=>Math.round(v),1100);});}
+function ringSVG(pct,label){pct=Math.round(pct);const R=34,C=2*Math.PI*R,w=80;
+  return '<div class="ring'+(pct>=100?" done":"")+'" data-pct="'+pct+'">'+
+    '<svg viewBox="0 0 '+w+' '+w+'" width="'+w+'" height="'+w+'">'+
+    '<circle class="rbg" cx="40" cy="40" r="'+R+'" fill="none" stroke-width="9"></circle>'+
+    '<circle class="rfg" cx="40" cy="40" r="'+R+'" fill="none" stroke-width="9" stroke-dasharray="'+C.toFixed(1)+'" stroke-dashoffset="'+C.toFixed(1)+'" data-c="'+C.toFixed(1)+'"></circle>'+
+    '</svg><div class="rpct">'+(pct>=100?'<span class="chk">✓</span>':'<span class="rnum">0</span>%')+'</div><div class="rlab">'+esc(label)+'</div></div>'; }
+
+/* ---- week helpers + game state ---- */
+function weekMonday(d){if(typeof d==="string")d=parseD(d);const x=new Date(d);const dow=(x.getDay()+6)%7;x.setDate(x.getDate()-dow);x.setHours(0,0,0,0);return x;}
+function weekKey(d){return isoD(weekMonday(d));}
+function ensureGame(){ if(!S.game)S.game={}; const g=S.game; g.activeWeeks=g.activeWeeks||[]; g.records=g.records||{};
+  const r=g.records; r.longestStreak=r.longestStreak||0; r.mostClearedAtOnce=r.mostClearedAtOnce||0; r.biggestCatchup=r.biggestCatchup||0;
+  if(g.seenStreak==null)g.seenStreak=0; return g; }
+function computeStreak(){ const g=ensureGame(); const set=new Set(g.activeWeeks); const cur=weekMonday(today());
+  let recent=null; set.forEach(k=>{const d=weekMonday(k); if(d<=cur&&(!recent||d>recent))recent=d;});
+  if(!recent)return {count:0,status:"none",longest:g.records.longestStreak};
+  let count=0,probe=new Date(recent); while(set.has(weekKey(probe))){count++;probe.setDate(probe.getDate()-7);}
+  const gap=Math.round((cur-recent)/(7*86400000));
+  const status=gap===0?"active":gap===1?"risk":"none";
+  if(status==="none")return {count:0,status:"none",longest:g.records.longestStreak};
+  return {count,status,longest:g.records.longestStreak}; }
+function gameTouch(){ const g=ensureGame(); const k=weekKey(today());
+  if(g.activeWeeks.indexOf(k)<0)g.activeWeeks.push(k);
+  g.activeWeeks.sort(); if(g.activeWeeks.length>520)g.activeWeeks=g.activeWeeks.slice(-520);
+  const st=computeStreak(); if(st.count>g.records.longestStreak)g.records.longestStreak=st.count; }
+function saveGameQuiet(){try{mirror(S);if(_db)kvPut("current",S);}catch(e){}}
+function gameGoals(){ const der=S.sessions.map(s=>({s,d:derive(s)}));
+  const past=der.filter(x=>x.d.past);
+  const payPast=past.filter(x=>(x.d.rate||0)>0);
+  const paid=payPast.filter(x=>x.d.clientPaid).length, over=payPast.length-paid;
+  const paidPct=payPast.length?Math.round(paid/payPast.length*100):100;
+  const complete=past.filter(x=>x.d.complete).length;
+  const compPct=past.length?Math.round(complete/past.length*100):100;
+  return {paidPct,paid,over,compPct,complete,incomplete:past.length-complete,totalPast:past.length}; }
+
+/* update records BEFORE commit so they persist; returns flags */
+function gameNoteBatch(m){const g=ensureGame();const f={};
+  if(m.cleared!=null&&m.cleared>g.records.mostClearedAtOnce){g.records.mostClearedAtOnce=m.cleared;f.recCleared=m.cleared;}
+  if(m.amount!=null&&m.amount>g.records.biggestCatchup&&m.amount>0){g.records.biggestCatchup=Math.round(m.amount);f.recAmount=Math.round(m.amount);}
+  return f;}
+/* choose + show ONE celebration AFTER commit (commit already ran gameTouch) */
+function gameShow(m,f){ f=f||{}; const g=ensureGame(); const st=computeStreak(); let streakUp=false;
+  if(st.status==="active"&&st.count>(g.seenStreak||0)){streakUp=true;g.seenStreak=st.count;saveGameQuiet();}
+  else if(st.status==="none"&&g.seenStreak!==0){g.seenStreak=0;saveGameQuiet();}
+  if(f.recCleared){celebrate({emoji:"🏆",title:"New record!",sub:"Cleared "+f.recCleared+" in one sweep — your best ever.",ribbon:"Personal best",level:"mega",sound:"record"});return;}
+  if(f.recAmount){celebrate({emoji:"🏆",title:"New record!",sub:"Biggest catch-up yet — "+gbp(f.recAmount)+" collected.",ribbon:"Personal best",level:"mega",sound:"record"});return;}
+  if(m.allClear){celebrate({emoji:m.allClearEmoji||"✨",title:m.allClearTitle||"All caught up!",sub:m.allClearSub||"",level:"big",sound:"fanfare"});
+    if(streakUp)setTimeout(()=>toast("🔥 "+st.count+"-week streak!"),500);return;}
+  if(m.bigEffort){celebrate({emoji:"💪",title:"Great effort!",sub:m.bigEffortSub||((m.batch||"")+" updated at once"),level:"big",sound:"fanfare"});return;}
+  if(streakUp){celebrate({emoji:"🔥",title:st.count+(st.count===1?"-week streak!":" weeks in a row!"),sub:(st.count>=g.records.longestStreak?"Your longest run ever — keep it lit!":"Keep your records up to date to extend it."),level:"normal",sound:"streak"});return;}
+  if(m.batch){ if(m.completed){Sfx.complete();Confetti.burst(22,{x:innerWidth/2,y:innerHeight*0.5,up:8,spread:0.9});}else Sfx.pop(); if(m.toast)toast(m.toast); }
+}
+
+/* header sound toggle + audio priming on first gesture */
+(function(){const b=$("#soundBtn");if(b){const upd=()=>{b.textContent=Sfx.on?"🔊":"🔇";b.classList.toggle("muted",!Sfx.on);};upd();
+  b.onclick=()=>{const nowOn=Sfx.toggle();upd();if(nowOn){Sfx.prime();Sfx.pop();toast("Sound on");}else toast("Sound muted");};}
+  window.addEventListener("pointerdown",function pr(){Sfx.prime();},{once:true});})();
+
+/* ============ Router ============ */
+const TABS=[
+ {id:"home",ic:'<svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7"/><path d="M5 9.8V20h14V9.8"/></svg>',label:"Home"},
+ {id:"sessions",ic:'<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2.5"/><path d="M4 9.5h16M8.5 3v3.5M15.5 3v3.5"/></svg>',label:"Sessions"},
+ {id:"clients",ic:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.2 20c0-3.3 2.6-5.2 5.8-5.2S14.8 16.7 14.8 20"/><path d="M16.5 5.6a3 3 0 0 1 0 5.8M17 14.9c2.2.5 3.8 2 3.8 4.6"/></svg>',label:"Clients"},
+ {id:"income",ic:'<svg viewBox="0 0 24 24"><path d="M4 20h16"/><rect x="6" y="12" width="3.2" height="7" rx="1"/><rect x="10.4" y="7" width="3.2" height="12" rx="1"/><rect x="14.8" y="14" width="3.2" height="5" rx="1"/></svg>',label:"Revenue"},
+ {id:"raw",ic:'<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16M10 10v9"/></svg>',label:"Table"},
+ {id:"data",ic:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 3.6v2.4M12 18v2.4M3.6 12h2.4M18 12h2.4M6 6l1.7 1.7M16.3 16.3 18 18M18 6l-1.7 1.7M7.7 16.3 6 18"/></svg>',label:"Backup"},
+];
+let cur="home";
+function renderTabs(){const overdue=S.sessions.filter(s=>derive(s).overdue).length;
+  $("#tabs").innerHTML=TABS.map(t=>`<button data-tab="${t.id}" class="${t.id===cur?"on":""}">
+    <span class="ic">${t.ic}</span><span>${t.label}${t.id==="sessions"&&overdue?` <span class="badge">${overdue}</span>`:""}</span></button>`).join("");
+  $("#tabs").querySelectorAll("button").forEach(b=>b.onclick=()=>go(b.dataset.tab));
+}
+function go(tab){cur=tab;renderTabs();$("#topTY").textContent="Charlotte Bloor Therapy";
+  const m=main();m.innerHTML="";m.appendChild(VIEWS[tab]());window.scrollTo(0,0);
+  $("#fab").style.display=(tab==="sessions"||tab==="home")?"flex":"none";
+}
+$("#fab").onclick=()=>sessionForm(null);
+/* ============ VIEWS ============ */
+const VIEWS={};
+
+VIEWS.home=function(){
+  const v=el('<div class="view active"></div>');
+  const ty=curTaxYear();
+  const der=S.sessions.map(s=>({s,d:derive(s)}));
+  const tyRows=der.filter(x=>x.d.taxYear===ty);
+  const billed=tyRows.reduce((a,x)=>a+(x.d.rate||0),0);
+  const received=tyRows.filter(x=>x.d.clientPaid).reduce((a,x)=>a+(x.d.rate||0),0);
+  const outstanding=der.filter(x=>x.d.overdue).reduce((a,x)=>a+(x.d.rate||0),0);
+  const t=today();
+  const upcoming=der.filter(x=>{const d=parseD(x.s.date);return d&&d>=t}).sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
+  const next7=upcoming.filter(x=>parseD(x.s.date)<=addDays(t,7));
+  /* ---- gamification cards ---- */
+  const st=computeStreak(), goals=gameGoals(), rec=ensureGame().records;
+  const cold=st.status==="none", risk=st.status==="risk";
+  const flame='<div class="flame'+(cold?" cold":"")+(risk?" risk":"")+'"><i class="o"></i><i class="i"></i></div>';
+  let smsg;
+  if(cold)smsg=rec.longestStreak?("Do anything this week to start again — your best is "+rec.longestStreak+" week"+(rec.longestStreak===1?"":"s")+"."):"Log or tidy a session this week to start your streak.";
+  else if(risk)smsg="⚠️ At risk — update something this week to keep your "+st.count+"-week run alive.";
+  else smsg=(st.count>=rec.longestStreak&&st.count>0)?"🏅 Longest streak ever — keep it going!":"On a roll — keep your records up to date each week.";
+  const snum=cold?0:st.count;
+  const streakCard='<div class="card"><div class="streakcard">'+flame+'<div class="streakwrap"><div class="streaknum">'+snum+' <small>week'+(snum===1?"":"s")+'</small></div><div class="streakmsg">'+smsg+'</div></div></div></div>';
+  const goalsCard='<div class="card"><h2>Goals</h2><div class="rings">'+
+    ringSVG(goals.paidPct,goals.over>0?(goals.over+" payment"+(goals.over===1?"":"s")+" overdue"):"All payments in ✓")+
+    ringSVG(goals.compPct,goals.incomplete>0?(goals.incomplete+" session"+(goals.incomplete===1?"":"s")+" to complete"):"Notes & room all done ✓")+
+    '</div>'+((goals.over>0||goals.incomplete>0)?'<p class="small muted center" style="margin:10px 0 0">'+(goals.over>0?'<span class="taxlink" id="goPay">Collect payments ›</span>':"")+(goals.over>0&&goals.incomplete>0?' &nbsp;·&nbsp; ':"")+(goals.incomplete>0?'<span class="taxlink" id="goInc">Complete sessions ›</span>':"")+'</p>':"")+'</div>';
+  const mk=(emoji,val,lab,locked)=>'<div class="bdg'+(locked?" locked":"")+'"><span class="be">'+emoji+'</span><div><div class="bv">'+val+'</div><div class="bl">'+lab+'</div></div></div>';
+  const recCard='<div class="card"><h2>Records</h2><div class="badgegrid">'+
+    mk("🔥",(rec.longestStreak||0)+(rec.longestStreak===1?" wk":" wks"),"Longest streak",!rec.longestStreak)+
+    mk("⚡",(rec.mostClearedAtOnce||0),"Most cleared at once",!rec.mostClearedAtOnce)+
+    mk("💷",gbp(rec.biggestCatchup||0),"Biggest catch-up",!rec.biggestCatchup)+
+    mk("✅",goals.complete,"Sessions completed",!goals.complete)+
+    '</div></div>';
+  v.innerHTML=(S.sessions.length?"":'<div class="hint" style="font-size:14px">👋 Welcome! No data yet. Tap <b>Backup</b> below → <b>Restore from backup</b>, and choose your <b>therapy-tracker-data.json</b> file to load everything.</div>')+
+   streakCard+`
+   <div class="kpis mb">
+     <div class="kpi"><div class="v" data-to="${billed}" data-fmt="m">${gbp(billed)}</div><div class="l">Billed this tax year</div></div>
+     <div class="kpi good"><div class="v" data-to="${received}" data-fmt="m">${gbp(received)}</div><div class="l">Received</div></div>
+     <div class="kpi clk ${outstanding?'bad':''}" id="kOut"><div class="v" data-to="${outstanding}" data-fmt="m">${gbp(outstanding)}</div><div class="l">Outstanding now ›</div></div>
+     <div class="kpi"><div class="v" data-to="${next7.length}">${next7.length}</div><div class="l">Sessions next 7 days</div></div>
+   </div>`+
+   goalsCard+`
+   <div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Quick add</h2></div>
+     <div class="row mt" style="flex-wrap:wrap;gap:8px">
+       <button class="btn" id="qNew">＋ New session</button>
+       <button class="btn sec" id="qRepeat">↻ Repeat last for…</button>
+       <button class="btn sec" id="qSup">＋ Supervision</button>
+     </div></div>
+   <div class="card"><h2>Coming up</h2><div id="up"></div></div>`+
+   recCard;
+  const up=v.querySelector("#up");
+  if(!upcoming.length)up.innerHTML='<p class="muted small">No future sessions logged.</p>';
+  else up.innerHTML=upcoming.slice(0,12).map(x=>{const d=x.d;
+    const warn=(d.roomBooked==="N")?'<span class="chip f">room not booked</span>':"";
+    return `<div class="list-item" data-id="${x.s._id}"><div class="li-main">
+      <div class="li-title">${esc(x.s.client)} · ${esc(x.s.location||"")} ${warn}</div>
+      <div class="li-sub">${fmtDshort(x.s.date)}${x.s.time?" · "+esc(x.s.time):""} · ${esc(x.s.mode||"")}</div></div>
+      <div class="li-right">${gbp(d.rate)}</div></div>`}).join("");
+  up.querySelectorAll(".list-item").forEach(li=>li.onclick=()=>sessionForm(S.sessions.find(s=>s._id===li.dataset.id)));
+  const kb=v.querySelector("#kOut");if(kb)kb.onclick=()=>{sessFilter.view="list";sessFilter.seg="unpaid";go("sessions");};
+  v.querySelector("#qNew").onclick=()=>sessionForm(null);
+  v.querySelector("#qRepeat").onclick=()=>repeatPicker();
+  v.querySelector("#qSup").onclick=()=>supervisionForm(null);
+  const gp=v.querySelector("#goPay");if(gp)gp.onclick=()=>{sessFilter.view="list";sessFilter.seg="unpaid";go("sessions");};
+  const gi=v.querySelector("#goInc");if(gi)gi.onclick=()=>{sessFilter.view="list";sessFilter.seg="incomplete";go("sessions");};
+  v.querySelectorAll(".kpi .v[data-to]").forEach(n=>{const to=+n.dataset.to;const m=n.dataset.fmt==="m";countUp(n,to,x=>m?gbp(x):Math.round(x),900);});
+  requestAnimationFrame(()=>animateRings(v));
+  return v;
+};
+
+let sessFilter={q:"",seg:"upcoming",view:"list"};
+let calY=null,calM=null,statGran="month",taxMode="proj";
+
+/* ===== analytics helpers (inline SVG charts) ===== */
+function monthKey(s){const d=parseD(s);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")}
+function weekStart(s){const d=parseD(s);const x=new Date(d);const dow=(x.getDay()+6)%7;x.setDate(x.getDate()-dow);return x}
+function moneyShort(n){n=Math.round(n);if(Math.abs(n)>=1000)return "£"+(n/1000).toFixed(n%1000===0?0:1)+"k";return "£"+n}
+function pkey(dstr,gran){if(gran==="week"){const ws=weekStart(dstr);return[isoD(ws),ws.toLocaleDateString("en-GB",{day:"2-digit",month:"short"})];}
+  const k=monthKey(dstr);return[k,parseD(k+"-01").toLocaleDateString("en-GB",{month:"short",year:"2-digit"})];}
+function periodSeries(gran){
+  const der=S.sessions.map(s=>({s,d:derive(s)}));const map={};
+  const get=(key,lab)=>map[key]||(map[key]={lab,revenue:0,room:0,sup:0,clients:new Set()});
+  der.forEach(x=>{const dt=parseD(x.s.date);if(!dt)return;const[key,lab]=pkey(x.s.date,gran);
+    const e=get(key,lab);e.revenue+=x.d.rate||0;e.room+=x.d.roomRate||0;if(x.s.client)e.clients.add(x.s.client.toLowerCase());});
+  (S.supervision||[]).forEach(sv=>{if(!sv.date)return;const[key,lab]=pkey(sv.date,gran);const e=get(key,lab);e.sup+=(+sv.cost||0);});
+  const allKeys=Object.keys(map).sort();
+  const netArr=allKeys.map(k=>map[k].revenue-map[k].room-map[k].sup);
+  const cliArr=allKeys.map(k=>map[k].clients.size);
+  const W=gran==="week"?26:6;
+  const mov=(arr,i)=>{const s=Math.max(0,i-W+1);let t=0;for(let q=s;q<=i;q++)t+=arr[q];return t/(i-s+1);};
+  const N=gran==="week"?16:13;const startIdx=Math.max(0,allKeys.length-N);
+  return allKeys.slice(startIdx).map((k,idx)=>{const i=startIdx+idx;const e=map[k];
+    return{l:e.lab,revenue:Math.round(e.revenue),room:Math.round(e.room),sup:Math.round(e.sup),
+      net:Math.round(e.revenue-e.room-e.sup),clients:e.clients.size,
+      netAvg:Math.round(mov(netArr,i)),cliAvg:Math.round(mov(cliArr,i)*10)/10};});
+}
+function chartBars(data,money){
+  const h=180,padT=20,padB=36,padL=8,step=44,bw=26,n=data.length||1;
+  const W=Math.max(n*step+padL*2,280),innerH=h-padT-padB,max=Math.max(1,...data.map(d=>d.v));
+  const body=data.map((d,i)=>{const x=padL+i*step+(step-bw)/2,bh=Math.max(d.v?2:0,Math.round(innerH*d.v/max)),y=padT+innerH-bh;
+    return '<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+bh+'" rx="4" fill="var(--brand)"></rect>'+
+      '<text x="'+(x+bw/2)+'" y="'+(y-4)+'" text-anchor="middle" font-size="9" fill="var(--muted)">'+(d.v?(money?moneyShort(d.v):d.v):"")+'</text>'+
+      '<text x="'+(x+bw/2)+'" y="'+(h-padB+16)+'" text-anchor="middle" font-size="9" fill="var(--muted)">'+esc(d.l)+'</text>';}).join("");
+  return '<div class="svgwrap"><svg viewBox="0 0 '+W+' '+h+'" width="'+W+'" height="'+h+'"><line x1="'+padL+'" y1="'+padT+'" x2="'+(W-padL)+'" y2="'+padT+'" stroke="var(--line)"></line><text x="'+padL+'" y="'+(padT-5)+'" font-size="9" fill="var(--muted)">'+(money?moneyShort(max):max)+'</text>'+body+'</svg></div>';
+}
+function chartLine(data){
+  const h=170,padT=18,padB=30,padL=20,padR=64,step=40,n=data.length||1;
+  const W=Math.max(padL+(n-1)*step+padR,300),innerH=h-padT-padB,max=Math.max(1,...data.map(d=>d.v),...data.map(d=>d.avg||0));
+  const yOf=v=>padT+innerH-innerH*v/max;
+  const pts=data.map((d,i)=>[padL+i*step,yOf(d.v)]);
+  if(!pts.length)return '<p class="muted small">No data.</p>';
+  const line=pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+  const area="M"+pts[0][0]+" "+(padT+innerH)+" "+pts.map(p=>"L"+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ")+" L"+pts[pts.length-1][0]+" "+(padT+innerH)+" Z";
+  const dots=pts.map((p,i)=>'<circle cx="'+p[0]+'" cy="'+p[1].toFixed(1)+'" r="3.2" fill="var(--brand)" stroke="var(--card)" stroke-width="1.3"></circle><text x="'+p[0]+'" y="'+(p[1]-8).toFixed(1)+'" text-anchor="middle" font-size="10" font-weight="600" paint-order="stroke" stroke="var(--card)" stroke-width="3" stroke-linejoin="round" fill="var(--brand-dark)">'+(data[i].v||"")+'</text>').join("");
+  const labs=data.map((d,i)=>'<text x="'+pts[i][0]+'" y="'+(h-padB+16)+'" text-anchor="middle" font-size="10" fill="var(--muted)">'+esc(d.l)+'</text>').join("");
+  const hasAvg=data.some(d=>d.avg!=null);
+  const avgPts=data.map((d,i)=>[pts[i][0],yOf(d.avg||0)]);
+  const avgD=avgPts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+  const avgLine=hasAvg?'<path d="'+avgD+'" fill="none" stroke="var(--card)" stroke-width="4.2" stroke-dasharray="2.4 3.6" stroke-linecap="round"></path><path d="'+avgD+'" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-dasharray="2.4 3.6" stroke-linecap="round"></path>':"";
+  const la=avgPts[avgPts.length-1];const lastX=padL+(n-1)*step;
+  const lay=la?Math.max(padT+10,Math.min(la[1],padT+innerH-8)):0;
+  const avgCall=hasAvg&&la?'<circle cx="'+la[0].toFixed(1)+'" cy="'+la[1].toFixed(1)+'" r="2.6" fill="var(--muted)"></circle><text x="'+(lastX+8)+'" y="'+(lay-2).toFixed(1)+'" font-size="9" fill="var(--muted)">6-mo avg</text><text x="'+(lastX+8)+'" y="'+(lay+11).toFixed(1)+'" font-size="12" font-weight="700" fill="var(--muted)">'+((data[data.length-1]||{}).avg||0)+'</text>':"";
+  return '<div class="svgwrap"><svg viewBox="0 0 '+W+' '+h+'" width="'+W+'" height="'+h+'"><text x="2" y="'+padT+'" font-size="10" font-weight="600" fill="var(--muted)">'+max+'</text><path d="'+area+'" fill="color-mix(in srgb,var(--brand) 15%,transparent)"></path><path d="'+line+'" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linejoin="round"></path>'+avgLine+dots+avgCall+labs+'</svg></div>';
+}
+function chartCombo(data,sel){
+  const h=234,padT=18,padB=40,padL=8,padR=64,step=52,bw=30,n=data.length||1;
+  const W=Math.max(padL+n*step+padR,320),innerH=h-padT-padB;
+  const posMax=Math.max(1,...data.map(d=>d.revenue),...data.map(d=>Math.max(0,d.net)));
+  const negMax=Math.max(1,...data.map(d=>d.room+d.sup));
+  const range=posMax+negMax;const zeroY=padT+innerH*posMax/range;
+  const yOf=v=>zeroY-innerH*v/range;
+  const bars=data.map((d,i)=>{const x=padL+i*step+(step-bw)/2;let out="";
+    const rh=innerH*d.revenue/range;out+='<rect x="'+x+'" y="'+(zeroY-rh).toFixed(1)+'" width="'+bw+'" height="'+rh.toFixed(1)+'" fill="var(--brand)"></rect>';
+    let y=zeroY;const rmh=innerH*d.room/range;if(rmh>0)out+='<rect x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+rmh.toFixed(1)+'" fill="var(--warn)"></rect>';y+=rmh;
+    const sph=innerH*d.sup/range;if(sph>0)out+='<rect x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+sph.toFixed(1)+'" fill="var(--accent)"></rect>';
+    return out;}).join("");
+  const npts=data.map((d,i)=>[padL+i*step+step/2,yOf(d.net)]);
+  const nline=npts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+  const ndots=npts.map((p,i)=>'<circle cx="'+p[0]+'" cy="'+p[1].toFixed(1)+'" r="3.4" fill="var(--hi)" stroke="var(--card)" stroke-width="1.5"></circle><text x="'+p[0]+'" y="'+(p[1]-8).toFixed(1)+'" text-anchor="middle" font-size="11" font-weight="700" paint-order="stroke" stroke="var(--card)" stroke-width="3.4" stroke-linejoin="round" fill="var(--hi-ink)">'+moneyShort(data[i].net)+'</text>').join("");
+  const labs=data.map((d,i)=>'<text x="'+(padL+i*step+step/2)+'" y="'+(h-padB+22)+'" text-anchor="middle" font-size="10" fill="var(--muted)">'+esc(d.l)+'</text>').join("");
+  const hot=data.map((d,i)=>'<rect class="hot" data-i="'+i+'" x="'+(padL+i*step)+'" y="'+padT+'" width="'+step+'" height="'+innerH+'" fill="transparent"></rect>').join("");
+  let tip="";
+  if(sel!=null&&data[sel]){const d=data[sel];const cx=padL+sel*step+step/2;const tw=128,th=70;let tx=cx-tw/2;tx=Math.max(padL,Math.min(tx,W-tw-padL));const ty=padT+2;
+    tip='<g><rect x="'+tx+'" y="'+ty+'" width="'+tw+'" height="'+th+'" rx="6" fill="#1f2a2a" opacity="0.92"></rect>'+
+      '<text x="'+(tx+8)+'" y="'+(ty+15)+'" font-size="10" fill="#fff" font-weight="700">'+esc(d.l)+'</text>'+
+      '<text x="'+(tx+8)+'" y="'+(ty+30)+'" font-size="10" fill="#9fe0d3">Revenue '+gbp(d.revenue)+'</text>'+
+      '<text x="'+(tx+8)+'" y="'+(ty+43)+'" font-size="10" fill="#f0b27a">Room −'+gbp(d.room)+'</text>'+
+      '<text x="'+(tx+8)+'" y="'+(ty+56)+'" font-size="10" fill="#c5a8f0">Supervision −'+gbp(d.sup)+'</text>'+
+      '<text x="'+(tx+8)+'" y="'+(ty+68)+'" font-size="10" fill="#fff" font-weight="700">Net '+gbp(d.net)+'</text></g>';}
+  const avgPts=data.map((d,i)=>[padL+i*step+step/2,yOf(d.netAvg||0)]);
+  const avgLine=avgPts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+  const avgSvg='<path d="'+avgLine+'" fill="none" stroke="var(--card)" stroke-width="4.2" stroke-dasharray="2.4 3.6" stroke-linecap="round"></path><path d="'+avgLine+'" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-dasharray="2.4 3.6" stroke-linecap="round"></path>';
+  const la=avgPts[avgPts.length-1];const lastRight=padL+n*step;
+  const lay=la?Math.max(padT+10,Math.min(la[1],padT+innerH-8)):0;
+  const avgCall=la?'<circle cx="'+la[0].toFixed(1)+'" cy="'+la[1].toFixed(1)+'" r="2.6" fill="var(--muted)"></circle><text x="'+(lastRight+6)+'" y="'+(lay-2).toFixed(1)+'" font-size="9" fill="var(--muted)">6-mo avg</text><text x="'+(lastRight+6)+'" y="'+(lay+11).toFixed(1)+'" font-size="12" font-weight="700" fill="var(--muted)">'+moneyShort((data[data.length-1]||{}).netAvg||0)+'</text>':"";
+  return '<div class="svgwrap"><svg viewBox="0 0 '+W+' '+h+'" width="'+W+'" height="'+h+'">'+
+    '<text x="'+padL+'" y="'+(padT+3)+'" font-size="10" font-weight="600" fill="var(--muted)">'+moneyShort(posMax)+'</text>'+
+    '<text x="'+padL+'" y="'+(padT+innerH+2)+'" font-size="9" fill="var(--muted)">−'+moneyShort(negMax)+'</text>'+
+    bars+'<line x1="'+padL+'" y1="'+zeroY.toFixed(1)+'" x2="'+(W-padL)+'" y2="'+zeroY.toFixed(1)+'" stroke="var(--ink)" stroke-width="0.7" opacity="0.5"></line>'+
+    avgSvg+'<path d="'+nline+'" fill="none" stroke="var(--hi)" stroke-width="2.9" stroke-linejoin="round"></path>'+ndots+avgCall+labs+hot+tip+'</svg></div>';
+}
+function comboLegend(){return '<div class="legend"><span class="lgi"><i style="background:var(--brand)"></i>Revenue</span><span class="lgi"><i style="background:var(--warn)"></i>Room</span><span class="lgi"><i style="background:var(--accent)"></i>Supervision</span><span class="lgi"><i class="line"></i>Net income</span><span class="lgi"><i class="dash"></i>6-mo avg</span></div>';}
+function payChip(s,d){return d.clientPaid?'<span class="chip y">paid '+fmtDM(s.paidDate)+'</span>':(d.overdue?'<span class="chip n">overdue · due '+fmtDM(s.date)+'</span>':'<span class="chip na">awaiting</span>');}
+function missingReasons(s){const m=[];
+  if(!(s.notes&&String(s.notes).trim()))m.push("notes");
+  if(!(s.roomPaid&&String(s.roomPaid).trim()))m.push("room-paid status");
+  return m;}
+
+VIEWS.sessions=function(){
+  const v=el('<div class="view active"></div>');
+  v.innerHTML='<div class="seg mb" id="viewseg" style="display:inline-flex"><button data-v="list" class="'+(sessFilter.view==="list"?"on":"")+'">☰ List</button><button data-v="cal" class="'+(sessFilter.view==="cal"?"on":"")+'">▦ Calendar</button><button data-v="sup" class="'+(sessFilter.view==="sup"?"on":"")+'">Supervision</button></div><div id="sbody"></div>';
+  const body=v.querySelector("#sbody");
+  function renderList(){
+    body.innerHTML='<div class="search"><input id="sq" placeholder="Search client, location, notes…" value="'+esc(sessFilter.q)+'"></div>'+
+      '<div class="seg" id="seg">'+(function(){var od=S.sessions.filter(x=>derive(x).overdue).length;return ["upcoming","unpaid","incomplete","all"].map(s=>'<button data-s="'+s+'" class="'+(sessFilter.seg===s?"on":"")+'">'+s[0].toUpperCase()+s.slice(1)+(s==="unpaid"&&od?' <span class="badge">'+od+'</span>':"")+'</button>').join("");})()+'</div>'+
+      '<div id="slist" class="card" style="padding:4px 12px"></div>';
+    const renderRows=()=>{
+      const t=today();let rows=S.sessions.map(s=>({s,d:derive(s)}));
+      const q=sessFilter.q.toLowerCase();
+      if(q)rows=rows.filter(x=>(x.s.client+" "+(x.s.location||"")+" "+(x.s.notes||"")+" "+(x.s.invoice||"")).toLowerCase().includes(q));
+      const list=body.querySelector("#slist");
+      if(sessFilter.seg==="unpaid"){
+        rows=rows.filter(x=>x.d.overdue).sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
+        renderUnpaid(list,rows,renderRows);return;
+      }
+      if(sessFilter.seg==="incomplete"){
+        rows=rows.filter(x=>x.d.past&&!x.d.complete).sort((a,b)=>parseD(b.s.date)-parseD(a.s.date));
+        renderIncomplete(list,rows,renderRows);return;
+      }
+      if(sessFilter.seg==="upcoming")rows=rows.filter(x=>parseD(x.s.date)>=t).sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
+      else if(sessFilter.seg==="incomplete")rows=rows.filter(x=>x.d.past&&!x.d.complete).sort((a,b)=>parseD(b.s.date)-parseD(a.s.date));
+      else rows=rows.sort((a,b)=>parseD(b.s.date)-parseD(a.s.date));
+      if(!rows.length){list.innerHTML='<p class="muted small center" style="padding:18px">No sessions match.</p>';return}
+      list.innerHTML=rows.slice(0,400).map(x=>{const d=x.d;
+        if(sessFilter.seg==="incomplete"){const miss=missingReasons(x.s);
+          return '<div class="list-item" data-id="'+x.s._id+'"><div class="li-main"><div class="li-title">'+esc(x.s.client)+' <span class="chip f">incomplete</span></div><div class="li-sub">'+fmtDshort(x.s.date)+' · #'+esc(x.s.num)+' · Missing: '+(miss.join(", ")||"—")+'</div></div><div class="li-right">'+gbp(d.rate)+'</div></div>';}
+        const pay=payChip(x.s,d);
+        return '<div class="list-item" data-id="'+x.s._id+'"><div class="li-main"><div class="li-title">'+esc(x.s.client)+' '+pay+'</div><div class="li-sub">'+fmtDshort(x.s.date)+' · '+esc(x.s.time||"")+' · '+esc(x.s.location||"")+' · #'+esc(x.s.num)+'</div></div><div class="li-right">'+gbp(d.rate)+'</div></div>';}).join("")
+        +(rows.length>400?'<p class="muted small center">Showing first 400 of '+rows.length+'.</p>':"");
+      list.querySelectorAll(".list-item").forEach(li=>li.onclick=()=>sessionForm(S.sessions.find(s=>s._id===li.dataset.id)));
+    };
+    body.querySelector("#sq").oninput=e=>{sessFilter.q=e.target.value;renderRows()};
+    body.querySelector("#seg").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{sessFilter.seg=bt.dataset.s;
+      body.querySelector("#seg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));renderRows()});
+    renderRows();
+  }
+  function renderUnpaid(container,rows,refresh){
+    const td=isoD(today());const t=today();
+    if(!rows.length){container.innerHTML='<p class="muted small center" style="padding:18px">Nothing overdue 🎉</p>';return}
+    const bk=days=>days<7?{o:4,l:"Under 1 week"}:days<14?{o:3,l:"1–2 weeks"}:days<31?{o:2,l:"2 weeks – 1 month"}:days<91?{o:1,l:"1–3 months"}:{o:0,l:"3+ months"};
+    rows.forEach(x=>{x._days=Math.floor((t-parseD(x.s.date))/86400000);x._bk=bk(x._days);});
+    const groups={};rows.forEach(x=>{(groups[x._bk.o]=groups[x._bk.o]||{l:x._bk.l,items:[]}).items.push(x);});
+    const order=Object.keys(groups).map(Number).sort((a,b)=>a-b);
+    container.innerHTML='<div class="paybar"><div class="hint" style="margin-top:4px">Tick what\'s been paid, set each date (defaults today), then Save.</div><div class="row" style="gap:8px;flex-wrap:wrap;margin:8px 0"><input type="date" id="allD" value="'+td+'" style="width:140px"><button class="btn sm sec" id="setAll">Apply date to ticked</button><button class="btn sm savebig" id="savePay">Save payments (0)</button></div></div><div id="prows"></div>';
+    const gstyle=o=>{const m={4:["var(--good)",14],3:["var(--warn)",16],2:["var(--warn)",30],1:["var(--bad)",26],0:["var(--bad)",100]};const a=m[o]||["var(--muted)",14];if(a[1]>=100)return "background:"+a[0]+";color:#fff";return "background:color-mix(in srgb,"+a[0]+" "+a[1]+"%,transparent);color:"+a[0];};
+    const prw=container.querySelector("#prows");
+    prw.innerHTML=order.map(o=>{const g=groups[o];const tot=g.items.reduce((a,x)=>a+(x.d.rate||0),0);
+      g.items.sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
+      return '<div class="grphead" style="'+gstyle(o)+'">'+esc(g.l)+' · '+g.items.length+' · '+gbp(tot)+'</div>'+
+        g.items.map(x=>'<div class="payrow"><input type="checkbox" class="pchk" data-id="'+x.s._id+'"><div class="li-main" data-id="'+x.s._id+'"><div class="li-title">'+esc(x.s.client)+' · '+gbp(x.d.rate)+'</div><div class="li-sub">'+fmtDshort(x.s.date)+' · #'+esc(x.s.num)+' · '+x._days+'d overdue</div></div><input type="date" class="pdate" data-id="'+x.s._id+'" value="'+td+'"></div>').join("");}).join("");
+    const sbtn=container.querySelector("#savePay");
+    const upd=()=>{const n=prw.querySelectorAll(".pchk:checked").length;sbtn.textContent="Save payments ("+n+")";sbtn.classList.toggle("ready",n>0);};
+    prw.querySelectorAll(".pchk").forEach(c=>c.onchange=()=>{Sfx.pop();upd();});
+    prw.querySelectorAll(".li-main").forEach(mn=>mn.onclick=()=>{const c=prw.querySelector('.pchk[data-id="'+mn.dataset.id+'"]');c.checked=!c.checked;Sfx.pop();upd();});
+    container.querySelector("#setAll").onclick=()=>{const dv=container.querySelector("#allD").value;prw.querySelectorAll(".pchk:checked").forEach(c=>{const di=prw.querySelector('.pdate[data-id="'+c.dataset.id+'"]');if(di)di.value=dv;});};
+    sbtn.onclick=async()=>{const checks=[...prw.querySelectorAll(".pchk:checked")];if(!checks.length){toast("Tick some sessions first");Sfx.error();return}
+      let amount=0;
+      checks.forEach(c=>{const di=prw.querySelector('.pdate[data-id="'+c.dataset.id+'"]');const ss=S.sessions.find(z=>z._id===c.dataset.id);if(ss){ss.paidDate=di.value||isoD(today());amount+=derive(ss).rate||0;}});
+      const batch=checks.length;
+      const f=gameNoteBatch({cleared:batch,amount:amount});
+      await commit("Marked "+batch+" session(s) paid");renderTabs();
+      const stillOver=S.sessions.filter(s=>{const d=derive(s);return d.overdue&&(d.rate||0)>0;}).length;
+      gameShow({batch:batch,amount:amount,toast:batch+" marked paid 🎉",
+        allClear:stillOver===0,allClearEmoji:"💰",allClearTitle:"All paid up!",allClearSub:"Every overdue payment collected — gorgeous.",
+        bigEffort:batch>=5,bigEffortSub:gbp(amount)+" collected across "+batch+" sessions"},f);
+      refresh();};
+  }
+  function renderIncomplete(container,rows,refresh){
+    const td=isoD(today());
+    if(!rows.length){container.innerHTML='<div class="center" style="padding:30px 10px"><div style="font-size:48px">🌟</div><p class="muted" style="margin-top:6px">Every past session is complete — notes and room all sorted. Spotless!</p></div>';return}
+    rows.sort((a,b)=>parseD(b.s.date)-parseD(a.s.date));
+    container.innerHTML='<div class="bulkbar"><div class="hint" style="margin-top:4px">Catch up on missing <b>notes</b> and <b>room payments</b> in bulk — tick what\'s done, then Save.</div>'+
+      '<div class="bbtns"><button class="btn sm sec" id="allNotes">✓ All notes done</button><button class="btn sm sec" id="allRoom">✓ All room paid</button>'+
+      '<input type="date" id="allRD" value="'+td+'" style="width:140px"><button class="btn sm sec" id="setRD">Apply date</button></div>'+
+      '<button class="btn full savebig" id="saveInc">Save (0)</button></div><div id="irows"></div>';
+    const irw=container.querySelector("#irows");
+    const stage={};
+    irw.innerHTML=rows.map(x=>{const s=x.s,d=x.d;const miss=missingReasons(s);
+      const needNotes=miss.includes("notes"), needRoom=miss.includes("room-paid status");
+      const chargeable=(d.roomRate||0)>0;
+      stage[s._id]={notes:false,room:false,rdate:td,chargeable:chargeable};
+      const notesCtl=needNotes?'<button class="tgl" data-k="notes" data-id="'+s._id+'"><span class="tbox"></span>Notes done</button>':'<span class="chip y">✓ notes</span>';
+      const roomCtl=needRoom?'<button class="tgl" data-k="room" data-id="'+s._id+'"><span class="tbox"></span>'+(chargeable?'Room paid':'No room fee')+'</button>':'<span class="chip y">✓ room</span>';
+      const noteInput=needNotes?'<input class="ninp" data-id="'+s._id+'" placeholder="Y / type a note" style="display:none;flex:1;min-width:130px;padding:8px;font-size:13px">':'';
+      const rdInput=(needRoom&&chargeable)?'<input type="date" class="rinp pdate2" data-id="'+s._id+'" value="'+td+'" style="display:none">':'';
+      return '<div class="irow" data-id="'+s._id+'"><div class="itop"><div><span class="ittl">'+esc(s.client)+'</span> <span class="isub">'+fmtDshort(s.date)+' · #'+esc(s.num)+(chargeable?' · room '+gbp(d.roomRate):'')+'</span></div><div class="li-right small muted">'+gbp(d.rate)+'</div></div><div class="ctrls">'+notesCtl+roomCtl+noteInput+rdInput+'</div></div>';
+    }).join("");
+    const sbtn=container.querySelector("#saveInc");
+    const count=()=>{let n=0;Object.keys(stage).forEach(id=>{if(stage[id].notes)n++;if(stage[id].room)n++;});return n;};
+    const upd=()=>{const n=count();sbtn.textContent="Save ("+n+")";sbtn.classList.toggle("ready",n>0);};
+    function setTgl(btn,on){const id=btn.dataset.id,k=btn.dataset.k;if(stage[id][k]===on)return;stage[id][k]=on;
+      btn.classList.toggle("on",on);btn.classList.remove("pop");void btn.offsetWidth;if(on)btn.classList.add("pop");
+      const row=irw.querySelector('.irow[data-id="'+id+'"]');
+      if(k==="notes"){const ni=row.querySelector('.ninp');if(ni)ni.style.display=on?"block":"none";}
+      if(k==="room"){const ri=row.querySelector('.rinp');if(ri)ri.style.display=on?"block":"none";}
+      Sfx.pop();upd();}
+    irw.querySelectorAll(".tgl").forEach(b=>b.onclick=()=>setTgl(b,!stage[b.dataset.id][b.dataset.k]));
+    container.querySelector("#allNotes").onclick=()=>irw.querySelectorAll('.tgl[data-k="notes"]').forEach(b=>setTgl(b,true));
+    container.querySelector("#allRoom").onclick=()=>irw.querySelectorAll('.tgl[data-k="room"]').forEach(b=>setTgl(b,true));
+    container.querySelector("#setRD").onclick=()=>{const dv=container.querySelector("#allRD").value;
+      irw.querySelectorAll('.rinp').forEach(ri=>ri.value=dv);Object.keys(stage).forEach(id=>{if(stage[id].room)stage[id].rdate=dv;});};
+    irw.querySelectorAll('.rinp').forEach(ri=>ri.onchange=()=>{stage[ri.dataset.id].rdate=ri.value;});
+    sbtn.onclick=async()=>{
+      const ids=Object.keys(stage).filter(id=>stage[id].notes||stage[id].room);
+      if(!ids.length){toast("Tick something first");Sfx.error();return}
+      let nNotes=0,nRoom=0,cleared=0;
+      ids.forEach(id=>{const stg=stage[id];const ss=S.sessions.find(z=>z._id===id);if(!ss)return;
+        const wasComplete=derive(ss).complete;
+        if(stg.notes){const ni=irw.querySelector('.ninp[data-id="'+id+'"]');const val=(ni&&ni.value.trim())||"Y";ss.notes=val;nNotes++;}
+        if(stg.room){if(stg.chargeable){ss.roomPaid="Y";const ri=irw.querySelector('.rinp[data-id="'+id+'"]');ss.roomPaidDate=(ri&&ri.value)||stg.rdate||td;}else ss.roomPaid="n/a";nRoom++;}
+        if(!wasComplete&&derive(ss).complete)cleared++;});
+      const batch=nNotes+nRoom;
+      const f=gameNoteBatch({cleared:cleared});
+      await commit("Catch-up: "+nNotes+" notes, "+nRoom+" room paid");renderTabs();
+      const remaining=S.sessions.filter(s=>{const d=derive(s);return d.past&&!d.complete;}).length;
+      gameShow({batch:batch,completed:cleared>0,toast:"Updated "+batch+" field"+(batch===1?"":"s")+" 🎉",
+        allClear:remaining===0,allClearEmoji:"🌟",allClearTitle:"Everything's complete!",allClearSub:"All past sessions have notes & room sorted.",
+        bigEffort:cleared>=5,bigEffortSub:cleared+" sessions fully completed in one sweep"},f);
+      refresh();};
+  }
+  function renderCal(){
+    if(calY===null){const t=today();calY=t.getFullYear();calM=t.getMonth();}
+    const monthName=new Date(calY,calM,1).toLocaleDateString("en-GB",{month:"long",year:"numeric"});
+    const lead=(new Date(calY,calM,1).getDay()+6)%7,days=new Date(calY,calM+1,0).getDate();
+    const byDay={};S.sessions.forEach(s=>{const d=parseD(s.date);if(d&&d.getFullYear()===calY&&d.getMonth()===calM)(byDay[d.getDate()]=byDay[d.getDate()]||[]).push(s);});
+    const t=today();let cells="";for(let i=0;i<lead;i++)cells+='<div class="cell empty"></div>';
+    for(let day=1;day<=days;day++){const ss=byDay[day]||[];const due=ss.some(s=>derive(s).overdue);
+      const isT=(calY===t.getFullYear()&&calM===t.getMonth()&&day===t.getDate());
+      const codes=[...new Set(ss.map(s=>s.client))].slice(0,3).join(" ");
+      cells+='<div class="cell'+(isT?" today":"")+'" data-day="'+day+'">'+day+(ss.length?'<span class="cnt'+(due?" due":"")+'">'+ss.length+'</span>':"")+(ss.length?'<span class="cc">'+esc(codes)+'</span>':"")+'</div>';}
+    body.innerHTML='<div class="calnav"><button class="btn sm sec" id="pm">◀</button><b>'+monthName+'</b><button class="btn sm sec" id="nm">▶</button></div><div class="cal"><div class="dow">M</div><div class="dow">T</div><div class="dow">W</div><div class="dow">T</div><div class="dow">F</div><div class="dow">S</div><div class="dow">S</div>'+cells+'</div><p class="small muted center mt">Tap a day to view or edit its sessions.</p>';
+    body.querySelector("#pm").onclick=()=>{calM--;if(calM<0){calM=11;calY--;}renderCal();};
+    body.querySelector("#nm").onclick=()=>{calM++;if(calM>11){calM=0;calY++;}renderCal();};
+    body.querySelectorAll(".cell[data-day]").forEach(c=>c.onclick=()=>daySheet(+c.dataset.day));
+  }
+  function daySheet(day){
+    const ss=S.sessions.filter(s=>{const d=parseD(s.date);return d&&d.getFullYear()===calY&&d.getMonth()===calM&&d.getDate()===day;}).sort((a,b)=>(a.time||"").localeCompare(b.time||""));
+    const bd=el('<div></div>');
+    bd.innerHTML=(ss.length?ss.map(s=>{const d=derive(s);const pay=payChip(s,d);
+      return '<div class="list-item" data-id="'+s._id+'"><div class="li-main"><div class="li-title">'+esc(s.client)+' '+pay+'</div><div class="li-sub">'+esc(s.time||"")+' · '+esc(s.location||"")+' · #'+esc(s.num)+'</div></div><div class="li-right">'+gbp(d.rate)+'</div></div>';}).join(""):'<p class="muted small">No sessions this day.</p>')+'<button class="btn full mt" id="addDay">＋ Add session this day</button>';
+    bd.querySelectorAll(".list-item").forEach(li=>li.onclick=()=>{closeSheet();sessionForm(S.sessions.find(s=>s._id===li.dataset.id));});
+    bd.querySelector("#addDay").onclick=()=>{const ds=isoD(new Date(calY,calM,day));closeSheet();sessionForm(null);setTimeout(()=>{const di=document.querySelector("#f_date");if(di)di.value=ds;},60);};
+    openSheet(new Date(calY,calM,day).toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"}),bd);
+  }
+  function renderSup(){
+    const sup=(S.supervision||[]).slice().sort((a,b)=>parseD(b.date)-parseD(a.date));
+    const total=sup.reduce((a,s)=>a+(+s.cost||0),0);
+    body.innerHTML='<div class="toolbar"><button class="btn sm" id="addSup">＋ Log supervision</button></div>'+
+      '<div class="card" style="padding:4px 12px">'+(sup.length?sup.map(s=>'<div class="list-item" data-id="'+s._id+'"><div class="li-main"><div class="li-title">'+esc(s.supervisor||"Supervision")+'</div><div class="li-sub">'+fmtDshort(s.date)+' · '+(s.count||1)+' client hr(s)</div></div><div class="li-right">'+gbp(s.cost)+'</div></div>').join(""):'<p class="muted small center" style="padding:18px">No supervision logged yet.</p>')+'</div>'+
+      '<p class="small muted center">Total logged: '+gbp(total)+' across '+sup.length+' session(s).</p>';
+    body.querySelector("#addSup").onclick=()=>supervisionForm(null);
+    body.querySelectorAll(".list-item").forEach(li=>li.onclick=()=>supervisionForm(S.supervision.find(s=>s._id===li.dataset.id)));
+  }
+  const route=()=>sessFilter.view==="sup"?renderSup():sessFilter.view==="cal"?renderCal():renderList();
+  v.querySelector("#viewseg").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{sessFilter.view=bt.dataset.v;
+    v.querySelector("#viewseg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));route();});
+  route();return v;
+};
+
+let cliTab="clients";
+VIEWS.clients=function(){
+  const v=el('<div class="view active"></div>');
+  v.innerHTML='<div class="seg mb" id="crtab" style="display:inline-flex"><button data-t="clients" class="'+(cliTab==="clients"?"on":"")+'">Clients</button><button data-t="rooms" class="'+(cliTab==="rooms"?"on":"")+'">Rooms</button></div><div id="crbody"></div>';
+  const body=v.querySelector("#crbody");
+  function renderClients(){
+    body.innerHTML='<div class="toolbar"><button class="btn sm" id="addC">＋ New client</button></div><div class="search"><input id="cq" placeholder="Search clients…"></div><div id="clist"></div>';
+    const render=()=>{
+      const q=(body.querySelector("#cq").value||"").toLowerCase();
+      const order={Ongoing:0,"Initial session booked":0,Paused:1,Finished:2};
+      let cs=S.clients.slice().sort((a,b)=>(order[a.status]??9)-(order[b.status]??9)||a.code.localeCompare(b.code));
+      if(q)cs=cs.filter(c=>(c.code+" "+(c.notes||"")+" "+(c.status||"")).toLowerCase().includes(q));
+      body.querySelector("#clist").innerHTML='<div class="card" style="padding:4px 12px">'+cs.map(c=>{
+        const r=effRate(c.code,isoD(today()));const ch=c.status==="Ongoing"?'y':c.status==="Paused"?'f':'na';
+        return '<div class="list-item" data-id="'+c._id+'"><div class="li-main"><div class="li-title">'+esc(c.code)+' <span class="chip '+ch+'">'+esc(c.status||"")+'</span></div><div class="li-sub">'+esc(c.frequency||"")+(c.notes?" · "+esc(c.notes):"")+'</div></div><div class="li-right">'+gbp(r)+'</div></div>';}).join("")+'</div>';
+      body.querySelectorAll("#clist .list-item").forEach(li=>li.onclick=()=>clientForm(S.clients.find(c=>c._id===li.dataset.id)));
+    };
+    body.querySelector("#cq").oninput=render; body.querySelector("#addC").onclick=()=>clientForm(null); render();
+  }
+  function renderRooms(){
+    body.innerHTML='<div class="toolbar"><button class="btn sm" id="addR">＋ New room / location</button></div><div id="rlist"></div>';
+    const r=()=>{
+      body.querySelector("#rlist").innerHTML='<div class="card" style="padding:4px 12px">'+S.rooms.map(rm=>{
+        const rate=effRoomRate(rm.location,isoD(today()));
+        return '<div class="list-item" data-id="'+rm._id+'"><div class="li-main"><div class="li-title">'+esc(rm.location)+'</div><div class="li-sub">Payment due: '+esc(rm.due||"n/a")+'</div></div><div class="li-right">'+gbp(rate)+'</div></div>';}).join("")+'</div>'+
+        '<p class="small muted">Tap a room to edit it or change its cost from a date (history is kept, like client rates).</p>';
+      body.querySelectorAll("#rlist .list-item").forEach(li=>li.onclick=()=>roomForm(S.rooms.find(x=>x._id===li.dataset.id)));
+    };
+    body.querySelector("#addR").onclick=()=>roomForm(null); r();
+  }
+  const route=()=>cliTab==="rooms"?renderRooms():renderClients();
+  v.querySelector("#crtab").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{cliTab=bt.dataset.t;
+    v.querySelector("#crtab").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));route();});
+  route();return v;
+};
+function roomForm(rm){
+  const isNew=!rm; const m=rm?clone(rm):{_id:uid(),location:"",due:"n/a"};
+  const body=el('<div></div>');
+  const rateNow=isNew?"":effRoomRate(m.location,isoD(today()));
+  const hist=(S.roomRateHistory||[]).filter(r=>(r.location||"").toLowerCase()===(m.location||"").toLowerCase()).sort((a,b)=>parseD(b.effectiveFrom)-parseD(a.effectiveFrom));
+  body.innerHTML='<label>Location / room name</label><input id="r_loc" value="'+esc(m.location)+'">'+
+    '<label>When is payment due?</label><select id="r_due">'+opts(["n/a","EOM","EOW"],m.due||"n/a")+'</select>'+
+    '<p class="small muted">EOM = end of month · EOW = end of week · n/a = no room charge.</p>'+
+    (isNew?'<label>Cost per session (£)</label><input type="number" id="r_rate" value="0">':
+      '<div class="hint">Current cost: <b>'+gbp(rateNow)+'</b> <button class="btn sm" id="chR" style="float:right">Change cost</button></div><div id="rhist"></div>')+
+    '<button class="btn full mt" id="rSave">Save room</button>'+
+    (isNew?"":'<button class="btn danger full mt" id="rDel">Delete room</button>');
+  if(!isNew){body.querySelector("#rhist").innerHTML='<details><summary>Cost history ('+hist.length+')</summary>'+hist.map(r=>'<div class="audit-row"><b>'+gbp(r.rate)+'</b> from '+fmtD(r.effectiveFrom)+'</div>').join("")+'</details>';
+    body.querySelector("#chR").onclick=()=>roomRateChange(m.location);}
+  body.querySelector("#rSave").onclick=async()=>{const loc=body.querySelector("#r_loc").value.trim();const dueV=body.querySelector("#r_due").value;
+    if(!loc){toast("Enter a name");return}
+    if(isNew){if(S.rooms.find(x=>x.location.toLowerCase()===loc.toLowerCase())){toast("Already exists");return}
+      const rate=+body.querySelector("#r_rate").value||0;m.location=loc;m.due=dueV;m.rate=rate;S.rooms.push(m);
+      S.roomRateHistory.push({_id:uid(),location:loc,effectiveFrom:isoD(today()),rate:rate});
+      await commit("Added room: "+loc+" @ "+gbp(rate));}
+    else{const ex=S.rooms.find(x=>x._id===m._id);ex.location=loc;ex.due=dueV;await commit("Edited room: "+loc);}
+    closeSheet();toast("Saved");go("clients");};
+  if(!isNew)body.querySelector("#rDel").onclick=async()=>{if(!confirm("Delete room "+m.location+"? (sessions are kept)"))return;
+    S.rooms=S.rooms.filter(x=>x._id!==m._id);await commit("Deleted room: "+m.location);closeSheet();toast("Deleted");go("clients");};
+  openSheet(isNew?"New room / location":"Room: "+m.location,body);
+}
+function roomRateChange(loc){
+  const body=el('<div></div>');
+  body.innerHTML='<p class="muted small">Adds a new cost from a date you choose. <b>Past sessions keep the old cost.</b></p>'+
+    '<label>Effective from</label><input type="date" id="rcD" value="'+isoD(today())+'">'+
+    '<label>New cost per session (£)</label><input type="number" id="rcA" value="'+(effRoomRate(loc,isoD(today()))||0)+'">'+
+    '<button class="btn full mt" id="rcS">Apply new cost</button>';
+  body.querySelector("#rcS").onclick=async()=>{const dt=body.querySelector("#rcD").value;const amt=+body.querySelector("#rcA").value;
+    if(!dt||isNaN(amt)){toast("Enter date and amount");return}
+    S.roomRateHistory.push({_id:uid(),location:loc,effectiveFrom:dt,rate:amt});
+    const rm=S.rooms.find(r=>r.location.toLowerCase()===loc.toLowerCase());if(rm&&parseD(dt)<=today())rm.rate=amt;
+    await commit("Room cost change: "+loc+" → "+gbp(amt)+" from "+dt);closeSheet();toast("Cost updated");go("clients");};
+  openSheet("Change cost · "+loc,body);
+}
+
+
+/* ===== UK sole-trader tax (Income Tax + Class 4/2 NIC) ===== */
+function taxRates(ty){const sy=parseInt(ty.slice(0,4));
+  const r={pa:12570,basicTop:50270,higherTop:125140,c4lpl:12570,c4upl:50270,c4upper:0.02};
+  r.c4main=(sy>=2024)?0.06:0.09;
+  if(sy<2024){r.class2week=3.45;r.spt=6725;}
+  return r;}
+function ukTax(profit,ty){profit=Math.max(0,profit||0);const r=taxRates(ty);
+  let pa=r.pa;if(profit>100000)pa=Math.max(0,r.pa-(profit-100000)/2);
+  const b1=Math.max(0,Math.min(profit,r.basicTop)-pa)*0.20;
+  const b2=Math.max(0,Math.min(profit,r.higherTop)-r.basicTop)*0.40;
+  const b3=Math.max(0,profit-r.higherTop)*0.45;
+  const incomeTax=b1+b2+b3;
+  const n1=Math.max(0,Math.min(profit,r.c4upl)-r.c4lpl)*r.c4main;
+  const n2=Math.max(0,profit-r.c4upl)*r.c4upper;
+  let class2=0;if(r.class2week)class2=profit>=r.spt?r.class2week*52:0;
+  const total=incomeTax+n1+n2+class2;
+  return {profit,pa,b1,b2,b3,incomeTax,n1,n2,class2,total,effective:profit>0?total/profit:0,r};}
+function tyBounds(ty){const sy=parseInt(ty.slice(0,4));return {start:new Date(sy,3,6),end:new Date(sy+1,3,5)};}
+function tyNet(y,toDateOnly){const t=today();let net=0;
+  S.sessions.forEach(s=>{const d=derive(s);if(d.taxYear!==y)return;if(toDateOnly){const dd=parseD(s.date);if(!dd||dd>t)return;}net+=(d.rate||0)-(d.roomRate||0);});
+  (S.supervision||[]).forEach(sv=>{if(!sv.date||taxYear(sv.date)!==y)return;if(toDateOnly){const dd=parseD(sv.date);if(!dd||dd>t)return;}net-=(+sv.cost||0);});
+  return Math.round(net);}
+function taxForYear(y){const b=tyBounds(y),t=today();
+  const status=b.end<t?"complete":(b.start<=t?"inprogress":"future");
+  const netAll=tyNet(y,false);
+  if(status==="future")return {status,netAll,display:null};
+  if(status==="complete"){const calc=ukTax(netAll,y);return {status,netAll,calc,display:calc.total};}
+  const netTD=tyNet(y,true);
+  const yearDays=Math.round((b.end-b.start)/86400000)+1;
+  const elapsed=Math.min(yearDays,Math.max(1,Math.round((t-b.start)/86400000)+1));
+  const frac=elapsed/yearDays;
+  const calcI=ukTax(netTD,y);
+  const projAnnual=frac>0?netTD/frac:netTD;
+  const calcProj=ukTax(projAnnual,y);
+  const proRata=calcProj.total*frac;
+  return {status,netAll,netTD,yearDays,elapsed,frac,calcI,calcProj,proRata,projAnnual,display:{proj:proRata,todate:calcI.total}};}
+function trow(l,v,b){return '<tr><td>'+(b?'<b>'+l+'</b>':l)+'</td><td class="num">'+(b?'<b>'+v+'</b>':v)+'</td></tr>';}
+function gbpR(n){return gbp(Math.round(n||0));}
+function taxBreakdown(c){return '<table>'+
+  trow('Taxable profit',gbpR(c.profit))+
+  trow('Personal allowance',gbpR(c.pa))+
+  trow('Income tax @ 20%',gbpR(c.b1))+
+  (c.b2?trow('Income tax @ 40%',gbpR(c.b2)):'')+
+  (c.b3?trow('Income tax @ 45%',gbpR(c.b3)):'')+
+  trow('Class 4 NIC @ '+Math.round(c.r.c4main*100)+'%',gbpR(c.n1))+
+  (c.n2?trow('Class 4 NIC @ 2%',gbpR(c.n2)):'')+
+  (c.class2?trow('Class 2 NIC',gbpR(c.class2)):'')+
+  trow('Total tax',gbpR(c.total),true)+
+  trow('Effective rate',(c.effective*100).toFixed(1)+'%')+'</table>';}
+function taxDetailsSheet(y){const tx=taxForYear(y);const body=el('<div></div>');let html='';
+  if(tx.status==="complete"){html='<div class="hint">Completed tax year.</div>'+taxBreakdown(tx.calc);}
+  else if(tx.status==="inprogress"){const pc=Math.round(tx.frac*100);
+    html='<div class="hint">In progress — '+tx.elapsed+' of '+tx.yearDays+' days ('+pc+'%) elapsed.</div>'+
+      '<h3>Projected pro-rata'+(taxMode==="proj"?' · shown in table':'')+'</h3>'+
+      '<p class="small muted">Net to date '+gbpR(tx.netTD)+' → projected full year '+gbpR(tx.projAnnual)+'. Full-year tax '+gbpR(tx.calcProj.total)+' × '+pc+'% = <b>'+gbpR(tx.proRata)+'</b>.</p>'+
+      taxBreakdown(tx.calcProj)+
+      '<h3 style="margin-top:16px">If you stopped today'+(taxMode==="todate"?' · shown in table':'')+'</h3>'+
+      '<p class="small muted">Tax on net to date '+gbpR(tx.netTD)+' = <b>'+gbpR(tx.calcI.total)+'</b>.</p>'+
+      taxBreakdown(tx.calcI);}
+  else {html='<p class="muted">This tax year hasn’t started yet.</p>';}
+  body.innerHTML=html+'<p class="small muted mt">Covers Income Tax and Class 4'+(parseInt(y)<2024?' &amp; Class 2':'')+' National Insurance for a sole trader. A personal estimate, not tax advice.</p>';
+  openSheet("Tax · "+y,body);}
+
+VIEWS.income=function(){
+  const v=el('<div class="view active"></div>');
+  const der=S.sessions.map(s=>({s,d:derive(s)}));
+  const sum=(rows,f)=>rows.reduce((a,x)=>a+(f(x)||0),0);
+  const years=[...new Set(der.map(x=>x.d.taxYear).filter(Boolean))].sort().reverse();
+  const supByTY={}; (S.supervision||[]).forEach(sv=>{if(!sv.date)return;const ty=taxYear(sv.date);supByTY[ty]=(supByTY[ty]||0)+(+sv.cost||0);});
+  const tyTable=years.map(y=>{const rs=der.filter(x=>x.d.taxYear===y);
+    const billed=sum(rs,x=>x.d.rate),rec=sum(rs.filter(x=>x.d.clientPaid),x=>x.d.rate),
+    over=sum(rs.filter(x=>x.d.overdue),x=>x.d.rate),room=sum(rs,x=>x.d.roomRate),sup=supByTY[y]||0;
+    const tx=taxForYear(y);let taxCell;
+    if(tx.status==="future"){taxCell='<td class="num">–</td>';}
+    else{const val=tx.status==="complete"?tx.display:tx.display[taxMode];
+      taxCell='<td class="num"><span class="taxlink" data-y="'+y+'">'+gbp(Math.round(val))+(tx.status==="inprogress"?'*':'')+'</span></td>';}
+    return '<tr><td><b>'+y+'</b></td><td class="num">'+rs.length+'</td><td class="num">'+gbp(billed)+'</td><td class="num">'+gbp(rec)+'</td><td class="num">'+(over?gbp(over):"–")+'</td><td class="num">'+gbp(billed-room-sup)+'</td>'+taxCell+'</tr>';}).join("");
+  const t=today();const months=[];for(let i=0;i<12;i++)months.push(new Date(t.getFullYear(),t.getMonth()-i,1));
+  const mTable=months.map(m=>{const end=new Date(m.getFullYear(),m.getMonth()+1,1);
+    const rs=der.filter(x=>{const d=parseD(x.s.date);return d&&d>=m&&d<end});
+    const billed=sum(rs,x=>x.d.rate),rec=sum(rs.filter(x=>x.d.clientPaid),x=>x.d.rate);
+    return '<tr><td>'+m.toLocaleDateString("en-GB",{month:"short",year:"2-digit"})+'</td><td class="num">'+rs.length+'</td><td class="num">'+gbp(billed)+'</td><td class="num">'+gbp(rec)+'</td><td class="num">'+(billed-rec?gbp(billed-rec):"–")+'</td></tr>';}).join("");
+  const byClient=S.clients.map(c=>{const rs=der.filter(x=>(x.s.client||"").toLowerCase()===c.code.toLowerCase()&&x.d.overdue);
+    return{code:c.code,n:rs.length,amt:sum(rs,x=>x.d.rate)}}).filter(x=>x.amt>0).sort((a,b)=>b.amt-a.amt);
+  // room payments due grouped by room with date-range
+  const due=der.filter(x=>x.d.roomDue==="Y");
+  const roomGrp={}; due.forEach(x=>{const k=x.s.location||"?";const g=roomGrp[k]||(roomGrp[k]={n:0,amt:0,min:null,max:null});
+    g.n++;g.amt+=x.d.roomRate||0;const d=parseD(x.s.date);if(!g.min||d<g.min)g.min=d;if(!g.max||d>g.max)g.max=d;});
+  const roomRows=Object.keys(roomGrp).map(k=>{const g=roomGrp[k];
+    const rng=g.min?(fmtDM(g.min)+(g.max&&+g.max!==+g.min?" – "+fmtDM(g.max):"")):"";
+    return '<tr><td>'+esc(k)+'</td><td class="num">'+g.n+'</td><td>'+rng+'</td><td class="num">'+gbp(g.amt)+'</td></tr>';}).join("");
+  v.innerHTML='<div class="card"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Revenue &amp; net income</h2>'+
+    '<div class="seg" id="gran"><button data-g="week" class="'+(statGran==="week"?"on":"")+'">Weekly</button><button data-g="month" class="'+(statGran==="month"?"on":"")+'">Monthly</button></div></div>'+
+    comboLegend()+'<div id="chCombo"></div><p class="small muted center" id="comboHint">Tap a bar to see revenue, room &amp; supervision values.</p>'+
+    '<div class="small muted mt" style="font-weight:600">Clients seen per '+statGran+'</div><div id="chCli"></div></div>'+
+    '<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">By tax year</h2><div class="seg" id="taxmode" style="display:inline-flex"><button data-m="proj" class="'+(taxMode==="proj"?"on":"")+'">Projected</button><button data-m="todate" class="'+(taxMode==="todate"?"on":"")+'">To date</button></div></div><div class="rawscroll"><table><thead><tr><th>Year</th><th class="num">Sess</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Overdue</th><th class="num">Net</th><th class="num">Tax</th></tr></thead><tbody>'+tyTable+'</tbody></table></div><p class="small muted">Net = billed less room &amp; supervision costs. Tax = Income Tax + Class 4 NIC (sole trader); tap a figure for the breakdown. <b>*</b> in-progress year shown as '+(taxMode==="proj"?"a pro-rata projection":"tax on income to date")+'.</p></div>'+
+    '<div class="card"><h2>Last 12 months</h2><table><thead><tr><th>Month</th><th class="num">Sess</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Open</th></tr></thead><tbody>'+mTable+'</tbody></table></div>'+
+    '<div class="card"><h2>Outstanding by client</h2>'+(byClient.length?'<table><thead><tr><th>Client</th><th class="num">Sessions</th><th class="num">Amount</th></tr></thead><tbody>'+byClient.map(x=>'<tr><td>'+esc(x.code)+'</td><td class="num">'+x.n+'</td><td class="num">'+gbp(x.amt)+'</td></tr>').join("")+'</tbody></table>':'<p class="muted small">Nothing outstanding 🎉</p>')+'</div>'+
+    '<div class="card"><h2>Room payments due</h2>'+(roomRows?'<table><thead><tr><th>Room</th><th class="num">Sessions</th><th>Dates</th><th class="num">Total</th></tr></thead><tbody>'+roomRows+'</tbody></table>':'<p class="muted small">No room payments outstanding.</p>')+'</div>';
+  const series=periodSeries(statGran);
+  let sel=null;
+  const drawCombo=()=>{v.querySelector("#chCombo").innerHTML=chartCombo(series,sel);
+    v.querySelectorAll("#chCombo .hot").forEach(r=>{const set=()=>{sel=+r.dataset.i;drawCombo();};
+      r.addEventListener("click",set);r.addEventListener("mouseenter",set);});};
+  drawCombo();
+  v.querySelector("#chCli").innerHTML=chartLine(series.map(d=>({l:d.l,v:d.clients,avg:d.cliAvg})));
+  v.querySelector("#gran").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{statGran=bt.dataset.g;go("income");});
+  v.querySelectorAll(".taxlink").forEach(elx=>elx.onclick=()=>taxDetailsSheet(elx.dataset.y));
+  var tmx=v.querySelector("#taxmode");if(tmx)tmx.querySelectorAll("button").forEach(b=>b.onclick=()=>{taxMode=b.dataset.m;go("income");});
+  return v;
+};
+
+const RAWCOLS=[
+ {k:"client",t:"Client"},{k:"num",t:"#",n:1},{k:"date",t:"Date"},{k:"time",t:"Time"},{k:"mode",t:"Mode"},
+ {k:"location",t:"Location"},{k:"room",t:"Room"},{k:"rate",t:"Rate",n:1,m:1},{k:"paidYN",t:"Paid"},{k:"paidDate",t:"Paid date"},
+ {k:"overdueYN",t:"Overdue"},{k:"roomRate",t:"Room £",n:1,m:1},{k:"roomPaid",t:"Room paid"},{k:"roomDue",t:"Room due"},
+ {k:"invoice",t:"Invoice"},{k:"notes",t:"Notes"},{k:"status",t:"Status"},{k:"taxYear",t:"Tax yr"},{k:"week",t:"Wk",n:1}];
+function recOf(s,d){return {client:s.client,num:s.num,date:s.date,time:s.time||"",mode:s.mode||"",location:s.location||"",room:s.room||"",
+  rate:d.rate,paidYN:d.clientPaid?"Y":"N",paidDate:s.paidDate||"",overdueYN:d.overdue?"Y":"N",roomRate:d.roomRate,roomPaid:s.roomPaid||"",
+  roomDue:d.roomDue,invoice:s.invoice||"",notes:s.notes||"",status:d.status||"",taxYear:d.taxYear,week:d.week};}
+let rawF={q:"",client:"",ty:"",paid:"",loc:"",sk:"date",sd:-1,cols:null};
+VIEWS.raw=function(){
+  const v=el('<div class="view active"></div>');
+  if(!rawF.cols){try{rawF.cols=JSON.parse(localStorage.getItem("tt_cols"))}catch(e){} if(!rawF.cols||!rawF.cols.length)rawF.cols=["client","num","date","time","location","rate","paidYN","paidDate","overdueYN","status"];}
+  const cOpt=["",...[...new Set(S.sessions.map(s=>s.client))].sort()];
+  const tyOpt=["",...[...new Set(S.sessions.map(s=>derive(s).taxYear).filter(Boolean))].sort().reverse()];
+  const lOpt=["",...S.rooms.map(r=>r.location)];
+  v.innerHTML='<div class="card"><div class="search"><input id="rq" placeholder="Search all fields…" value="'+esc(rawF.q)+'"></div>'+
+    '<div class="row" style="gap:6px;flex-wrap:wrap">'+
+    '<select id="fCl">'+cOpt.map(c=>'<option value="'+esc(c)+'"'+(c===rawF.client?" selected":"")+'>'+(c||"All clients")+'</option>').join("")+'</select>'+
+    '<select id="fTy">'+tyOpt.map(c=>'<option value="'+esc(c)+'"'+(c===rawF.ty?" selected":"")+'>'+(c||"All tax yrs")+'</option>').join("")+'</select>'+
+    '<select id="fPaid"><option value="">Any status</option><option value="Y"'+(rawF.paid==="Y"?" selected":"")+'>Paid</option><option value="N"'+(rawF.paid==="N"?" selected":"")+'>Unpaid</option><option value="OD"'+(rawF.paid==="OD"?" selected":"")+'>Overdue</option></select>'+
+    '<select id="fLoc">'+lOpt.map(c=>'<option value="'+esc(c)+'"'+(c===rawF.loc?" selected":"")+'>'+(c||"All locations")+'</option>').join("")+'</select></div>'+
+    '<details class="mt"><summary>Choose columns &amp; export</summary><div id="colsBox" class="mt"></div><button class="btn sm sec mt" id="rcsv">Export filtered to CSV</button></details>'+
+    '<div id="rcount" class="small muted mt"></div></div>'+
+    '<div class="card" style="padding:6px"><div class="rawscroll"><table id="rtable"></table></div></div>';
+  const cb=v.querySelector("#colsBox");
+  cb.innerHTML=RAWCOLS.map(c=>'<label class="colchk"><input type="checkbox" data-k="'+c.k+'"'+(rawF.cols.includes(c.k)?" checked":"")+'> '+esc(c.t)+'</label>').join("");
+  cb.querySelectorAll("input").forEach(x=>x.onchange=()=>{const k=x.dataset.k;if(x.checked){if(!rawF.cols.includes(k))rawF.cols.push(k);}else rawF.cols=rawF.cols.filter(z=>z!==k);try{localStorage.setItem("tt_cols",JSON.stringify(rawF.cols))}catch(e){} draw();});
+  const fmtCell=(rec,c)=>{let val=rec[c.k];if(c.m)return gbp(val);return esc(val==null?"":val);};
+  function filtered(){
+    let rows=S.sessions.map(s=>{const d=derive(s);return recOf(s,d);});
+    const q=rawF.q.toLowerCase();
+    if(q)rows=rows.filter(r=>RAWCOLS.some(c=>String(r[c.k]==null?"":r[c.k]).toLowerCase().includes(q)));
+    if(rawF.client)rows=rows.filter(r=>r.client===rawF.client);
+    if(rawF.ty)rows=rows.filter(r=>r.taxYear===rawF.ty);
+    if(rawF.loc)rows=rows.filter(r=>r.location===rawF.loc);
+    if(rawF.paid==="Y")rows=rows.filter(r=>r.paidYN==="Y");
+    else if(rawF.paid==="N")rows=rows.filter(r=>r.paidYN==="N");
+    else if(rawF.paid==="OD")rows=rows.filter(r=>r.overdueYN==="Y");
+    const sc=RAWCOLS.find(c=>c.k===rawF.sk)||{};
+    rows.sort((a,b)=>{let x=a[rawF.sk],y=b[rawF.sk];
+      if(rawF.sk==="date"||rawF.sk==="paidDate"){x=x?parseD(x):0;y=y?parseD(y):0;}
+      else if(sc.n){x=+x||0;y=+y||0;}else{x=String(x==null?"":x).toLowerCase();y=String(y==null?"":y).toLowerCase();}
+      return (x>y?1:x<y?-1:0)*rawF.sd;});
+    return rows;
+  }
+  function draw(){
+    const rows=filtered();const cols=RAWCOLS.filter(c=>rawF.cols.includes(c.k));
+    const thead='<thead><tr>'+cols.map(c=>'<th data-k="'+c.k+'"'+(c.n?' class="num"':'')+'>'+esc(c.t)+(rawF.sk===c.k?(rawF.sd>0?" ▲":" ▼"):"")+'</th>').join("")+'</tr></thead>';
+    const tb='<tbody>'+rows.map(r=>'<tr>'+cols.map(c=>'<td'+(c.n?' class="num"':'')+'>'+fmtCell(r,c)+'</td>').join("")+'</tr>').join("")+'</tbody>';
+    const tbl=v.querySelector("#rtable");tbl.innerHTML=thead+tb;
+    tbl.querySelectorAll("th").forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(rawF.sk===k)rawF.sd=-rawF.sd;else{rawF.sk=k;rawF.sd=1;}draw();});
+    v.querySelector("#rcount").textContent=rows.length+" rows · "+cols.length+" columns shown";
+    v.querySelector("#rcsv").onclick=()=>{const head=cols.map(c=>c.t).join(",");
+      const lines=rows.map(r=>cols.map(c=>{let val=c.m?r[c.k]:r[c.k];val=val==null?"":String(val);return /[",\n]/.test(val)?'"'+val.replace(/"/g,'""')+'"':val;}).join(","));
+      download("therapy-table-"+isoD(today())+".csv",[head,...lines].join("\n"),"text/csv");toast("CSV downloaded");};
+  }
+  v.querySelector("#rq").oninput=e=>{rawF.q=e.target.value;draw();};
+  v.querySelector("#fCl").onchange=e=>{rawF.client=e.target.value;draw();};
+  v.querySelector("#fTy").onchange=e=>{rawF.ty=e.target.value;draw();};
+  v.querySelector("#fPaid").onchange=e=>{rawF.paid=e.target.value;draw();};
+  v.querySelector("#fLoc").onchange=e=>{rawF.loc=e.target.value;draw();};
+  draw();return v;
+};
+
+VIEWS.data=function(){
+  const v=el('<div class="view active"></div>');
+  v.innerHTML=`
+   <div class="card"><h2>Backup &amp; restore</h2>
+     <p class="small muted">Your data lives on this device. Export regularly to a file you keep (iCloud/Files/email).</p>
+     <div class="row mt" style="flex-wrap:wrap;gap:8px">
+       <button class="btn" id="expJ">⤓ Export backup (.json)</button>
+       <button class="btn sec" id="expC">⤓ Export sessions (.csv)</button>
+       <button class="btn ghost" id="impB">⤒ Restore from backup</button>
+       <input type="file" id="impF" accept=".json,application/json" style="display:none">
+     </div>
+   </div>
+   <div class="card"><h2>Undo &amp; history</h2>
+     <div class="row" style="gap:8px"><button class="btn sec" id="undoB">↩︎ Undo last change</button>
+       <button class="btn ghost" id="snapB">View restore points</button></div>
+     <div id="auditWrap" class="mt"></div>
+   </div>
+   <div class="card"><h2>About</h2><p class="small muted">Therapy Tracker · offline · replaces the spreadsheet.
+     ${S.sessions.length} sessions, ${S.clients.length} clients. Add to your Home Screen for an app-like experience.</p></div>`;
+  v.querySelector("#expJ").onclick=exportJSON;
+  v.querySelector("#expC").onclick=exportCSV;
+  v.querySelector("#impB").onclick=()=>v.querySelector("#impF").click();
+  v.querySelector("#impF").onchange=importJSON;
+  v.querySelector("#undoB").onclick=async()=>{if(await undo()){toast("Reverted");go("data")}};
+  v.querySelector("#snapB").onclick=showSnapshots;
+  (_db?auditAll():Promise.resolve([])).then(a=>{a.sort((x,y)=>y.id-x.id);
+    v.querySelector("#auditWrap").innerHTML='<details><summary>Recent activity ('+a.length+')</summary>'+
+      a.slice(0,60).map(r=>`<div class="audit-row"><b>${new Date(r.ts).toLocaleString("en-GB",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}</b> — ${esc(r.summary)}</div>`).join("")+'</details>';
+  });
+  return v;
+};
+/* ============ Suggestions ============ */
+function clientList(){const order={Ongoing:0,"Initial session booked":0,Paused:1,Finished:2};
+  return S.clients.slice().sort((a,b)=>(order[a.status]??9)-(order[b.status]??9)||a.code.localeCompare(b.code)).map(c=>c.code)}
+function statusGroups(){
+  const order=["Ongoing","Initial session booked","Active enquiry","Active","Paused","Finished"];
+  const g={}; S.clients.forEach(c=>{const k=c.status||"Other";(g[k]=g[k]||[]).push(c.code)});
+  return Object.keys(g).sort((a,b)=>{const ia=order.indexOf(a),ib=order.indexOf(b);return (ia<0?98:ia)-(ib<0?98:ib)||a.localeCompare(b)})
+    .map(k=>[k,g[k].sort((x,y)=>x.localeCompare(y))]);
+}
+function clientSelectHTML(sel){
+  return '<option value="">— choose client —</option>'+statusGroups().map(([st,codes])=>
+    '<optgroup label="'+esc(st)+'">'+codes.map(c=>'<option value="'+esc(c)+'"'+(c===sel?" selected":"")+'>'+esc(c)+'</option>').join("")+'</optgroup>').join("");
+}
+function lastSessionFor(code,excludeId){
+  const rs=S.sessions.filter(s=>(s.client||"").toLowerCase()===(code||"").toLowerCase()&&s._id!==excludeId);
+  if(!rs.length)return null; rs.sort((a,b)=>parseD(b.date)-parseD(a.date)); return rs[0];
+}
+function freqDays(c){const f=(c&&c.frequency||"").toLowerCase();
+  if(f.includes("2"))return 14; if(f.includes("3"))return 21; if(f.includes("month"))return 28; return 7}
+function suggestFor(code){
+  const rs=S.sessions.filter(s=>(s.client||"").toLowerCase()===(code||"").toLowerCase());
+  if(!rs.length)return {num:1,date:isoD(today()),time:"10:00",mode:"In-person",location:"At home",room:""};
+  rs.sort((a,b)=>parseD(b.date)-parseD(a.date));const last=rs[0];
+  const maxNum=Math.max(...rs.map(s=>+s.num||0));
+  const cl=S.clients.find(c=>c.code.toLowerCase()===code.toLowerCase());
+  const nd=addDays(parseD(last.date),freqDays(cl));
+  return {num:maxNum+1,date:isoD(nd),time:last.time||"10:00",mode:last.mode||"In-person",
+    location:last.location||"At home",room:last.room&&last.room!=="-"?last.room:""};
+}
+
+/* ============ Session form ============ */
+function sessionForm(s){
+  const isNew=!s; const m=s?clone(s):{_id:uid(),client:"",num:"",date:isoD(today()),time:"10:00",mode:"In-person",location:"At home",room:"",invoice:"",paidDate:"",receipt:"",notes:"",roomPaid:"",roomPaidDate:""};
+  const clients=clientList();
+  const locs=S.rooms.map(r=>r.location);
+  const body=el('<div></div>');
+  const draw=()=>{
+    const d=derive(m);
+    const last = m.client ? lastSessionFor(m.client, m._id) : null;
+    const P=(fn)=>{ if(!last) return ""; let x; try{x=fn(last)}catch(e){return ""} return (x==null||x==="")?"":'<div class="prev">Last: '+esc(String(x))+'</div>'; };
+    body.innerHTML=`
+     <label>Client</label>
+     <select id="f_client">${clientSelectHTML(m.client)}</select>
+     <div id="sugHint"></div>
+     <div class="field2">
+       <div><label>Date</label><input type="date" id="f_date" value="${esc(m.date)}">${P(l=>fmtDshort(l.date))}</div>
+       <div><label>Time</label><input type="time" id="f_time" value="${esc(m.time)}">${P(l=>l.time)}</div>
+     </div>
+     <div class="field2">
+       <div><label>Mode</label><select id="f_mode">${opts(["In-person","Online"],m.mode)}</select>${P(l=>l.mode)}</div>
+       <div><label>Session #</label><input type="number" id="f_num" value="${esc(m.num)}">${P(l=>"#"+l.num)}</div>
+     </div>
+     <div class="field2">
+       <div><label>Location</label><select id="f_loc">${opts(locs,m.location)}</select>${P(l=>l.location)}</div>
+       <div><label>Room number</label><input id="f_room" value="${esc(m.room==='-'?'':m.room)}" placeholder="—">${P(l=>(l.room&&l.room!=='-')?l.room:"")}</div>
+     </div>
+     <div class="hint">Rate: <b>${gbp(d.rate)}</b>${d.roomRate?` · Room: ${gbp(d.roomRate)} (${esc(d.due)})`:""} · ${d.taxYear} ${d.past?"· past":"· upcoming"}</div>
+     <label>Payment received date <span class="muted small">(blank = not paid)</span></label>
+     <input type="date" id="f_paid" value="${esc(m.paidDate||"")}">
+     <div class="field2">
+       <div><label>Invoice #</label><input id="f_inv" value="${esc(m.invoice||"")}"></div>
+       <div><label>Room paid?</label><select id="f_rp">${opts(["","Y","N","n/a"],m.roomPaid||"")}</select></div>
+     </div>
+     <label>Notes done?</label><input id="f_notes" value="${esc(m.notes||"")}" placeholder="Y / note">
+     <div class="row mt" style="gap:8px"><button class="btn full" id="save">Save session</button></div>
+     ${isNew?"":'<button class="btn danger full mt" id="del">Delete session</button>'}`;
+    const g=id=>body.querySelector(id);
+    const sync=()=>{m.client=g("#f_client").value;m.date=g("#f_date").value;m.time=g("#f_time").value;m.mode=g("#f_mode").value;
+      m.num=g("#f_num").value;m.location=g("#f_loc").value;m.room=g("#f_room").value;m.paidDate=g("#f_paid").value;
+      m.invoice=g("#f_inv").value;m.roomPaid=g("#f_rp").value;m.notes=g("#f_notes").value;};
+    g("#f_client").onchange=()=>{const code=g("#f_client").value; sync(); m.client=code;
+      if(isNew&&code){const sg=suggestFor(code);Object.assign(m,{num:sg.num,date:sg.date,time:sg.time,mode:sg.mode,location:sg.location,room:sg.room});}
+      draw();
+      if(isNew&&code)body.querySelector("#sugHint").innerHTML='<div class="hint">✨ Pre-filled from this client’s last session — adjust anything, then Save.</div>';};
+    ["#f_date","#f_loc","#f_paid","#f_rp"].forEach(id=>g(id).addEventListener("change",()=>{sync();
+      const d=derive(m);body.querySelector(".hint").innerHTML=`Rate: <b>${gbp(d.rate)}</b>${d.roomRate?` · Room: ${gbp(d.roomRate)} (${esc(d.due)})`:""} · ${d.taxYear} ${d.past?"· past":"· upcoming"}`;}));
+    g("#save").onclick=async()=>{sync();
+      if(!m.client){toast("Choose a client");Sfx.error();return}
+      if(!m.date){toast("Add a date");Sfx.error();return}
+      if(!m.room)m.room="-";
+      const exists=S.sessions.find(x=>x._id===m._id);
+      const prevComplete=exists?derive(exists).complete:false;
+      if(exists){Object.assign(exists,m);await commit("Edited session: "+m.client+" "+m.date);}
+      else{S.sessions.push(m);await commit("Added session: "+m.client+" "+m.date);}
+      const dNow=derive(m);const justCompleted=dNow.past&&dNow.complete&&!prevComplete;
+      closeSheet();
+      gameShow({batch:1,completed:justCompleted,toast:justCompleted?"Session complete ✓":(exists?"Saved":"Session logged ✨")},{});
+      go(cur);};
+    if(!isNew)g("#del").onclick=async()=>{if(!confirm("Delete this session?"))return;
+      S.sessions=S.sessions.filter(x=>x._id!==m._id);await commit("Deleted session: "+m.client+" "+m.date);closeSheet();toast("Deleted");go(cur);};
+  };
+  draw();openSheet(isNew?"New session":"Edit session",body);
+}
+
+function repeatPicker(){
+  const body=el('<div></div>');
+  const recent=[...new Set(S.sessions.slice().sort((a,b)=>parseD(b.date)-parseD(a.date)).map(s=>s.client))];
+  body.innerHTML=`<p class="muted small">Pick a client and we’ll create their next session pre-filled.</p>
+    <select id="rc"><option value="">— choose —</option>${opts(recent)}</select>
+    <button class="btn full mt" id="goRc">Continue</button>`;
+  body.querySelector("#goRc").onclick=()=>{const c=body.querySelector("#rc").value;if(!c)return;closeSheet();
+    const sg=suggestFor(c);sessionForm(null);
+    // prime the form: simulate selecting client
+    setTimeout(()=>{const sel=document.querySelector("#f_client");if(sel){sel.value=c;sel.onchange();}},60);};
+  openSheet("Repeat last session",body);
+}
+
+/* ============ Client form + rate change ============ */
+function clientForm(c){
+  const isNew=!c; const m=c?clone(c):{_id:uid(),code:"",status:"Ongoing",frequency:"Weekly",insurance:"N",notes:""};
+  const statuses=[...new Set(S.clientCategories.map(x=>x.status).concat(["Ongoing","Paused","Finished"]))];
+  const body=el('<div></div>');
+  const rateNow=isNew?"":effRate(m.code,isoD(today()));
+  const hist=S.rateHistory.filter(r=>(r.client||"").toLowerCase()===(m.code||"").toLowerCase()).sort((a,b)=>parseD(b.effectiveFrom)-parseD(a.effectiveFrom));
+  body.innerHTML=`
+    <label>Client code</label><input id="c_code" value="${esc(m.code)}" ${isNew?"":"readonly"}>
+    <div class="field2"><div><label>Status</label><select id="c_status">${opts(statuses,m.status)}</select></div>
+      <div><label>Frequency</label><select id="c_freq">${opts(["Weekly","Every 2 weeks","Every 3 weeks","Monthly"],m.frequency)}</select></div></div>
+    ${isNew?`<label>Starting rate (£)</label><input type="number" id="c_rate" value="85">`:
+      `<div class="hint">Current rate: <b>${gbp(rateNow)}</b> <button class="btn sm" id="chRate" style="float:right">Change rate</button></div>
+       <div id="histWrap"></div>`}
+    <div class="field2"><div><label>Insurance?</label><select id="c_ins">${opts(["N","Y"],m.insurance||"N")}</select></div><div></div></div>
+    <label>Notes</label><textarea id="c_notes" rows="2">${esc(m.notes||"")}</textarea>
+    <button class="btn full mt" id="cSave">Save client</button>
+    ${isNew?"":'<button class="btn danger full mt" id="cDel">Delete client</button>'}`;
+  if(!isNew){
+    body.querySelector("#histWrap").innerHTML='<details><summary>Rate history ('+hist.length+')</summary>'+
+      hist.map(r=>`<div class="audit-row"><b>${gbp(r.rate)}</b> from ${fmtD(r.effectiveFrom)}</div>`).join("")+'</details>';
+    body.querySelector("#chRate").onclick=()=>rateChange(m.code);
+  }
+  body.querySelector("#cSave").onclick=async()=>{
+    m.code=body.querySelector("#c_code").value.trim();m.status=body.querySelector("#c_status").value;
+    m.frequency=body.querySelector("#c_freq").value;m.insurance=body.querySelector("#c_ins").value;m.notes=body.querySelector("#c_notes").value;
+    if(!m.code){toast("Enter a code");return}
+    const cat=S.clientCategories.find(x=>x.status===m.status);m.category=cat?cat.category:m.status;
+    if(isNew){const rate=+body.querySelector("#c_rate").value||0;
+      if(S.clients.find(x=>x.code.toLowerCase()===m.code.toLowerCase())){toast("Code already exists");return}
+      m.rate=rate;S.clients.push(m);
+      S.rateHistory.push({_id:uid(),client:m.code,effectiveFrom:isoD(today()),rate:rate});
+      await commit("Added client: "+m.code+" @ "+gbp(rate));
+    }else{const ex=S.clients.find(x=>x._id===m._id);Object.assign(ex,m);await commit("Edited client: "+m.code);}
+    closeSheet();toast("Saved");go(cur);
+  };
+  if(!isNew)body.querySelector("#cDel").onclick=async()=>{if(!confirm("Delete client "+m.code+"? (sessions are kept)"))return;
+    S.clients=S.clients.filter(x=>x._id!==m._id);await commit("Deleted client: "+m.code);closeSheet();toast("Deleted");go(cur);};
+  openSheet(isNew?"New client":"Client: "+m.code,body);
+}
+function rateChange(code){
+  const body=el('<div></div>');
+  body.innerHTML=`<p class="muted small">Adds a new rate from a date you choose. <b>Past sessions keep their old rate.</b></p>
+    <label>Effective from</label><input type="date" id="rDate" value="${isoD(today())}">
+    <label>New rate (£)</label><input type="number" id="rAmt" value="${effRate(code,isoD(today()))||85}">
+    <button class="btn full mt" id="rSave">Apply new rate</button>`;
+  body.querySelector("#rSave").onclick=async()=>{const dt=body.querySelector("#rDate").value;const amt=+body.querySelector("#rAmt").value;
+    if(!dt||isNaN(amt)){toast("Enter date and amount");return}
+    S.rateHistory.push({_id:uid(),client:code,effectiveFrom:dt,rate:amt});
+    const cl=S.clients.find(c=>c.code.toLowerCase()===code.toLowerCase());if(cl&&parseD(dt)<=today())cl.rate=amt;
+    await commit("Rate change: "+code+" → "+gbp(amt)+" from "+dt);closeSheet();toast("Rate updated");go(cur);};
+  openSheet("Change rate · "+code,body);
+}
+
+/* ============ Supervision ============ */
+function supervisionForm(s){
+  const isNew=!s;const m=s?clone(s):{_id:uid(),date:isoD(today()),supervisor:(S.supervision.slice(-1)[0]||{}).supervisor||"",count:1,cost:55};
+  const body=el('<div></div>');
+  body.innerHTML=`<div class="field2"><div><label>Date</label><input type="date" id="s_date" value="${esc(m.date)}"></div>
+     <div><label>Client hrs</label><input type="number" id="s_cnt" value="${esc(m.count)}"></div></div>
+    <label>Supervisor</label><input id="s_sup" value="${esc(m.supervisor||"")}">
+    <label>Cost (£)</label><input type="number" id="s_cost" value="${esc(m.cost)}">
+    <button class="btn full mt" id="sSave">Save</button>
+    ${isNew?"":'<button class="btn danger full mt" id="sDel">Delete</button>'}`;
+  body.querySelector("#sSave").onclick=async()=>{m.date=body.querySelector("#s_date").value;m.count=+body.querySelector("#s_cnt").value;
+    m.supervisor=body.querySelector("#s_sup").value;m.cost=+body.querySelector("#s_cost").value;
+    const ex=S.supervision.find(x=>x._id===m._id);if(ex)Object.assign(ex,m);else S.supervision.push(m);
+    await commit((ex?"Edited":"Added")+" supervision: "+m.date);closeSheet();toast("Saved");go(cur);};
+  if(!isNew)body.querySelector("#sDel").onclick=async()=>{S.supervision=S.supervision.filter(x=>x._id!==m._id);
+    await commit("Deleted supervision: "+m.date);closeSheet();toast("Deleted");go(cur);};
+  openSheet(isNew?"New supervision":"Edit supervision",body);
+}
+
+/* ============ Export / import ============ */
+function download(name,text,type){const b=new Blob([text],{type:type||"application/json"});const u=URL.createObjectURL(b);
+  const a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500)}
+async function exportJSON(){const audit=await auditAll();
+  const out={app:"TherapyTracker",version:1,exportedAt:new Date().toISOString(),state:S,audit:audit.slice(-800)};
+  download("therapy-tracker-backup-"+isoD(today())+".json",JSON.stringify(out));toast("Backup downloaded")}
+function exportCSV(){
+  const cols=["client","num","date","time","mode","location","room","invoice","paidDate","notes","roomPaid","rate","clientPaid","overdue","roomRate","roomDue","status","taxYear","week"];
+  const rows=[cols.join(",")];
+  S.sessions.slice().sort((a,b)=>parseD(a.date)-parseD(b.date)).forEach(s=>{const d=derive(s);
+    const r=cols.map(c=>{let v=(c in s)?s[c]:d[c];if(c==="clientPaid")v=d.clientPaid?"Y":"N";if(c==="overdue")v=d.overdue?"Y":"N";
+      v=v==null?"":String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v});
+    rows.push(r.join(","))});
+  download("therapy-sessions-"+isoD(today())+".csv",rows.join("\n"),"text/csv");toast("CSV downloaded")}
+function importJSON(e){const f=e.target.files[0];if(!f)return;const rd=new FileReader();
+  rd.onload=async()=>{try{const o=JSON.parse(rd.result);const st=o.state||o;
+    if(!st.sessions||!st.clients)throw new Error("Not a valid backup");
+    if(!confirm("Restore this backup? It replaces current data (current state is saved as a restore point)."))return;
+    S=normalize(st);
+    await commit("Restored backup ("+(S.sessions.length)+" sessions)");toast("Backup restored");go("home");
+  }catch(err){alert("Could not import: "+err.message)}};rd.readAsText(f)}
+async function showSnapshots(){if(!_db){toast("Restore points need storage");return}
+  const snaps=await snapAll();snaps.sort((a,b)=>b.id-a.id);
+  const body=el('<div></div>');
+  body.innerHTML='<p class="muted small">Every change creates a restore point. Tap to roll back.</p>'+
+    snaps.slice(0,80).map(s=>`<div class="list-item" data-id="${s.id}"><div class="li-main">
+      <div class="li-title">${esc(s.label)}</div><div class="li-sub">${new Date(s.ts).toLocaleString("en-GB")} · ${s.data.sessions.length} sessions</div></div>
+      <button class="btn sm sec">Restore</button></div>`).join("");
+  body.querySelectorAll(".list-item").forEach(li=>li.onclick=async()=>{const id=+li.dataset.id;const snap=snaps.find(x=>x.id===id);
+    if(!confirm("Roll back to: "+snap.label+"?"))return;S=clone(snap.data);await commit("Rolled back to: "+snap.label);closeSheet();toast("Restored");go("home")});
+  openSheet("Restore points",body);
+}
+
+/* ============ Init ============ */
+(async function(){
+  try{await openDB();await loadState();}
+  catch(e){ // fallback to localStorage
+    try{const ls=localStorage.getItem("tt_state");S=ls?JSON.parse(ls):clone(window.SEED);}catch(_){S=clone(window.SEED);}
+    if(!S.sessions)S=clone(window.SEED);
+  }
+  go("home");
+})();
+</script>
+<script>if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(function(){});}</script></body>
+</html>
