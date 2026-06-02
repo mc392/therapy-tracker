@@ -1,1 +1,6 @@
 .idea/
+.claude/
+
+# Local data & backups — NEVER commit real client data to this (public) repo
+therapy-tracker-data*.json
+therapy-tracker-backup-*.json

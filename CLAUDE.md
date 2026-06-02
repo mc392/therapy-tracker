@@ -16,13 +16,14 @@ TherapyTracker-web/
 
 **Do not edit** `CBT/Therapy Tracker.html` — that is an old diverged copy. Always edit `TherapyTracker-web/index.html`.
 
-## Critical: service worker cache
-After every change to `index.html`, bump the cache name in `sw.js`:
-```js
-// e.g. tt-v2 → tt-v3
-const C = "tt-v3";
-```
-Without this, installed PWA instances serve the stale cached version.
+## Deployment
+Hosted on GitHub Pages. Push to `main` → GitHub Actions deploys `TherapyTracker-web/` automatically.
+Live URL: `https://<username>.github.io/<repo>/`
+
+## Service worker cache strategy
+`sw.js` uses **network-first for HTML** (`req.mode === "navigate"`) — every page load fetches a fresh `index.html` from the network, so updates land on next open without needing a cache bump.
+
+Static assets (icons, manifest) use cache-first. You only need to bump the cache name constant (`C = "tt-v2"`) if you rename or remove a static asset file, to force old caches to clear.
 
 ## State / data model
 Global `S` object — persisted to IndexedDB (`TherapyTrackerDB`) with a localStorage mirror.

@@ -148,7 +148,9 @@ nav.tabs button.on{color:var(--brand);
 #rtable{font-size:12px;white-space:nowrap;min-width:100%}
 #rtable th{cursor:pointer;position:sticky;top:0;background:var(--card);user-select:none}
 #rtable td,#rtable th{padding:7px 9px}
-.colchk{display:inline-flex;align-items:center;gap:5px;font-size:13px;margin:4px 12px 4px 0;color:var(--ink);font-weight:500}
+#colsBox{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px 10px}
+.colchk{display:flex;align-items:center;gap:7px;font-size:13.5px;color:var(--ink);font-weight:500}
+.colchk input[type=checkbox]{width:18px;height:18px;flex:none;margin:0;accent-color:var(--brand)}
 optgroup{font-size:12px;color:var(--muted)} optgroup option{font-size:16px;color:var(--ink)}
 .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--brand);color:#fff;
   padding:11px 18px;border-radius:24px;font-size:14px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.3)}
@@ -232,7 +234,7 @@ summary{font-weight:600;cursor:pointer}
 .ring .rbg{stroke:var(--soft)}
 .ring .rfg{stroke:var(--brand);transition:stroke-dashoffset 1.1s cubic-bezier(.2,.85,.25,1);stroke-linecap:round}
 .ring.done .rfg{stroke:var(--good)}
-.ring .rpct{position:absolute;top:31px;left:0;right:0;font-size:21px;font-weight:800;color:var(--brand-dark);font-variant-numeric:tabular-nums}
+.ring .rpct{position:absolute;top:0;left:0;right:0;height:80px;display:flex;align-items:center;justify-content:center;font-size:21px;font-weight:800;color:var(--brand-dark);font-variant-numeric:tabular-nums}
 .ring.done .rpct{color:var(--good)}
 .ring .rpct .chk{font-size:24px}
 .ring .rlab{font-size:11.5px;color:var(--muted);margin-top:7px;line-height:1.25}
@@ -694,7 +696,7 @@ VIEWS.home=function(){
 };
 
 let sessFilter={q:"",seg:"upcoming",view:"list"};
-let calY=null,calM=null,statGran="month",taxMode="proj";
+let calY=null,calM=null,statGran="month",taxMode="proj",thMode="net",supTab="log";
 
 /* ===== analytics helpers (inline SVG charts) ===== */
 function monthKey(s){const d=parseD(s);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")}
@@ -938,13 +940,49 @@ VIEWS.sessions=function(){
     openSheet(new Date(calY,calM,day).toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"}),bd);
   }
   function renderSup(){
-    const sup=(S.supervision||[]).slice().sort((a,b)=>parseD(b.date)-parseD(a.date));
-    const total=sup.reduce((a,s)=>a+(+s.cost||0),0);
-    body.innerHTML='<div class="toolbar"><button class="btn sm" id="addSup">＋ Log supervision</button></div>'+
-      '<div class="card" style="padding:4px 12px">'+(sup.length?sup.map(s=>'<div class="list-item" data-id="'+s._id+'"><div class="li-main"><div class="li-title">'+esc(s.supervisor||"Supervision")+'</div><div class="li-sub">'+fmtDshort(s.date)+' · '+(s.count||1)+' client hr(s)</div></div><div class="li-right">'+gbp(s.cost)+'</div></div>').join(""):'<p class="muted small center" style="padding:18px">No supervision logged yet.</p>')+'</div>'+
-      '<p class="small muted center">Total logged: '+gbp(total)+' across '+sup.length+' session(s).</p>';
-    body.querySelector("#addSup").onclick=()=>supervisionForm(null);
-    body.querySelectorAll(".list-item").forEach(li=>li.onclick=()=>supervisionForm(S.supervision.find(s=>s._id===li.dataset.id)));
+    body.innerHTML='<div class="seg mb" id="suptab" style="display:inline-flex"><button data-st="log" class="'+(supTab==="log"?"on":"")+'">Log</button><button data-st="metrics" class="'+(supTab==="metrics"?"on":"")+'">Metrics</button></div><div id="supbody"></div>';
+    const sb=body.querySelector("#supbody");
+    function drawLog(){
+      const sup=(S.supervision||[]).slice().sort((a,b)=>parseD(b.date)-parseD(a.date));
+      const total=sup.reduce((a,s)=>a+(+s.cost||0),0);
+      sb.innerHTML='<div class="toolbar"><button class="btn sm" id="addSup">＋ Log supervision</button></div>'+
+        '<div class="card" style="padding:4px 12px">'+(sup.length?sup.map(s=>{const disc=(s.clients&&s.clients.length)?(' · '+esc(s.clients.join(", "))):'';
+          return '<div class="list-item" data-id="'+s._id+'"><div class="li-main"><div class="li-title">'+esc(s.supervisor||"Supervision")+'</div><div class="li-sub">'+fmtDshort(s.date)+' · '+(s.count||1)+' client hr(s)'+disc+'</div></div><div class="li-right">'+gbp(s.cost)+'</div></div>';}).join(""):'<p class="muted small center" style="padding:18px">No supervision logged yet.</p>')+'</div>'+
+        '<p class="small muted center">Total logged: '+gbp(total)+' across '+sup.length+' session(s).</p>';
+      sb.querySelector("#addSup").onclick=()=>supervisionForm(null);
+      sb.querySelectorAll(".list-item").forEach(li=>li.onclick=()=>supervisionForm(S.supervision.find(s=>s._id===li.dataset.id)));
+    }
+    function drawMetrics(){
+      const t=today();
+      const sup=(S.supervision||[]).slice().filter(s=>s.date).sort((a,b)=>parseD(a.date)-parseD(b.date));
+      const totalSess=sup.length;
+      const totalCost=sup.reduce((a,s)=>a+(+s.cost||0),0);
+      const totalHrs=sup.reduce((a,s)=>a+(+s.count||0),0);
+      const ty=curTaxYear();
+      const tyCost=sup.filter(s=>taxYear(s.date)===ty).reduce((a,s)=>a+(+s.cost||0),0);
+      let avgGap=null;
+      if(sup.length>=2)avgGap=Math.round((parseD(sup[sup.length-1].date)-parseD(sup[0].date))/86400000/(sup.length-1));
+      const lastDisc={};
+      sup.forEach(s=>{const d=parseD(s.date);if(!d)return;(s.clients||[]).forEach(code=>{const k=code.toLowerCase();if(!lastDisc[k]||d>lastDisc[k])lastDisc[k]=d;});});
+      const active=S.clients.filter(c=>clientCategory(c.status)==="Active");
+      const rows=active.map(c=>{const ld=lastDisc[c.code.toLowerCase()];
+        return {code:c.code,date:ld||null,days:ld?Math.floor((t-ld)/86400000):null};})
+        .sort((a,b)=>{if(a.days==null&&b.days==null)return a.code.localeCompare(b.code);if(a.days==null)return -1;if(b.days==null)return 1;return b.days-a.days;});
+      const recencyChip=r=>r.days==null?'<span class="chip n">never</span>':r.days>56?'<span class="chip n">'+r.days+'d</span>':r.days>28?'<span class="chip f">'+r.days+'d</span>':'<span class="chip y">'+r.days+'d</span>';
+      sb.innerHTML='<div class="kpis mb">'+
+        '<div class="kpi"><div class="v">'+totalSess+'</div><div class="l">Sessions logged</div></div>'+
+        '<div class="kpi"><div class="v">'+gbp(Math.round(totalCost))+'</div><div class="l">Total spent</div></div>'+
+        '<div class="kpi"><div class="v">'+(Math.round(totalHrs*10)/10)+'</div><div class="l">Client-hours</div></div>'+
+        '<div class="kpi"><div class="v">'+gbp(Math.round(tyCost))+'</div><div class="l">'+ty+' spend</div></div>'+
+        '</div>'+
+        '<div class="card"><h2>Client discussion recency</h2><p class="small muted" style="margin:0 0 6px">Time since each active client was last discussed in supervision'+(avgGap!=null?' · avg '+avgGap+' days between supervisions':'')+'.</p>'+
+        (rows.length?'<div style="padding:0 2px">'+rows.map(r=>'<div class="list-item"><div class="li-main"><div class="li-title">'+esc(r.code)+'</div><div class="li-sub">'+(r.date?'Last discussed '+fmtD(r.date):'Not yet discussed in supervision')+'</div></div><div class="li-right">'+recencyChip(r)+'</div></div>').join("")+'</div>':'<p class="muted small">No active clients to show.</p>')+
+        '<div class="legend" style="margin-top:10px"><span class="lgi"><i style="background:var(--good)"></i>≤4 wks</span><span class="lgi"><i style="background:var(--accent)"></i>4–8 wks</span><span class="lgi"><i style="background:var(--bad)"></i>8+ wks / never</span></div></div>';
+    }
+    const route=()=>supTab==="metrics"?drawMetrics():drawLog();
+    body.querySelector("#suptab").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{supTab=bt.dataset.st;
+      body.querySelector("#suptab").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));route();});
+    route();
   }
   const route=()=>sessFilter.view==="sup"?renderSup():sessFilter.view==="cal"?renderCal():renderList();
   v.querySelector("#viewseg").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{sessFilter.view=bt.dataset.v;
@@ -1091,6 +1129,25 @@ function taxDetailsSheet(y){const tx=taxForYear(y);const body=el('<div></div>');
   body.innerHTML=html+'<p class="small muted mt">Covers Income Tax and Class 4'+(parseInt(y)<2024?' &amp; Class 2':'')+' National Insurance for a sole trader. A personal estimate, not tax advice.</p>';
   openSheet("Tax · "+y,body);}
 
+/* ===== Monthly take-home & pension ===== */
+function pensionPcm(){let v=150;try{const s=localStorage.getItem("tt_pension");if(s!==null&&s!==""&&!isNaN(+s))v=+s;}catch(e){}return v;}
+function setPensionPcm(v){try{localStorage.setItem("tt_pension",String(v));}catch(e){}}
+function clientCategory(status){const c=(S.clientCategories||[]).find(x=>x.status===status);return c?c.category:(status||"");}
+function monthlyTakeHome(){const ty=curTaxYear();const tx=taxForYear(ty);
+  let annualNet=0,annualTax=0;
+  if(tx.status==="complete"){annualNet=tx.netAll;annualTax=tx.calc.total;}
+  else if(tx.status==="inprogress"){annualNet=tx.projAnnual;annualTax=tx.calcProj.total;}
+  const annualHome=annualNet-annualTax;
+  return {ty,status:tx.status,annualNet,annualTax,annualHome,monthly:annualHome/12};}
+function editPension(after){const body=el('<div></div>');
+  body.innerHTML='<p class="muted small">Set your monthly pension contribution. It’s deducted from your after-tax take-home in the “After pension” view (a simple deduction — tax relief isn’t modelled).</p>'+
+    '<label>Monthly pension contribution (£)</label><input type="number" id="penA" value="'+pensionPcm()+'">'+
+    '<button class="btn full mt" id="penS">Save</button>';
+  body.querySelector("#penS").onclick=()=>{const val=+body.querySelector("#penA").value;
+    if(isNaN(val)||val<0){toast("Enter an amount");Sfx.error();return;}
+    setPensionPcm(val);closeSheet();toast("Pension updated");if(after)after();};
+  openSheet("Monthly pension",body);}
+
 VIEWS.income=function(){
   const v=el('<div class="view active"></div>');
   const der=S.sessions.map(s=>({s,d:derive(s)}));
@@ -1119,7 +1176,18 @@ VIEWS.income=function(){
   const roomRows=Object.keys(roomGrp).map(k=>{const g=roomGrp[k];
     const rng=g.min?(fmtDM(g.min)+(g.max&&+g.max!==+g.min?" – "+fmtDM(g.max):"")):"";
     return '<tr><td>'+esc(k)+'</td><td class="num">'+g.n+'</td><td>'+rng+'</td><td class="num">'+gbp(g.amt)+'</td></tr>';}).join("");
-  v.innerHTML='<div class="card"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Revenue &amp; net income</h2>'+
+  const th=monthlyTakeHome();
+  const thBasis = th.status==="inprogress"
+    ? "Based on "+th.ty+"’s projected net of "+gbp(Math.round(th.annualNet))+" less "+gbp(Math.round(th.annualTax))+" tax."
+    : th.status==="complete"
+    ? "Based on "+th.ty+"’s net of "+gbp(Math.round(th.annualNet))+" less "+gbp(Math.round(th.annualTax))+" tax."
+    : "No income recorded this tax year yet.";
+  const thCard='<div class="card" id="thCard"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">Monthly take-home</h2>'+
+    '<div class="seg" id="thMode" style="display:inline-flex"><button data-th="net" class="'+(thMode==="net"?"on":"")+'">Net of tax</button><button data-th="pension" class="'+(thMode==="pension"?"on":"")+'">After pension</button></div></div>'+
+    '<div class="kpis mt" style="grid-template-columns:1fr 1fr"><div class="kpi good"><div class="v" id="thMain"></div><div class="l" id="thMainL"></div></div>'+
+    '<div class="kpi"><div class="v" id="thYr"></div><div class="l" id="thYrL"></div></div></div>'+
+    '<p class="small muted mt" id="thNote"></p></div>';
+  v.innerHTML=thCard+'<div class="card"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Revenue &amp; net income</h2>'+
     '<div class="seg" id="gran"><button data-g="week" class="'+(statGran==="week"?"on":"")+'">Weekly</button><button data-g="month" class="'+(statGran==="month"?"on":"")+'">Monthly</button></div></div>'+
     comboLegend()+'<div id="chCombo"></div><p class="small muted center" id="comboHint">Tap a bar to see revenue, room &amp; supervision values.</p>'+
     '<div class="small muted mt" style="font-weight:600">Clients seen per '+statGran+'</div><div id="chCli"></div></div>'+
@@ -1137,21 +1205,33 @@ VIEWS.income=function(){
   v.querySelector("#gran").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{statGran=bt.dataset.g;go("income");});
   v.querySelectorAll(".taxlink").forEach(elx=>elx.onclick=()=>taxDetailsSheet(elx.dataset.y));
   var tmx=v.querySelector("#taxmode");if(tmx)tmx.querySelectorAll("button").forEach(b=>b.onclick=()=>{taxMode=b.dataset.m;go("income");});
+  function paintTH(){const pen=pensionPcm();
+    const mainV=thMode==="pension"?Math.round(th.monthly-pen):Math.round(th.monthly);
+    const yrV=thMode==="pension"?Math.round(th.annualHome-pen*12):Math.round(th.annualHome);
+    v.querySelector("#thMain").textContent=gbp(mainV);
+    v.querySelector("#thMainL").textContent=thMode==="pension"?"per month, after tax & pension":"per month, after tax";
+    v.querySelector("#thYr").textContent=gbp(yrV);
+    v.querySelector("#thYrL").textContent=thMode==="pension"?"per year, after tax & pension":"per year, after tax";
+    v.querySelector("#thNote").innerHTML=thBasis+(thMode==="pension"?(" Less pension "+gbp(pen)+"/mo."):"")+' <span class="taxlink" id="editPen">'+(thMode==="pension"?"Edit pension ›":("Pension "+gbp(pen)+"/mo ›"))+'</span>';
+    const ep=v.querySelector("#editPen");if(ep)ep.onclick=()=>editPension(()=>go("income"));}
+  v.querySelector("#thMode").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{thMode=bt.dataset.th;
+    v.querySelector("#thMode").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));paintTH();});
+  paintTH();
   return v;
 };
 
 const RAWCOLS=[
  {k:"client",t:"Client"},{k:"num",t:"#",n:1},{k:"date",t:"Date"},{k:"time",t:"Time"},{k:"mode",t:"Mode"},
  {k:"location",t:"Location"},{k:"room",t:"Room"},{k:"rate",t:"Rate",n:1,m:1},{k:"paidYN",t:"Paid"},{k:"paidDate",t:"Paid date"},
- {k:"overdueYN",t:"Overdue"},{k:"roomRate",t:"Room £",n:1,m:1},{k:"roomPaid",t:"Room paid"},{k:"roomDue",t:"Room due"},
+ {k:"overdueYN",t:"Overdue"},{k:"roomRate",t:"Room £",n:1,m:1},{k:"roomPaid",t:"Room paid"},{k:"roomPaidDate",t:"Room paid date"},{k:"roomDue",t:"Room due"},
  {k:"invoice",t:"Invoice"},{k:"notes",t:"Notes"},{k:"status",t:"Status"},{k:"taxYear",t:"Tax yr"},{k:"week",t:"Wk",n:1}];
 function recOf(s,d){return {client:s.client,num:s.num,date:s.date,time:s.time||"",mode:s.mode||"",location:s.location||"",room:s.room||"",
   rate:d.rate,paidYN:d.clientPaid?"Y":"N",paidDate:s.paidDate||"",overdueYN:d.overdue?"Y":"N",roomRate:d.roomRate,roomPaid:s.roomPaid||"",
-  roomDue:d.roomDue,invoice:s.invoice||"",notes:s.notes||"",status:d.status||"",taxYear:d.taxYear,week:d.week};}
+  roomPaidDate:s.roomPaidDate||"",roomDue:d.roomDue,invoice:s.invoice||"",notes:s.notes||"",status:d.status||"",taxYear:d.taxYear,week:d.week};}
 let rawF={q:"",client:"",ty:"",paid:"",loc:"",sk:"date",sd:-1,cols:null};
 VIEWS.raw=function(){
   const v=el('<div class="view active"></div>');
-  if(!rawF.cols){try{rawF.cols=JSON.parse(localStorage.getItem("tt_cols"))}catch(e){} if(!rawF.cols||!rawF.cols.length)rawF.cols=["client","num","date","time","location","rate","paidYN","paidDate","overdueYN","status"];}
+  if(!rawF.cols){try{rawF.cols=JSON.parse(localStorage.getItem("tt_cols"))}catch(e){} if(!rawF.cols||!rawF.cols.length)rawF.cols=["client","num","date","time","location","rate","paidYN","paidDate","roomPaidDate","overdueYN","status"];}
   const cOpt=["",...[...new Set(S.sessions.map(s=>s.client))].sort()];
   const tyOpt=["",...[...new Set(S.sessions.map(s=>derive(s).taxYear).filter(Boolean))].sort().reverse()];
   const lOpt=["",...S.rooms.map(r=>r.location)];
@@ -1298,13 +1378,15 @@ function sessionForm(s){
        <div><label>Invoice #</label><input id="f_inv" value="${esc(m.invoice||"")}"></div>
        <div><label>Room paid?</label><select id="f_rp">${opts(["","Y","N","n/a"],m.roomPaid||"")}</select></div>
      </div>
+     <label>Room payment date <span class="muted small">(when the room fee was paid)</span></label>
+     <input type="date" id="f_rpd" value="${esc(m.roomPaidDate||"")}">
      <label>Notes done?</label><input id="f_notes" value="${esc(m.notes||"")}" placeholder="Y / note">
      <div class="row mt" style="gap:8px"><button class="btn full" id="save">Save session</button></div>
      ${isNew?"":'<button class="btn danger full mt" id="del">Delete session</button>'}`;
     const g=id=>body.querySelector(id);
     const sync=()=>{m.client=g("#f_client").value;m.date=g("#f_date").value;m.time=g("#f_time").value;m.mode=g("#f_mode").value;
       m.num=g("#f_num").value;m.location=g("#f_loc").value;m.room=g("#f_room").value;m.paidDate=g("#f_paid").value;
-      m.invoice=g("#f_inv").value;m.roomPaid=g("#f_rp").value;m.notes=g("#f_notes").value;};
+      m.invoice=g("#f_inv").value;m.roomPaid=g("#f_rp").value;m.roomPaidDate=g("#f_rpd").value;m.notes=g("#f_notes").value;};
     g("#f_client").onchange=()=>{const code=g("#f_client").value; sync(); m.client=code;
       if(isNew&&code){const sg=suggestFor(code);Object.assign(m,{num:sg.num,date:sg.date,time:sg.time,mode:sg.mode,location:sg.location,room:sg.room});}
       draw();
@@ -1398,16 +1480,27 @@ function rateChange(code){
 
 /* ============ Supervision ============ */
 function supervisionForm(s){
-  const isNew=!s;const m=s?clone(s):{_id:uid(),date:isoD(today()),supervisor:(S.supervision.slice(-1)[0]||{}).supervisor||"",count:1,cost:55};
+  const isNew=!s;const m=s?clone(s):{_id:uid(),date:isoD(today()),supervisor:(S.supervision.slice(-1)[0]||{}).supervisor||"",count:1,cost:55,clients:[]};
   const body=el('<div></div>');
+  const allCodes=clientList();
+  const sel=new Set(m.clients||[]);
+  const chips=allCodes.length
+    ? allCodes.map(code=>'<button type="button" class="tgl'+(sel.has(code)?" on":"")+'" data-code="'+esc(code)+'"><span class="tbox"></span>'+esc(code)+'</button>').join("")
+    : '<span class="muted small">No clients yet.</span>';
   body.innerHTML=`<div class="field2"><div><label>Date</label><input type="date" id="s_date" value="${esc(m.date)}"></div>
      <div><label>Client hrs</label><input type="number" id="s_cnt" value="${esc(m.count)}"></div></div>
     <label>Supervisor</label><input id="s_sup" value="${esc(m.supervisor||"")}">
     <label>Cost (£)</label><input type="number" id="s_cost" value="${esc(m.cost)}">
+    <label>Clients discussed <span class="muted small">(tap to select)</span></label>
+    <div id="s_clients" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">${chips}</div>
     <button class="btn full mt" id="sSave">Save</button>
     ${isNew?"":'<button class="btn danger full mt" id="sDel">Delete</button>'}`;
+  body.querySelectorAll('#s_clients .tgl[data-code]').forEach(b=>b.onclick=()=>{const code=b.dataset.code;
+    if(sel.has(code))sel.delete(code);else sel.add(code);
+    b.classList.toggle("on",sel.has(code));b.classList.remove("pop");void b.offsetWidth;b.classList.add("pop");Sfx.pop();});
   body.querySelector("#sSave").onclick=async()=>{m.date=body.querySelector("#s_date").value;m.count=+body.querySelector("#s_cnt").value;
     m.supervisor=body.querySelector("#s_sup").value;m.cost=+body.querySelector("#s_cost").value;
+    m.clients=allCodes.filter(c=>sel.has(c));
     const ex=S.supervision.find(x=>x._id===m._id);if(ex)Object.assign(ex,m);else S.supervision.push(m);
     await commit((ex?"Edited":"Added")+" supervision: "+m.date);closeSheet();toast("Saved");go(cur);};
   if(!isNew)body.querySelector("#sDel").onclick=async()=>{S.supervision=S.supervision.filter(x=>x._id!==m._id);
