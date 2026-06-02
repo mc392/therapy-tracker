@@ -705,7 +705,7 @@ VIEWS.home=function(){
     mk("💷",gbp(rec.biggestCatchup||0),"Biggest catch-up",!rec.biggestCatchup)+
     mk("✅",goals.complete,"Sessions completed",!goals.complete)+
     '</div></div>';
-  const topClients=S.clients.map(c=>({code:c.code,_id:c._id,n:cCounts[c.code.toLowerCase()]||0,status:c.status})).filter(x=>x.n>=6).sort((a,b)=>b.n-a.n).slice(0,5);
+  const topClients=S.clients.map(c=>({code:c.code,_id:c._id,n:cCounts[c.code.toLowerCase()]||0,status:c.status})).filter(x=>x.n>=6).sort((a,b)=>b.n-a.n).slice(0,3);
   const loyalCard=topClients.length?'<div class="card"><h2>Longstanding relationships 💞</h2><p class="small muted" style="margin:0 0 4px">Clients you’ve walked a long way with — lovely, steady work.</p>'+topClients.map((x,i)=>{const medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":"💞";return '<div class="list-item" data-cid="'+x._id+'"><div class="li-main"><div class="li-title">'+medal+' '+esc(x.code)+'</div><div class="li-sub">'+esc(x.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>';}).join("")+'</div>':'';
   const monthSeries=periodSeries("month");
   const sparkVals=monthSeries.map(d=>d.revenue);
@@ -1208,6 +1208,8 @@ function taxDetailsSheet(y){const tx=taxForYear(y);const body=el('<div></div>');
 /* ===== Monthly take-home & pension ===== */
 function pensionPcm(){let v=150;try{const s=localStorage.getItem("tt_pension");if(s!==null&&s!==""&&!isNaN(+s))v=+s;}catch(e){}return v;}
 function setPensionPcm(v){try{localStorage.setItem("tt_pension",String(v));}catch(e){}}
+function defaultRate(){let v=90;try{const s=localStorage.getItem("tt_default_rate");if(s!=null&&s!==""&&!isNaN(+s))v=+s;}catch(e){}return v;}
+function setDefaultRate(v){try{localStorage.setItem("tt_default_rate",String(v));}catch(e){}}
 function clientCategory(status){const c=(S.clientCategories||[]).find(x=>x.status===status);return c?c.category:(status||"");}
 function monthlyTakeHome(){const ty=curTaxYear();const tx=taxForYear(ty);
   let annualNet=0,annualTax=0;
@@ -1514,7 +1516,7 @@ function clientForm(c){
     <label>Client code</label><input id="c_code" value="${esc(m.code)}" ${isNew?"":"readonly"}>
     <div class="field2"><div><label>Status</label><select id="c_status">${opts(statuses,m.status)}</select></div>
       <div><label>Frequency</label><select id="c_freq">${opts(["Weekly","Every 2 weeks","Every 3 weeks","Monthly"],m.frequency)}</select></div></div>
-    ${isNew?`<label>Starting rate (£)</label><input type="number" id="c_rate" value="85">`:
+    ${isNew?`<label>Starting rate (£)</label><input type="number" id="c_rate" value="${defaultRate()}"><div class="prev" style="margin-top:5px"><span class="taxlink" id="setDefRate">Update default (£${defaultRate()}) ›</span></div>`:
       `<div class="hint">Current rate: <b>${gbp(rateNow)}</b> <button class="btn sm" id="chRate" style="float:right">Change rate</button></div>
        <div id="histWrap"></div>`}
     <div class="field2"><div><label>Insurance?</label><select id="c_ins">${opts(["N","Y"],m.insurance||"N")}</select></div><div></div></div>
@@ -1526,6 +1528,10 @@ function clientForm(c){
       hist.map(r=>`<div class="audit-row"><b>${gbp(r.rate)}</b> from ${fmtD(r.effectiveFrom)}</div>`).join("")+'</details>';
     body.querySelector("#chRate").onclick=()=>rateChange(m.code);
   }
+  const sdr=body.querySelector("#setDefRate");
+  if(sdr)sdr.onclick=()=>{const v=prompt("Default starting rate for new clients (£):",defaultRate());if(v==null)return;
+    const n=+v;if(isNaN(n)||n<0){toast("Enter a valid amount");Sfx.error();return;}
+    setDefaultRate(n);const inp=body.querySelector("#c_rate");if(inp)inp.value=n;sdr.textContent="Update default (£"+n+") ›";toast("Default set to "+gbp(n));};
   body.querySelector("#cSave").onclick=async()=>{
     m.code=body.querySelector("#c_code").value.trim();m.status=body.querySelector("#c_status").value;
     m.frequency=body.querySelector("#c_freq").value;m.insurance=body.querySelector("#c_ins").value;m.notes=body.querySelector("#c_notes").value;
@@ -1548,7 +1554,7 @@ function rateChange(code){
   const body=el('<div></div>');
   body.innerHTML=`<p class="muted small">Adds a new rate from a date you choose. <b>Past sessions keep their old rate.</b></p>
     <label>Effective from</label><input type="date" id="rDate" value="${isoD(today())}">
-    <label>New rate (£)</label><input type="number" id="rAmt" value="${effRate(code,isoD(today()))||85}">
+    <label>New rate (£)</label><input type="number" id="rAmt" value="${effRate(code,isoD(today()))||defaultRate()}">
     <button class="btn full mt" id="rSave">Apply new rate</button>`;
   body.querySelector("#rSave").onclick=async()=>{const dt=body.querySelector("#rDate").value;const amt=+body.querySelector("#rAmt").value;
     if(!dt||isNaN(amt)){toast("Enter date and amount");return}
