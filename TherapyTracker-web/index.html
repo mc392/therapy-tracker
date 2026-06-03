@@ -119,6 +119,11 @@ nav.tabs button.on{color:var(--brand);
 .x{font-size:22px;color:var(--muted);background:none;border:0;cursor:pointer;padding:4px 8px}
 .suggest{font-size:11px;color:var(--accent-ink);font-weight:700;margin-left:6px}
 .hint{background:color-mix(in srgb,var(--brand) 9%,var(--card));border:1px solid color-mix(in srgb,var(--brand) 22%,var(--card));border-radius:12px;padding:10px 12px;font-size:13px;color:var(--brand-dark);margin:10px 0}
+.vbanner{margin:10px 0 2px}
+.vmsg{border-radius:12px;padding:9px 12px;font-size:13px;margin-bottom:8px;font-weight:600;line-height:1.35}
+.vmsg.err{background:color-mix(in srgb,var(--bad) 14%,var(--card));border:1px solid color-mix(in srgb,var(--bad) 45%,transparent);color:var(--bad)}
+.vmsg.warn{background:color-mix(in srgb,var(--warn) 14%,var(--card));border:1px solid color-mix(in srgb,var(--warn) 42%,transparent);color:var(--warn)}
+.vmsg.ok{background:color-mix(in srgb,var(--good) 14%,var(--card));border:1px solid color-mix(in srgb,var(--good) 40%,transparent);color:var(--good)}
 .prev{font-size:11px;color:var(--muted);margin-top:3px}
 .svgwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:6px -4px 0}
 .svgwrap svg{display:block}
@@ -858,6 +863,55 @@ function missingReasons(s){const m=[];
 /* late cancellation: explicit flag, with fallback to the historical notes convention */
 function isLateCancel(s){return !!(s&&(s.lateCancel||(s.notes&&/late cancellation/i.test(String(s.notes)))));}
 
+/* ============ Session validation (shared by the form + the data-health sweep) ============ */
+function validateSession(m){
+  const errors=[],warnings=[];
+  const id=m._id;
+  const d=derive(m);
+  const md=m.date?parseD(m.date):null;
+  const t=today();
+  const cl=m.client?S.clients.find(c=>(c.code||"").toLowerCase()===(m.client||"").toLowerCase()):null;
+  const sameClient=s=>(s.client||"").toLowerCase()===(m.client||"").toLowerCase();
+  const hasNum=m.num!==""&&m.num!=null;
+  /* BLOCK: exact time clash (can't be in two places at once) */
+  if(m.date&&m.time){const clash=S.sessions.find(s=>s._id!==id&&s.date===m.date&&(s.time||"")===(m.time||""));
+    if(clash)errors.push({code:"timeclash",msg:"Time clash with "+esc(clash.client||"another session")+" at "+esc(m.time)+" on "+fmtDMY(m.date)});}
+  /* BLOCK: duplicate session # for this client */
+  let isDupNum=false;
+  if(m.client&&hasNum){const dup=S.sessions.find(s=>s._id!==id&&sameClient(s)&&String(s.num)===String(m.num));
+    if(dup){isDupNum=true;errors.push({code:"dupnum",msg:"#"+esc(m.num)+" already exists for "+esc(m.client)+" ("+fmtDMY(dup.date)+")"});}}
+  /* WARN: same client, same day */
+  if(m.client&&m.date){const same=S.sessions.find(s=>s._id!==id&&sameClient(s)&&s.date===m.date);
+    if(same)warnings.push({code:"sameday",msg:esc(m.client)+" already has a session on "+fmtDMY(m.date)});}
+  /* WARN: payment-date sanity */
+  if(m.paidDate){const pd=parseD(m.paidDate);
+    if(pd&&pd>t)warnings.push({code:"paidfuture",msg:"Payment date is in the future"});
+    else if(pd&&md&&pd<md)warnings.push({code:"paidbefore",msg:"Payment date is before the session date"});}
+  if(m.roomPaidDate){const rpd=parseD(m.roomPaidDate);
+    if(rpd&&rpd>t)warnings.push({code:"roompaidfuture",msg:"Room payment date is in the future"});
+    else if(rpd&&md&&rpd<md)warnings.push({code:"roompaidbefore",msg:"Room payment date is before the session date"});}
+  /* WARN: room-paid vs room fee */
+  const chargeable=(d.roomRate||0)>0;
+  if(m.roomPaid==="Y"&&!chargeable)warnings.push({code:"roompaidnofee",msg:"Marked room paid, but "+esc(m.location||"this location")+" has no room fee"});
+  if(m.roomPaid==="n/a"&&chargeable)warnings.push({code:"roomnafee",msg:"Room marked n/a, but "+esc(m.location||"this room")+" charges "+gbp(d.roomRate)});
+  /* WARN: £0 / missing rate where the client normally charges */
+  if(m.client&&(d.rate||0)===0){const charges=cl&&((cl.rate||0)>0||(S.rateHistory||[]).some(r=>(r.client||"").toLowerCase()===(m.client||"").toLowerCase()&&(r.rate||0)>0));
+    if(charges)warnings.push({code:"zerorate",msg:"Rate is £0 although "+esc(m.client)+" normally charges — check rate history"});}
+  /* WARN: online session carrying a room */
+  if((m.mode||"")==="Online"&&(chargeable||(m.room&&m.room!=="-")))warnings.push({code:"onlineroom",msg:"Online session has a room/room fee assigned"});
+  /* WARN: inactive client (only for today/future sessions — past history is expected) */
+  if(cl&&(cl.status==="Finished"||cl.status==="Paused")&&(!md||md>=t))warnings.push({code:"inactive",msg:esc(m.client)+" is marked "+esc(cl.status)});
+  /* WARN: out-of-sequence # (not an exact duplicate) */
+  if(m.client&&hasNum&&!isDupNum){const n=+m.num||0;
+    const nums=S.sessions.filter(s=>s._id!==id&&sameClient(s)).map(s=>+s.num||0);
+    const maxN=nums.length?Math.max(...nums):0;
+    if(maxN&&n>maxN+1)warnings.push({code:"seqgap",msg:"#"+n+" skips ahead (latest is #"+maxN+")"});
+    else if(maxN&&n>0&&n<maxN)warnings.push({code:"seqlow",msg:"#"+n+" is below the client's latest (#"+maxN+")"});}
+  /* WARN: late cancellation on a future session */
+  if(m.lateCancel&&md&&md>t)warnings.push({code:"lcfuture",msg:"Late cancellation ticked on a future session"});
+  return {errors,warnings};
+}
+
 VIEWS.sessions=function(){
   const v=el('<div class="view active"></div>');
   v.innerHTML='<div class="seg mb" id="viewseg" style="display:inline-flex"><button data-v="list" class="'+(sessFilter.view==="list"?"on":"")+'">☰ List</button><button data-v="cal" class="'+(sessFilter.view==="cal"?"on":"")+'">▦ Calendar</button><button data-v="sup" class="'+(sessFilter.view==="sup"?"on":"")+'">Supervision</button></div><div id="sbody"></div>';
@@ -1420,8 +1474,30 @@ VIEWS.data=function(){
        <button class="btn ghost" id="snapB">View restore points</button></div>
      <div id="auditWrap" class="mt"></div>
    </div>
+   <div class="card"><h2>Data health</h2>
+     <p class="small muted">Scan every session for possible issues — time clashes, duplicate numbers, payment-date slips, room/rate mismatches and more.</p>
+     <button class="btn sec" id="checkData">Check data</button>
+     <div id="dhResults" class="mt"></div>
+   </div>
    <div class="card"><h2>About</h2><p class="small muted">Therapy Tracker · offline · replaces the spreadsheet.
      ${S.sessions.length} sessions, ${S.clients.length} clients. Add to your Home Screen for an app-like experience.</p></div>`;
+  v.querySelector("#checkData").onclick=()=>{
+    const out=v.querySelector("#dhResults");const seen=new Set();const items=[];
+    S.sessions.forEach(s=>{const vr=validateSession(s);
+      vr.errors.forEach(e=>{let key=null;
+        if(e.code==="timeclash")key="timeclash|"+s.date+"|"+(s.time||"");
+        else if(e.code==="dupnum")key="dupnum|"+(s.client||"").toLowerCase()+"|"+s.num;
+        if(key){if(seen.has(key))return;seen.add(key);}
+        items.push({id:s._id,sev:"err",msg:e.msg});});
+      vr.warnings.forEach(w=>items.push({id:s._id,sev:"warn",msg:w.msg}));});
+    if(!items.length){out.innerHTML='<div class="vmsg ok" style="margin-top:10px">✓ All good — no issues found across '+S.sessions.length+' sessions.</div>';Sfx.complete();return;}
+    items.sort((a,b)=>(a.sev==="err"?0:1)-(b.sev==="err"?0:1));
+    const nE=items.filter(i=>i.sev==="err").length,nW=items.length-nE;
+    out.innerHTML='<p class="small muted" style="margin:10px 0 4px">'+nE+' error'+(nE===1?'':'s')+' · '+nW+' warning'+(nW===1?'':'s')+' — tap any row to open and fix.</p>'+
+      '<div class="card" style="padding:4px 12px">'+items.map(i=>'<div class="list-item" data-id="'+esc(i.id)+'"><div class="li-main"><div class="li-title" style="font-size:13.5px;font-weight:600;color:'+(i.sev==="err"?'var(--bad)':'var(--warn)')+'">'+(i.sev==="err"?'⛔ ':'⚠️ ')+i.msg+'</div></div></div>').join("")+'</div>';
+    out.querySelectorAll(".list-item").forEach(li=>li.onclick=()=>{const ss=S.sessions.find(x=>x._id===li.dataset.id);if(ss)sessionForm(ss);});
+    Sfx.error();
+  };
   v.querySelector("#expJ").onclick=exportJSON;
   v.querySelector("#expC").onclick=exportCSV;
   v.querySelector("#impB").onclick=()=>v.querySelector("#impF").click();
@@ -1472,6 +1548,11 @@ function sessionForm(s,o){
   const clients=clientList();
   const locs=S.rooms.map(r=>r.location);
   const body=el('<div></div>');
+  let pendingWarn=false; // a "Save anyway" is armed; any edit disarms it
+  /* msg strings come pre-escaped from validateSession, so inject raw */
+  function renderValidation(errors,warnings){const vb=body.querySelector("#vbanner");if(!vb)return;
+    vb.innerHTML=(errors||[]).map(e=>'<div class="vmsg err">⛔ '+e.msg+'</div>').join("")+(warnings||[]).map(w=>'<div class="vmsg warn">⚠️ '+w.msg+'</div>').join("");}
+  function resetWarn(){const vb=body.querySelector("#vbanner");if(vb&&vb.innerHTML)vb.innerHTML="";if(pendingWarn){pendingWarn=false;const sb=body.querySelector("#save");if(sb)sb.textContent="Save session";}}
   const draw=()=>{
     const d=derive(m);
     const last = m.client ? lastSessionFor(m.client, m._id) : null;
@@ -1503,6 +1584,7 @@ function sessionForm(s,o){
      <input type="date" id="f_rpd" value="${esc(m.roomPaidDate||"")}">
      <label>Notes done?</label><input id="f_notes" value="${esc(m.notes||"")}" placeholder="Y / note">
      <label class="colchk" style="margin-top:14px"><input type="checkbox" id="f_latecancel"${m.lateCancel?" checked":""}> Late cancellation</label>
+     <div class="vbanner" id="vbanner"></div>
      <div class="row mt" style="gap:8px"><button class="btn full" id="save">Save session</button></div>
      ${isNew?"":'<button class="btn danger full mt" id="del">Delete session</button>'}`;
     const g=id=>body.querySelector(id);
@@ -1521,6 +1603,9 @@ function sessionForm(s,o){
       if(!m.client){toast("Choose a client");Sfx.error();return}
       if(!m.date){toast("Add a date");Sfx.error();return}
       if(!m.room)m.room="-";
+      const vr=validateSession(m);renderValidation(vr.errors,vr.warnings);
+      if(vr.errors.length){Sfx.error();const vb=body.querySelector("#vbanner");if(vb)vb.scrollIntoView({behavior:"smooth",block:"nearest"});return;}
+      if(vr.warnings.length&&!pendingWarn){pendingWarn=true;const sb=body.querySelector("#save");if(sb)sb.textContent="Save anyway";Sfx.error();const vb=body.querySelector("#vbanner");if(vb)vb.scrollIntoView({behavior:"smooth",block:"nearest"});return;}
       const exists=S.sessions.find(x=>x._id===m._id);
       const prevComplete=exists?derive(exists).complete:false;
       if(exists){Object.assign(exists,m);await commit("Edited session: "+m.client+" "+m.date);}
@@ -1535,7 +1620,9 @@ function sessionForm(s,o){
     if(!isNew)g("#del").onclick=async()=>{if(!confirm("Delete this session?"))return;
       S.sessions=S.sessions.filter(x=>x._id!==m._id);await commit("Deleted session: "+m.client+" "+m.date);closeSheet();toast("Deleted");go(cur);};
   };
-  draw();openSheet(isNew?"New session":"Edit session",body);
+  draw();
+  body.addEventListener("input",resetWarn);body.addEventListener("change",resetWarn);
+  openSheet(isNew?"New session":"Edit session",body);
 }
 
 function repeatPicker(){
