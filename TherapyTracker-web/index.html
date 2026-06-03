@@ -886,10 +886,10 @@ function validateSession(m){
   /* WARN: payment-date sanity */
   if(m.paidDate){const pd=parseD(m.paidDate);
     if(pd&&pd>t)warnings.push({code:"paidfuture",msg:"Payment date is in the future"});
-    else if(pd&&md&&pd<md)warnings.push({code:"paidbefore",msg:"Payment date is before the session date"});}
+    else if(pd&&md&&(md-pd)/86400000>7)warnings.push({code:"paidbefore",msg:"Payment date is over a week before the session date"});}
   if(m.roomPaidDate){const rpd=parseD(m.roomPaidDate);
     if(rpd&&rpd>t)warnings.push({code:"roompaidfuture",msg:"Room payment date is in the future"});
-    else if(rpd&&md&&rpd<md)warnings.push({code:"roompaidbefore",msg:"Room payment date is before the session date"});}
+    else if(rpd&&md&&(md-rpd)/86400000>7)warnings.push({code:"roompaidbefore",msg:"Room payment date is over a week before the session date"});}
   /* WARN: room-paid vs room fee */
   const chargeable=(d.roomRate||0)>0;
   if(m.roomPaid==="Y"&&!chargeable)warnings.push({code:"roompaidnofee",msg:"Marked room paid, but "+esc(m.location||"this location")+" has no room fee"});
@@ -897,16 +897,19 @@ function validateSession(m){
   /* WARN: £0 / missing rate where the client normally charges */
   if(m.client&&(d.rate||0)===0){const charges=cl&&((cl.rate||0)>0||(S.rateHistory||[]).some(r=>(r.client||"").toLowerCase()===(m.client||"").toLowerCase()&&(r.rate||0)>0));
     if(charges)warnings.push({code:"zerorate",msg:"Rate is £0 although "+esc(m.client)+" normally charges — check rate history"});}
-  /* WARN: online session carrying a room */
-  if((m.mode||"")==="Online"&&(chargeable||(m.room&&m.room!=="-")))warnings.push({code:"onlineroom",msg:"Online session has a room/room fee assigned"});
   /* WARN: inactive client (only for today/future sessions — past history is expected) */
   if(cl&&(cl.status==="Finished"||cl.status==="Paused")&&(!md||md>=t))warnings.push({code:"inactive",msg:esc(m.client)+" is marked "+esc(cl.status)});
-  /* WARN: out-of-sequence # (not an exact duplicate) */
-  if(m.client&&hasNum&&!isDupNum){const n=+m.num||0;
-    const nums=S.sessions.filter(s=>s._id!==id&&sameClient(s)).map(s=>+s.num||0);
-    const maxN=nums.length?Math.max(...nums):0;
-    if(maxN&&n>maxN+1)warnings.push({code:"seqgap",msg:"#"+n+" skips ahead (latest is #"+maxN+")"});
-    else if(maxN&&n>0&&n<maxN)warnings.push({code:"seqlow",msg:"#"+n+" is below the client's latest (#"+maxN+")"});}
+  /* WARN: out-of-sequence # relative to the neighbouring session by date (not the global max — past entries are expected to sit below later ones) */
+  if(m.client&&hasNum&&!isDupNum&&md){const n=+m.num||0;
+    let prior=null,next=null;
+    S.sessions.forEach(s=>{if(s._id===id||!sameClient(s)||(+s.num||0)<=0)return;const sd=s.date?parseD(s.date):null;if(!sd)return;
+      if(sd<md){if(!prior||sd>parseD(prior.date))prior=s;}
+      else if(sd>md){if(!next||sd<parseD(next.date))next=s;}});
+    if(n>0&&prior){const p=+prior.num||0;
+      if(n<=p)warnings.push({code:"seqlow",msg:"#"+n+" is below the prior session (#"+p+" on "+fmtDMY(prior.date)+")"});
+      else if(n>p+1)warnings.push({code:"seqgap",msg:"#"+n+" skips ahead of the prior session (#"+p+" on "+fmtDMY(prior.date)+")"});}
+    else if(n>0&&next){const nx=+next.num||0;
+      if(nx&&n>=nx)warnings.push({code:"seqlow",msg:"#"+n+" is not below the next session (#"+nx+" on "+fmtDMY(next.date)+")"});}}
   /* WARN: late cancellation on a future session */
   if(m.lateCancel&&md&&md>t)warnings.push({code:"lcfuture",msg:"Late cancellation ticked on a future session"});
   return {errors,warnings};
