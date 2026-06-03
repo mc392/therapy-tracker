@@ -132,7 +132,7 @@ nav.tabs button.on{color:var(--brand);
 .cal .cell:active{background:var(--soft)}
 .cal .cnt{position:absolute;top:3px;right:4px;font-size:9px;font-weight:700;color:#fff;background:var(--brand);border-radius:8px;padding:0 5px;line-height:15px}
 .cal .cnt.due{background:var(--bad)}
-.cal .cc{display:block;margin-top:16px;font-size:9px;color:var(--brand-dark);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:600}
+.cal .cc{display:block;margin-top:16px;font-size:9px;color:var(--brand-dark);white-space:normal;line-height:1.3;word-break:break-word;font-weight:600}
 .payrow{display:flex;align-items:center;gap:11px;padding:10px 4px;border-bottom:1px solid var(--line)}
 .payrow input[type=checkbox]{width:23px;height:23px;flex:none;accent-color:var(--brand)}
 .payrow input[type=date]{width:135px;padding:8px;font-size:13px;flex:none}
@@ -364,6 +364,12 @@ function normalize(st){
   st.game=st.game||{}; st.game.activeWeeks=st.game.activeWeeks||[]; st.game.records=st.game.records||{};
   const rr=st.game.records; rr.longestStreak=rr.longestStreak||0; rr.mostClearedAtOnce=rr.mostClearedAtOnce||0; rr.biggestCatchup=rr.biggestCatchup||0;
   if(st.game.seenStreak==null)st.game.seenStreak=0;
+  /* one-time backfill: historical late cancellations were recorded in notes as "Y (late cancellation)" */
+  st.meta=st.meta||{};
+  if(!st.meta.lateCancelBackfill){
+    st.sessions.forEach(s=>{if(s&&s.lateCancel==null&&s.notes&&/late cancellation/i.test(String(s.notes)))s.lateCancel=true;});
+    st.meta.lateCancelBackfill=true;
+  }
   return st;
 }
 async function loadState(){
@@ -406,6 +412,7 @@ function fmtD(d){if(!d)return"";if(typeof d==="string")d=parseD(d);if(!d)return"
   return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}
 function fmtDshort(d){if(typeof d==="string")d=parseD(d);if(!d)return"";return d.toLocaleDateString("en-GB",{weekday:"short",day:"2-digit",month:"short"})}
 function fmtDM(d){if(typeof d==="string")d=parseD(d);if(!d)return"";return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"})}
+function fmtDMY(d){if(typeof d==="string")d=parseD(d);if(!d)return"";return String(d.getDate()).padStart(2,"0")+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+d.getFullYear()}
 function isoD(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
 function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
 function gbp(n){if(n==null||isNaN(n))return"£0";return"£"+Number(n).toLocaleString("en-GB",{minimumFractionDigits:(n%1?2:0),maximumFractionDigits:2})}
@@ -603,7 +610,7 @@ function gameShow(m,f){ f=f||{}; const g=ensureGame(); const st=computeStreak();
   else if(st.status==="none"&&g.seenStreak!==0){g.seenStreak=0;saveGameQuiet();}
   if(f.recCleared){celebrate({emoji:"🏆",title:"New record!",sub:"Cleared "+f.recCleared+" in one sweep — your best ever.",ribbon:"Personal best",level:"mega",sound:"record"});return;}
   if(f.recAmount){celebrate({emoji:"🏆",title:"New record!",sub:"Biggest catch-up yet — "+gbp(f.recAmount)+" collected.",ribbon:"Personal best",level:"mega",sound:"record"});return;}
-  if(m.milestone){celebrate({emoji:"💞",title:m.milestone+" sessions with "+m.milestoneClient+"!",sub:"A deep, lasting therapeutic relationship — beautiful, steady work.",ribbon:"Relationship milestone",level:"big",sound:"fanfare"});
+  if(m.milestone){celebrate({emoji:"🎯",title:m.milestone+" sessions with "+m.milestoneClient+"!",sub:"A significant therapeutic milestone — steady, consistent work.",ribbon:"Session milestone",level:"big",sound:"fanfare"});
     if(streakUp)setTimeout(()=>toast("🔥 "+st.count+"-week streak!"),600);return;}
   if(m.allClear){celebrate({emoji:m.allClearEmoji||"✨",title:m.allClearTitle||"All caught up!",sub:m.allClearSub||"",level:"big",sound:"fanfare"});
     if(streakUp)setTimeout(()=>toast("🔥 "+st.count+"-week streak!"),500);return;}
@@ -641,8 +648,8 @@ function celebrateNewClient(c){
   const gap=lastAdd?Math.floor((today()-parseD(lastAdd))/86400000):null;
   const total=S.clients.length;
   if(total===1)celebrate({emoji:"🌱",title:"Your very first client!",sub:c.code+" is the start of your practice — exciting times ahead.",ribbon:"Day one",level:"mega",sound:"record"});
-  else if(gap!=null&&gap>=30)celebrate({emoji:"🌟",title:"A wonderful new beginning!",sub:"Welcome "+c.code+" — your first new client in "+gap+" days. Lovely to be growing again.",ribbon:"Fresh start",level:"mega",sound:"record"});
-  else celebrate({emoji:"🌱",title:"New client welcomed!",sub:c.code+" joins your practice — that's "+total+" clients in your care. Beautiful work.",level:"big",sound:"fanfare"});
+  else if(gap!=null&&gap>=30)celebrate({emoji:"🌟",title:"A new beginning",sub:"Welcome "+c.code+" — your first new client in "+gap+" days. Good to be growing again.",ribbon:"Fresh start",level:"mega",sound:"record"});
+  else celebrate({emoji:"🌱",title:"New client welcomed",sub:c.code+" joins your practice — that's "+total+" clients in your care. Great work.",level:"big",sound:"fanfare"});
 }
 
 /* ============ Router ============ */
@@ -699,14 +706,14 @@ VIEWS.home=function(){
   const inCare=S.clients.filter(c=>clientCategory(c.status)==="Active").length;
   const recCard='<div class="card"><h2>Records</h2><div class="badgegrid">'+
     mk("🔥",(rec.longestStreak||0)+(rec.longestStreak===1?" wk":" wks"),"Longest streak",!rec.longestStreak)+
-    mk("💞",maxRel?(maxRel+" sess"):"0","Deepest relationship",!maxRel)+
+    mk("📈",maxRel?(maxRel+" sess"):"0","Most sessions with a client",!maxRel)+
     mk("🌱",inCare,"Clients in care",!inCare)+
     mk("⚡",(rec.mostClearedAtOnce||0),"Most cleared at once",!rec.mostClearedAtOnce)+
     mk("💷",gbp(rec.biggestCatchup||0),"Biggest catch-up",!rec.biggestCatchup)+
     mk("✅",goals.complete,"Sessions completed",!goals.complete)+
     '</div></div>';
   const topClients=S.clients.map(c=>({code:c.code,_id:c._id,n:cCounts[c.code.toLowerCase()]||0,status:c.status})).filter(x=>x.n>=6).sort((a,b)=>b.n-a.n).slice(0,3);
-  const loyalCard=topClients.length?'<div class="card"><h2>Longstanding relationships 💞</h2><p class="small muted" style="margin:0 0 4px">Clients you’ve walked a long way with — lovely, steady work.</p>'+topClients.map((x,i)=>{const medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":"💞";return '<div class="list-item" data-cid="'+x._id+'"><div class="li-main"><div class="li-title">'+medal+' '+esc(x.code)+'</div><div class="li-sub">'+esc(x.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>';}).join("")+'</div>':'';
+  const loyalCard=topClients.length?'<div class="card"><h2>Longstanding clients</h2><p class="small muted" style="margin:0 0 4px">Clients you’ve seen over many sessions.</p>'+topClients.map((x,i)=>{const medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":"•";return'<div class="list-item" data-cid="'+x._id+'"><div class="li-main"><div class="li-title">'+medal+' '+esc(x.code)+'</div><div class="li-sub">'+esc(x.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>';}).join("")+'</div>':'';
   const monthSeries=periodSeries("month");
   const sparkVals=monthSeries.map(d=>d.revenue);
   const lastM=monthSeries[monthSeries.length-1];
@@ -848,6 +855,8 @@ function missingReasons(s){const m=[];
   if(!(s.notes&&String(s.notes).trim()))m.push("notes");
   if(!(s.roomPaid&&String(s.roomPaid).trim()))m.push("room-paid status");
   return m;}
+/* late cancellation: explicit flag, with fallback to the historical notes convention */
+function isLateCancel(s){return !!(s&&(s.lateCancel||(s.notes&&/late cancellation/i.test(String(s.notes)))));}
 
 VIEWS.sessions=function(){
   const v=el('<div class="view active"></div>');
@@ -914,7 +923,7 @@ VIEWS.sessions=function(){
       await commit("Marked "+batch+" session(s) paid");renderTabs();
       const stillOver=S.sessions.filter(s=>{const d=derive(s);return d.overdue&&(d.rate||0)>0;}).length;
       gameShow({batch:batch,amount:amount,toast:batch+" marked paid 🎉",
-        allClear:stillOver===0,allClearEmoji:"💰",allClearTitle:"All paid up!",allClearSub:"Every overdue payment collected — gorgeous.",
+        allClear:stillOver===0,allClearEmoji:"💰",allClearTitle:"All paid up!",allClearSub:"Every overdue payment collected — excellent.",
         bigEffort:batch>=5,bigEffortSub:gbp(amount)+" collected across "+batch+" sessions"},f);
       refresh();};
   }
@@ -979,7 +988,7 @@ VIEWS.sessions=function(){
     const t=today();let cells="";for(let i=0;i<lead;i++)cells+='<div class="cell empty"></div>';
     for(let day=1;day<=days;day++){const ss=byDay[day]||[];const due=ss.some(s=>derive(s).overdue);
       const isT=(calY===t.getFullYear()&&calM===t.getMonth()&&day===t.getDate());
-      const codes=[...new Set(ss.map(s=>s.client))].slice(0,3).join(" ");
+      const codes=[...new Set(ss.map(s=>s.client))].join(" ");
       cells+='<div class="cell'+(isT?" today":"")+'" data-day="'+day+'">'+day+(ss.length?'<span class="cnt'+(due?" due":"")+'">'+ss.length+'</span>':"")+(ss.length?'<span class="cc">'+esc(codes)+'</span>':"")+'</div>';}
     body.innerHTML='<div class="calnav"><button class="btn sm sec" id="pm">◀</button><b>'+monthName+'</b><button class="btn sm sec" id="nm">▶</button></div><div class="cal"><div class="dow">M</div><div class="dow">T</div><div class="dow">W</div><div class="dow">T</div><div class="dow">F</div><div class="dow">S</div><div class="dow">S</div>'+cells+'</div><p class="small muted center mt">Tap a day to view or edit its sessions.</p>';
     body.querySelector("#pm").onclick=()=>{calM--;if(calM<0){calM=11;calY--;}renderCal();};
@@ -992,7 +1001,7 @@ VIEWS.sessions=function(){
     bd.innerHTML=(ss.length?ss.map(s=>{const d=derive(s);const pay=payChip(s,d);
       return '<div class="list-item" data-id="'+s._id+'"><div class="li-main"><div class="li-title">'+esc(s.client)+' '+pay+'</div><div class="li-sub">'+esc(s.time||"")+' · '+esc(s.location||"")+' · #'+esc(s.num)+'</div></div><div class="li-right">'+gbp(d.rate)+'</div></div>';}).join(""):'<p class="muted small">No sessions this day.</p>')+'<button class="btn full mt" id="addDay">＋ Add session this day</button>';
     bd.querySelectorAll(".list-item").forEach(li=>li.onclick=()=>{closeSheet();sessionForm(S.sessions.find(s=>s._id===li.dataset.id));});
-    bd.querySelector("#addDay").onclick=()=>{const ds=isoD(new Date(calY,calM,day));closeSheet();sessionForm(null);setTimeout(()=>{const di=document.querySelector("#f_date");if(di)di.value=ds;},60);};
+    bd.querySelector("#addDay").onclick=()=>{const ds=isoD(new Date(calY,calM,day));closeSheet();sessionForm(null,{date:ds});};
     openSheet(new Date(calY,calM,day).toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"}),bd);
   }
   function renderSup(){
@@ -1049,7 +1058,7 @@ VIEWS.sessions=function(){
 let cliTab="clients";
 VIEWS.clients=function(){
   const v=el('<div class="view active"></div>');
-  v.innerHTML='<div class="seg mb" id="crtab" style="display:inline-flex"><button data-t="clients" class="'+(cliTab==="clients"?"on":"")+'">Clients</button><button data-t="funnel" class="'+(cliTab==="funnel"?"on":"")+'">Funnel</button><button data-t="rooms" class="'+(cliTab==="rooms"?"on":"")+'">Rooms</button></div><div id="crbody"></div>';
+  v.innerHTML='<div class="seg mb" id="crtab" style="display:inline-flex"><button data-t="clients" class="'+(cliTab==="clients"?"on":"")+'">Clients</button><button data-t="metrics" class="'+(cliTab==="metrics"?"on":"")+'">Metrics</button><button data-t="rooms" class="'+(cliTab==="rooms"?"on":"")+'">Rooms</button></div><div id="crbody"></div>';
   const body=v.querySelector("#crbody");
   function renderClients(){
     body.innerHTML='<div class="toolbar"><button class="btn sm" id="addC">＋ New client</button></div><div class="search"><input id="cq" placeholder="Search clients…"></div><div id="clist"></div>';
@@ -1076,27 +1085,58 @@ VIEWS.clients=function(){
     };
     body.querySelector("#addR").onclick=()=>roomForm(null); r();
   }
-  function renderFunnel(){
+  function renderMetrics(){
     const counts=clientSessionCounts();
     const withSess=S.clients.map(c=>({c,n:counts[c.code.toLowerCase()]||0}));
     const base=withSess.filter(x=>x.n>=1).length;
     const max=Math.max(1,base);
-    const tiers=[{t:1,l:"In therapy",d:"1+ sessions",e:"🌱"},{t:6,l:"Building",d:"6+ sessions",e:"🌿"},{t:12,l:"Established",d:"12+ sessions",e:"🌳"},{t:20,l:"Deep work",d:"20+ sessions",e:"💞"}];
+    const tiers=[{t:1,l:"In therapy",d:"1+ sessions",e:"🌱"},{t:6,l:"Building",d:"6+ sessions",e:"🌿"},{t:12,l:"Established",d:"12+ sessions",e:"🌳"},{t:20,l:"Long-term",d:"20+ sessions",e:"🌲"}];
     const rows=tiers.map(tr=>{const n=withSess.filter(x=>x.n>=tr.t).length;const pct=base?Math.round(n/base*100):0;const w=Math.round(n/max*100);
       return '<div class="fr"><div class="ftop"><span>'+tr.e+' <b>'+tr.l+'</b> · '+tr.d+'</span><span>'+n+' '+(n===1?'client':'clients')+(tr.t>1&&base?' · '+pct+'%':'')+'</span></div><div class="fbar"><i data-w="'+w+'" style="width:0"></i></div></div>';}).join("");
     const deep=withSess.filter(x=>x.n>=20).sort((a,b)=>b.n-a.n);
     const totalSessions=withSess.reduce((a,x)=>a+x.n,0);
     const avg=base?Math.round(totalSessions/base*10)/10:0;
-    body.innerHTML='<div class="card"><h2>Client retention funnel</h2><p class="small muted" style="margin:0 0 10px">How your therapeutic relationships deepen over time — every stage is something to be proud of.</p><div class="funnel">'+rows+'</div></div>'+
+
+    /* ---- late cancellation trends ---- */
+    const t=today();
+    const totalLC=S.sessions.filter(isLateCancel).length;
+    const lcPct=S.sessions.length?Math.round(totalLC/S.sessions.length*1000)/10:0;
+    const byClient={};
+    S.sessions.forEach(s=>{const k=(s.client||"").toLowerCase();if(!k)return;
+      const e=byClient[k]||(byClient[k]={code:s.client,total:0,lc:0,recent:0,prev:0,last:null});
+      e.total++;
+      if(isLateCancel(s)){e.lc++;const d=parseD(s.date);if(d){if(!e.last||d>e.last)e.last=d;
+        const days=(t-d)/86400000;if(days<=90)e.recent++;else if(days<=180)e.prev++;}}});
+    const lcClients=Object.values(byClient).filter(e=>e.lc>0).sort((a,b)=>b.lc-a.lc||b.total-a.total);
+    const affected=lcClients.length;
+    let recent90=0,prev90=0;
+    S.sessions.filter(isLateCancel).forEach(s=>{const d=parseD(s.date);if(!d)return;const days=(t-d)/86400000;if(days<=90)recent90++;else if(days<=180)prev90++;});
+    const trendChip=(r,p)=>r>p?'<span class="chip n">↑ rising</span>':r<p?'<span class="chip y">↓ falling</span>':'<span class="chip na">→ steady</span>';
+    const pctOf=e=>e.total?Math.round(e.lc/e.total*1000)/10:0;
+    const rateChip=e=>{const p=pctOf(e);return '<span class="chip '+(p>=15?'n':p>=5?'f':'s')+'">'+p+'%</span>';};
+    const lcCard='<div class="card"><h2>Late cancellations</h2>'+
+      '<div class="kpis mb">'+
+        '<div class="kpi"><div class="v">'+totalLC+'</div><div class="l">Late cancellations</div></div>'+
+        '<div class="kpi"><div class="v">'+lcPct+'%</div><div class="l">Of all sessions</div></div>'+
+        '<div class="kpi"><div class="v">'+affected+'</div><div class="l">Clients affected</div></div>'+
+        '<div class="kpi"><div class="v">'+recent90+'</div><div class="l">In the last 90 days</div></div>'+
+      '</div>'+
+      '<p class="small muted" style="margin:0 0 6px">Trend '+trendChip(recent90,prev90)+' — '+recent90+' in the last 90 days vs '+prev90+' in the previous 90. The per-client % is each client’s share of their own sessions.</p>'+
+      (lcClients.length?lcClients.map(e=>{const cl=S.clients.find(c=>(c.code||"").toLowerCase()===(e.code||"").toLowerCase());
+        return '<div class="list-item"'+(cl?' data-id="'+cl._id+'"':'')+'><div class="li-main"><div class="li-title">'+esc(e.code)+' '+rateChip(e)+'</div><div class="li-sub">'+e.lc+' of '+e.total+' sessions'+(e.last?' · last '+fmtDMY(e.last):'')+'</div></div><div class="li-right">'+trendChip(e.recent,e.prev)+'</div></div>';}).join("")
+        :'<p class="muted small">No late cancellations recorded yet.</p>')+'</div>';
+
+    body.innerHTML='<div class="card"><h2>Client retention funnel</h2><p class="small muted" style="margin:0 0 10px">How clients progress over time, by number of sessions.</p><div class="funnel">'+rows+'</div></div>'+
       '<div class="kpis mb">'+
         '<div class="kpi"><div class="v">'+base+'</div><div class="l">Clients seen</div></div>'+
         '<div class="kpi"><div class="v">'+avg+'</div><div class="l">Avg sessions / client</div></div>'+
       '</div>'+
-      (deep.length?'<div class="card"><h2>Deep work 💞</h2><p class="small muted" style="margin:0 0 6px">Clients you’ve walked alongside for 20+ sessions.</p>'+deep.map(x=>'<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+'</div><div class="li-sub">'+esc(x.c.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>').join("")+'</div>':'');
+      lcCard+
+      (deep.length?'<div class="card"><h2>Long-term clients</h2><p class="small muted" style="margin:0 0 6px">Clients seen for 20+ sessions.</p>'+deep.map(x=>'<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+'</div><div class="li-sub">'+esc(x.c.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>').join("")+'</div>':'');
     body.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>clientForm(S.clients.find(c=>c._id===li.dataset.id)));
     requestAnimationFrame(()=>body.querySelectorAll(".funnel .fbar>i").forEach(i=>{i.style.width=(+i.dataset.w)+"%";}));
   }
-  const route=()=>cliTab==="rooms"?renderRooms():cliTab==="funnel"?renderFunnel():renderClients();
+  const route=()=>cliTab==="rooms"?renderRooms():cliTab==="metrics"?renderMetrics():renderClients();
   v.querySelector("#crtab").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{cliTab=bt.dataset.t;
     v.querySelector("#crtab").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));route();});
   route();return v;
@@ -1299,13 +1339,14 @@ VIEWS.income=function(){
 };
 
 const RAWCOLS=[
- {k:"client",t:"Client"},{k:"num",t:"#",n:1},{k:"date",t:"Date"},{k:"time",t:"Time"},{k:"mode",t:"Mode"},
- {k:"location",t:"Location"},{k:"room",t:"Room"},{k:"rate",t:"Rate",n:1,m:1},{k:"paidYN",t:"Paid"},{k:"paidDate",t:"Paid date"},
- {k:"overdueYN",t:"Overdue"},{k:"roomRate",t:"Room £",n:1,m:1},{k:"roomPaid",t:"Room paid"},{k:"roomPaidDate",t:"Room paid date"},{k:"roomDue",t:"Room due"},
+ {k:"client",t:"Client"},{k:"num",t:"#",n:1},{k:"date",t:"Date",d:1},{k:"time",t:"Time"},{k:"mode",t:"Mode"},
+ {k:"location",t:"Location"},{k:"room",t:"Room"},{k:"rate",t:"Rate",n:1,m:1},{k:"paidYN",t:"Paid"},{k:"paidDate",t:"Paid date",d:1},
+ {k:"overdueYN",t:"Overdue"},{k:"roomRate",t:"Room £",n:1,m:1},{k:"roomPaid",t:"Room paid"},{k:"roomPaidDate",t:"Room paid date",d:1},{k:"roomDue",t:"Room due"},
+ {k:"lateCancel",t:"Late cancel"},
  {k:"invoice",t:"Invoice"},{k:"notes",t:"Notes"},{k:"status",t:"Status"},{k:"taxYear",t:"Tax yr"},{k:"week",t:"Wk",n:1}];
 function recOf(s,d){return {client:s.client,num:s.num,date:s.date,time:s.time||"",mode:s.mode||"",location:s.location||"",room:s.room||"",
   rate:d.rate,paidYN:d.clientPaid?"Y":"N",paidDate:s.paidDate||"",overdueYN:d.overdue?"Y":"N",roomRate:d.roomRate,roomPaid:s.roomPaid||"",
-  roomPaidDate:s.roomPaidDate||"",roomDue:d.roomDue,invoice:s.invoice||"",notes:s.notes||"",status:d.status||"",taxYear:d.taxYear,week:d.week};}
+  roomPaidDate:s.roomPaidDate||"",roomDue:d.roomDue,lateCancel:isLateCancel(s)?"Y":"",invoice:s.invoice||"",notes:s.notes||"",status:d.status||"",taxYear:d.taxYear,week:d.week};}
 let rawF={q:"",client:"",ty:"",paid:"",loc:"",sk:"date",sd:-1,cols:null};
 VIEWS.raw=function(){
   const v=el('<div class="view active"></div>');
@@ -1325,7 +1366,7 @@ VIEWS.raw=function(){
   const cb=v.querySelector("#colsBox");
   cb.innerHTML=RAWCOLS.map(c=>'<label class="colchk"><input type="checkbox" data-k="'+c.k+'"'+(rawF.cols.includes(c.k)?" checked":"")+'> '+esc(c.t)+'</label>').join("");
   cb.querySelectorAll("input").forEach(x=>x.onchange=()=>{const k=x.dataset.k;if(x.checked){if(!rawF.cols.includes(k))rawF.cols.push(k);}else rawF.cols=rawF.cols.filter(z=>z!==k);try{localStorage.setItem("tt_cols",JSON.stringify(rawF.cols))}catch(e){} draw();});
-  const fmtCell=(rec,c)=>{let val=rec[c.k];if(c.m)return gbp(val);return esc(val==null?"":val);};
+  const fmtCell=(rec,c)=>{let val=rec[c.k];if(c.m)return gbp(val);if(c.d)return esc(fmtDMY(val));return esc(val==null?"":val);};
   function filtered(){
     let rows=S.sessions.map(s=>{const d=derive(s);return recOf(s,d);});
     const q=rawF.q.toLowerCase();
@@ -1424,8 +1465,10 @@ function suggestFor(code){
 }
 
 /* ============ Session form ============ */
-function sessionForm(s){
-  const isNew=!s; const m=s?clone(s):{_id:uid(),client:"",num:"",date:isoD(today()),time:"10:00",mode:"In-person",location:"At home",room:"",invoice:"",paidDate:"",receipt:"",notes:"",roomPaid:"",roomPaidDate:""};
+function sessionForm(s,o){
+  o=o||{};
+  const isNew=!s; const m=s?clone(s):{_id:uid(),client:"",num:"",date:o.date||isoD(today()),time:"10:00",mode:"In-person",location:"At home",room:"",invoice:"",paidDate:"",receipt:"",notes:"",roomPaid:"",roomPaidDate:"",lateCancel:false};
+  const lockDate=isNew&&!!o.date; // came from the calendar's "add this day" — keep that date
   const clients=clientList();
   const locs=S.rooms.map(r=>r.location);
   const body=el('<div></div>');
@@ -1459,14 +1502,17 @@ function sessionForm(s){
      <label>Room payment date <span class="muted small">(when the room fee was paid)</span></label>
      <input type="date" id="f_rpd" value="${esc(m.roomPaidDate||"")}">
      <label>Notes done?</label><input id="f_notes" value="${esc(m.notes||"")}" placeholder="Y / note">
+     <label class="colchk" style="margin-top:14px"><input type="checkbox" id="f_latecancel"${m.lateCancel?" checked":""}> Late cancellation</label>
      <div class="row mt" style="gap:8px"><button class="btn full" id="save">Save session</button></div>
      ${isNew?"":'<button class="btn danger full mt" id="del">Delete session</button>'}`;
     const g=id=>body.querySelector(id);
     const sync=()=>{m.client=g("#f_client").value;m.date=g("#f_date").value;m.time=g("#f_time").value;m.mode=g("#f_mode").value;
       m.num=g("#f_num").value;m.location=g("#f_loc").value;m.room=g("#f_room").value;m.paidDate=g("#f_paid").value;
-      m.invoice=g("#f_inv").value;m.roomPaid=g("#f_rp").value;m.roomPaidDate=g("#f_rpd").value;m.notes=g("#f_notes").value;};
+      m.invoice=g("#f_inv").value;m.roomPaid=g("#f_rp").value;m.roomPaidDate=g("#f_rpd").value;m.notes=g("#f_notes").value;
+      m.lateCancel=g("#f_latecancel").checked;};
     g("#f_client").onchange=()=>{const code=g("#f_client").value; sync(); m.client=code;
-      if(isNew&&code){const sg=suggestFor(code);Object.assign(m,{num:sg.num,date:sg.date,time:sg.time,mode:sg.mode,location:sg.location,room:sg.room});}
+      if(isNew&&code){const sg=suggestFor(code);Object.assign(m,{num:sg.num,time:sg.time,mode:sg.mode,location:sg.location,room:sg.room});
+        if(!lockDate)m.date=sg.date;}
       draw();
       if(isNew&&code)body.querySelector("#sugHint").innerHTML='<div class="hint">✨ Pre-filled from this client’s last session — adjust anything, then Save.</div>';};
     ["#f_date","#f_loc","#f_paid","#f_rp"].forEach(id=>g(id).addEventListener("change",()=>{sync();
