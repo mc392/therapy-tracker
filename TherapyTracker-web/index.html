@@ -127,8 +127,6 @@ nav.tabs button.on{color:var(--brand);
 .prev{font-size:11px;color:var(--muted);margin-top:3px}
 .acc-work{margin-top:10px;padding:11px 13px;border:1px solid var(--line);border-radius:12px;background:var(--soft);font-size:12.5px;line-height:1.75;color:var(--ink)}
 .acc-work div{margin:1px 0} .acc-work b{font-weight:700}
-.splitbar{height:9px;border-radius:6px;background:color-mix(in srgb,var(--accent) 35%,transparent);overflow:hidden}
-.splitbar i{display:block;height:100%;background:var(--brand)}
 .svgwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:6px -4px 0}
 .svgwrap svg{display:block}
 .calnav{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
@@ -883,7 +881,7 @@ function clinicalStats(){const t=today();let inP=0,onl=0;
 function mountAccreditation(host){if(!host)return;
   const ac=S.accreditation;
   host.innerHTML=`<div class="card"><h2>Accreditation hours &amp; ratio</h2>
-    <p class="small muted" style="margin:0 0 4px">Totals for Form 3A. Each completed client session = 1 client hour (50-min minimum) and each logged supervision session = 1 supervision hour; missed / late-cancelled sessions are excluded.</p>
+    <p class="small muted" style="margin:0 0 4px">Totals for Form 3A. <b>Clinical hours</b> = your logged client sessions, each counted as 1 hour (50-min minimum). Any session flagged as a <b>late cancellation</b> is excluded, in line with the rule that missed sessions don’t count. <b>Supervision hours</b> = each logged supervision session (1 hour) plus the training &amp; placement totals below.</p>
     <div class="field2">
       <div><label>Training supervision hrs</label><input type="number" min="0" step="0.5" id="ac_train" value="${esc(ac.trainingSupHrs)}"></div>
       <div><label>Placement supervision hrs</label><input type="number" min="0" step="0.5" id="ac_place" value="${esc(ac.placementSupHrs)}"></div>
@@ -898,7 +896,6 @@ function mountAccreditation(host){if(!host)return;
     const other=+g("#ac_other").value||0, train=+g("#ac_train").value||0, place=+g("#ac_place").value||0;
     const clinical=cs.logged+other, sup=supSess+train+place;
     const ratio=sup>0?clinical/sup:null, minSup=clinical/6;
-    const ipPct=cs.logged?Math.round(cs.inPerson/cs.logged*100):0, onPct=cs.logged?100-ipPct:0;
     out.innerHTML='<div class="kpis" style="margin-top:12px">'+
         '<div class="kpi"><div class="v">'+r1(clinical)+'</div><div class="l">Clinical hrs</div></div>'+
         '<div class="kpi"><div class="v">'+r1(sup)+'</div><div class="l">Supervision hrs</div></div>'+
@@ -908,15 +905,10 @@ function mountAccreditation(host){if(!host)return;
         :ratio<=6?'<div class="vmsg ok" style="margin-top:10px">✓ Within the 1:6 requirement — 1 supervision hr per '+r1(ratio)+' client hrs.</div>'
         :'<div class="vmsg err" style="margin-top:10px">⛔ Over the 1:6 limit — '+r1(clinical)+' clinical hrs need ≥ '+r1(minSup)+' supervision hrs ('+r1(minSup-sup)+' more).</div>')+
       '<div class="acc-work">'+
-        '<div><b>Clinical</b> = logged sessions '+cs.logged+' (in-person '+cs.inPerson+' + online '+cs.online+')'+(other?' + other '+r1(other):'')+' = <b>'+r1(clinical)+' hrs</b></div>'+
+        '<div><b>Clinical</b> = logged sessions '+cs.logged+(other?' + other '+r1(other):'')+' = <b>'+r1(clinical)+' hrs</b> <span class="muted">(late cancellations excluded)</span></div>'+
         '<div><b>Supervision</b> = logged sessions '+supSess+' + training '+r1(train)+' + placement '+r1(place)+' = <b>'+r1(sup)+' hrs</b></div>'+
         '<div><b>Ratio</b> = '+r1(clinical)+' ÷ '+r1(sup)+' = <b>'+(ratio!=null?r1(ratio):'—')+'</b> &nbsp;(must be ≤ 6; lower = more supervision)</div>'+
         '<div class="small muted" style="margin-top:5px">Guideline: min 1½ hrs supervision per month. Peer supervision doesn’t count.</div>'+
-      '</div>'+
-      '<div style="margin-top:12px"><div class="small muted" style="margin-bottom:5px">In-person '+cs.inPerson+' hrs ('+ipPct+'%) · Online '+cs.online+' hrs ('+onPct+'%)</div>'+
-        '<div class="splitbar"><i style="width:'+ipPct+'%"></i></div>'+
-        (cs.logged?(ipPct>=51?'<div class="small" style="color:var(--good);margin-top:5px">✓ Meets BACP ≥51% in-person.</div>'
-          :'<div class="small" style="color:var(--warn);margin-top:5px">⚠️ Below the BACP 51% in-person guideline (UKCP sets no fixed rule).</div>'):'')+
       '</div>';
   }
   ["#ac_train","#ac_place","#ac_other"].forEach(id=>{const inp=g(id);
