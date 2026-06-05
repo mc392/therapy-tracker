@@ -729,7 +729,12 @@ VIEWS.home=function(){
     '</div></div>';
   const topClients=S.clients.map(c=>({code:c.code,_id:c._id,n:cCounts[c.code.toLowerCase()]||0,status:c.status})).filter(x=>x.n>=6).sort((a,b)=>b.n-a.n).slice(0,3);
   const loyalCard=topClients.length?'<div class="card"><h2>Longstanding clients</h2><p class="small muted" style="margin:0 0 4px">Clients you’ve seen over many sessions.</p>'+topClients.map((x,i)=>{const medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":"•";return'<div class="list-item" data-cid="'+x._id+'"><div class="li-main"><div class="li-title">'+medal+' '+esc(x.code)+'</div><div class="li-sub">'+esc(x.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>';}).join("")+'</div>':'';
-  const weekSeries=periodSeries("week").slice(-24);
+  const weekRev={};
+  der.forEach(x=>{const dd=parseD(x.s.date);if(!dd)return;const k=isoD(weekStart(x.s.date));weekRev[k]=(weekRev[k]||0)+(x.d.rate||0);});
+  const curWk=weekStart(isoD(t)); // Monday of the current week; build 24 consecutive weeks back from here (empty weeks = £0)
+  const weekSeries=[];
+  for(let i=23;i>=0;i--){const ws=addDays(curWk,-7*i);
+    weekSeries.push({l:ws.toLocaleDateString("en-GB",{day:"2-digit",month:"short"}),revenue:Math.round(weekRev[isoD(ws)]||0)});}
   const sparkVals=weekSeries.map(d=>d.revenue);
   const lastW=weekSeries[weekSeries.length-1];
   const sparkCard=S.sessions.length?'<div class="card"><div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Revenue trend</h2><span class="small muted">last 24 weeks</span></div>'+sparkline(sparkVals)+'<div class="row small muted" style="justify-content:space-between;margin-top:4px"><span>'+(weekSeries[0]?"w/c "+esc(weekSeries[0].l):"")+'</span><span><b style="color:var(--brand-dark)">'+gbp(lastW?lastW.revenue:0)+'</b> this week</span></div></div>':'';
