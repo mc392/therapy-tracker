@@ -101,7 +101,7 @@ nav.tabs{position:fixed;bottom:0;left:0;right:0;z-index:35;
   display:flex;justify-content:space-around;gap:4px;padding:8px 8px calc(8px + env(safe-area-inset-bottom));max-width:780px;margin:0 auto}
 nav.tabs button{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:4px;
   flex:1;color:var(--muted);padding:7px 2px 6px;cursor:pointer;font-weight:600;border-radius:16px;transition:color .2s,background .2s}
-nav.tabs button>span:last-child{font-size:10px;line-height:1.1;text-align:center}
+nav.tabs button>span:last-child{font-size:10px;line-height:1.1;text-align:center;overflow-wrap:anywhere}
 nav.tabs button .ic{width:24px;height:24px;display:flex;align-items:center;justify-content:center}
 nav.tabs button .ic svg{width:23px;height:23px;display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 nav.tabs button.on{color:var(--brand);
@@ -314,7 +314,7 @@ summary{font-weight:600;cursor:pointer}
 <link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon-180.png"></head>
 <body>
 <div class="app">
-  <header class="top"><h1 id="topTitle">Therapy Tracker</h1><span class="ty" id="topTY"></span><button class="themebtn" id="soundBtn" title="Toggle sound" aria-label="Toggle sound">🔊</button><button class="themebtn" id="themeBtn" title="Toggle dark mode" aria-label="Toggle dark mode">☾</button></header>
+  <header class="top"><h1 id="topTitle">Therapy Tracker</h1><span class="ty" id="topTY"></span><button class="themebtn" id="settingsBtn" title="Settings" aria-label="Settings">⚙</button></header>
   <main id="main"></main>
   <nav class="tabs" id="tabs"></nav>
 </div>
@@ -489,6 +489,7 @@ $("#sheet").addEventListener("click",e=>{if(e.target.id==="sheet")closeSheet()})
 function curTheme(){return document.documentElement.getAttribute("data-theme")==="dark"?"dark":"light";}
 function setTheme(t){document.documentElement.setAttribute("data-theme",t);try{localStorage.setItem("tt_theme",t)}catch(e){} const b=$("#themeBtn");if(b)b.textContent=t==="dark"?"☀":"☾";}
 (function(){const b=$("#themeBtn");if(b){b.textContent=curTheme()==="dark"?"☀":"☾";b.onclick=()=>setTheme(curTheme()==="dark"?"light":"dark");}})();
+(function(){const b=$("#settingsBtn");if(b)b.onclick=()=>go("settings");})();
 function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 function opts(arr,sel){return arr.map(o=>`<option value="${esc(o)}"${o===sel?" selected":""}>${esc(o)}</option>`).join("")}
 
@@ -674,9 +675,9 @@ const TABS=[
  {id:"home",ic:'<svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7"/><path d="M5 9.8V20h14V9.8"/></svg>',label:"Home"},
  {id:"sessions",ic:'<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2.5"/><path d="M4 9.5h16M8.5 3v3.5M15.5 3v3.5"/></svg>',label:"Sessions"},
  {id:"clients",ic:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.2 20c0-3.3 2.6-5.2 5.8-5.2S14.8 16.7 14.8 20"/><path d="M16.5 5.6a3 3 0 0 1 0 5.8M17 14.9c2.2.5 3.8 2 3.8 4.6"/></svg>',label:"Clients"},
+ {id:"supervision",ic:'<svg viewBox="0 0 24 24"><path d="M20 11a7 7 0 0 1-10.4 6.1L4.5 19l1.4-4.3A7 7 0 1 1 20 11z"/><path d="M9 10.5h6M9 13h4"/></svg>',label:"Supervision"},
  {id:"income",ic:'<svg viewBox="0 0 24 24"><path d="M4 20h16"/><rect x="6" y="12" width="3.2" height="7" rx="1"/><rect x="10.4" y="7" width="3.2" height="12" rx="1"/><rect x="14.8" y="14" width="3.2" height="5" rx="1"/></svg>',label:"Revenue"},
  {id:"raw",ic:'<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16M10 10v9"/></svg>',label:"Table"},
- {id:"data",ic:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 3.6v2.4M12 18v2.4M3.6 12h2.4M18 12h2.4M6 6l1.7 1.7M16.3 16.3 18 18M18 6l-1.7 1.7M7.7 16.3 6 18"/></svg>',label:"Backup"},
 ];
 let cur="home";
 function renderTabs(){const overdue=S.sessions.filter(s=>derive(s).overdue).length;
@@ -733,7 +734,7 @@ VIEWS.home=function(){
   const sparkVals=weekSeries.map(d=>d.revenue);
   const lastW=weekSeries[weekSeries.length-1];
   const sparkCard=S.sessions.length?'<div class="card"><div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Revenue trend</h2><span class="small muted">last 24 weeks</span></div>'+sparkline(sparkVals)+'<div class="row small muted" style="justify-content:space-between;margin-top:4px"><span>'+(weekSeries[0]?"w/c "+esc(weekSeries[0].l):"")+'</span><span><b style="color:var(--brand-dark)">'+gbp(lastW?lastW.revenue:0)+'</b> this week</span></div></div>':'';
-  v.innerHTML=(S.sessions.length?"":'<div class="hint" style="font-size:14px">👋 Welcome! No data yet. Tap <b>Backup</b> below → <b>Restore from backup</b>, and choose your <b>therapy-tracker-data.json</b> file to load everything.</div>')+`
+  v.innerHTML=(S.sessions.length?"":'<div class="hint" style="font-size:14px">👋 Welcome! No data yet. Tap the <b>⚙ Settings</b> icon (top-right) → <b>Restore from backup</b>, and choose your <b>therapy-tracker-data.json</b> file to load everything.</div>')+`
    <div class="kpis mb">
      <div class="kpi"><div class="v" data-to="${billed}" data-fmt="m">${gbp(billed)}</div><div class="l">Billed this tax year</div></div>
      <div class="kpi good"><div class="v" data-to="${received}" data-fmt="m">${gbp(received)}</div><div class="l">Received</div></div>
@@ -975,7 +976,7 @@ function validateSession(m){
 
 VIEWS.sessions=function(){
   const v=el('<div class="view active"></div>');
-  v.innerHTML='<div class="seg mb" id="viewseg" style="display:inline-flex"><button data-v="list" class="'+(sessFilter.view==="list"?"on":"")+'">☰ List</button><button data-v="cal" class="'+(sessFilter.view==="cal"?"on":"")+'">▦ Calendar</button><button data-v="sup" class="'+(sessFilter.view==="sup"?"on":"")+'">Supervision</button></div><div id="sbody"></div>';
+  v.innerHTML='<div class="seg mb" id="viewseg" style="display:inline-flex"><button data-v="list" class="'+(sessFilter.view==="list"||sessFilter.view==="sup"?"on":"")+'">☰ List</button><button data-v="cal" class="'+(sessFilter.view==="cal"?"on":"")+'">▦ Calendar</button></div><div id="sbody"></div>';
   const body=v.querySelector("#sbody");
   function renderList(){
     body.innerHTML='<div class="search"><input id="sq" placeholder="Search client, location, notes…" value="'+esc(sessFilter.q)+'"></div>'+
@@ -1127,9 +1128,17 @@ VIEWS.sessions=function(){
     bd.querySelector("#addDay").onclick=()=>{const ds=isoD(new Date(calY,calM,day));closeSheet();sessionForm(null,{date:ds});};
     openSheet(new Date(calY,calM,day).toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"}),bd);
   }
-  function renderSup(){
-    body.innerHTML='<div class="seg mb" id="suptab" style="display:inline-flex"><button data-st="log" class="'+(supTab==="log"?"on":"")+'">Log</button><button data-st="metrics" class="'+(supTab==="metrics"?"on":"")+'">Metrics</button></div><div id="supbody"></div>';
-    const sb=body.querySelector("#supbody");
+  const route=()=>sessFilter.view==="cal"?renderCal():renderList();
+  v.querySelector("#viewseg").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{sessFilter.view=bt.dataset.v;
+    v.querySelector("#viewseg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));route();});
+  route();return v;
+};
+
+VIEWS.supervision=function(){
+  const v=el('<div class="view active"></div>');
+  v.innerHTML='<div class="seg mb" id="suptab" style="display:inline-flex"><button data-st="log" class="'+(supTab==="log"?"on":"")+'">Log</button><button data-st="metrics" class="'+(supTab==="metrics"?"on":"")+'">Insights</button></div><div id="supbody"></div>';
+  const sb=v.querySelector("#supbody");
+  {
     function drawLog(){
       const sup=(S.supervision||[]).slice().sort((a,b)=>parseD(b.date)-parseD(a.date));
       const total=sup.reduce((a,s)=>a+(+s.cost||0),0);
@@ -1169,20 +1178,17 @@ VIEWS.sessions=function(){
       mountAccreditation(sb.querySelector("#accMount"));
     }
     const route=()=>supTab==="metrics"?drawMetrics():drawLog();
-    body.querySelector("#suptab").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{supTab=bt.dataset.st;
-      body.querySelector("#suptab").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));route();});
+    v.querySelector("#suptab").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{supTab=bt.dataset.st;
+      v.querySelector("#suptab").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));route();});
     route();
   }
-  const route=()=>sessFilter.view==="sup"?renderSup():sessFilter.view==="cal"?renderCal():renderList();
-  v.querySelector("#viewseg").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{sessFilter.view=bt.dataset.v;
-    v.querySelector("#viewseg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));route();});
-  route();return v;
+  return v;
 };
 
 let cliTab="clients";
 VIEWS.clients=function(){
   const v=el('<div class="view active"></div>');
-  v.innerHTML='<div class="seg mb" id="crtab" style="display:inline-flex"><button data-t="clients" class="'+(cliTab==="clients"?"on":"")+'">Clients</button><button data-t="metrics" class="'+(cliTab==="metrics"?"on":"")+'">Metrics</button><button data-t="rooms" class="'+(cliTab==="rooms"?"on":"")+'">Rooms</button></div><div id="crbody"></div>';
+  v.innerHTML='<div class="seg mb" id="crtab" style="display:inline-flex"><button data-t="clients" class="'+(cliTab==="clients"?"on":"")+'">Clients</button><button data-t="metrics" class="'+(cliTab==="metrics"?"on":"")+'">Trends</button><button data-t="rooms" class="'+(cliTab==="rooms"?"on":"")+'">Rooms</button></div><div id="crbody"></div>';
   const body=v.querySelector("#crbody");
   function renderClients(){
     body.innerHTML='<div class="toolbar"><button class="btn sm" id="addC">＋ New client</button></div><div class="search"><input id="cq" placeholder="Search clients…"></div><div id="clist"></div>';
@@ -1567,9 +1573,16 @@ VIEWS.raw=function(){
   draw();return v;
 };
 
-VIEWS.data=function(){
+VIEWS.settings=function(){
   const v=el('<div class="view active"></div>');
   v.innerHTML=`
+   <div class="card"><h2>Appearance &amp; sound</h2>
+     <p class="small muted">Theme and sound effects for this device.</p>
+     <div class="row mt" style="gap:8px;flex-wrap:wrap">
+       <button class="btn sec" id="setTheme"></button>
+       <button class="btn sec" id="setSound"></button>
+     </div>
+   </div>
    <div class="card"><h2>Backup &amp; restore</h2>
      <p class="small muted">Your data lives on this device. Export regularly to a file you keep (iCloud/Files/email). The <b>.json backup is the complete copy</b> — it holds every session, supervision entry, client, room and setting. The CSVs are spreadsheet-friendly extracts.</p>
      <div class="row mt" style="flex-wrap:wrap;gap:8px">
@@ -1609,12 +1622,16 @@ VIEWS.data=function(){
     out.querySelectorAll(".list-item").forEach(li=>li.onclick=()=>{const ss=S.sessions.find(x=>x._id===li.dataset.id);if(ss)sessionForm(ss);});
     Sfx.error();
   };
+  const tBtn=v.querySelector("#setTheme"),updT=()=>tBtn.textContent=curTheme()==="dark"?"☀ Switch to light":"☾ Switch to dark";
+  updT();tBtn.onclick=()=>{setTheme(curTheme()==="dark"?"light":"dark");updT();};
+  const soBtn=v.querySelector("#setSound"),updS=()=>{soBtn.textContent=Sfx.on?"🔊 Sound on":"🔇 Sound off";soBtn.classList.toggle("muted",!Sfx.on);};
+  updS();soBtn.onclick=()=>{const nowOn=Sfx.toggle();updS();if(nowOn){Sfx.prime();Sfx.pop();toast("Sound on");}else toast("Sound muted");};
   v.querySelector("#expJ").onclick=exportJSON;
   v.querySelector("#expC").onclick=exportCSV;
   v.querySelector("#expSC").onclick=exportSupervisionCSV;
   v.querySelector("#impB").onclick=()=>v.querySelector("#impF").click();
   v.querySelector("#impF").onchange=importJSON;
-  v.querySelector("#undoB").onclick=async()=>{if(await undo()){toast("Reverted");go("data")}};
+  v.querySelector("#undoB").onclick=async()=>{if(await undo()){toast("Reverted");go("settings")}};
   v.querySelector("#snapB").onclick=showSnapshots;
   (_db?auditAll():Promise.resolve([])).then(a=>{a.sort((x,y)=>y.id-x.id);
     v.querySelector("#auditWrap").innerHTML='<details><summary>Recent activity ('+a.length+')</summary>'+
