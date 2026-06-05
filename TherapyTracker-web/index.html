@@ -125,6 +125,10 @@ nav.tabs button.on{color:var(--brand);
 .vmsg.warn{background:color-mix(in srgb,var(--warn) 14%,var(--card));border:1px solid color-mix(in srgb,var(--warn) 42%,transparent);color:var(--warn)}
 .vmsg.ok{background:color-mix(in srgb,var(--good) 14%,var(--card));border:1px solid color-mix(in srgb,var(--good) 40%,transparent);color:var(--good)}
 .prev{font-size:11px;color:var(--muted);margin-top:3px}
+.acc-work{margin-top:10px;padding:11px 13px;border:1px solid var(--line);border-radius:12px;background:var(--soft);font-size:12.5px;line-height:1.75;color:var(--ink)}
+.acc-work div{margin:1px 0} .acc-work b{font-weight:700}
+.splitbar{height:9px;border-radius:6px;background:color-mix(in srgb,var(--accent) 35%,transparent);overflow:hidden}
+.splitbar i{display:block;height:100%;background:var(--brand)}
 .svgwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:6px -4px 0}
 .svgwrap svg{display:block}
 .calnav{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
@@ -369,6 +373,9 @@ function normalize(st){
   st.game=st.game||{}; st.game.activeWeeks=st.game.activeWeeks||[]; st.game.records=st.game.records||{};
   const rr=st.game.records; rr.longestStreak=rr.longestStreak||0; rr.mostClearedAtOnce=rr.mostClearedAtOnce||0; rr.biggestCatchup=rr.biggestCatchup||0;
   if(st.game.seenStreak==null)st.game.seenStreak=0;
+  /* accreditation hours (Form 3A): supervision totals are entered manually; clinical hours come from logged sessions */
+  st.accreditation=st.accreditation||{}; const ac=st.accreditation;
+  if(ac.trainingSupHrs==null)ac.trainingSupHrs=108; if(ac.placementSupHrs==null)ac.placementSupHrs=0; if(ac.otherClinicalHrs==null)ac.otherClinicalHrs=0;
   /* one-time backfill: historical late cancellations were recorded in notes as "Y (late cancellation)" */
   st.meta=st.meta||{};
   if(!st.meta.lateCancelBackfill){
@@ -862,6 +869,61 @@ function missingReasons(s){const m=[];
   return m;}
 /* late cancellation: explicit flag, with fallback to the historical notes convention */
 function isLateCancel(s){return !!(s&&(s.lateCancel||(s.notes&&/late cancellation/i.test(String(s.notes)))));}
+/* clinical (client-contact) hours from logged sessions: each session that has taken place = 1 hr (50-min min); missed / late-cancelled excluded */
+function clinicalStats(){const t=today();let inP=0,onl=0;
+  S.sessions.forEach(s=>{const d=parseD(s.date);if(!d||d>t||isLateCancel(s))return;
+    if((s.mode||"")==="Online")onl++;else inP++;});
+  return {inPerson:inP,online:onl,logged:inP+onl};}
+/* Form 3A accreditation card: clinical hrs (from sessions) vs supervision hrs (manual), ratio must stay ≤ 6 */
+function mountAccreditation(host){if(!host)return;
+  const ac=S.accreditation;
+  host.innerHTML=`<div class="card"><h2>Accreditation hours &amp; ratio</h2>
+    <p class="small muted" style="margin:0 0 4px">Totals for Form 3A. Each completed client session = 1 client hour (50-min minimum) and each logged supervision session = 1 supervision hour; missed / late-cancelled sessions are excluded.</p>
+    <div class="field2">
+      <div><label>Training supervision hrs</label><input type="number" min="0" step="0.5" id="ac_train" value="${esc(ac.trainingSupHrs)}"></div>
+      <div><label>Placement supervision hrs</label><input type="number" min="0" step="0.5" id="ac_place" value="${esc(ac.placementSupHrs)}"></div>
+    </div>
+    <label>Other clinical hrs <span class="muted small">(e.g. signed-off training — added to logged sessions)</span></label>
+    <input type="number" min="0" step="0.5" id="ac_other" value="${esc(ac.otherClinicalHrs)}">
+    <div id="ac_out"></div></div>`;
+  const g=id=>host.querySelector(id), out=g("#ac_out"), r1=x=>Math.round(x*10)/10;
+  function calc(){
+    const cs=clinicalStats(), t=today();
+    const supSess=(S.supervision||[]).filter(s=>{const d=s.date?parseD(s.date):null;return d&&d<=t;}).length;
+    const other=+g("#ac_other").value||0, train=+g("#ac_train").value||0, place=+g("#ac_place").value||0;
+    const clinical=cs.logged+other, sup=supSess+train+place;
+    const ratio=sup>0?clinical/sup:null, minSup=clinical/6;
+    const ipPct=cs.logged?Math.round(cs.inPerson/cs.logged*100):0, onPct=cs.logged?100-ipPct:0;
+    out.innerHTML='<div class="kpis" style="margin-top:12px">'+
+        '<div class="kpi"><div class="v">'+r1(clinical)+'</div><div class="l">Clinical hrs</div></div>'+
+        '<div class="kpi"><div class="v">'+r1(sup)+'</div><div class="l">Supervision hrs</div></div>'+
+        '<div class="kpi'+(ratio!=null?(ratio<=6?' good':' bad'):'')+'"><div class="v">'+(ratio!=null?r1(ratio):'—')+'</div><div class="l">Ratio (≤6)</div></div>'+
+      '</div>'+
+      (ratio==null?'<div class="vmsg warn" style="margin-top:10px">⚠️ Enter supervision hours to calculate the ratio.</div>'
+        :ratio<=6?'<div class="vmsg ok" style="margin-top:10px">✓ Within the 1:6 requirement — 1 supervision hr per '+r1(ratio)+' client hrs.</div>'
+        :'<div class="vmsg err" style="margin-top:10px">⛔ Over the 1:6 limit — '+r1(clinical)+' clinical hrs need ≥ '+r1(minSup)+' supervision hrs ('+r1(minSup-sup)+' more).</div>')+
+      '<div class="acc-work">'+
+        '<div><b>Clinical</b> = logged sessions '+cs.logged+' (in-person '+cs.inPerson+' + online '+cs.online+')'+(other?' + other '+r1(other):'')+' = <b>'+r1(clinical)+' hrs</b></div>'+
+        '<div><b>Supervision</b> = logged sessions '+supSess+' + training '+r1(train)+' + placement '+r1(place)+' = <b>'+r1(sup)+' hrs</b></div>'+
+        '<div><b>Ratio</b> = '+r1(clinical)+' ÷ '+r1(sup)+' = <b>'+(ratio!=null?r1(ratio):'—')+'</b> &nbsp;(must be ≤ 6; lower = more supervision)</div>'+
+        '<div class="small muted" style="margin-top:5px">Guideline: min 1½ hrs supervision per month. Peer supervision doesn’t count.</div>'+
+      '</div>'+
+      '<div style="margin-top:12px"><div class="small muted" style="margin-bottom:5px">In-person '+cs.inPerson+' hrs ('+ipPct+'%) · Online '+cs.online+' hrs ('+onPct+'%)</div>'+
+        '<div class="splitbar"><i style="width:'+ipPct+'%"></i></div>'+
+        (cs.logged?(ipPct>=51?'<div class="small" style="color:var(--good);margin-top:5px">✓ Meets BACP ≥51% in-person.</div>'
+          :'<div class="small" style="color:var(--warn);margin-top:5px">⚠️ Below the BACP 51% in-person guideline (UKCP sets no fixed rule).</div>'):'')+
+      '</div>';
+  }
+  ["#ac_train","#ac_place","#ac_other"].forEach(id=>{const inp=g(id);
+    inp.addEventListener("input",calc);
+    inp.addEventListener("change",async()=>{
+      S.accreditation.trainingSupHrs=+g("#ac_train").value||0;
+      S.accreditation.placementSupHrs=+g("#ac_place").value||0;
+      S.accreditation.otherClinicalHrs=+g("#ac_other").value||0;
+      await commit("Updated accreditation hours");});
+  });
+  calc();
+}
 
 /* ============ Session validation (shared by the form + the data-health sweep) ============ */
 function validateSession(m){
@@ -1091,15 +1153,16 @@ VIEWS.sessions=function(){
         return {code:c.code,date:ld||null,days:ld?Math.floor((t-ld)/86400000):null};})
         .sort((a,b)=>{if(a.days==null&&b.days==null)return a.code.localeCompare(b.code);if(a.days==null)return -1;if(b.days==null)return 1;return b.days-a.days;});
       const recencyChip=r=>r.days==null?'<span class="chip n">never</span>':r.days>56?'<span class="chip n">'+r.days+'d</span>':r.days>28?'<span class="chip f">'+r.days+'d</span>':'<span class="chip y">'+r.days+'d</span>';
-      sb.innerHTML='<div class="kpis mb">'+
+      sb.innerHTML='<div id="accMount"></div><div class="kpis mb">'+
         '<div class="kpi"><div class="v">'+totalSess+'</div><div class="l">Sessions logged</div></div>'+
         '<div class="kpi"><div class="v">'+gbp(Math.round(totalCost))+'</div><div class="l">Total spent</div></div>'+
-        '<div class="kpi"><div class="v">'+(Math.round(totalHrs*10)/10)+'</div><div class="l">Client-hours</div></div>'+
+        '<div class="kpi"><div class="v">'+(Math.round(totalHrs*10)/10)+'</div><div class="l">Client-hrs reviewed</div></div>'+
         '<div class="kpi"><div class="v">'+gbp(Math.round(tyCost))+'</div><div class="l">'+ty+' spend</div></div>'+
         '</div>'+
         '<div class="card"><h2>Client discussion recency</h2><p class="small muted" style="margin:0 0 6px">Time since each active client was last discussed in supervision'+(avgGap!=null?' · avg '+avgGap+' days between supervisions':'')+'.</p>'+
         (rows.length?'<div style="padding:0 2px">'+rows.map(r=>'<div class="list-item"><div class="li-main"><div class="li-title">'+esc(r.code)+'</div><div class="li-sub">'+(r.date?'Last discussed '+fmtD(r.date):'Not yet discussed in supervision')+'</div></div><div class="li-right">'+recencyChip(r)+'</div></div>').join("")+'</div>':'<p class="muted small">No active clients to show.</p>')+
         '<div class="legend" style="margin-top:10px"><span class="lgi"><i style="background:var(--good)"></i>≤4 wks</span><span class="lgi"><i style="background:var(--accent)"></i>4–8 wks</span><span class="lgi"><i style="background:var(--bad)"></i>8+ wks / never</span></div></div>';
+      mountAccreditation(sb.querySelector("#accMount"));
     }
     const route=()=>supTab==="metrics"?drawMetrics():drawLog();
     body.querySelector("#suptab").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{supTab=bt.dataset.st;
@@ -1727,7 +1790,7 @@ function supervisionForm(s){
     ? groups.map(([st,codes])=>'<div class="cgrp"><div class="cglab">'+esc(st)+'</div><div class="cgchips">'+codes.map(chip).join("")+'</div></div>').join("")
     : '<span class="muted small">No clients yet.</span>';
   body.innerHTML=`<div class="field2"><div><label>Date</label><input type="date" id="s_date" value="${esc(m.date)}"></div>
-     <div><label>Client hrs</label><input type="number" id="s_cnt" value="${esc(m.count)}"></div></div>
+     <div><label>Client hrs <span class="muted small">(auto from ticks)</span></label><input type="number" id="s_cnt" value="${esc(m.count)}"></div></div>
     <label>Supervisor</label><input id="s_sup" value="${esc(m.supervisor||"")}">
     <label>Cost (£)</label><input type="number" id="s_cost" value="${esc(m.cost)}">
     <label>Clients discussed <span class="muted small">(tap to select)</span></label>
@@ -1736,7 +1799,8 @@ function supervisionForm(s){
     ${isNew?"":'<button class="btn danger full mt" id="sDel">Delete</button>'}`;
   body.querySelectorAll('#s_clients .tgl[data-code]').forEach(b=>b.onclick=()=>{const code=b.dataset.code;
     if(sel.has(code))sel.delete(code);else sel.add(code);
-    b.classList.toggle("on",sel.has(code));b.classList.remove("pop");void b.offsetWidth;b.classList.add("pop");Sfx.pop();});
+    b.classList.toggle("on",sel.has(code));b.classList.remove("pop");void b.offsetWidth;b.classList.add("pop");Sfx.pop();
+    body.querySelector("#s_cnt").value=sel.size||1;});
   body.querySelector("#sSave").onclick=async()=>{m.date=body.querySelector("#s_date").value;m.count=+body.querySelector("#s_cnt").value;
     m.supervisor=body.querySelector("#s_sup").value;m.cost=+body.querySelector("#s_cost").value;
     m.clients=allCodes.filter(c=>sel.has(c));
