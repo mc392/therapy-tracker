@@ -40,6 +40,13 @@ header.top .ty{font-size:12px;opacity:.95;background:rgba(255,255,255,.16);paddi
 .themebtn{background:rgba(255,255,255,.16);border:0;color:#fff;width:34px;height:34px;border-radius:11px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .themebtn:active{transform:scale(.94)}
 main{flex:1;padding:18px 16px 96px}
+.bkbar{display:none;align-items:center;justify-content:space-between;gap:8px 14px;flex-wrap:wrap;
+  background:color-mix(in srgb,var(--warn) 16%,var(--card));border-bottom:1px solid color-mix(in srgb,var(--warn) 45%,transparent);
+  color:var(--ink);padding:9px 16px;font-size:13px}
+.bkbar.show{display:flex}
+.bkbar .bkmsg{flex:1;min-width:170px;line-height:1.4}
+.bkbar .bkdetail{color:var(--muted)}
+.bkbar .btn{white-space:nowrap}
 .view{display:none}
 .view.active{display:block;animation:f .2s ease}
 @keyframes f{from{opacity:.3;transform:translateY(5px)}to{opacity:1;transform:none}}
@@ -315,6 +322,7 @@ summary{font-weight:600;cursor:pointer}
 <body>
 <div class="app">
   <header class="top"><h1 id="topTitle">Therapy Tracker</h1><span class="ty" id="topTY"></span><button class="themebtn" id="settingsBtn" title="Settings" aria-label="Settings">⚙</button></header>
+  <div id="backupBanner" class="bkbar"><span class="bkmsg">⚠️ <b>Time to back up your data.</b> <span id="bkdetail" class="bkdetail"></span></span><button class="btn sm" id="bkNow">Back up now</button></div>
   <main id="main"></main>
   <nav class="tabs" id="tabs"></nav>
 </div>
@@ -399,8 +407,25 @@ async function loadState(){
   }catch(e){console.warn(e);} }
   S=st; mirror(S);
 }
+/* ===== Backup reminder: nudge after BACKUP_DAYS or BACKUP_ACTIONS since the last .json backup, whichever comes first. Tracked per-device in localStorage (not part of the data). ===== */
+const BACKUP_DAYS=7, BACKUP_ACTIONS=25;
+function lastBackupTs(){const s=localStorage.getItem("tt_last_backup");return s?+s:0;}
+function actsSinceBackup(){const s=localStorage.getItem("tt_acts_since_backup");return s?+s:0;}
+function bumpBackupActs(){try{localStorage.setItem("tt_acts_since_backup",String(actsSinceBackup()+1));}catch(e){}}
+function markBackedUp(){try{localStorage.setItem("tt_last_backup",String(Date.now()));localStorage.setItem("tt_acts_since_backup","0");}catch(e){}updateBackupBanner();}
+function initBackupTracking(){if(!localStorage.getItem("tt_last_backup"))markBackedUp();} // start the clock on first run / first update
+function backupDueInfo(){const last=lastBackupTs(),acts=actsSinceBackup();const ms=last?Date.now()-last:0;
+  const byTime=last>0&&ms>=BACKUP_DAYS*86400000, byActs=acts>=BACKUP_ACTIONS;
+  return {due:acts>0&&(byTime||byActs), days:last?Math.floor(ms/86400000):null, acts};} // never nag when nothing has changed
+function updateBackupBanner(){const bar=document.getElementById("backupBanner");if(!bar)return;
+  const info=backupDueInfo();bar.classList.toggle("show",info.due);
+  if(info.due){const d=document.getElementById("bkdetail");if(d){const parts=[];
+    if(info.days!=null)parts.push(info.days+" day"+(info.days===1?"":"s")+" since last backup");
+    if(info.acts)parts.push(info.acts+" change"+(info.acts===1?"":"s")+" since");
+    d.textContent=parts.join(" · ")+".";}}}
 async function commit(summary){
   try{gameTouch();}catch(e){}      // record weekly activity (streak)
+  try{bumpBackupActs();updateBackupBanner();}catch(e){} // count change toward the backup nudge
   mirror(S);                       // localStorage first (always works)
   if(!_db)return;                  // running in fallback mode
   try{
@@ -688,6 +713,7 @@ function renderTabs(){const overdue=S.sessions.filter(s=>derive(s).overdue).leng
 function go(tab){cur=tab;renderTabs();$("#topTY").textContent="Charlotte Bloor Therapy";
   const m=main();m.innerHTML="";m.appendChild(VIEWS[tab]());window.scrollTo(0,0);
   $("#fab").style.display=(tab==="sessions"||tab==="home")?"flex":"none";
+  updateBackupBanner();
 }
 $("#fab").onclick=()=>sessionForm(null);
 /* ============ VIEWS ============ */
@@ -1864,7 +1890,7 @@ function download(name,text,type){const b=new Blob([text],{type:type||"applicati
   const a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500)}
 async function exportJSON(){const audit=await auditAll();
   const out={app:"TherapyTracker",version:1,exportedAt:new Date().toISOString(),state:S,audit:audit.slice(-800)};
-  download("therapy-tracker-backup-"+isoD(today())+".json",JSON.stringify(out));toast("Backup downloaded")}
+  download("therapy-tracker-backup-"+isoD(today())+".json",JSON.stringify(out));markBackedUp();toast("Backup downloaded")}
 function exportCSV(){
   const cols=["client","num","date","time","mode","location","room","invoice","paidDate","notes","roomPaid","rate","clientPaid","overdue","roomRate","roomDue","status","taxYear","week"];
   const rows=[cols.join(",")];
@@ -1887,7 +1913,7 @@ function importJSON(e){const f=e.target.files[0];if(!f)return;const rd=new FileR
     if(!st.sessions||!st.clients)throw new Error("Not a valid backup");
     if(!confirm("Restore this backup? It replaces current data (current state is saved as a restore point)."))return;
     S=normalize(st);
-    await commit("Restored backup ("+(S.sessions.length)+" sessions)");toast("Backup restored");go("home");
+    await commit("Restored backup ("+(S.sessions.length)+" sessions)");markBackedUp();toast("Backup restored");go("home");
   }catch(err){alert("Could not import: "+err.message)}};rd.readAsText(f)}
 async function showSnapshots(){if(!_db){toast("Restore points need storage");return}
   const snaps=await snapAll();snaps.sort((a,b)=>b.id-a.id);
@@ -1908,6 +1934,8 @@ async function showSnapshots(){if(!_db){toast("Restore points need storage");ret
     try{const ls=localStorage.getItem("tt_state");S=ls?JSON.parse(ls):clone(window.SEED);}catch(_){S=clone(window.SEED);}
     if(!S.sessions)S=clone(window.SEED);
   }
+  initBackupTracking();
+  const bk=document.getElementById("bkNow");if(bk)bk.onclick=exportJSON;
   go("home");
 })();
 </script>
