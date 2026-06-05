@@ -729,10 +729,10 @@ VIEWS.home=function(){
     '</div></div>';
   const topClients=S.clients.map(c=>({code:c.code,_id:c._id,n:cCounts[c.code.toLowerCase()]||0,status:c.status})).filter(x=>x.n>=6).sort((a,b)=>b.n-a.n).slice(0,3);
   const loyalCard=topClients.length?'<div class="card"><h2>Longstanding clients</h2><p class="small muted" style="margin:0 0 4px">Clients you’ve seen over many sessions.</p>'+topClients.map((x,i)=>{const medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":"•";return'<div class="list-item" data-cid="'+x._id+'"><div class="li-main"><div class="li-title">'+medal+' '+esc(x.code)+'</div><div class="li-sub">'+esc(x.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>';}).join("")+'</div>':'';
-  const monthSeries=periodSeries("month");
-  const sparkVals=monthSeries.map(d=>d.revenue);
-  const lastM=monthSeries[monthSeries.length-1];
-  const sparkCard=S.sessions.length?'<div class="card"><div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Revenue trend</h2><span class="small muted">'+(lastM?esc(lastM.l):"")+'</span></div>'+sparkline(sparkVals)+'<div class="row small muted" style="justify-content:space-between;margin-top:4px"><span>'+(monthSeries[0]?esc(monthSeries[0].l):"")+'</span><span><b style="color:var(--brand-dark)">'+gbp(lastM?lastM.revenue:0)+'</b> this month</span></div></div>':'';
+  const weekSeries=periodSeries("week").slice(-24);
+  const sparkVals=weekSeries.map(d=>d.revenue);
+  const lastW=weekSeries[weekSeries.length-1];
+  const sparkCard=S.sessions.length?'<div class="card"><div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Revenue trend</h2><span class="small muted">last 24 weeks</span></div>'+sparkline(sparkVals)+'<div class="row small muted" style="justify-content:space-between;margin-top:4px"><span>'+(weekSeries[0]?"w/c "+esc(weekSeries[0].l):"")+'</span><span><b style="color:var(--brand-dark)">'+gbp(lastW?lastW.revenue:0)+'</b> this week</span></div></div>':'';
   v.innerHTML=(S.sessions.length?"":'<div class="hint" style="font-size:14px">👋 Welcome! No data yet. Tap <b>Backup</b> below → <b>Restore from backup</b>, and choose your <b>therapy-tracker-data.json</b> file to load everything.</div>')+
    streakCard+`
    <div class="kpis mb">
