@@ -382,6 +382,11 @@ function normalize(st){
     st.sessions.forEach(s=>{if(s&&s.lateCancel==null&&s.notes&&/late cancellation/i.test(String(s.notes)))s.lateCancel=true;});
     st.meta.lateCancelBackfill=true;
   }
+  /* one-time backfill: align supervision "client hrs" with the number of clients recorded (min 1) */
+  if(!st.meta.supCountBackfill){
+    (st.supervision||[]).forEach(sv=>{if(sv)sv.count=Math.max(1,(sv.clients||[]).length);});
+    st.meta.supCountBackfill=true;
+  }
   return st;
 }
 async function loadState(){
@@ -1542,10 +1547,11 @@ VIEWS.data=function(){
   const v=el('<div class="view active"></div>');
   v.innerHTML=`
    <div class="card"><h2>Backup &amp; restore</h2>
-     <p class="small muted">Your data lives on this device. Export regularly to a file you keep (iCloud/Files/email).</p>
+     <p class="small muted">Your data lives on this device. Export regularly to a file you keep (iCloud/Files/email). The <b>.json backup is the complete copy</b> — it holds every session, supervision entry, client, room and setting. The CSVs are spreadsheet-friendly extracts.</p>
      <div class="row mt" style="flex-wrap:wrap;gap:8px">
        <button class="btn" id="expJ">⤓ Export backup (.json)</button>
        <button class="btn sec" id="expC">⤓ Export sessions (.csv)</button>
+       <button class="btn sec" id="expSC">⤓ Export supervision (.csv)</button>
        <button class="btn ghost" id="impB">⤒ Restore from backup</button>
        <input type="file" id="impF" accept=".json,application/json" style="display:none">
      </div>
@@ -1581,6 +1587,7 @@ VIEWS.data=function(){
   };
   v.querySelector("#expJ").onclick=exportJSON;
   v.querySelector("#expC").onclick=exportCSV;
+  v.querySelector("#expSC").onclick=exportSupervisionCSV;
   v.querySelector("#impB").onclick=()=>v.querySelector("#impF").click();
   v.querySelector("#impF").onchange=importJSON;
   v.querySelector("#undoB").onclick=async()=>{if(await undo()){toast("Reverted");go("data")}};
@@ -1824,7 +1831,16 @@ function exportCSV(){
     const r=cols.map(c=>{let v=(c in s)?s[c]:d[c];if(c==="clientPaid")v=d.clientPaid?"Y":"N";if(c==="overdue")v=d.overdue?"Y":"N";
       v=v==null?"":String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v});
     rows.push(r.join(","))});
-  download("therapy-sessions-"+isoD(today())+".csv",rows.join("\n"),"text/csv");toast("CSV downloaded")}
+  download("therapy-sessions-"+isoD(today())+".csv",rows.join("\n"),"text/csv");toast("Sessions CSV downloaded")}
+function exportSupervisionCSV(){
+  const cols=["date","supervisor","clientHrsReviewed","cost","clientsDiscussed","taxYear"];
+  const rows=[cols.join(",")];
+  (S.supervision||[]).slice().sort((a,b)=>parseD(a.date)-parseD(b.date)).forEach(s=>{
+    const rec={date:s.date||"",supervisor:s.supervisor||"",clientHrsReviewed:(+s.count||1),cost:(+s.cost||0),
+      clientsDiscussed:(s.clients||[]).join("; "),taxYear:s.date?taxYear(s.date):""};
+    const r=cols.map(c=>{let v=rec[c];v=v==null?"":String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v});
+    rows.push(r.join(","))});
+  download("therapy-supervision-"+isoD(today())+".csv",rows.join("\n"),"text/csv");toast("Supervision CSV downloaded")}
 function importJSON(e){const f=e.target.files[0];if(!f)return;const rd=new FileReader();
   rd.onload=async()=>{try{const o=JSON.parse(rd.result);const st=o.state||o;
     if(!st.sessions||!st.clients)throw new Error("Not a valid backup");
