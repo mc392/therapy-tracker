@@ -685,10 +685,10 @@ VIEWS.home=function(){
   const ty=curTaxYear();
   const der=S.sessions.map(s=>({s,d:derive(s)}));
   const tyRows=der.filter(x=>x.d.taxYear===ty);
-  const billed=tyRows.reduce((a,x)=>a+(x.d.rate||0),0);
+  const t=today();
+  const billed=tyRows.filter(x=>{const d=parseD(x.s.date);return d&&d<=t;}).reduce((a,x)=>a+(x.d.rate||0),0);
   const received=tyRows.filter(x=>x.d.clientPaid).reduce((a,x)=>a+(x.d.rate||0),0);
   const outstanding=der.filter(x=>x.d.overdue).reduce((a,x)=>a+(x.d.rate||0),0);
-  const t=today();
   const upcoming=der.filter(x=>{const d=parseD(x.s.date);return d&&d>=t}).sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
   const next7=upcoming.filter(x=>parseD(x.s.date)<=addDays(t,7));
   /* ---- gamification cards ---- */
@@ -783,7 +783,7 @@ function periodSeries(gran){
   const cliArr=allKeys.map(k=>map[k].clients.size);
   const W=gran==="week"?26:6;
   const mov=(arr,i)=>{const s=Math.max(0,i-W+1);let t=0;for(let q=s;q<=i;q++)t+=arr[q];return t/(i-s+1);};
-  const N=gran==="week"?16:13;const startIdx=Math.max(0,allKeys.length-N);
+  const startIdx=0;
   return allKeys.slice(startIdx).map((k,idx)=>{const i=startIdx+idx;const e=map[k];
     return{l:e.lab,revenue:Math.round(e.revenue),room:Math.round(e.room),sup:Math.round(e.sup),
       net:Math.round(e.revenue-e.room-e.sup),clients:e.clients.size,
@@ -1405,13 +1405,27 @@ function recOf(s,d){return {client:s.client,num:s.num,date:s.date,time:s.time||"
   rate:d.rate,paidYN:d.clientPaid?"Y":"N",paidDate:s.paidDate||"",overdueYN:d.overdue?"Y":"N",roomRate:d.roomRate,roomPaid:s.roomPaid||"",
   roomPaidDate:s.roomPaidDate||"",roomDue:d.roomDue,lateCancel:isLateCancel(s)?"Y":"",invoice:s.invoice||"",notes:s.notes||"",status:d.status||"",taxYear:d.taxYear,week:d.week};}
 let rawF={q:"",client:"",ty:"",paid:"",loc:"",sk:"date",sd:-1,cols:null};
+let rawSeg="sessions";
 VIEWS.raw=function(){
   const v=el('<div class="view active"></div>');
+  const segHtml='<div class="seg mb" style="display:inline-flex"><button data-rs="sessions" class="'+(rawSeg==="sessions"?"on":"")+'">Sessions</button><button data-rs="supervision" class="'+(rawSeg==="supervision"?"on":"")+'">Supervision</button></div>';
+  if(rawSeg==="supervision"){
+    const SUPCOLS=[{k:"date",t:"Date",d:1},{k:"supervisor",t:"Supervisor"},{k:"count",t:"Client hrs",n:1},{k:"cost",t:"Cost",n:1,m:1},{k:"clients",t:"Clients discussed"},{k:"taxYear",t:"Tax yr"}];
+    let supSk="date",supSd=-1;
+    const supRows=()=>{const rows=(S.supervision||[]).map(s=>({date:s.date||"",supervisor:s.supervisor||"",count:+(s.count)||1,cost:+(s.cost)||0,clients:(s.clients||[]).join(", "),taxYear:taxYear(s.date)}));rows.sort((a,b)=>{let x=a[supSk],y=b[supSk];if(supSk==="date"){x=x?parseD(x):0;y=y?parseD(y):0;}else if(supSk==="count"||supSk==="cost"){x=+x||0;y=+y||0;}else{x=String(x||"").toLowerCase();y=String(y||"").toLowerCase();}return(x>y?1:x<y?-1:0)*supSd;});return rows;};
+    const fmtSupCell=(r,c)=>{if(c.m)return gbp(r[c.k]);if(c.d)return esc(fmtD(r[c.k]));return esc(r[c.k]==null?"":r[c.k]);};
+    function drawSup(){const rows=supRows();const thead='<thead><tr>'+SUPCOLS.map(c=>'<th data-k="'+c.k+'"'+(c.n?' class="num"':'')+'>'+esc(c.t)+(supSk===c.k?(supSd>0?" ▲":" ▼"):"")+'</th>').join("")+'</tr></thead>';const tb='<tbody>'+rows.map(r=>'<tr>'+SUPCOLS.map(c=>'<td'+(c.n?' class="num"':'')+'>'+fmtSupCell(r,c)+'</td>').join("")+'</tr>').join("")+'</tbody>';v.querySelector("#suptable").innerHTML=thead+tb;v.querySelectorAll("#suptable th").forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(supSk===k)supSd=-supSd;else{supSk=k;supSd=1;}drawSup();});}
+    const supTotal=(S.supervision||[]).reduce((a,s)=>a+(+s.cost||0),0);
+    v.innerHTML=segHtml+'<div class="card" style="padding:6px"><div class="rawscroll"><table id="suptable"></table></div></div><p class="small muted center" style="margin-top:8px">'+(S.supervision||[]).length+' sessions · total '+gbp(supTotal)+'</p>';
+    drawSup();
+    v.querySelectorAll("[data-rs]").forEach(bt=>bt.onclick=()=>{rawSeg=bt.dataset.rs;go("raw");});
+    return v;
+  }
   if(!rawF.cols){try{rawF.cols=JSON.parse(localStorage.getItem("tt_cols"))}catch(e){} if(!rawF.cols||!rawF.cols.length)rawF.cols=["client","num","date","time","location","rate","paidYN","paidDate","roomPaidDate","overdueYN","status"];}
   const cOpt=["",...[...new Set(S.sessions.map(s=>s.client))].sort()];
   const tyOpt=["",...[...new Set(S.sessions.map(s=>derive(s).taxYear).filter(Boolean))].sort().reverse()];
   const lOpt=["",...S.rooms.map(r=>r.location)];
-  v.innerHTML='<div class="card"><div class="search"><input id="rq" placeholder="Search all fields…" value="'+esc(rawF.q)+'"></div>'+
+  v.innerHTML=segHtml+'<div class="card"><div class="search"><input id="rq" placeholder="Search all fields…" value="'+esc(rawF.q)+'"></div>'+
     '<div class="row" style="gap:6px;flex-wrap:wrap">'+
     '<select id="fCl">'+cOpt.map(c=>'<option value="'+esc(c)+'"'+(c===rawF.client?" selected":"")+'>'+(c||"All clients")+'</option>').join("")+'</select>'+
     '<select id="fTy">'+tyOpt.map(c=>'<option value="'+esc(c)+'"'+(c===rawF.ty?" selected":"")+'>'+(c||"All tax yrs")+'</option>').join("")+'</select>'+
@@ -1457,6 +1471,7 @@ VIEWS.raw=function(){
   v.querySelector("#fTy").onchange=e=>{rawF.ty=e.target.value;draw();};
   v.querySelector("#fPaid").onchange=e=>{rawF.paid=e.target.value;draw();};
   v.querySelector("#fLoc").onchange=e=>{rawF.loc=e.target.value;draw();};
+  v.querySelectorAll("[data-rs]").forEach(bt=>bt.onclick=()=>{rawSeg=bt.dataset.rs;go("raw");});
   draw();return v;
 };
 
