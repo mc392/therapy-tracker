@@ -136,6 +136,8 @@ nav.tabs button.on{color:var(--brand);
 .cal .cell{min-height:56px;border:1px solid var(--line);border-radius:11px;padding:4px 5px;font-size:11px;background:var(--card);position:relative;cursor:pointer;color:var(--muted)}
 .cal .cell.empty{background:transparent;border:0;cursor:default}
 .cal .cell.today{border-color:var(--hi);box-shadow:0 0 0 1.5px var(--hi)}
+.cal .cell.sup{border-color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent)}
+.cal .cell.today.sup{border-color:var(--accent);box-shadow:0 0 0 1.5px var(--hi),inset 0 0 0 2px var(--accent)}
 .cal .cell:active{background:var(--soft)}
 .cal .cnt{position:absolute;top:3px;right:4px;font-size:9px;font-weight:700;color:#fff;background:var(--brand);border-radius:8px;padding:0 5px;line-height:15px}
 .cal .cnt.due{background:var(--bad)}
@@ -703,14 +705,6 @@ VIEWS.home=function(){
   const next7=upcoming.filter(x=>parseD(x.s.date)<=addDays(t,7));
   /* ---- gamification cards ---- */
   const st=computeStreak(), goals=gameGoals(), rec=ensureGame().records;
-  const cold=st.status==="none", risk=st.status==="risk";
-  const flame='<div class="flame'+(cold?" cold":"")+(risk?" risk":"")+'"><i class="o"></i><i class="i"></i></div>';
-  let smsg;
-  if(cold)smsg=rec.longestStreak?("Do anything this week to start again — your best is "+rec.longestStreak+" week"+(rec.longestStreak===1?"":"s")+"."):"Log or tidy a session this week to start your streak.";
-  else if(risk)smsg="⚠️ At risk — update something this week to keep your "+st.count+"-week run alive.";
-  else smsg=(st.count>=rec.longestStreak&&st.count>0)?"🏅 Longest streak ever — keep it going!":"On a roll — keep your records up to date each week.";
-  const snum=cold?0:st.count;
-  const streakCard='<div class="card"><div class="streakcard">'+flame+'<div class="streakwrap"><div class="streaknum">'+snum+' <small>week'+(snum===1?"":"s")+'</small></div><div class="streakmsg">'+smsg+'</div></div></div></div>';
   const goalsCard='<div class="card"><h2>Goals</h2><div class="rings">'+
     ringSVG(goals.paidPct,goals.over>0?(goals.over+" payment"+(goals.over===1?"":"s")+" overdue"):"All payments in ✓")+
     ringSVG(goals.compPct,goals.incomplete>0?(goals.incomplete+" session"+(goals.incomplete===1?"":"s")+" to complete"):"Notes & room all done ✓")+
@@ -720,7 +714,8 @@ VIEWS.home=function(){
   const maxRel=Math.max(0,...S.clients.map(c=>cCounts[c.code.toLowerCase()]||0));
   const inCare=S.clients.filter(c=>clientCategory(c.status)==="Active").length;
   const recCard='<div class="card"><h2>Records</h2><div class="badgegrid">'+
-    mk("🔥",(rec.longestStreak||0)+(rec.longestStreak===1?" wk":" wks"),"Longest streak",!rec.longestStreak)+
+    mk("🔥",(st.count||0)+(st.count===1?" wk":" wks"),"App-usage streak"+(st.status==="risk"?" · at risk":""),!st.count)+
+    mk("🏅",(rec.longestStreak||0)+(rec.longestStreak===1?" wk":" wks"),"Longest streak",!rec.longestStreak)+
     mk("📈",maxRel?(maxRel+" sess"):"0","Most sessions with a client",!maxRel)+
     mk("🌱",inCare,"Clients in care",!inCare)+
     mk("⚡",(rec.mostClearedAtOnce||0),"Most cleared at once",!rec.mostClearedAtOnce)+
@@ -738,8 +733,7 @@ VIEWS.home=function(){
   const sparkVals=weekSeries.map(d=>d.revenue);
   const lastW=weekSeries[weekSeries.length-1];
   const sparkCard=S.sessions.length?'<div class="card"><div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Revenue trend</h2><span class="small muted">last 24 weeks</span></div>'+sparkline(sparkVals)+'<div class="row small muted" style="justify-content:space-between;margin-top:4px"><span>'+(weekSeries[0]?"w/c "+esc(weekSeries[0].l):"")+'</span><span><b style="color:var(--brand-dark)">'+gbp(lastW?lastW.revenue:0)+'</b> this week</span></div></div>':'';
-  v.innerHTML=(S.sessions.length?"":'<div class="hint" style="font-size:14px">👋 Welcome! No data yet. Tap <b>Backup</b> below → <b>Restore from backup</b>, and choose your <b>therapy-tracker-data.json</b> file to load everything.</div>')+
-   streakCard+`
+  v.innerHTML=(S.sessions.length?"":'<div class="hint" style="font-size:14px">👋 Welcome! No data yet. Tap <b>Backup</b> below → <b>Restore from backup</b>, and choose your <b>therapy-tracker-data.json</b> file to load everything.</div>')+`
    <div class="kpis mb">
      <div class="kpi"><div class="v" data-to="${billed}" data-fmt="m">${gbp(billed)}</div><div class="l">Billed this tax year</div></div>
      <div class="kpi good"><div class="v" data-to="${received}" data-fmt="m">${gbp(received)}</div><div class="l">Received</div></div>
@@ -1106,22 +1100,30 @@ VIEWS.sessions=function(){
     const monthName=new Date(calY,calM,1).toLocaleDateString("en-GB",{month:"long",year:"numeric"});
     const lead=(new Date(calY,calM,1).getDay()+6)%7,days=new Date(calY,calM+1,0).getDate();
     const byDay={};S.sessions.forEach(s=>{const d=parseD(s.date);if(d&&d.getFullYear()===calY&&d.getMonth()===calM)(byDay[d.getDate()]=byDay[d.getDate()]||[]).push(s);});
+    const supDay={};(S.supervision||[]).forEach(s=>{const d=parseD(s.date);if(d&&d.getFullYear()===calY&&d.getMonth()===calM)supDay[d.getDate()]=true;});
     const t=today();let cells="";for(let i=0;i<lead;i++)cells+='<div class="cell empty"></div>';
     for(let day=1;day<=days;day++){const ss=byDay[day]||[];const due=ss.some(s=>derive(s).overdue);
       const isT=(calY===t.getFullYear()&&calM===t.getMonth()&&day===t.getDate());
       const codes=[...new Set(ss.map(s=>s.client))].join(" ");
-      cells+='<div class="cell'+(isT?" today":"")+'" data-day="'+day+'">'+day+(ss.length?'<span class="cnt'+(due?" due":"")+'">'+ss.length+'</span>':"")+(ss.length?'<span class="cc">'+esc(codes)+'</span>':"")+'</div>';}
-    body.innerHTML='<div class="calnav"><button class="btn sm sec" id="pm">◀</button><b>'+monthName+'</b><button class="btn sm sec" id="nm">▶</button></div><div class="cal"><div class="dow">M</div><div class="dow">T</div><div class="dow">W</div><div class="dow">T</div><div class="dow">F</div><div class="dow">S</div><div class="dow">S</div>'+cells+'</div><p class="small muted center mt">Tap a day to view or edit its sessions.</p>';
+      cells+='<div class="cell'+(isT?" today":"")+(supDay[day]?" sup":"")+'" data-day="'+day+'">'+day+(ss.length?'<span class="cnt'+(due?" due":"")+'">'+ss.length+'</span>':"")+(ss.length?'<span class="cc">'+esc(codes)+'</span>':"")+'</div>';}
+    body.innerHTML='<div class="calnav"><button class="btn sm sec" id="pm">◀</button><b>'+monthName+'</b><button class="btn sm sec" id="nm">▶</button></div><div class="cal"><div class="dow">M</div><div class="dow">T</div><div class="dow">W</div><div class="dow">T</div><div class="dow">F</div><div class="dow">S</div><div class="dow">S</div>'+cells+'</div>'+
+      '<div class="small muted center mt" style="display:flex;gap:16px;justify-content:center;align-items:center;flex-wrap:wrap"><span><i style="display:inline-block;width:13px;height:13px;border:2px solid var(--accent);border-radius:4px;vertical-align:-2px;margin-right:5px"></i>Supervision day</span><span>Tap a day to view or edit it.</span></div>';
     body.querySelector("#pm").onclick=()=>{calM--;if(calM<0){calM=11;calY--;}renderCal();};
     body.querySelector("#nm").onclick=()=>{calM++;if(calM>11){calM=0;calY++;}renderCal();};
     body.querySelectorAll(".cell[data-day]").forEach(c=>c.onclick=()=>daySheet(+c.dataset.day));
   }
   function daySheet(day){
-    const ss=S.sessions.filter(s=>{const d=parseD(s.date);return d&&d.getFullYear()===calY&&d.getMonth()===calM&&d.getDate()===day;}).sort((a,b)=>(a.time||"").localeCompare(b.time||""));
+    const sameDay=s=>{const d=parseD(s.date);return d&&d.getFullYear()===calY&&d.getMonth()===calM&&d.getDate()===day;};
+    const ss=S.sessions.filter(sameDay).sort((a,b)=>(a.time||"").localeCompare(b.time||""));
+    const sup=(S.supervision||[]).filter(sameDay);
     const bd=el('<div></div>');
-    bd.innerHTML=(ss.length?ss.map(s=>{const d=derive(s);const pay=payChip(s,d);
-      return '<div class="list-item" data-id="'+s._id+'"><div class="li-main"><div class="li-title">'+esc(s.client)+' '+pay+'</div><div class="li-sub">'+esc(s.time||"")+' · '+esc(s.location||"")+' · #'+esc(s.num)+'</div></div><div class="li-right">'+gbp(d.rate)+'</div></div>';}).join(""):'<p class="muted small">No sessions this day.</p>')+'<button class="btn full mt" id="addDay">＋ Add session this day</button>';
-    bd.querySelectorAll(".list-item").forEach(li=>li.onclick=()=>{closeSheet();sessionForm(S.sessions.find(s=>s._id===li.dataset.id));});
+    const sessHTML=ss.length?ss.map(s=>{const d=derive(s);const pay=payChip(s,d);
+      return '<div class="list-item" data-id="'+s._id+'"><div class="li-main"><div class="li-title">'+esc(s.client)+' '+pay+'</div><div class="li-sub">'+esc(s.time||"")+' · '+esc(s.location||"")+' · #'+esc(s.num)+'</div></div><div class="li-right">'+gbp(d.rate)+'</div></div>';}).join(""):'<p class="muted small">No sessions this day.</p>';
+    const supHTML=sup.length?'<div class="li-sub" style="margin:12px 2px 2px;font-weight:700;color:var(--accent-ink)">Supervision</div>'+sup.map(s=>{const disc=(s.clients&&s.clients.length)?(' · '+esc(s.clients.join(", "))):'';
+      return '<div class="list-item" data-supid="'+s._id+'"><div class="li-main"><div class="li-title">'+esc(s.supervisor||"Supervision")+'</div><div class="li-sub">'+(s.count||1)+' client hr(s)'+disc+'</div></div><div class="li-right">'+gbp(s.cost)+'</div></div>';}).join(""):'';
+    bd.innerHTML=sessHTML+supHTML+'<button class="btn full mt" id="addDay">＋ Add session this day</button>';
+    bd.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>{closeSheet();sessionForm(S.sessions.find(s=>s._id===li.dataset.id));});
+    bd.querySelectorAll(".list-item[data-supid]").forEach(li=>li.onclick=()=>{closeSheet();supervisionForm(S.supervision.find(s=>s._id===li.dataset.supid));});
     bd.querySelector("#addDay").onclick=()=>{const ds=isoD(new Date(calY,calM,day));closeSheet();sessionForm(null,{date:ds});};
     openSheet(new Date(calY,calM,day).toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"}),bd);
   }
@@ -1470,18 +1472,43 @@ function recOf(s,d){return {client:s.client,num:s.num,date:s.date,time:s.time||"
   rate:d.rate,paidYN:d.clientPaid?"Y":"N",paidDate:s.paidDate||"",overdueYN:d.overdue?"Y":"N",roomRate:d.roomRate,roomPaid:s.roomPaid||"",
   roomPaidDate:s.roomPaidDate||"",roomDue:d.roomDue,lateCancel:isLateCancel(s)?"Y":"",invoice:s.invoice||"",notes:s.notes||"",status:d.status||"",taxYear:d.taxYear,week:d.week};}
 let rawF={q:"",client:"",ty:"",paid:"",loc:"",sk:"date",sd:-1,cols:null};
+let supF={q:"",sk:"date",sd:-1,cols:null};
 let rawSeg="sessions";
 VIEWS.raw=function(){
   const v=el('<div class="view active"></div>');
   const segHtml='<div class="seg mb" style="display:inline-flex"><button data-rs="sessions" class="'+(rawSeg==="sessions"?"on":"")+'">Sessions</button><button data-rs="supervision" class="'+(rawSeg==="supervision"?"on":"")+'">Supervision</button></div>';
   if(rawSeg==="supervision"){
     const SUPCOLS=[{k:"date",t:"Date",d:1},{k:"supervisor",t:"Supervisor"},{k:"count",t:"Client hrs",n:1},{k:"cost",t:"Cost",n:1,m:1},{k:"clients",t:"Clients discussed"},{k:"taxYear",t:"Tax yr"}];
-    let supSk="date",supSd=-1;
-    const supRows=()=>{const rows=(S.supervision||[]).map(s=>({date:s.date||"",supervisor:s.supervisor||"",count:+(s.count)||1,cost:+(s.cost)||0,clients:(s.clients||[]).join(", "),taxYear:taxYear(s.date)}));rows.sort((a,b)=>{let x=a[supSk],y=b[supSk];if(supSk==="date"){x=x?parseD(x):0;y=y?parseD(y):0;}else if(supSk==="count"||supSk==="cost"){x=+x||0;y=+y||0;}else{x=String(x||"").toLowerCase();y=String(y||"").toLowerCase();}return(x>y?1:x<y?-1:0)*supSd;});return rows;};
+    if(!supF.cols){try{supF.cols=JSON.parse(localStorage.getItem("tt_supcols"))}catch(e){} if(!supF.cols||!supF.cols.length)supF.cols=SUPCOLS.map(c=>c.k);}
     const fmtSupCell=(r,c)=>{if(c.m)return gbp(r[c.k]);if(c.d)return esc(fmtD(r[c.k]));return esc(r[c.k]==null?"":r[c.k]);};
-    function drawSup(){const rows=supRows();const thead='<thead><tr>'+SUPCOLS.map(c=>'<th data-k="'+c.k+'"'+(c.n?' class="num"':'')+'>'+esc(c.t)+(supSk===c.k?(supSd>0?" ▲":" ▼"):"")+'</th>').join("")+'</tr></thead>';const tb='<tbody>'+rows.map(r=>'<tr>'+SUPCOLS.map(c=>'<td'+(c.n?' class="num"':'')+'>'+fmtSupCell(r,c)+'</td>').join("")+'</tr>').join("")+'</tbody>';v.querySelector("#suptable").innerHTML=thead+tb;v.querySelectorAll("#suptable th").forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(supSk===k)supSd=-supSd;else{supSk=k;supSd=1;}drawSup();});}
-    const supTotal=(S.supervision||[]).reduce((a,s)=>a+(+s.cost||0),0);
-    v.innerHTML=segHtml+'<div class="card" style="padding:6px"><div class="rawscroll"><table id="suptable"></table></div></div><p class="small muted center" style="margin-top:8px">'+(S.supervision||[]).length+' sessions · total '+gbp(supTotal)+'</p>';
+    function filteredSup(){
+      let rows=(S.supervision||[]).map(s=>({date:s.date||"",supervisor:s.supervisor||"",count:+(s.count)||1,cost:+(s.cost)||0,clients:(s.clients||[]).join(", "),taxYear:taxYear(s.date)}));
+      const q=(supF.q||"").toLowerCase();
+      if(q)rows=rows.filter(r=>SUPCOLS.some(c=>String(r[c.k]==null?"":r[c.k]).toLowerCase().includes(q)));
+      const sc=SUPCOLS.find(c=>c.k===supF.sk)||{};
+      rows.sort((a,b)=>{let x=a[supF.sk],y=b[supF.sk];if(supF.sk==="date"){x=x?parseD(x):0;y=y?parseD(y):0;}else if(sc.n){x=+x||0;y=+y||0;}else{x=String(x||"").toLowerCase();y=String(y||"").toLowerCase();}return(x>y?1:x<y?-1:0)*supF.sd;});
+      return rows;
+    }
+    v.innerHTML=segHtml+'<div class="card"><div class="search"><input id="supq" placeholder="Search all fields…" value="'+esc(supF.q)+'"></div>'+
+      '<details class="mt"><summary>Choose columns &amp; export</summary><div id="supColsBox" class="mt"></div><button class="btn sm sec mt" id="supcsv">Export filtered to CSV</button></details>'+
+      '<div id="supcount" class="small muted mt"></div></div>'+
+      '<div class="card" style="padding:6px"><div class="rawscroll"><table id="suptable"></table></div></div>';
+    const scb=v.querySelector("#supColsBox");
+    scb.innerHTML=SUPCOLS.map(c=>'<label class="colchk"><input type="checkbox" data-k="'+c.k+'"'+(supF.cols.includes(c.k)?" checked":"")+'> '+esc(c.t)+'</label>').join("");
+    scb.querySelectorAll("input").forEach(x=>x.onchange=()=>{const k=x.dataset.k;if(x.checked){if(!supF.cols.includes(k))supF.cols.push(k);}else supF.cols=supF.cols.filter(z=>z!==k);try{localStorage.setItem("tt_supcols",JSON.stringify(supF.cols))}catch(e){} drawSup();});
+    function drawSup(){
+      const rows=filteredSup();const cols=SUPCOLS.filter(c=>supF.cols.includes(c.k));
+      const thead='<thead><tr>'+cols.map(c=>'<th data-k="'+c.k+'"'+(c.n?' class="num"':'')+'>'+esc(c.t)+(supF.sk===c.k?(supF.sd>0?" ▲":" ▼"):"")+'</th>').join("")+'</tr></thead>';
+      const tb='<tbody>'+rows.map(r=>'<tr>'+cols.map(c=>'<td'+(c.n?' class="num"':'')+'>'+fmtSupCell(r,c)+'</td>').join("")+'</tr>').join("")+'</tbody>';
+      v.querySelector("#suptable").innerHTML=thead+tb;
+      v.querySelectorAll("#suptable th").forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(supF.sk===k)supF.sd=-supF.sd;else{supF.sk=k;supF.sd=1;}drawSup();});
+      const totCost=rows.reduce((a,r)=>a+(+r.cost||0),0);
+      v.querySelector("#supcount").textContent=rows.length+" rows · "+cols.length+" columns shown · total "+gbp(totCost);
+      v.querySelector("#supcsv").onclick=()=>{const head=cols.map(c=>c.t).join(",");
+        const lines=rows.map(r=>cols.map(c=>{let val=r[c.k];val=val==null?"":String(val);return /[",\n]/.test(val)?'"'+val.replace(/"/g,'""')+'"':val;}).join(","));
+        download("therapy-supervision-table-"+isoD(today())+".csv",[head,...lines].join("\n"),"text/csv");toast("CSV downloaded");};
+    }
+    v.querySelector("#supq").oninput=e=>{supF.q=e.target.value;drawSup();};
     drawSup();
     v.querySelectorAll("[data-rs]").forEach(bt=>bt.onclick=()=>{rawSeg=bt.dataset.rs;go("raw");});
     return v;
