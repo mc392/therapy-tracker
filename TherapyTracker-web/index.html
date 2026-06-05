@@ -407,22 +407,34 @@ async function loadState(){
   }catch(e){console.warn(e);} }
   S=st; mirror(S);
 }
-/* ===== Backup reminder: nudge after BACKUP_DAYS or BACKUP_ACTIONS since the last .json backup, whichever comes first. Tracked per-device in localStorage (not part of the data). ===== */
-const BACKUP_DAYS=7, BACKUP_ACTIONS=25;
+/* ===== Backup reminder: nudge after the configured days/changes thresholds since the last .json backup, whichever comes first. Thresholds + state tracked per-device in localStorage (not part of the data). ===== */
+const BACKUP_DEFAULT_DAYS=7, BACKUP_DEFAULT_ACTS=25;
+function backupDaysThreshold(){const s=+localStorage.getItem("tt_backup_days");return s>0?s:BACKUP_DEFAULT_DAYS;}
+function backupActsThreshold(){const s=+localStorage.getItem("tt_backup_acts");return s>0?s:BACKUP_DEFAULT_ACTS;}
 function lastBackupTs(){const s=localStorage.getItem("tt_last_backup");return s?+s:0;}
+function lastBackupLabel(){const t=lastBackupTs();if(!t)return "never on this device";
+  const mins=Math.floor((Date.now()-t)/60000);
+  if(mins<1)return "just now";
+  if(mins<60)return mins+" min"+(mins===1?"":"s")+" ago";
+  const hrs=Math.floor(mins/60);if(hrs<24)return hrs+" hour"+(hrs===1?"":"s")+" ago";
+  const days=Math.floor(hrs/24);return days+" day"+(days===1?"":"s")+" ago";}
 function actsSinceBackup(){const s=localStorage.getItem("tt_acts_since_backup");return s?+s:0;}
 function bumpBackupActs(){try{localStorage.setItem("tt_acts_since_backup",String(actsSinceBackup()+1));}catch(e){}}
 function markBackedUp(){try{localStorage.setItem("tt_last_backup",String(Date.now()));localStorage.setItem("tt_acts_since_backup","0");}catch(e){}updateBackupBanner();}
-function initBackupTracking(){if(!localStorage.getItem("tt_last_backup"))markBackedUp();} // start the clock on first run / first update
-function backupDueInfo(){const last=lastBackupTs(),acts=actsSinceBackup();const ms=last?Date.now()-last:0;
-  const byTime=last>0&&ms>=BACKUP_DAYS*86400000, byActs=acts>=BACKUP_ACTIONS;
-  return {due:acts>0&&(byTime||byActs), days:last?Math.floor(ms/86400000):null, acts};} // never nag when nothing has changed
-function updateBackupBanner(){const bar=document.getElementById("backupBanner");if(!bar)return;
-  const info=backupDueInfo();bar.classList.toggle("show",info.due);
-  if(info.due){const d=document.getElementById("bkdetail");if(d){const parts=[];
-    if(info.days!=null)parts.push(info.days+" day"+(info.days===1?"":"s")+" since last backup");
-    if(info.acts)parts.push(info.acts+" change"+(info.acts===1?"":"s")+" since");
-    d.textContent=parts.join(" · ")+".";}}}
+function initBackupTracking(){try{if(!localStorage.getItem("tt_clock_start"))localStorage.setItem("tt_clock_start",String(Date.now()));}catch(e){}} // anchor the time-based nudge from first run; display still shows the real last backup
+function backupRefTs(){return lastBackupTs()||(+localStorage.getItem("tt_clock_start")||0);} // time reference: real last backup, else first-run anchor
+function backupDueInfo(){const acts=actsSinceBackup(),last=lastBackupTs(),ref=backupRefTs();
+  const byTime=ref>0&&(Date.now()-ref)>=backupDaysThreshold()*86400000, byActs=acts>=backupActsThreshold();
+  return {due:acts>0&&(byTime||byActs), days:last?Math.floor((Date.now()-last)/86400000):null, acts};} // never nag when nothing has changed
+function updateBackupBanner(){const info=backupDueInfo();
+  const bar=document.getElementById("backupBanner");
+  if(bar){bar.classList.toggle("show",info.due);
+    if(info.due){const d=document.getElementById("bkdetail");if(d){const parts=[];
+      if(info.days!=null)parts.push(info.days+" day"+(info.days===1?"":"s")+" since last backup");
+      if(info.acts)parts.push(info.acts+" change"+(info.acts===1?"":"s")+" not backed up");
+      d.textContent=parts.join(" · ")+".";}}}
+  const st=document.getElementById("bkStatus"); // settings status line, when that view is open
+  if(st)st.textContent="Last backed up: "+lastBackupLabel()+(info.acts?" · "+info.acts+" change"+(info.acts===1?"":"s")+" not backed up":"");}
 async function commit(summary){
   try{gameTouch();}catch(e){}      // record weekly activity (streak)
   try{bumpBackupActs();updateBackupBanner();}catch(e){} // count change toward the backup nudge
@@ -1619,6 +1631,14 @@ VIEWS.settings=function(){
        <input type="file" id="impF" accept=".json,application/json" style="display:none">
      </div>
    </div>
+   <div class="card"><h2>Backup reminders</h2>
+     <p class="small muted" id="bkStatus"></p>
+     <p class="small muted">A banner reminds you to back up once either limit below is reached, and clears when you do.</p>
+     <div class="field2">
+       <div><label>Remind after (days)</label><input type="number" min="1" id="setBkDays"></div>
+       <div><label>…or after (changes)</label><input type="number" min="1" id="setBkActs"></div>
+     </div>
+   </div>
    <div class="card"><h2>Undo &amp; history</h2>
      <div class="row" style="gap:8px"><button class="btn sec" id="undoB">↩︎ Undo last change</button>
        <button class="btn ghost" id="snapB">View restore points</button></div>
@@ -1652,6 +1672,10 @@ VIEWS.settings=function(){
   updT();tBtn.onclick=()=>{setTheme(curTheme()==="dark"?"light":"dark");updT();};
   const soBtn=v.querySelector("#setSound"),updS=()=>{soBtn.textContent=Sfx.on?"🔊 Sound on":"🔇 Sound off";soBtn.classList.toggle("muted",!Sfx.on);};
   updS();soBtn.onclick=()=>{const nowOn=Sfx.toggle();updS();if(nowOn){Sfx.prime();Sfx.pop();toast("Sound on");}else toast("Sound muted");};
+  const dEl=v.querySelector("#setBkDays"),aEl=v.querySelector("#setBkActs");
+  dEl.value=backupDaysThreshold();aEl.value=backupActsThreshold();
+  dEl.onchange=()=>{const n=Math.max(1,Math.round(+dEl.value)||BACKUP_DEFAULT_DAYS);dEl.value=n;try{localStorage.setItem("tt_backup_days",String(n));}catch(e){}updateBackupBanner();toast("Saved");};
+  aEl.onchange=()=>{const n=Math.max(1,Math.round(+aEl.value)||BACKUP_DEFAULT_ACTS);aEl.value=n;try{localStorage.setItem("tt_backup_acts",String(n));}catch(e){}updateBackupBanner();toast("Saved");};
   v.querySelector("#expJ").onclick=exportJSON;
   v.querySelector("#expC").onclick=exportCSV;
   v.querySelector("#expSC").onclick=exportSupervisionCSV;
