@@ -680,7 +680,7 @@ function gameShow(m,f){ f=f||{}; const g=ensureGame(); const st=computeStreak();
   window.addEventListener("pointerdown",function pr(){Sfx.prime();},{once:true});})();
 
 /* ============ Longevity / funnel / sparkline helpers ============ */
-function clientSessionCounts(){const m={};S.sessions.forEach(s=>{const k=(s.client||"").toLowerCase();if(k)m[k]=(m[k]||0)+1;});return m;}
+function clientSessionCounts(){const m={};S.sessions.forEach(s=>{if(isLateCancel(s))return;const k=(s.client||"").toLowerCase();if(k)m[k]=(m[k]||0)+1;});return m;}
 function clientAddedDate(c){if(c.created)return c.created;
   const rs=(S.rateHistory||[]).filter(r=>(r.client||"").toLowerCase()===(c.code||"").toLowerCase()).map(r=>r.effectiveFrom).filter(Boolean).sort();
   if(rs.length)return rs[0];
@@ -1845,7 +1845,7 @@ function sessionForm(s,o){
       else{S.sessions.push(m);await commit("Added session: "+m.client+" "+m.date);}
       const dNow=derive(m);const justCompleted=dNow.past&&dNow.complete&&!prevComplete;
       let milestone=null;
-      if(!exists){const cnt=S.sessions.filter(x=>(x.client||"").toLowerCase()===(m.client||"").toLowerCase()).length;
+      if(!exists&&!isLateCancel(m)){const cnt=S.sessions.filter(x=>(x.client||"").toLowerCase()===(m.client||"").toLowerCase()&&!isLateCancel(x)).length;
         milestone=[6,12,20,30,50,75,100].find(T=>cnt-1<T&&cnt>=T)||null;}
       closeSheet();
       gameShow({batch:1,completed:justCompleted,milestone:milestone,milestoneClient:m.client,toast:justCompleted?"Session complete ✓":(exists?"Saved":"Session logged ✨")},{});
