@@ -1294,11 +1294,38 @@ VIEWS.clients=function(){
         return '<div class="list-item"'+(cl?' data-id="'+cl._id+'"':'')+'><div class="li-main"><div class="li-title">'+esc(e.code)+' '+rateChip(e)+'</div><div class="li-sub">'+e.lc+' of '+e.total+' sessions'+(e.last?' · last '+fmtDMY(e.last):'')+'</div></div><div class="li-right">'+trendChip(e.recent,e.prev)+'</div></div>';}).join("")
         :'<p class="muted small">No late cancellations recorded yet.</p>')+'</div>';
 
+    /* ---- attendance ---- */
+    const attRows=S.clients.map(c=>({c,a:clientAttendance(c)})).filter(x=>x.a&&x.a.n>=2);
+    const attPctChip=p=>'<span class="chip '+(p>=85?'s':p>=65?'f':'n')+'">'+p+'%</span>';
+    const fmtRange=(a,b)=>fmtDM(a)+'–'+fmtDM(b);
+    const pauseNote=a=>{const parts=[];
+      if(a.pauses.length)parts.push(a.pauses.length+' pause'+(a.pauses.length>1?'s':'')+' (excluded): '+a.pauses.map(p=>fmtRange(p.from,p.to)).join(', '));
+      if(a.currentPause)parts.push('on a pause since '+fmtDM(a.currentPause.from)+' ('+a.currentPause.days+'d)');
+      return parts.length?'<div class="li-sub" style="color:var(--accent-ink)">⏸ '+esc(parts.join(' · '))+'</div>':'';};
+    const attAvg=attRows.length?Math.round(attRows.reduce((s,x)=>s+x.a.pct,0)/attRows.length):0;
+    const attSorted=attRows.slice().sort((a,b)=>a.a.pct-b.a.pct||b.a.n-a.a.n);
+    const attCard='<div class="card"><h2>Attendance</h2>'+
+      '<p class="small muted" style="margin:0 0 8px">How regularly each client attends vs their expected frequency, since their first session. Long gaps (over 3× the interval) count as a pause and are excluded from the rate (but noted ⏸). Late cancellations don’t count as attended.</p>'+
+      '<div class="kpis mb">'+
+        '<div class="kpi"><div class="v">'+attAvg+'%</div><div class="l">Avg attendance</div></div>'+
+        '<div class="kpi"><div class="v">'+attRows.length+'</div><div class="l">Clients tracked</div></div>'+
+      '</div>'+
+      (attSorted.length?attSorted.map(x=>{const a=x.a;
+        return '<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+' '+attPctChip(a.pct)+'</div><div class="li-sub">'+a.attended+' of '+a.expected+' expected · '+esc(x.c.frequency||"")+'</div>'+pauseNote(a)+'</div><div class="li-right"><span class="small muted">since '+fmtDM(a.first)+'</span></div></div>';}).join("")
+        :'<p class="muted small">Need at least two sessions per client to measure attendance.</p>')+'</div>';
+    /* ---- ongoing clients on a current pause: prompt to review status ---- */
+    const review=attRows.filter(x=>x.a.currentPause);
+    const reviewCard=review.length?'<div class="card" style="border:1px solid var(--accent)"><h2>⏸ Review status</h2>'+
+      '<p class="small muted" style="margin:0 0 6px">These clients are marked <b>Ongoing</b> but haven’t had a session in over 3× their usual interval. Consider updating them to <b>Paused</b> or <b>Finished</b>.</p>'+
+      review.sort((a,b)=>b.a.currentPause.days-a.a.currentPause.days).map(x=>'<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+' <span class="chip f">'+x.a.currentPause.days+'d gap</span></div><div class="li-sub">Last session '+fmtDMY(x.a.last)+' · '+esc(x.c.frequency||"")+'</div></div><div class="li-right"><span class="small muted">tap to update ›</span></div></div>').join("")+'</div>':'';
+
     body.innerHTML='<div class="card"><h2>Client retention funnel</h2><p class="small muted" style="margin:0 0 10px">How clients progress over time, by number of sessions.</p><div class="funnel">'+rows+'</div></div>'+
       '<div class="kpis mb">'+
         '<div class="kpi"><div class="v">'+base+'</div><div class="l">Clients seen</div></div>'+
         '<div class="kpi"><div class="v">'+avg+'</div><div class="l">Avg sessions / client</div></div>'+
       '</div>'+
+      reviewCard+
+      attCard+
       lcCard+
       (deep.length?'<div class="card"><h2>Long-term clients</h2><p class="small muted" style="margin:0 0 6px">Clients seen for 20+ sessions.</p>'+deep.map(x=>'<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+'</div><div class="li-sub">'+esc(x.c.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>').join("")+'</div>':'');
     body.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>clientForm(S.clients.find(c=>c._id===li.dataset.id)));
@@ -1708,6 +1735,33 @@ function lastSessionFor(code,excludeId){
 }
 function freqDays(c){const f=(c&&c.frequency||"").toLowerCase();
   if(f.includes("2"))return 14; if(f.includes("3"))return 21; if(f.includes("month"))return 28; return 7}
+/* Attendance: how regularly a client attends vs their expected frequency, since their first session.
+   Gaps longer than 3× the expected interval are treated as "pauses" and excluded from the denominator
+   (but recorded so they can be shown as a footnote). For Ongoing clients a pause running up to today is
+   flagged separately so their status can be reviewed. */
+function clientAttendance(c){
+  const code=(c&&c.code||"").toLowerCase(); if(!code)return null;
+  const rs=S.sessions.filter(s=>(s.client||"").toLowerCase()===code)
+    .map(s=>({d:parseD(s.date),lc:isLateCancel(s)})).filter(x=>x.d).sort((a,b)=>a.d-b.d);
+  if(!rs.length)return null;
+  const fd=freqDays(c);
+  const ongoing=(c.status||"")==="Ongoing";
+  const first=rs[0].d, last=rs[rs.length-1].d;
+  const end=ongoing?today():last;
+  const pauses=[]; let pauseDays=0;
+  for(let i=1;i<rs.length;i++){
+    const gap=(rs[i].d-rs[i-1].d)/86400000;
+    if(gap>3*fd){ pauses.push({from:rs[i-1].d,to:rs[i].d,days:Math.round(gap)}); pauseDays+=gap-fd; }
+  }
+  let currentPause=null;
+  if(ongoing){ const tail=(end-last)/86400000;
+    if(tail>3*fd){ currentPause={from:last,to:end,days:Math.round(tail)}; pauseDays+=tail-fd; } }
+  const spanDays=Math.max(0,(end-first)/86400000-pauseDays);
+  const expected=Math.max(1,Math.round(spanDays/fd)+1);
+  const attended=rs.filter(x=>!x.lc).length;
+  const pct=Math.min(100,Math.round(attended/expected*100));
+  return {pct,attended,expected,pauses,currentPause,first,last,ongoing,fd,n:rs.length};
+}
 function suggestFor(code){
   const rs=S.sessions.filter(s=>(s.client||"").toLowerCase()===(code||"").toLowerCase());
   if(!rs.length)return {num:1,date:isoD(today()),time:"10:00",mode:"In-person",location:"At home",room:""};
