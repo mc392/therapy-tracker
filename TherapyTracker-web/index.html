@@ -52,6 +52,8 @@ main{flex:1;padding:18px 16px 96px}
 @keyframes f{from{opacity:.3;transform:translateY(5px)}to{opacity:1;transform:none}}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin:0 0 14px;box-shadow:var(--shadow)}
 .card h2{font-size:14px;color:var(--brand-dark);letter-spacing:.04em;text-transform:uppercase;font-weight:700}
+.grp-h{font-size:12px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--brand-dark);margin:16px 0 6px;padding-top:12px;border-top:1px solid var(--line)}
+.grp-h:first-of-type{border-top:0;padding-top:0;margin-top:8px}
 .kpis{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:15px;box-shadow:var(--shadow)}
 .kpi .v{font-size:23px;font-weight:700;color:var(--brand-dark)}
@@ -865,6 +867,30 @@ function chartLine(data){
   const avgCall=hasAvg&&la?'<circle cx="'+la[0].toFixed(1)+'" cy="'+la[1].toFixed(1)+'" r="2.6" fill="var(--muted)"></circle><text x="'+(lastX+8)+'" y="'+(lay-2).toFixed(1)+'" font-size="9" fill="var(--muted)">6-mo avg</text><text x="'+(lastX+8)+'" y="'+(lay+11).toFixed(1)+'" font-size="12" font-weight="700" fill="var(--muted)">'+((data[data.length-1]||{}).avg||0)+'</text>':"";
   return '<div class="svgwrap"><svg viewBox="0 0 '+W+' '+h+'" width="'+W+'" height="'+h+'"><text x="2" y="'+padT+'" font-size="10" font-weight="600" fill="var(--muted)">'+max+'</text><path d="'+area+'" fill="color-mix(in srgb,var(--brand) 15%,transparent)"></path><path d="'+line+'" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linejoin="round"></path>'+avgLine+dots+avgCall+labs+'</svg></div>';
 }
+function chartAttendance(data){
+  const haveData=data.filter(d=>d.avg!=null);
+  if(haveData.length<2)return '<p class="muted small">Not enough history yet to chart a trend — keep logging sessions.</p>';
+  const h=176,padT=18,padB=30,padL=28,padR=16,n=data.length;
+  const step=Math.max(24,Math.min(56,Math.round((320-padL-padR)/Math.max(1,n-1))));
+  const W=Math.max(280,padL+(n-1)*step+padR),innerH=h-padT-padB;
+  const max=Math.max(110,...data.map(d=>d.avg||0));
+  const yOf=v=>padT+innerH-innerH*Math.min(v,max)/max;
+  const refY=yOf(100);
+  const ref='<line x1="'+padL+'" y1="'+refY.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+refY.toFixed(1)+'" stroke="var(--line)" stroke-dasharray="3 4"></line>'+
+    '<text x="'+(W-padR)+'" y="'+(refY-3).toFixed(1)+'" text-anchor="end" font-size="9" fill="var(--muted)">100%</text>';
+  let line="",started=false;
+  data.forEach((d,i)=>{if(d.avg==null){started=false;return;}const x=padL+i*step,y=yOf(d.avg);line+=(started?"L":"M")+x.toFixed(1)+" "+y.toFixed(1)+" ";started=true;});
+  const dots=data.map((d,i)=>{if(d.avg==null)return"";const x=padL+i*step,y=yOf(d.avg);
+    return '<circle cx="'+x+'" cy="'+y.toFixed(1)+'" r="3" fill="var(--brand)" stroke="var(--card)" stroke-width="1.3"></circle>';}).join("");
+  const lastI=data.reduce((m,d,i)=>d.avg!=null?i:m,-1);
+  let lastLab="";
+  if(lastI>=0){const x=padL+lastI*step,y=yOf(data[lastI].avg);
+    lastLab='<text x="'+x+'" y="'+(y-9).toFixed(1)+'" text-anchor="middle" font-size="11" font-weight="700" paint-order="stroke" stroke="var(--card)" stroke-width="3.4" stroke-linejoin="round" fill="var(--brand-dark)">'+data[lastI].avg+'%</text>';}
+  const every=Math.ceil(n/8);
+  const labs=data.map((d,i)=>(i%every===0||i===n-1)?'<text x="'+(padL+i*step)+'" y="'+(h-padB+16)+'" text-anchor="middle" font-size="9" fill="var(--muted)">'+esc(d.lab)+'</text>':"").join("");
+  return '<div class="svgwrap"><svg viewBox="0 0 '+W+' '+h+'" width="'+W+'" height="'+h+'"><text x="2" y="'+padT+'" font-size="9" fill="var(--muted)">'+Math.round(max)+'%</text>'+
+    ref+'<path d="'+line.trim()+'" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></path>'+dots+lastLab+labs+'</svg></div>';
+}
 function chartCombo(data,sel){
   const h=234,padT=18,padB=40,padL=8,padR=64,step=52,bw=30,n=data.length||1;
   const W=Math.max(padL+n*step+padR,320),innerH=h-padT-padB;
@@ -1304,19 +1330,26 @@ VIEWS.clients=function(){
       return parts.length?'<div class="li-sub" style="color:var(--accent-ink)">⏸ '+esc(parts.join(' · '))+'</div>':'';};
     const attAvg=attRows.length?Math.round(attRows.reduce((s,x)=>s+x.a.pct,0)/attRows.length):0;
     const attSorted=attRows.slice().sort((a,b)=>a.a.pct-b.a.pct||b.a.n-a.a.n);
+    const attLi=x=>{const a=x.a;
+      return '<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+' '+attPctChip(a.pct)+'</div><div class="li-sub">'+a.attended+' of '+a.expected+' expected · '+esc(x.c.frequency||"")+'</div>'+pauseNote(a)+'</div><div class="li-right"><span class="small muted">since '+fmtDM(a.first)+'</span></div></div>';};
+    const grpAvg=arr=>arr.length?Math.round(arr.reduce((s,x)=>s+x.a.pct,0)/arr.length):0;
+    const attOngoing=attSorted.filter(x=>(x.c.status||"")==="Ongoing");
+    const attOther=attSorted.filter(x=>(x.c.status||"")!=="Ongoing");
+    const attSection=(title,arr)=>arr.length?'<div class="grp-h">'+title+' <span class="muted" style="font-weight:600">· '+arr.length+' client'+(arr.length>1?'s':'')+' · avg '+grpAvg(arr)+'%</span></div>'+arr.map(attLi).join(""):"";
+    const attSeries=rollingAttendanceSeries(attRows);
     const attCard='<div class="card"><h2>Attendance</h2>'+
-      '<p class="small muted" style="margin:0 0 8px">How regularly each client attends vs their expected frequency, since their first session. Long gaps (over 3× the interval) count as a pause and are excluded from the rate (but noted ⏸). Late cancellations don’t count as attended.</p>'+
+      '<p class="small muted" style="margin:0 0 8px">How regularly each client attends vs their expected frequency, since their first session. Long gaps (3× the interval or more) count as a pause and are excluded from the rate (but noted ⏸). Late cancellations don’t count as attended.</p>'+
       '<div class="kpis mb">'+
         '<div class="kpi"><div class="v">'+attAvg+'%</div><div class="l">Avg attendance</div></div>'+
         '<div class="kpi"><div class="v">'+attRows.length+'</div><div class="l">Clients tracked</div></div>'+
       '</div>'+
-      (attSorted.length?attSorted.map(x=>{const a=x.a;
-        return '<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+' '+attPctChip(a.pct)+'</div><div class="li-sub">'+a.attended+' of '+a.expected+' expected · '+esc(x.c.frequency||"")+'</div>'+pauseNote(a)+'</div><div class="li-right"><span class="small muted">since '+fmtDM(a.first)+'</span></div></div>';}).join("")
+      (attRows.length?'<p class="small muted" style="margin:0 0 2px">3-month rolling attendance rate across all tracked clients.</p>'+chartAttendance(attSeries):"")+
+      (attSorted.length?attSection('Ongoing',attOngoing)+attSection('Paused &amp; finished',attOther)
         :'<p class="muted small">Need at least two sessions per client to measure attendance.</p>')+'</div>';
     /* ---- ongoing clients on a current pause: prompt to review status ---- */
     const review=attRows.filter(x=>x.a.currentPause);
     const reviewCard=review.length?'<div class="card" style="border:1px solid var(--accent)"><h2>⏸ Review status</h2>'+
-      '<p class="small muted" style="margin:0 0 6px">These clients are marked <b>Ongoing</b> but haven’t had a session in over 3× their usual interval. Consider updating them to <b>Paused</b> or <b>Finished</b>.</p>'+
+      '<p class="small muted" style="margin:0 0 6px">These clients are marked <b>Ongoing</b> but haven’t had a session in 3× their usual interval or more. Consider updating them to <b>Paused</b> or <b>Finished</b>.</p>'+
       review.sort((a,b)=>b.a.currentPause.days-a.a.currentPause.days).map(x=>'<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+' <span class="chip f">'+x.a.currentPause.days+'d gap</span></div><div class="li-sub">Last session '+fmtDMY(x.a.last)+' · '+esc(x.c.frequency||"")+'</div></div><div class="li-right"><span class="small muted">tap to update ›</span></div></div>').join("")+'</div>':'';
 
     body.innerHTML='<div class="card"><h2>Client retention funnel</h2><p class="small muted" style="margin:0 0 10px">How clients progress over time, by number of sessions.</p><div class="funnel">'+rows+'</div></div>'+
@@ -1736,7 +1769,7 @@ function lastSessionFor(code,excludeId){
 function freqDays(c){const f=(c&&c.frequency||"").toLowerCase();
   if(f.includes("2"))return 14; if(f.includes("3"))return 21; if(f.includes("month"))return 28; return 7}
 /* Attendance: how regularly a client attends vs their expected frequency, since their first session.
-   Gaps longer than 3× the expected interval are treated as "pauses" and excluded from the denominator
+   Gaps of 3× the expected interval or more are treated as "pauses" and excluded from the denominator
    (but recorded so they can be shown as a footnote). For Ongoing clients a pause running up to today is
    flagged separately so their status can be reviewed. */
 function clientAttendance(c){
@@ -1751,16 +1784,53 @@ function clientAttendance(c){
   const pauses=[]; let pauseDays=0;
   for(let i=1;i<rs.length;i++){
     const gap=(rs[i].d-rs[i-1].d)/86400000;
-    if(gap>3*fd){ pauses.push({from:rs[i-1].d,to:rs[i].d,days:Math.round(gap)}); pauseDays+=gap-fd; }
+    if(gap>=3*fd){ pauses.push({from:rs[i-1].d,to:rs[i].d,days:Math.round(gap)}); pauseDays+=gap-fd; }
   }
   let currentPause=null;
   if(ongoing){ const tail=(end-last)/86400000;
-    if(tail>3*fd){ currentPause={from:last,to:end,days:Math.round(tail)}; pauseDays+=tail-fd; } }
+    if(tail>=3*fd){ currentPause={from:last,to:end,days:Math.round(tail)}; pauseDays+=tail-fd; } }
   const spanDays=Math.max(0,(end-first)/86400000-pauseDays);
   const expected=Math.max(1,Math.round(spanDays/fd)+1);
   const attended=rs.filter(x=>!x.lc).length;
   const pct=Math.min(100,Math.round(attended/expected*100));
   return {pct,attended,expected,pauses,currentPause,first,last,ongoing,fd,n:rs.length};
+}
+/* Rolling attendance over time: bucket every month from the earliest first-session to now,
+   summing attended vs expected sessions across all tracked clients (same active-span / pause
+   logic as clientAttendance, clipped to the month). The plotted line is a 3-month moving
+   ratio of attended/expected, which smooths the noise of individual months. */
+function rollingAttendanceSeries(rows){
+  if(!rows.length)return [];
+  const DAY=86400000,t=today();
+  let minD=null; rows.forEach(x=>{if(!minD||x.a.first<minD)minD=x.a.first;});
+  if(!minD)return [];
+  const months=[];
+  let cur=new Date(minD.getFullYear(),minD.getMonth(),1);
+  const stop=new Date(t.getFullYear(),t.getMonth(),1);
+  while(cur<=stop){
+    const start=new Date(cur.getFullYear(),cur.getMonth(),1);
+    const end=new Date(cur.getFullYear(),cur.getMonth()+1,1);
+    months.push({lab:start.toLocaleDateString("en-GB",{month:"short",year:"2-digit"}),start,end,attended:0,expected:0});
+    cur=end;
+  }
+  const overlap=(a0,a1,b0,b1)=>Math.max(0,Math.min(a1,b1)-Math.max(a0,b0));
+  rows.forEach(x=>{
+    const a=x.a,code=(x.c.code||"").toLowerCase();
+    const dates=S.sessions.filter(s=>(s.client||"").toLowerCase()===code&&!isLateCancel(s))
+      .map(s=>parseD(s.date)).filter(Boolean);
+    const activeEnd=(a.ongoing?t:a.last).getTime();
+    const pauses=a.pauses.slice(); if(a.currentPause)pauses.push(a.currentPause);
+    months.forEach(m=>{
+      const ms=m.start.getTime(),me=m.end.getTime();
+      let act=overlap(ms,me,a.first.getTime(),activeEnd);
+      pauses.forEach(p=>{act-=overlap(ms,me,p.from.getTime(),p.to.getTime());});
+      if(act>0)m.expected+=act/DAY/a.fd;
+      m.attended+=dates.filter(d=>d>=m.start&&d<m.end).length;
+    });
+  });
+  const W=3;
+  return months.map((m,i)=>{let sa=0,se=0;for(let q=Math.max(0,i-W+1);q<=i;q++){sa+=months[q].attended;se+=months[q].expected;}
+    return {lab:m.lab,avg:se>0?Math.round(sa/se*100):null};});
 }
 function suggestFor(code){
   const rs=S.sessions.filter(s=>(s.client||"").toLowerCase()===(code||"").toLowerCase());
