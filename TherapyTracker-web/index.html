@@ -319,6 +319,45 @@ summary{font-weight:600;cursor:pointer}
 .cgrp{margin-top:9px}
 .cglab{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;margin-bottom:5px}
 .cgchips{display:flex;flex-wrap:wrap;gap:8px}
+
+/* ===== attention feed (Home) ===== */
+.attn{display:flex;flex-direction:column;gap:8px}
+.acard{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--muted);border-radius:0 12px 12px 0;padding:11px 12px;transition:opacity .3s,transform .3s}
+.acard.bad{border-left-color:var(--bad)} .acard.warn{border-left-color:var(--warn)} .acard.brand{border-left-color:var(--brand)} .acard.acc{border-left-color:var(--accent)}
+.acard .ae{font-size:20px;flex:none;line-height:1}
+.acard .am{flex:1;min-width:0;font-size:13.5px;line-height:1.35}
+.acard .am b{color:var(--brand-dark)}
+.acard .am .sub{font-size:12px;color:var(--muted)}
+.acard.gone{opacity:0;transform:translateX(30px)}
+.allclear{text-align:center;padding:14px 8px;color:var(--good);font-weight:600;font-size:14px}
+.allclear .ace{font-size:30px;display:block;margin-bottom:3px}
+
+/* ===== quick-log command bar ===== */
+.qlwrap{position:relative}
+.qlchips{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;min-height:26px;align-items:center}
+.qlchips .chip{font-size:12px}
+.qlhint{font-size:11.5px;color:var(--muted);margin-top:7px}
+
+/* ===== swipeable session rows ===== */
+.swrow{position:relative;overflow:hidden;border-radius:10px}
+.swrow .swunder{position:absolute;inset:0;background:var(--good);color:#fff;display:flex;align-items:center;justify-content:flex-end;gap:7px;padding-right:16px;font-weight:700;font-size:13px}
+.swrow .swover{position:relative;background:var(--card);touch-action:pan-y}
+.swrow .swover.snap{transition:transform .2s ease}
+
+/* ===== year heatmap ===== */
+.hmgrid{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,11px);gap:2.5px;overflow-x:auto;padding:4px 2px;-webkit-overflow-scrolling:touch}
+.hmgrid i{width:11px;height:11px;border-radius:2.5px;background:var(--soft);flex:none}
+.hmgrid i.l1{background:color-mix(in srgb,var(--brand) 32%,var(--soft))}
+.hmgrid i.l2{background:color-mix(in srgb,var(--brand) 62%,var(--soft))}
+.hmgrid i.l3{background:var(--brand)}
+.hmleg{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);margin-top:6px;justify-content:flex-end}
+.hmleg i{width:10px;height:10px;border-radius:2px;display:inline-block}
+
+/* ===== client profile ===== */
+.avatar{width:44px;height:44px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex:none}
+.wkdots{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+.wkdots i{width:15px;height:15px;border-radius:4px;background:var(--soft);flex:none}
+.wkdots i.att{background:var(--brand)} .wkdots i.lc{background:color-mix(in srgb,var(--bad) 45%,var(--soft))} .wkdots i.up{border:1.5px dashed var(--brand);background:transparent;box-sizing:border-box}
 </style>
 <link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon-180.png"></head>
 <body>
@@ -440,6 +479,7 @@ function updateBackupBanner(){const info=backupDueInfo();
 async function commit(summary){
   try{gameTouch();}catch(e){}      // record weekly activity (streak)
   try{bumpBackupActs();updateBackupBanner();}catch(e){} // count change toward the backup nudge
+  try{autoEncBackup();}catch(e){}  // silent encrypted auto-save, when configured
   mirror(S);                       // localStorage first (always works)
   if(!_db)return;                  // running in fallback mode
   try{
@@ -774,7 +814,8 @@ VIEWS.home=function(){
   const sparkVals=weekSeries.map(d=>d.revenue);
   const lastW=weekSeries[weekSeries.length-1];
   const sparkCard=S.sessions.length?'<div class="card"><div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Revenue trend</h2><span class="small muted">last 24 weeks</span></div>'+sparkline(sparkVals)+'<div class="row small muted" style="justify-content:space-between;margin-top:4px"><span>'+(weekSeries[0]?"w/c "+esc(weekSeries[0].l):"")+'</span><span><b style="color:var(--brand-dark)">'+gbp(lastW?lastW.revenue:0)+'</b> this week</span></div></div>':'';
-  v.innerHTML=(S.sessions.length?"":'<div class="hint" style="font-size:14px">👋 Welcome! No data yet. Tap the <b>⚙ Settings</b> icon (top-right) → <b>Restore from backup</b>, and choose your <b>therapy-tracker-data.json</b> file to load everything.</div>')+`
+  v.innerHTML=(S.sessions.length?"":'<div class="hint" style="font-size:14px">👋 Welcome! No data yet. Tap the <b>⚙ Settings</b> icon (top-right) → <b>Restore from backup</b>, and choose your <b>therapy-tracker-data.json</b> file to load everything.</div>')+
+   (S.sessions.length?'<div class="card"><h2>Needs attention</h2><div class="attn" id="attn"></div></div>':'')+`
    <div class="kpis mb">
      <div class="kpi"><div class="v" data-to="${billed}" data-fmt="m">${gbp(billed)}</div><div class="l">Billed this tax year</div></div>
      <div class="kpi good"><div class="v" data-to="${received}" data-fmt="m">${gbp(received)}</div><div class="l">Received</div></div>
@@ -784,6 +825,12 @@ VIEWS.home=function(){
    sparkCard+
    goalsCard+`
    <div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Quick add</h2></div>
+     <div class="qlwrap mt">
+       <input id="ql" placeholder="Type it: e.g. &quot;AB tue 14:00 paid&quot; or &quot;CD yesterday online&quot;" autocomplete="off" autocapitalize="off">
+       <div class="qlchips" id="qlout"></div>
+       <button class="btn sm" id="qlGo" style="display:none">Log it</button>
+       <div class="qlhint">Client code + optional day/date, time, location, "online", "paid" — everything else fills in from their last session.</div>
+     </div>
      <div class="row mt" style="flex-wrap:wrap;gap:8px">
        <button class="btn" id="qNew">＋ New session</button>
        <button class="btn sec" id="qRepeat">↻ Repeat last for…</button>
@@ -802,10 +849,12 @@ VIEWS.home=function(){
   up.querySelectorAll(".list-item").forEach(li=>li.onclick=()=>sessionForm(S.sessions.find(s=>s._id===li.dataset.id)));
   const kb=v.querySelector("#kOut");if(kb)kb.onclick=()=>{sessFilter.view="list";sessFilter.seg="unpaid";go("sessions");};
   const kn=v.querySelector("#kNext7");if(kn)kn.onclick=()=>{sessFilter.view="list";sessFilter.seg="upcoming";go("sessions");};
-  v.querySelectorAll(".list-item[data-cid]").forEach(li=>li.onclick=()=>clientForm(S.clients.find(c=>c._id===li.dataset.cid)));
+  v.querySelectorAll(".list-item[data-cid]").forEach(li=>li.onclick=()=>clientProfile(S.clients.find(c=>c._id===li.dataset.cid)));
   v.querySelector("#qNew").onclick=()=>sessionForm(null);
   v.querySelector("#qRepeat").onclick=()=>repeatPicker();
   v.querySelector("#qSup").onclick=()=>supervisionForm(null);
+  mountQuickLog(v);
+  const attnHost=v.querySelector("#attn");if(attnHost)renderAttention(attnHost);
   const gp=v.querySelector("#goPay");if(gp)gp.onclick=()=>{sessFilter.view="list";sessFilter.seg="unpaid";go("sessions");};
   const gi=v.querySelector("#goInc");if(gi)gi.onclick=()=>{sessFilter.view="list";sessFilter.seg="incomplete";go("sessions");};
   v.querySelectorAll(".kpi .v[data-to]").forEach(n=>{const to=+n.dataset.to;const m=n.dataset.fmt==="m";countUp(n,to,x=>m?gbp(x):Math.round(x),900);});
@@ -1037,6 +1086,23 @@ function validateSession(m){
   if(m.lateCancel&&md&&md>t)warnings.push({code:"lcfuture",msg:"Late cancellation ticked on a future session"});
   return {errors,warnings};
 }
+/* practice-wide integrity checks (beyond per-session validation) */
+function practiceChecks(){
+  const items=[];
+  S.sessions.forEach(s=>{if(!s.date||!/^\d{4}-\d{2}-\d{2}$/.test(String(s.date))||!parseD(s.date))
+    items.push({id:s._id,sev:"err",msg:"Invalid or missing date on a session for "+esc(s.client||"?")});});
+  const codeSet=new Set(S.clients.map(c=>(c.code||"").toLowerCase()));
+  const orphC={};S.sessions.forEach(s=>{const k=(s.client||"").toLowerCase();if(k&&!codeSet.has(k))orphC[k]=(orphC[k]||0)+1;});
+  Object.keys(orphC).forEach(k=>items.push({sev:"warn",msg:orphC[k]+" session"+(orphC[k]===1?"":"s")+" reference deleted client \""+esc(k)+"\""}));
+  const locSet=new Set(S.rooms.map(r=>(r.location||"").toLowerCase()));
+  const orphL={};S.sessions.forEach(s=>{const k=(s.location||"").toLowerCase();if(k&&!locSet.has(k))orphL[k]=(orphL[k]||0)+1;});
+  Object.keys(orphL).forEach(k=>items.push({sev:"warn",msg:orphL[k]+" session"+(orphL[k]===1?"":"s")+" reference deleted room \""+esc(k)+"\""}));
+  S.clients.filter(c=>(c.status||"")==="Ongoing").forEach(c=>{const a=clientAttendance(c);
+    if(a&&a.currentPause)items.push({sev:"warn",msg:esc(c.code)+" is Ongoing but unseen for "+a.currentPause.days+" days — pause or finish?"});});
+  S.clients.forEach(c=>{const has=(S.rateHistory||[]).some(r=>(r.client||"").toLowerCase()===(c.code||"").toLowerCase()&&(r.rate||0)>0);
+    if(!has&&!((c.rate||0)>0)&&(c.status||"")!=="Finished")items.push({sev:"warn",msg:esc(c.code)+" has no rate set — sessions will bill £0"});});
+  return items;
+}
 
 VIEWS.sessions=function(){
   const v=el('<div class="view active"></div>');
@@ -1063,13 +1129,19 @@ VIEWS.sessions=function(){
       else if(sessFilter.seg==="incomplete")rows=rows.filter(x=>x.d.past&&!x.d.complete).sort((a,b)=>parseD(b.s.date)-parseD(a.s.date));
       else rows=rows.sort((a,b)=>parseD(b.s.date)-parseD(a.s.date));
       if(!rows.length){list.innerHTML='<p class="muted small center" style="padding:18px">No sessions match.</p>';return}
+      let anySwipe=false;
       list.innerHTML=rows.slice(0,400).map(x=>{const d=x.d;
         if(sessFilter.seg==="incomplete"){const miss=missingReasons(x.s);
           return '<div class="list-item" data-id="'+x.s._id+'"><div class="li-main"><div class="li-title">'+esc(x.s.client)+' <span class="chip f">incomplete</span></div><div class="li-sub">'+fmtDshort(x.s.date)+' · #'+esc(x.s.num)+' · Missing: '+(miss.join(", ")||"—")+'</div></div><div class="li-right">'+gbp(d.rate)+'</div></div>';}
         const pay=payChip(x.s,d);
-        return '<div class="list-item" data-id="'+x.s._id+'"><div class="li-main"><div class="li-title">'+esc(x.s.client)+' '+pay+'</div><div class="li-sub">'+fmtDshort(x.s.date)+' · '+esc(x.s.time||"")+' · '+esc(x.s.location||"")+' · #'+esc(x.s.num)+'</div></div><div class="li-right">'+gbp(d.rate)+'</div></div>';}).join("")
+        const inner='<div class="list-item" data-id="'+x.s._id+'"><div class="li-main"><div class="li-title">'+esc(x.s.client)+' '+pay+'</div><div class="li-sub">'+fmtDshort(x.s.date)+' · '+esc(x.s.time||"")+' · '+esc(x.s.location||"")+' · #'+esc(x.s.num)+'</div></div><div class="li-right">'+gbp(d.rate)+'</div></div>';
+        if(d.overdue&&(d.rate||0)>0){anySwipe=true;
+          return '<div class="swrow" data-swipe="'+x.s._id+'"><div class="swunder">✓ Mark paid</div><div class="swover">'+inner+'</div></div>';}
+        return inner;}).join("")
         +(rows.length>400?'<p class="muted small center">Showing first 400 of '+rows.length+'.</p>':"");
+      if(anySwipe)list.insertAdjacentHTML("afterbegin",'<p class="small muted" style="margin:8px 2px 2px">💡 Swipe an overdue row left to mark it paid.</p>');
       list.querySelectorAll(".list-item").forEach(li=>li.onclick=()=>sessionForm(S.sessions.find(s=>s._id===li.dataset.id)));
+      attachSwipe(list,()=>renderRows());
     };
     body.querySelector("#sq").oninput=e=>{sessFilter.q=e.target.value;renderRows()};
     body.querySelector("#seg").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{sessFilter.seg=bt.dataset.s;
@@ -1264,7 +1336,7 @@ VIEWS.clients=function(){
       body.querySelector("#clist").innerHTML='<div class="card" style="padding:4px 12px">'+cs.map(c=>{
         const r=effRate(c.code,isoD(today()));const ch=c.status==="Ongoing"?'y':c.status==="Paused"?'f':'na';
         return '<div class="list-item" data-id="'+c._id+'"><div class="li-main"><div class="li-title">'+esc(c.code)+' <span class="chip '+ch+'">'+esc(c.status||"")+'</span></div><div class="li-sub">'+esc(c.frequency||"")+(c.notes?" · "+esc(c.notes):"")+'</div></div><div class="li-right">'+gbp(r)+'</div></div>';}).join("")+'</div>';
-      body.querySelectorAll("#clist .list-item").forEach(li=>li.onclick=()=>clientForm(S.clients.find(c=>c._id===li.dataset.id)));
+      body.querySelectorAll("#clist .list-item").forEach(li=>li.onclick=()=>clientProfile(S.clients.find(c=>c._id===li.dataset.id)));
     };
     body.querySelector("#cq").oninput=render; body.querySelector("#addC").onclick=()=>clientForm(null); render();
   }
@@ -1533,7 +1605,18 @@ VIEWS.income=function(){
     '<div class="kpis mt" style="grid-template-columns:1fr 1fr"><div class="kpi good"><div class="v" id="thMain"></div><div class="l" id="thMainL"></div></div>'+
     '<div class="kpi"><div class="v" id="thYr"></div><div class="l" id="thYrL"></div></div></div>'+
     '<p class="small muted mt" id="thNote"></p></div>';
-  v.innerHTML=thCard+'<div class="card"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Revenue &amp; net income</h2>'+
+  const fc=incomeForecast();
+  const fcCard='<div class="card"><h2>This month &amp; year at a glance</h2>'+
+    '<div class="kpis mt">'+
+      '<div class="kpi"><div class="v">'+gbp(fc.mtd)+'</div><div class="l">Billed so far this month</div></div>'+
+      '<div class="kpi good"><div class="v">'+gbp(fc.proj)+'</div><div class="l">Projected month total</div></div>'+
+      '<div class="kpi'+(fc.delta==null?'':(fc.delta>=0?' good':' bad'))+'"><div class="v">'+(fc.delta==null?'—':(fc.delta>=0?'+':'')+fc.delta+'%')+'</div><div class="l">vs last month ('+gbp(fc.lastM)+')</div></div>'+
+      '<div class="kpi"><div class="v">'+esc(fc.busiest)+'</div><div class="l">Busiest day (6 mo)</div></div>'+
+    '</div>'+
+    '<p class="small muted" style="margin:12px 0 4px">Sessions per day, last 12 months — each column is a week.</p>'+
+    yearHeatmapHTML()+
+    '<p class="small muted" style="margin:8px 0 0">Projection = billed to date + the larger of (sessions already booked this month) and (your 8-week average daily revenue × days left).</p></div>';
+  v.innerHTML=thCard+fcCard+'<div class="card"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Revenue &amp; net income</h2>'+
     '<div class="seg" id="gran"><button data-g="week" class="'+(statGran==="week"?"on":"")+'">Weekly</button><button data-g="month" class="'+(statGran==="month"?"on":"")+'">Monthly</button></div></div>'+
     comboLegend()+'<div id="chCombo"></div><p class="small muted center" id="comboHint">Tap a bar to see revenue, room &amp; supervision values.</p>'+
     '<div class="small muted mt" style="font-weight:600">Clients seen per '+statGran+'</div><div id="chCli"></div></div>'+
@@ -1691,6 +1774,16 @@ VIEWS.settings=function(){
        <input type="file" id="impF" accept=".json,application/json" style="display:none">
      </div>
    </div>
+   <div class="card"><h2>Encrypted backup 🔐</h2>
+     <p class="small muted">Protect backups with a passphrase (AES-256). The file is unreadable without it — safe to keep in iCloud, Drive or email. On desktop Chrome/Edge you can also pick a file that backups <b>auto-save to silently</b> after every change. <b>If you forget the passphrase, encrypted backups cannot be opened.</b></p>
+     <p class="small" id="encStatus" style="font-weight:600"></p>
+     <div class="row mt" style="flex-wrap:wrap;gap:8px">
+       <button class="btn sec" id="encSet"></button>
+       <button class="btn" id="encNow" style="display:none">🔐 Encrypt &amp; save now</button>
+       <button class="btn sec" id="encAuto" style="display:none">Choose auto-save file</button>
+       <button class="btn ghost" id="encOff" style="display:none">Turn off</button>
+     </div>
+   </div>
    <div class="card"><h2>Backup reminders</h2>
      <p class="small muted" id="bkStatus"></p>
      <p class="small muted">A banner reminds you to back up once either limit below is reached, and clears when you do.</p>
@@ -1720,12 +1813,14 @@ VIEWS.settings=function(){
         if(key){if(seen.has(key))return;seen.add(key);}
         items.push({id:s._id,sev:"err",msg:e.msg});});
       vr.warnings.forEach(w=>items.push({id:s._id,sev:"warn",msg:w.msg}));});
-    if(!items.length){out.innerHTML='<div class="vmsg ok" style="margin-top:10px">✓ All good — no issues found across '+S.sessions.length+' sessions.</div>';Sfx.complete();return;}
+    practiceChecks().forEach(i=>items.push(i));
+    const scanned='Scanned '+S.sessions.length+' sessions, '+S.clients.length+' clients, '+S.rooms.length+' rooms, '+(S.supervision||[]).length+' supervision entries.';
+    if(!items.length){out.innerHTML='<div class="vmsg ok" style="margin-top:10px">✓ All good — no issues found. '+scanned+'</div>';Sfx.complete();return;}
     items.sort((a,b)=>(a.sev==="err"?0:1)-(b.sev==="err"?0:1));
     const nE=items.filter(i=>i.sev==="err").length,nW=items.length-nE;
-    out.innerHTML='<p class="small muted" style="margin:10px 0 4px">'+nE+' error'+(nE===1?'':'s')+' · '+nW+' warning'+(nW===1?'':'s')+' — tap any row to open and fix.</p>'+
-      '<div class="card" style="padding:4px 12px">'+items.map(i=>'<div class="list-item" data-id="'+esc(i.id)+'"><div class="li-main"><div class="li-title" style="font-size:13.5px;font-weight:600;color:'+(i.sev==="err"?'var(--bad)':'var(--warn)')+'">'+(i.sev==="err"?'⛔ ':'⚠️ ')+i.msg+'</div></div></div>').join("")+'</div>';
-    out.querySelectorAll(".list-item").forEach(li=>li.onclick=()=>{const ss=S.sessions.find(x=>x._id===li.dataset.id);if(ss)sessionForm(ss);});
+    out.innerHTML='<p class="small muted" style="margin:10px 0 4px">'+nE+' error'+(nE===1?'':'s')+' · '+nW+' warning'+(nW===1?'':'s')+' — tap a session row to open and fix. '+scanned+'</p>'+
+      '<div class="card" style="padding:4px 12px">'+items.map(i=>'<div class="list-item"'+(i.id?' data-id="'+esc(i.id)+'"':'')+'><div class="li-main"><div class="li-title" style="font-size:13.5px;font-weight:600;color:'+(i.sev==="err"?'var(--bad)':'var(--warn)')+'">'+(i.sev==="err"?'⛔ ':'⚠️ ')+i.msg+'</div></div></div>').join("")+'</div>';
+    out.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>{const ss=S.sessions.find(x=>x._id===li.dataset.id);if(ss)sessionForm(ss);});
     Sfx.error();
   };
   const tBtn=v.querySelector("#setTheme"),updT=()=>tBtn.textContent=curTheme()==="dark"?"☀ Switch to light":"☾ Switch to dark";
@@ -1736,6 +1831,26 @@ VIEWS.settings=function(){
   dEl.value=backupDaysThreshold();aEl.value=backupActsThreshold();
   dEl.onchange=()=>{const n=Math.max(1,Math.round(+dEl.value)||BACKUP_DEFAULT_DAYS);dEl.value=n;try{localStorage.setItem("tt_backup_days",String(n));}catch(e){}updateBackupBanner();toast("Saved");};
   aEl.onchange=()=>{const n=Math.max(1,Math.round(+aEl.value)||BACKUP_DEFAULT_ACTS);aEl.value=n;try{localStorage.setItem("tt_backup_acts",String(n));}catch(e){}updateBackupBanner();toast("Saved");};
+  (async function(){
+    const st=v.querySelector("#encStatus"),setB=v.querySelector("#encSet"),nowB=v.querySelector("#encNow"),
+      autoB=v.querySelector("#encAuto"),offB=v.querySelector("#encOff");
+    async function paintEnc(){
+      const on=encReady();
+      const h=on&&_db?await kvGet("encHandle"):null;
+      st.textContent=on?("On — backups are encrypted."+(h?" Auto-save file set ✓":(window.showSaveFilePicker?" No auto-save file yet.":" (Auto-save unavailable on this device — use Encrypt & save.)"))):"Off — backups are plain .json.";
+      st.style.color=on?"var(--good)":"var(--muted)";
+      setB.textContent=on?"Change passphrase":"🔐 Set a passphrase";
+      nowB.style.display=on?"inline-flex":"none";
+      autoB.style.display=(on&&window.showSaveFilePicker)?"inline-flex":"none";
+      offB.style.display=on?"inline-flex":"none";
+    }
+    setB.onclick=()=>encPromptSetup(paintEnc);
+    nowB.onclick=()=>encBackupNow();
+    autoB.onclick=()=>encChooseFile(paintEnc);
+    offB.onclick=async()=>{if(!confirm("Turn off encrypted backups? Existing encrypted files still need the passphrase to open."))return;
+      await encDisable();toast("Encrypted backups off");paintEnc();};
+    paintEnc();
+  })();
   v.querySelector("#expJ").onclick=exportJSON;
   v.querySelector("#expC").onclick=exportCSV;
   v.querySelector("#expSC").onclick=exportSupervisionCSV;
@@ -2033,12 +2148,417 @@ function supervisionForm(s){
   openSheet(isNew?"New supervision":"Edit supervision",body);
 }
 
+/* ============ Quick-log command bar (natural-language session entry) ============ */
+function parseQuickLog(text){
+  const raw=(text||"").trim(); if(!raw)return null;
+  const toks=raw.split(/\s+/);
+  const res={client:null,clientAmbig:[],date:null,time:null,mode:null,location:null,paid:false,unmatched:[]};
+  const codes=S.clients.map(c=>c.code);
+  const locs=S.rooms.map(r=>r.location);
+  const wd={mon:1,monday:1,tue:2,tues:2,tuesday:2,wed:3,weds:3,wednesday:3,thu:4,thur:4,thurs:4,thursday:4,fri:5,friday:5,sat:6,saturday:6,sun:0,sunday:0};
+  toks.forEach(tok=>{
+    const w=tok.toLowerCase().replace(/[.,;]+$/,"");
+    if(!w)return;
+    if(w==="paid"){res.paid=true;return;}
+    if(w==="online"){res.mode="Online";return;}
+    if(w==="in-person"||w==="inperson"||w==="f2f"){res.mode="In-person";return;}
+    if(w==="today"){res.date=isoD(today());return;}
+    if(w==="yesterday"){res.date=isoD(addDays(today(),-1));return;}
+    if(w==="tomorrow"){res.date=isoD(addDays(today(),1));return;}
+    if(wd[w]!=null){const t=today();let diff=wd[w]-t.getDay();
+      if(diff>3)diff-=7; if(diff<-3)diff+=7;
+      res.date=isoD(addDays(t,diff));return;}
+    let m2=w.match(/^(\d{1,2}):(\d{2})$/);
+    if(m2){res.time=String(+m2[1]).padStart(2,"0")+":"+m2[2];return;}
+    m2=w.match(/^(\d{1,2})(am|pm)$/);
+    if(m2){let h=(+m2[1])%12;if(m2[2]==="pm")h+=12;res.time=String(h).padStart(2,"0")+":00";return;}
+    m2=w.match(/^\d{4}-\d{2}-\d{2}$/);
+    if(m2&&parseD(w)){res.date=w;return;}
+    m2=w.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+    if(m2){const t=today();let y=m2[3]?+m2[3]:t.getFullYear();if(y<100)y+=2000;
+      res.date=y+"-"+String(+m2[2]).padStart(2,"0")+"-"+String(+m2[1]).padStart(2,"0");return;}
+    if(!res.client){
+      const exact=codes.filter(c=>c.toLowerCase()===w);
+      const pref=exact.length?exact:codes.filter(c=>c.toLowerCase().startsWith(w));
+      const cand=pref.length?pref:codes.filter(c=>c.toLowerCase().includes(w));
+      if(cand.length===1){res.client=cand[0];return;}
+      if(cand.length>1){res.clientAmbig=cand.slice(0,4);return;}
+    }
+    if(!res.location){
+      const lm=locs.find(L=>{const ll=L.toLowerCase();return ll===w||ll.startsWith(w)||ll.split(/\s+/).indexOf(w)>=0;});
+      if(lm){res.location=lm;return;}
+    }
+    res.unmatched.push(tok);
+  });
+  return res;
+}
+function quickLogBuild(p){
+  const sg=suggestFor(p.client);
+  return {_id:uid(),client:p.client,num:sg.num,date:p.date||isoD(today()),time:p.time||sg.time,
+    mode:p.mode||sg.mode,location:p.location||sg.location,room:sg.room||"-",invoice:"",
+    paidDate:p.paid?isoD(today()):"",receipt:"",notes:"",roomPaid:"",roomPaidDate:"",lateCancel:false};
+}
+function mountQuickLog(host){
+  const inp=host.querySelector("#ql"),out=host.querySelector("#qlout"),btn=host.querySelector("#qlGo");
+  let cur=null,armed=false;
+  const chip=(txt,cls)=>'<span class="chip '+(cls||"s")+'">'+txt+'</span>';
+  function paint(){
+    const p=parseQuickLog(inp.value);
+    armed=false;btn.textContent="Log it";
+    if(!p){out.innerHTML='';btn.style.display="none";cur=null;return;}
+    let h="";
+    if(p.client)h+=chip("👤 "+esc(p.client),"y");
+    else if(p.clientAmbig.length)h+=chip("who? "+p.clientAmbig.map(esc).join(" / "),"n");
+    else h+=chip("client?","n");
+    const m=p.client?quickLogBuild(p):null;
+    if(m){
+      h+=chip(fmtDshort(m.date));
+      h+=chip(m.time)+chip(esc(m.mode))+chip(esc(m.location))+chip("#"+m.num,"f");
+      const r=effRate(m.client,m.date);
+      h+=chip(gbp(r));
+      h+=p.paid?chip("paid today","y"):chip("awaiting","na");
+      if(p.unmatched.length)h+=chip("ignored: "+esc(p.unmatched.join(" ")),"na");
+      cur=m;btn.style.display="inline-flex";
+    }else{cur=null;btn.style.display="none";}
+    out.innerHTML=h;
+  }
+  inp.addEventListener("input",paint);
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();btn.click();}});
+  btn.onclick=async()=>{
+    if(!cur){toast("Name a client first");Sfx.error();return;}
+    const vr=validateSession(cur);
+    if(vr.errors.length){out.innerHTML='<span class="chip n">⛔ '+vr.errors[0].msg+'</span>';Sfx.error();return;}
+    if(vr.warnings.length&&!armed){armed=true;btn.textContent="Log anyway";
+      out.innerHTML='<span class="chip f">⚠️ '+vr.warnings[0].msg+'</span>';Sfx.error();return;}
+    S.sessions.push(cur);
+    await commit("Quick-logged session: "+cur.client+" "+cur.date);renderTabs();
+    const logged=cur;cur=null;inp.value="";out.innerHTML="";btn.style.display="none";
+    gameShow({batch:1,toast:logged.client+" logged ✨"},{});
+    go(curTab());
+  };
+}
+function curTab(){return cur;}
+
+/* ============ Attention feed (Home) ============ */
+function attentionItems(){
+  const der=S.sessions.map(s=>({s,d:derive(s)}));
+  const items=[];const t=today();
+  const od=der.filter(x=>x.d.overdue&&(x.d.rate||0)>0);
+  if(od.length){const amt=od.reduce((a,x)=>a+(x.d.rate||0),0);
+    const oldest=od.reduce((m,x)=>{const d=parseD(x.s.date);return(!m||d<m)?d:m;},null);
+    items.push({cls:"bad",e:"💷",msg:"<b>"+od.length+" session"+(od.length===1?"":"s")+" unpaid</b> · "+gbp(amt)+" outstanding",
+      sub:oldest?("oldest "+fmtDM(oldest)):"",btn:"Collect",act:()=>{sessFilter.view="list";sessFilter.seg="unpaid";go("sessions");}});}
+  const inc=der.filter(x=>x.d.past&&!x.d.complete);
+  if(inc.length)items.push({cls:"warn",e:"📝",msg:"<b>"+inc.length+" session"+(inc.length===1?"":"s")+" incomplete</b>",
+    sub:"notes or room-paid missing",btn:"Catch up",act:()=>{sessFilter.view="list";sessFilter.seg="incomplete";go("sessions");}});
+  const rd=der.filter(x=>x.d.roomDue==="Y");
+  if(rd.length){const amt=rd.reduce((a,x)=>a+(x.d.roomRate||0),0);
+    items.push({cls:"warn",e:"🏠",msg:"<b>Room fees due</b> · "+gbp(amt)+" across "+rd.length+" session"+(rd.length===1?"":"s"),
+      sub:"",btn:"Review",act:()=>go("income")});}
+  const sups=(S.supervision||[]).filter(s=>s.date&&parseD(s.date)<=t).sort((a,b)=>parseD(b.date)-parseD(a.date));
+  if(sups.length){const days=Math.floor((t-parseD(sups[0].date))/86400000);
+    if(days>35)items.push({cls:"acc",e:"🧭",msg:"<b>Supervision due</b> · last was "+days+" days ago",
+      sub:"guideline: min 1½ hrs per month",btn:"Log it",act:()=>supervisionForm(null)});}
+  const bi=backupDueInfo();
+  if(bi.due)items.push({cls:"brand",e:"☁️",msg:"<b>Back up your data</b>"+(bi.acts?" · "+bi.acts+" change"+(bi.acts===1?"":"s")+" unsaved":""),
+    sub:bi.days!=null?(bi.days+" days since last backup"):"never backed up on this device",btn:"Back up",
+    act:()=>{if(encReady())encBackupNow();else exportJSON();updateBackupBanner();go("home");}});
+  return items;
+}
+function renderAttention(host){
+  const items=attentionItems();
+  if(!items.length){host.innerHTML='<div class="allclear"><span class="ace">✨</span>All clear — nothing needs you today</div>';return;}
+  host.innerHTML=items.map((it,i)=>'<div class="acard '+it.cls+'" data-i="'+i+'"><span class="ae">'+it.e+'</span>'+
+    '<div class="am">'+it.msg+(it.sub?'<div class="sub">'+it.sub+'</div>':'')+'</div>'+
+    '<button class="btn sm">'+esc(it.btn)+'</button></div>').join("");
+  host.querySelectorAll(".acard").forEach(c=>{c.querySelector("button").onclick=()=>items[+c.dataset.i].act();});
+}
+
+/* ============ Swipe-to-mark-paid ============ */
+function attachSwipe(container,refresh){
+  container.querySelectorAll(".swrow").forEach(w=>{
+    const over=w.querySelector(".swover");const id=w.dataset.swipe;
+    let sx=null,sy=null,dx=0,drag=false;
+    over.addEventListener("pointerdown",e=>{sx=e.clientX;sy=e.clientY;dx=0;drag=false;over.classList.remove("snap");});
+    over.addEventListener("pointermove",e=>{if(sx==null)return;
+      const mx=e.clientX-sx,my=e.clientY-sy;
+      if(!drag){if(Math.abs(mx)>12&&Math.abs(mx)>Math.abs(my)*1.2){drag=true;try{over.setPointerCapture(e.pointerId);}catch(_){}}else return;}
+      dx=Math.min(0,Math.max(-130,mx));over.style.transform="translateX("+dx+"px)";});
+    const end=async()=>{if(sx==null)return;
+      const fired=drag&&dx<-80;sx=null;
+      over.classList.add("snap");over.style.transform="translateX(0)";
+      if(drag){const block=ev=>{ev.stopPropagation();ev.preventDefault();};
+        over.addEventListener("click",block,true);setTimeout(()=>over.removeEventListener("click",block,true),400);}
+      drag=false;
+      if(fired){const ss=S.sessions.find(z=>z._id===id);
+        if(ss&&!ss.paidDate){ss.paidDate=isoD(today());
+          const amt=derive(ss).rate||0;
+          gameNoteBatch({cleared:1,amount:amt});
+          await commit("Marked paid (swipe): "+ss.client+" "+ss.date);renderTabs();
+          Sfx.complete();Confetti.burst(16,{up:8,spread:0.8});
+          toast(ss.client+" marked paid ✓");
+          if(refresh)refresh();}}};
+    over.addEventListener("pointerup",end);over.addEventListener("pointercancel",end);
+  });
+}
+
+/* ============ Client insight profile ============ */
+function clientProfile(c){
+  if(!c)return;
+  const lc=(c.code||"").toLowerCase(),t=today();
+  const rows=S.sessions.filter(s=>(s.client||"").toLowerCase()===lc).map(s=>({s,d:derive(s)}))
+    .sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
+  const past=rows.filter(x=>{const d=parseD(x.s.date);return d&&d<=t;});
+  const attended=past.filter(x=>!isLateCancel(x.s)).length;
+  const lcN=past.filter(x=>isLateCancel(x.s)).length;
+  const billed=past.reduce((a,x)=>a+(x.d.rate||0),0);
+  const owedRows=rows.filter(x=>x.d.overdue&&(x.d.rate||0)>0);
+  const owed=owedRows.reduce((a,x)=>a+(x.d.rate||0),0);
+  const since=clientAddedDate(c);
+  const att=clientAttendance(c);
+  const next=rows.filter(x=>parseD(x.s.date)>t)[0]||null;
+  const rate=effRate(c.code,isoD(t));
+  /* 12-week dot strip */
+  const dotArr=[];
+  for(let i=11;i>=0;i--){const ws=addDays(weekMonday(t),-7*i),we=addDays(ws,7);
+    const inWk=rows.filter(x=>{const d=parseD(x.s.date);return d&&d>=ws&&d<we;});
+    let cls="";let tip=fmtDM(ws)+": no session";
+    if(inWk.some(x=>parseD(x.s.date)>t)){cls="up";tip=fmtDM(ws)+": booked";}
+    if(inWk.some(x=>isLateCancel(x.s))){cls="lc";tip=fmtDM(ws)+": late cancellation";}
+    if(inWk.some(x=>parseD(x.s.date)<=t&&!isLateCancel(x.s))){cls="att";tip=fmtDM(ws)+": attended";}
+    dotArr.push('<i class="'+cls+'" title="'+esc(tip)+'"></i>');}
+  /* 12-month income sparkline */
+  const mVals=[];
+  for(let i=11;i>=0;i--){const ms=new Date(t.getFullYear(),t.getMonth()-i,1),me=new Date(t.getFullYear(),t.getMonth()-i+1,1);
+    mVals.push(Math.round(rows.filter(x=>{const d=parseD(x.s.date);return d&&d>=ms&&d<me&&d<=t;}).reduce((a,x)=>a+(x.d.rate||0),0)));}
+  const initials=(c.code||"?").replace(/[^A-Za-z0-9]/g,"").slice(0,2).toUpperCase()||"?";
+  const ch=c.status==="Ongoing"?'y':c.status==="Paused"?'f':'na';
+  const body=el('<div></div>');
+  body.innerHTML='<div class="row" style="gap:12px;margin:4px 0 12px"><div class="avatar">'+esc(initials)+'</div>'+
+    '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:17px">'+esc(c.code)+' <span class="chip '+ch+'">'+esc(c.status||"")+'</span></div>'+
+    '<div class="small muted">'+(since?("since "+fmtD(since)+" · "):"")+esc(c.frequency||"")+' · '+gbp(rate)+'/session</div></div></div>'+
+    '<div class="kpis mb" style="grid-template-columns:1fr 1fr">'+
+      '<div class="kpi"><div class="v">'+attended+'</div><div class="l">Sessions attended'+(lcN?' · '+lcN+' late-cancelled':'')+'</div></div>'+
+      '<div class="kpi"><div class="v">'+gbp(Math.round(billed))+'</div><div class="l">Lifetime billed</div></div>'+
+      '<div class="kpi'+(owed?' bad':' good')+'"><div class="v">'+gbp(Math.round(owed))+'</div><div class="l">'+(owed?("Outstanding · "+owedRows.length+" session"+(owedRows.length===1?"":"s")):"Nothing owed")+'</div></div>'+
+      '<div class="kpi"><div class="v">'+(att?att.pct+"%":"—")+'</div><div class="l">Attendance'+(att&&att.currentPause?' · ⏸ paused '+att.currentPause.days+'d':'')+'</div></div>'+
+    '</div>'+
+    '<h3>Last 12 weeks</h3><div class="wkdots">'+dotArr.join("")+'</div>'+
+    '<div class="small muted mt" style="display:flex;gap:12px;flex-wrap:wrap"><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--brand);vertical-align:-1px"></i> attended</span><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:color-mix(in srgb,var(--bad) 45%,var(--soft));vertical-align:-1px"></i> late cancel</span><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;border:1.5px dashed var(--brand);vertical-align:-1px;box-sizing:border-box"></i> booked</span></div>'+
+    '<h3 class="mt">Monthly income (12 mo)</h3>'+sparkline(mVals)+
+    (next?'<div class="hint">Next session: <b>'+fmtDshort(next.s.date)+'</b>'+(next.s.time?' · '+esc(next.s.time):'')+' · '+esc(next.s.location||"")+'</div>':'')+
+    '<h3 class="mt">Recent sessions</h3><div id="cpRecent"></div>'+
+    '<div class="row mt" style="gap:8px;flex-wrap:wrap">'+
+      '<button class="btn" id="cpNew">＋ New session</button>'+
+      '<button class="btn sec" id="cpReceipt">🧾 Receipt / statement</button>'+
+      '<button class="btn ghost" id="cpEdit">Edit client</button></div>';
+  const rec=rows.slice(-6).reverse();
+  body.querySelector("#cpRecent").innerHTML=rec.length?rec.map(x=>{const pay=payChip(x.s,x.d);
+    return '<div class="list-item" data-id="'+x.s._id+'"><div class="li-main"><div class="li-title">#'+esc(x.s.num)+' '+pay+'</div><div class="li-sub">'+fmtDshort(x.s.date)+' · '+esc(x.s.location||"")+(isLateCancel(x.s)?' · late cancel':'')+'</div></div><div class="li-right">'+gbp(x.d.rate)+'</div></div>';}).join("")
+    :'<p class="muted small">No sessions logged yet.</p>';
+  body.querySelectorAll("#cpRecent .list-item").forEach(li=>li.onclick=()=>{closeSheet();sessionForm(S.sessions.find(s=>s._id===li.dataset.id));});
+  body.querySelector("#cpNew").onclick=()=>{closeSheet();sessionForm(null);
+    setTimeout(()=>{const sel=document.querySelector("#f_client");if(sel){sel.value=c.code;sel.onchange();}},60);};
+  body.querySelector("#cpEdit").onclick=()=>{closeSheet();clientForm(c);};
+  body.querySelector("#cpReceipt").onclick=()=>{closeSheet();receiptSheet(c);};
+  openSheet("Client · "+c.code,body);
+}
+
+/* ============ Invoice / receipt generator ============ */
+function receiptRows(c,per){
+  const lc=(c.code||"").toLowerCase(),t=today();
+  let from=null,to=null,label="";
+  if(per==="month"){from=new Date(t.getFullYear(),t.getMonth(),1);to=eomonth(t);label=t.toLocaleDateString("en-GB",{month:"long",year:"numeric"});}
+  else if(per==="lastmonth"){from=new Date(t.getFullYear(),t.getMonth()-1,1);to=eomonth(from);label=from.toLocaleDateString("en-GB",{month:"long",year:"numeric"});}
+  else if(per==="taxyear"){const b=tyBounds(curTaxYear());from=b.start;to=b.end;label="Tax year "+curTaxYear();}
+  else label="All sessions";
+  const rows=S.sessions.filter(s=>(s.client||"").toLowerCase()===lc).map(s=>({s,d:derive(s)}))
+    .filter(x=>{const d=parseD(x.s.date);if(!d)return false;if(from&&(d<from||d>to))return false;return d<=t&&!isLateCancel(x.s);})
+    .sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
+  return {rows,label};
+}
+function receiptSheet(c){
+  const body=el('<div></div>');
+  body.innerHTML='<p class="muted small">A printable statement of sessions for this client — for insurance claims, expenses or their records. Print to PDF from the print dialog.</p>'+
+    '<label>Period</label><select id="rcPer"><option value="month">This month</option><option value="lastmonth">Last month</option><option value="taxyear">This tax year</option><option value="all">All sessions</option></select>'+
+    '<label class="colchk" style="margin-top:14px"><input type="checkbox" id="rcPaidOnly"> Paid sessions only (receipt)</label>'+
+    '<div id="rcPrev" class="mt"></div>'+
+    '<button class="btn full mt" id="rcGo">🧾 Generate &amp; print</button>';
+  const prev=()=>{const {rows,label}=receiptRows(c,body.querySelector("#rcPer").value);
+    const po=body.querySelector("#rcPaidOnly").checked;
+    const use=po?rows.filter(x=>x.d.clientPaid):rows;
+    const tot=use.reduce((a,x)=>a+(x.d.rate||0),0);
+    body.querySelector("#rcPrev").innerHTML='<div class="hint">'+esc(label)+': <b>'+use.length+' session'+(use.length===1?'':'s')+' · '+gbp(tot)+'</b>'+(po?' (paid only)':'')+'</div>';};
+  body.querySelector("#rcPer").onchange=prev;body.querySelector("#rcPaidOnly").onchange=prev;prev();
+  body.querySelector("#rcGo").onclick=()=>{const {rows,label}=receiptRows(c,body.querySelector("#rcPer").value);
+    const po=body.querySelector("#rcPaidOnly").checked;
+    const use=po?rows.filter(x=>x.d.clientPaid):rows;
+    if(!use.length){toast("No sessions in that period");Sfx.error();return;}
+    printReceipt(c,use,label,po);};
+  openSheet("Receipt · "+c.code,body);
+}
+function printReceipt(c,rows,label,paidOnly){
+  const tot=rows.reduce((a,x)=>a+(x.d.rate||0),0);
+  const paid=rows.filter(x=>x.d.clientPaid).reduce((a,x)=>a+(x.d.rate||0),0);
+  const t=today();
+  const num="CBT-"+isoD(t).replace(/-/g,"")+"-"+(c.code||"").replace(/[^A-Za-z0-9]/g,"").toUpperCase();
+  const trs=rows.map(x=>'<tr><td>'+fmtDMY(x.s.date)+'</td><td>#'+esc(x.s.num)+'</td><td>'+esc(x.s.mode||"")+'</td><td class="r">'+gbp(x.d.rate)+'</td><td>'+(x.d.clientPaid?("Paid "+fmtDMY(x.s.paidDate)):"Due")+'</td></tr>').join("");
+  const html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+esc(num)+'</title><style>'+
+    'body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1E2A26;margin:40px;font-size:14px}'+
+    'h1{font-size:22px;color:#46594F;margin:0}.sub{color:#6E7E78;font-size:12px}'+
+    '.head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #5C7A6D;padding-bottom:14px;margin-bottom:18px}'+
+    'table{width:100%;border-collapse:collapse;margin-top:10px}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #E6ECEA;font-size:13px}'+
+    'th{font-size:11px;text-transform:uppercase;color:#6E7E78}.r{text-align:right}'+
+    '.tot{margin-top:14px;text-align:right;font-size:15px}.tot b{font-size:19px;color:#46594F}'+
+    '.foot{margin-top:34px;color:#6E7E78;font-size:11px;border-top:1px solid #E6ECEA;padding-top:10px}'+
+    '@media print{body{margin:16mm}}</style></head><body>'+
+    '<div class="head"><div><h1>Charlotte Bloor Therapy</h1><div class="sub">Counselling &amp; psychotherapy</div></div>'+
+    '<div style="text-align:right"><div style="font-weight:700">'+(paidOnly?"RECEIPT":"STATEMENT")+'</div><div class="sub">'+esc(num)+'</div><div class="sub">Issued '+fmtD(t)+'</div></div></div>'+
+    '<p><b>Client:</b> '+esc(c.code)+' &nbsp;·&nbsp; <b>Period:</b> '+esc(label)+'</p>'+
+    '<table><thead><tr><th>Date</th><th>Session</th><th>Mode</th><th class="r">Fee</th><th>Status</th></tr></thead><tbody>'+trs+'</tbody></table>'+
+    '<div class="tot">'+(paidOnly?('Total received: <b>'+gbp(tot)+'</b>'):('Total billed: <b>'+gbp(tot)+'</b>'+(paid<tot?'<br><span class="sub">of which paid '+gbp(paid)+' · outstanding '+gbp(tot-paid)+'</span>':'<br><span class="sub">paid in full</span>')))+'</div>'+
+    '<div class="foot">Generated by Therapy Tracker on '+fmtD(t)+'. Client identified by confidential code. This document confirms therapy sessions provided by Charlotte Bloor Therapy.</div>'+
+    '</body></html>';
+  const fr=document.createElement("iframe");
+  fr.style.cssText="position:absolute;width:0;height:0;border:0;visibility:hidden";
+  document.body.appendChild(fr);
+  fr.contentDocument.open();fr.contentDocument.write(html);fr.contentDocument.close();
+  setTimeout(()=>{try{fr.contentWindow.focus();fr.contentWindow.print();}catch(e){toast("Print failed — try again");}
+    setTimeout(()=>fr.remove(),4000);},250);
+  toast("Opening print dialog…");
+}
+
+/* ============ Year heatmap + income forecast ============ */
+function yearHeatmapHTML(){
+  const t=today();const counts={};
+  S.sessions.forEach(s=>{const d=parseD(s.date);if(d&&d<=t)counts[isoD(d)]=(counts[isoD(d)]||0)+1;});
+  const start=weekMonday(addDays(t,-364));
+  let cells="";let d=new Date(start);
+  while(d<=t||d.getDay()!==1){
+    if(d>t){cells+='<i style="visibility:hidden"></i>';}
+    else{const n=counts[isoD(d)]||0;const cls=n>=3?"l3":n===2?"l2":n===1?"l1":"";
+      cells+='<i class="'+cls+'" title="'+fmtDM(d)+': '+n+' session'+(n===1?'':'s')+'"></i>';}
+    d=addDays(d,1);
+    if(d>t&&d.getDay()===1)break;
+  }
+  return '<div class="hmgrid">'+cells+'</div><div class="hmleg">Less <i style="background:var(--soft)"></i><i style="background:color-mix(in srgb,var(--brand) 32%,var(--soft))"></i><i style="background:color-mix(in srgb,var(--brand) 62%,var(--soft))"></i><i style="background:var(--brand)"></i> More</div>';
+}
+function incomeForecast(){
+  const t=today();const der=S.sessions.map(s=>({s,d:derive(s)}));
+  const mStart=new Date(t.getFullYear(),t.getMonth(),1),mEnd=eomonth(t);
+  const mtd=der.filter(x=>{const d=parseD(x.s.date);return d&&d>=mStart&&d<=t;}).reduce((a,x)=>a+(x.d.rate||0),0);
+  const booked=der.filter(x=>{const d=parseD(x.s.date);return d&&d>t&&d<=mEnd;}).reduce((a,x)=>a+(x.d.rate||0),0);
+  const hFrom=addDays(weekMonday(t),-56),hTo=weekMonday(t);
+  const hist=der.filter(x=>{const d=parseD(x.s.date);return d&&d>=hFrom&&d<hTo;}).reduce((a,x)=>a+(x.d.rate||0),0)/56;
+  const remDays=Math.max(0,Math.round((mEnd-t)/86400000));
+  const proj=Math.round(mtd+Math.max(booked,hist*remDays));
+  const lmStart=new Date(t.getFullYear(),t.getMonth()-1,1),lmEnd=eomonth(lmStart);
+  const lastM=der.filter(x=>{const d=parseD(x.s.date);return d&&d>=lmStart&&d<=lmEnd;}).reduce((a,x)=>a+(x.d.rate||0),0);
+  const delta=lastM>0?Math.round((proj-lastM)/lastM*100):null;
+  const dayN=[0,0,0,0,0,0,0];
+  der.forEach(x=>{const d=parseD(x.s.date);if(d&&d<=t&&(t-d)/86400000<=182&&!isLateCancel(x.s))dayN[d.getDay()]++;});
+  const bestI=dayN.indexOf(Math.max(...dayN));
+  const busiest=Math.max(...dayN)>0?["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][bestI]:"—";
+  return {mtd:Math.round(mtd),proj,lastM:Math.round(lastM),delta,busiest};
+}
+
 /* ============ Export / import ============ */
 function download(name,text,type){const b=new Blob([text],{type:type||"application/json"});const u=URL.createObjectURL(b);
   const a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500)}
 async function exportJSON(){const audit=await auditAll();
   const out={app:"TherapyTracker",version:1,exportedAt:new Date().toISOString(),state:S,audit:audit.slice(-800)};
   download("therapy-tracker-backup-"+isoD(today())+".json",JSON.stringify(out));markBackedUp();toast("Backup downloaded")}
+
+/* ===== Encrypted backups (AES-256-GCM via WebCrypto, passphrase-derived key) =====
+   The passphrase is never stored. A non-extractable AES key derived from it (PBKDF2, 210k iterations)
+   is kept in IndexedDB so backups can be written silently; the backup FILE can only be read with the
+   passphrase, so it's safe in iCloud/Drive/email. Restoring prompts for the passphrase. */
+const ENC_ITER=210000;
+function bufToB64(buf){const u=new Uint8Array(buf);let s="";for(let i=0;i<u.length;i+=0x8000)s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(s);}
+function b64ToBuf(s){const bin=atob(s);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u.buffer;}
+async function encDeriveKey(pass,salt){
+  const km=await crypto.subtle.importKey("raw",new TextEncoder().encode(pass),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt:salt,iterations:ENC_ITER,hash:"SHA-256"},km,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+}
+function encReady(){try{return _db&&localStorage.getItem("tt_enc")==="on";}catch(e){return false;}}
+async function encSetup(pass){
+  const salt=crypto.getRandomValues(new Uint8Array(16));
+  const key=await encDeriveKey(pass,salt);
+  await kvPut("encKey",key);await kvPut("encSalt",bufToB64(salt.buffer));
+  try{localStorage.setItem("tt_enc","on");}catch(e){}
+}
+async function encDisable(){await kvPut("encKey",null);await kvPut("encSalt",null);await kvPut("encHandle",null);
+  try{localStorage.removeItem("tt_enc");}catch(e){}}
+async function encPayload(){
+  const key=await kvGet("encKey"),saltB=await kvGet("encSalt");
+  if(!key||!saltB)throw new Error("no passphrase set");
+  const audit=_db?await auditAll():[];
+  const plain=JSON.stringify({app:"TherapyTracker",version:1,exportedAt:new Date().toISOString(),state:S,audit:audit.slice(-800)});
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv:iv},key,new TextEncoder().encode(plain));
+  return JSON.stringify({app:"TherapyTracker",enc:1,cipher:"AES-256-GCM",kdf:"PBKDF2-SHA256",iter:ENC_ITER,salt:saltB,iv:bufToB64(iv.buffer),data:bufToB64(ct)});
+}
+async function encWriteToHandle(txt,interactive){
+  const h=await kvGet("encHandle");if(!h)return false;
+  try{
+    let perm=await h.queryPermission({mode:"readwrite"});
+    if(perm!=="granted"){if(!interactive)return false;perm=await h.requestPermission({mode:"readwrite"});}
+    if(perm!=="granted")return false;
+    const w=await h.createWritable();await w.write(txt);await w.close();return true;
+  }catch(e){return false;}
+}
+async function encBackupNow(){
+  try{const txt=await encPayload();
+    const wrote=await encWriteToHandle(txt,true);
+    if(!wrote)download("therapy-tracker-backup-"+isoD(today())+".enc.json",txt);
+    markBackedUp();toast(wrote?"Encrypted backup saved to your file":"Encrypted backup downloaded");
+  }catch(e){toast("Backup failed: "+e.message);Sfx.error();}
+}
+let _autoBkT=null;
+function autoEncBackup(){
+  if(!encReady())return;
+  clearTimeout(_autoBkT);
+  _autoBkT=setTimeout(async()=>{try{
+    const txt=await encPayload();
+    if(await encWriteToHandle(txt,false)){markBackedUp();}
+  }catch(e){}},2000);
+}
+async function encChooseFile(after){
+  if(!window.showSaveFilePicker){toast("Silent auto-save needs Chrome or Edge on desktop — on this device use Encrypt & download");Sfx.error();return;}
+  try{
+    const h=await window.showSaveFilePicker({suggestedName:"therapy-tracker-backup.enc.json",
+      types:[{description:"Encrypted backup",accept:{"application/json":[".json"]}}]});
+    await kvPut("encHandle",h);
+    const txt=await encPayload();await encWriteToHandle(txt,true);markBackedUp();
+    toast("Auto-save on — backups now write here silently");if(after)after();
+  }catch(e){if(e&&e.name!=="AbortError")toast("Could not set location");}
+}
+function encPromptSetup(after){
+  const p1=prompt("Choose a backup passphrase (keep it safe — without it an encrypted backup CANNOT be opened):");
+  if(!p1)return;
+  if(p1.length<8){alert("Use at least 8 characters.");return;}
+  const p2=prompt("Type the passphrase again to confirm:");
+  if(p1!==p2){alert("Passphrases didn't match — nothing changed.");return;}
+  encSetup(p1).then(()=>{toast("Encrypted backups on");if(after)after();})
+    .catch(e=>{toast("Setup failed: "+e.message);});
+}
+
+/* ===== Import validation (schema + sanity report before restore) ===== */
+function validateImport(st){
+  const problems=[];
+  if(!st||typeof st!=="object")return {ok:false,problems:["Not a recognisable backup file"]};
+  if(!Array.isArray(st.sessions)||!Array.isArray(st.clients))return {ok:false,problems:["Missing sessions or clients — not a Therapy Tracker backup"]};
+  const badDates=st.sessions.filter(s=>!s||!s.date||!/^\d{4}-\d{2}-\d{2}$/.test(String(s.date))).length;
+  if(badDates)problems.push(badDates+" session(s) with missing/invalid dates");
+  const codeSet=new Set((st.clients||[]).map(c=>(c&&c.code||"").toLowerCase()));
+  const orphans=st.sessions.filter(s=>s&&s.client&&!codeSet.has(String(s.client).toLowerCase())).length;
+  if(orphans)problems.push(orphans+" session(s) referencing clients not in the backup");
+  const dupIds={};let dups=0;
+  st.sessions.forEach(s=>{if(s&&s._id){if(dupIds[s._id])dups++;dupIds[s._id]=1;}});
+  if(dups)problems.push(dups+" duplicate internal id(s)");
+  return {ok:true,problems,counts:{sessions:st.sessions.length,clients:st.clients.length,
+    supervision:(st.supervision||[]).length,rooms:(st.rooms||[]).length}};
+}
 function exportCSV(){
   const cols=["client","num","date","time","mode","location","room","invoice","paidDate","notes","roomPaid","rate","clientPaid","overdue","roomRate","roomDue","status","taxYear","week"];
   const rows=[cols.join(",")];
@@ -2057,12 +2577,26 @@ function exportSupervisionCSV(){
     rows.push(r.join(","))});
   download("therapy-supervision-"+isoD(today())+".csv",rows.join("\n"),"text/csv");toast("Supervision CSV downloaded")}
 function importJSON(e){const f=e.target.files[0];if(!f)return;const rd=new FileReader();
-  rd.onload=async()=>{try{const o=JSON.parse(rd.result);const st=o.state||o;
-    if(!st.sessions||!st.clients)throw new Error("Not a valid backup");
-    if(!confirm("Restore this backup? It replaces current data (current state is saved as a restore point)."))return;
+  rd.onload=async()=>{try{let o=JSON.parse(rd.result);
+    if(o&&o.enc===1){
+      const pass=prompt("This backup is encrypted. Enter its passphrase:");
+      if(!pass)return;
+      try{
+        const key=await encDeriveKey(pass,new Uint8Array(b64ToBuf(o.salt)));
+        const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:new Uint8Array(b64ToBuf(o.iv))},key,b64ToBuf(o.data));
+        o=JSON.parse(new TextDecoder().decode(pt));
+      }catch(err2){alert("Wrong passphrase or corrupted file — nothing changed.");return;}
+    }
+    const st=o.state||o;
+    const rep=validateImport(st);
+    if(!rep.ok)throw new Error(rep.problems.join("; "));
+    let msg="Restore this backup?\n\n"+rep.counts.sessions+" sessions · "+rep.counts.clients+" clients · "+rep.counts.supervision+" supervision · "+rep.counts.rooms+" rooms";
+    if(rep.problems.length)msg+="\n\n⚠️ Checks found:\n– "+rep.problems.join("\n– ");
+    msg+="\n\nCurrent data is kept as a restore point.";
+    if(!confirm(msg))return;
     S=normalize(st);
     await commit("Restored backup ("+(S.sessions.length)+" sessions)");markBackedUp();toast("Backup restored");go("home");
-  }catch(err){alert("Could not import: "+err.message)}};rd.readAsText(f)}
+  }catch(err){alert("Could not import: "+err.message)}};rd.readAsText(f);e.target.value="";}
 async function showSnapshots(){if(!_db){toast("Restore points need storage");return}
   const snaps=await snapAll();snaps.sort((a,b)=>b.id-a.id);
   const body=el('<div></div>');
