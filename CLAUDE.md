@@ -41,6 +41,12 @@ S = {
     activeWeeks: [],    // ISO week strings for streak tracking
     records: { longestStreak, mostClearedAtOnce, biggestCatchup },
     seenStreak: 0
+  },
+  settings: {           // practice branding + feature switches (added Aug 2026)
+    practiceName, practiceTagline,
+    palette,            // key into PALETTES: sage|ocean|plum|clay|indigo|slate
+    features: {},       // key → false to disable; absent/true = on
+    onboarded, onboardedAt, setupRuns
   }
 }
 ```
@@ -59,13 +65,23 @@ Key functions:
 - **Confetti**: canvas-based `Confetti` object.
 - **Celebrate overlay**: `celebrate(emoji, title, sub, ribbon)`.
 
+## Setup wizard & guided tour (S.settings)
+- **First run**: `startSetup()` fires from init when `S.settings.onboarded` is false. `normalize()` sets `onboarded = true` for any state that already has clients or sessions, so existing installs never see it.
+- **Flow engine**: `flowStart/flowGo/flowNext/flowClose` drive a full-screen `.ov` overlay (z-index 45 — above the tab bar, below `#sheet`) from an array of step objects `{emoji,h,sub,html,mount,validate,onLeave}`. Shared by setup and the tour.
+- **Tour**: `startTour()` — feature-aware, read-only. Replayable from Settings › Setup & help.
+- **Re-run**: `confirmRerunSetup()` — warning sheet requiring the user to type `RESET SETUP`. Skips the rooms step once sessions exist.
+- **Feature flags**: `feat(key)` gates tabs (`TABS[].ft`), gamification (`celebrate`, `Confetti.burst`), quick-add, attention feed, receipts and accreditation. Off = hidden, never deleted.
+- **Palettes**: `PALETTES` + `html[data-palette]` CSS blocks. `applyPalette()` mirrors to `localStorage('tt_palette')` so the head script applies it before first paint. `paintThemeColor()` keeps `#tcMeta` in sync.
+- **Branding**: `practiceName()` / `practiceTagline()` feed the header pill, `--appname` (desktop sidebar title), `document.title` and printed receipts. `applySettings()` re-applies everything after load, import or rollback.
+
 ## UI structure
 - Single-page app with tab navigation (`nav.tabs`).
 - Views rendered into `<main id="main">` — each tab calls its own `render*()` function.
 - Bottom-sheet modal: `#sheet` / `#sheetBody` / `openSheet(title, html)`.
 - FAB (`#fab`) = quick "Log session".
 - Toast notifications: `toast(msg)`.
-- Dark/light theme via `data-theme` on `<html>`, persisted to `localStorage('tt_theme')`.
+- Dark/light theme via `data-theme` on `<html>`. `localStorage('tt_theme')` holds `light`/`dark`; **absent = auto** (follow the device, via a `matchMedia` listener). Use `themePref()` to read it, `setTheme('light'|'dark'|'auto')` to set it.
+- Colour scheme via `data-palette` on `<html>`, persisted to `localStorage('tt_palette')`.
 
 ## Key views / render functions
 | Function | Tab |

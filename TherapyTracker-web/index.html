@@ -5,10 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-<meta name="theme-color" content="#5C7A6D" media="(prefers-color-scheme: light)"/>
-<meta name="theme-color" content="#1A2220" media="(prefers-color-scheme: dark)"/>
+<meta name="theme-color" id="tcMeta" content="#5C7A6D"/>
 <title>Therapy Tracker</title>
-<script>(function(){try{var t=localStorage.getItem('tt_theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
+<script>(function(){var d=document.documentElement;try{var t=localStorage.getItem('tt_theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';}d.setAttribute('data-theme',t);
+d.setAttribute('data-palette',localStorage.getItem('tt_palette')||'sage');
+var n=localStorage.getItem('tt_practice');if(n)d.style.setProperty('--appname',JSON.stringify('⬡ '+n));
+}catch(e){d.setAttribute('data-theme','light');d.setAttribute('data-palette','sage');}})();</script>
 <style>
 :root{
   color-scheme:light;
@@ -24,6 +26,60 @@ html[data-theme="dark"]{
   --brand:#6E9384; --brand-dark:#AFC8BC; --accent:#B0A2B4; --accent-ink:#C7BBCB;
   --good:#6FAE86; --bad:#E08068; --warn:#CBA66A; --hi:#3FD6BB; --hi-ink:#A6F0E2;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.35);
+}
+/* ====== Colour schemes ======
+   Chosen in Setup / Settings, applied as data-palette on <html>. "sage" is the built-in
+   default above, so it needs no block here. Each other scheme overrides the light values,
+   then the [data-theme="dark"] pair (higher specificity) overrides them again for dark. */
+html[data-palette="ocean"]{
+  --bg:#F4F8FA; --card:#FFFFFF; --soft:#E8EFF4; --ink:#1B2730; --muted:#687C8A; --line:#DFE9EF;
+  --brand:#3D6E8E; --brand-dark:#2C5169; --accent:#7E93B8; --accent-ink:#4C5E7E;
+  --good:#3E8071; --bad:#C2564C; --warn:#A87F3F; --hi:#1795BC; --hi-ink:#0B5470;
+}
+html[data-palette="ocean"][data-theme="dark"]{
+  --bg:#161F27; --card:#1E2A33; --soft:#26343E; --ink:#E2EBF1; --muted:#96A8B6; --line:#2F404C;
+  --brand:#6E9CBC; --brand-dark:#A9CBE0; --accent:#98ABCB; --accent-ink:#BAC8DE;
+  --good:#6FAE9B; --bad:#E0806E; --warn:#CBA66A; --hi:#4FC6E4; --hi-ink:#A6E6F4;
+}
+html[data-palette="plum"]{
+  --bg:#F9F6FA; --card:#FFFFFF; --soft:#F0EAF1; --ink:#271F29; --muted:#7C6F80; --line:#E9E1EB;
+  --brand:#7A5C7E; --brand-dark:#5A4260; --accent:#B08A8A; --accent-ink:#7E5F5F;
+  --good:#4E7E63; --bad:#C25C49; --warn:#A8803F; --hi:#B24E8E; --hi-ink:#6E2A55;
+}
+html[data-palette="plum"][data-theme="dark"]{
+  --bg:#221A24; --card:#2C232E; --soft:#372C39; --ink:#EDE6EF; --muted:#ADA0B0; --line:#423446;
+  --brand:#A583AA; --brand-dark:#C9B0CC; --accent:#C4A0A0; --accent-ink:#D9BEBE;
+  --good:#6FAE86; --bad:#E08068; --warn:#CBA66A; --hi:#E070B8; --hi-ink:#F2B8DC;
+}
+html[data-palette="clay"]{
+  --bg:#FBF7F5; --card:#FFFFFF; --soft:#F4ECE7; --ink:#2A211C; --muted:#83726A; --line:#EDE3DD;
+  --brand:#B0623F; --brand-dark:#7E442B; --accent:#8A8560; --accent-ink:#605C40;
+  --good:#4E7E63; --bad:#BE4B3F; --warn:#A8803F; --hi:#C98A17; --hi-ink:#7A5209;
+}
+html[data-palette="clay"][data-theme="dark"]{
+  --bg:#241C18; --card:#2F2521; --soft:#3A2F29; --ink:#F0E7E1; --muted:#B7A79D; --line:#463931;
+  --brand:#D18A63; --brand-dark:#E8B396; --accent:#ADA77C; --accent-ink:#C9C39B;
+  --good:#6FAE86; --bad:#E88070; --warn:#CBA66A; --hi:#E8B03F; --hi-ink:#F5D591;
+}
+html[data-palette="indigo"]{
+  --bg:#F7F7FB; --card:#FFFFFF; --soft:#EDEDF4; --ink:#20202B; --muted:#6F6F82; --line:#E5E5EF;
+  --brand:#55568F; --brand-dark:#3E3F6E; --accent:#8C7FA8; --accent-ink:#625780;
+  --good:#44806B; --bad:#C25C49; --warn:#A8803F; --hi:#5C7AE0; --hi-ink:#2F44A0;
+}
+html[data-palette="indigo"][data-theme="dark"]{
+  --bg:#1B1B26; --card:#242433; --soft:#2E2E40; --ink:#E8E8F2; --muted:#A2A2B8; --line:#38384D;
+  --brand:#8687C2; --brand-dark:#B4B4DE; --accent:#A99CC4; --accent-ink:#C6BBDC;
+  --good:#6FAE94; --bad:#E08068; --warn:#CBA66A; --hi:#8FA4F2; --hi-ink:#C3CFFA;
+}
+html[data-palette="slate"]{
+  --bg:#F7F8F9; --card:#FFFFFF; --soft:#EDEFF0; --ink:#1F2426; --muted:#6D7679; --line:#E5E8E9;
+  --brand:#4E5A5E; --brand-dark:#384245; --accent:#8A8A8A; --accent-ink:#5F5F5F;
+  --good:#3E7F6B; --bad:#BE5347; --warn:#9E7A3C; --hi:#2A9D8F; --hi-ink:#1A6157;
+}
+html[data-palette="slate"][data-theme="dark"]{
+  --bg:#1A1E20; --card:#232829; --soft:#2D3335; --ink:#E6EAEB; --muted:#9BA6A9; --line:#373E40;
+  --brand:#83969C; --brand-dark:#B4C4C9; --accent:#A6A6A6; --accent-ink:#C4C4C4;
+  --good:#6FAE94; --bad:#E08068; --warn:#C9A469; --hi:#4FC7B8; --hi-ink:#A8ECE3;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
@@ -72,7 +128,7 @@ main{flex:1;padding:18px 16px 96px}
 .fab{position:fixed;right:18px;bottom:calc(82px + env(safe-area-inset-bottom));z-index:40;
   width:60px;height:60px;border-radius:50%;color:#fff;border:0;cursor:pointer;
   display:flex;align-items:center;justify-content:center;line-height:0;
-  box-shadow:0 8px 20px rgba(92,122,109,.45);background:var(--brand)}
+  box-shadow:0 8px 20px color-mix(in srgb,var(--brand) 45%,transparent);background:var(--brand)}
 .fab svg{width:26px;height:26px;display:block;fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round}
 .fab:active{transform:scale(.95)}
 label{display:block;font-size:13px;color:var(--muted);margin:12px 0 5px;font-weight:600}
@@ -184,7 +240,8 @@ summary{font-weight:600;cursor:pointer}
   nav.tabs{flex-direction:column;justify-content:flex-start;align-items:stretch;top:0;bottom:0;left:0;right:auto;
     width:236px;max-width:236px;margin:0;background:var(--brand);border-top:0;border-right:1px solid var(--line);
     padding:calc(env(safe-area-inset-top) + 20px) 12px 20px;gap:5px}
-  nav.tabs::before{content:"⬡ Therapy Tracker";display:block;color:#fff;font-weight:700;font-size:16px;padding:6px 14px 16px;opacity:.96}
+  nav.tabs::before{content:var(--appname,"⬡ Therapy Tracker");display:block;color:#fff;font-weight:700;font-size:16px;padding:6px 14px 16px;opacity:.96;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   nav.tabs button{flex-direction:row;justify-content:flex-start;gap:12px;width:100%;color:rgba(255,255,255,.82);
     padding:12px 14px;border-radius:12px;font-size:14.5px}
   nav.tabs button .ic{width:22px;height:22px}
@@ -358,6 +415,74 @@ summary{font-weight:600;cursor:pointer}
 .wkdots{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
 .wkdots i{width:15px;height:15px;border-radius:4px;background:var(--soft);flex:none}
 .wkdots i.att{background:var(--brand)} .wkdots i.lc{background:color-mix(in srgb,var(--bad) 45%,var(--soft))} .wkdots i.up{border:1.5px dashed var(--brand);background:transparent;box-sizing:border-box}
+
+/* ===== full-screen step flow: first-run setup + guided tour ===== */
+/* sits above the tab bar (35) and FAB (40) but below sheets (50), so setup can open a sheet on top */
+.ov{position:fixed;inset:0;z-index:45;background:var(--bg);display:none;flex-direction:column}
+.ov.show{display:flex}
+.ovtop{background:var(--brand);color:#fff;padding:calc(env(safe-area-inset-top) + 14px) 18px 12px;display:flex;align-items:center;gap:10px}
+.ovtop .ovttl{flex:1;font-weight:700;font-size:15.5px;letter-spacing:.01em;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ovtop .ovskip{background:rgba(255,255,255,.18);border:0;color:#fff;font:inherit;font-size:13px;font-weight:600;padding:7px 13px;border-radius:20px;cursor:pointer}
+.ovtop .ovskip:active{transform:scale(.96)}
+.ovdots{display:flex;gap:5px;justify-content:center;padding:11px 16px 3px;flex-wrap:wrap}
+.ovdots i{width:7px;height:7px;border-radius:50%;background:var(--line);transition:background .25s,width .25s}
+.ovdots i.done{background:color-mix(in srgb,var(--brand) 55%,var(--line))}
+.ovdots i.on{background:var(--brand);width:20px;border-radius:4px}
+.ovbody{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:10px 18px 22px}
+.ovinner{max-width:560px;margin:0 auto}
+.ovhero{font-size:52px;line-height:1.1;text-align:center;margin:10px 0 6px;animation:bounce-emoji .9s ease 1}
+.ovh{font-size:23px;font-weight:800;color:var(--brand-dark);text-align:center;margin:0 0 8px;line-height:1.22}
+.ovsub{font-size:14.5px;color:var(--muted);text-align:center;line-height:1.5;margin:0 0 18px}
+.ovsub b{color:var(--ink)}
+.ovfoot{background:var(--bg);border-top:1px solid var(--line);padding:12px 18px calc(14px + env(safe-area-inset-bottom))}
+.ovbtns{display:flex;gap:10px}
+.ovbtns .btn{flex:1}
+.ovbtns .btn.ghost{flex:0 0 96px}
+.ovpts{display:flex;flex-direction:column;gap:11px;margin:4px 0 6px}
+.ovpt{display:flex;gap:12px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 14px}
+.ovpt .pe{font-size:21px;line-height:1.25;flex:none}
+.ovpt .pt{flex:1;min-width:0;font-size:14px;line-height:1.5}
+.ovpt .pt b{color:var(--brand-dark)}
+.ovpt .pt .sub{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+.ovnote{background:color-mix(in srgb,var(--warn) 13%,var(--card));border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);
+  border-radius:13px;padding:12px 14px;font-size:13.5px;line-height:1.5;margin:12px 0 0}
+.ovnote b{color:var(--ink)}
+.ovkey{display:inline-block;background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:12.5px;font-weight:700;color:var(--brand-dark)}
+/* palette picker */
+.palgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:4px}
+.palopt{display:flex;align-items:center;gap:10px;background:var(--card);border:2px solid var(--line);border-radius:14px;padding:11px 12px;cursor:pointer;text-align:left;font:inherit;color:var(--ink);transition:border-color .15s,transform .1s}
+.palopt:active{transform:scale(.97)}
+.palopt.on{border-color:var(--brand);box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 18%,transparent)}
+.palopt .pswatch{width:34px;height:34px;border-radius:50%;flex:none;position:relative;overflow:hidden;border:1px solid rgba(0,0,0,.08)}
+.palopt .pswatch i{position:absolute;inset:0}
+.palopt .pswatch i:nth-child(2){left:50%}
+.palopt .pswatch i:nth-child(3){top:66%;left:0;right:0;bottom:0}
+.palopt .pn{font-size:14px;font-weight:700;line-height:1.2}
+.palopt .pd{font-size:11.5px;color:var(--muted);margin-top:1px}
+/* feature toggles */
+.ftrow{display:flex;gap:12px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 13px;margin-bottom:9px}
+.ftrow .fic{font-size:19px;flex:none;line-height:1.3}
+.ftrow .fmain{flex:1;min-width:0}
+.ftrow .fn{font-size:14.5px;font-weight:700}
+.ftrow .fd{font-size:12.5px;color:var(--muted);line-height:1.45;margin-top:2px}
+.ftrow.off{opacity:.62}
+.sw{flex:none;width:48px;height:28px;border-radius:20px;border:0;background:var(--line);position:relative;cursor:pointer;transition:background .2s;padding:0;margin-top:2px}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .2s}
+.sw.on{background:var(--brand)}
+.sw.on::after{transform:translateX(20px)}
+.sw:disabled{opacity:.4;cursor:not-allowed}
+/* setup room rows */
+.rmrow{display:grid;grid-template-columns:1fr 84px 88px 34px;gap:7px;align-items:center;margin-bottom:8px}
+.rmrow input,.rmrow select{padding:10px 9px;font-size:14px;border-radius:10px}
+.rmrow .rmx{background:none;border:0;color:var(--muted);font-size:19px;cursor:pointer;padding:2px}
+.rmhead{display:grid;grid-template-columns:1fr 84px 88px 34px;gap:7px;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);font-weight:700;margin-bottom:5px}
+/* live header preview */
+.brandprev{background:var(--brand);color:#fff;border-radius:13px;padding:12px 14px;display:flex;align-items:center;gap:9px;margin-top:12px}
+.brandprev .bpt{font-size:14px;font-weight:700;flex:none}
+.brandprev .bpn{font-size:11.5px;background:rgba(255,255,255,.18);padding:4px 10px;border-radius:20px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.setsum{background:var(--soft);border:1px solid var(--line);border-radius:13px;padding:12px 14px;font-size:13.5px;line-height:1.85}
+.setsum div{display:flex;gap:10px;justify-content:space-between}
+.setsum b{color:var(--brand-dark);text-align:right}
 </style>
 <link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon-180.png"></head>
 <body>
@@ -419,6 +544,14 @@ function normalize(st){
     st.roomRateHistory=st.rooms.map(r=>({_id:uid(),location:r.location,effectiveFrom:"2000-01-01",rate:r.rate}));
   }
   st.roomRateHistory.forEach(x=>{if(!x._id)x._id=uid()});
+  /* practice branding + feature switches, set in first-run setup (travels with backups) */
+  st.settings=st.settings||{}; const sg=st.settings;
+  const hasData=(st.sessions.length>0||st.clients.length>0);
+  if(sg.practiceName==null)sg.practiceName=hasData?"Charlotte Bloor Therapy":"Therapy Tracker"; // existing installs keep their header
+  if(sg.practiceTagline==null)sg.practiceTagline="Counselling & psychotherapy";
+  if(sg.palette==null)sg.palette="sage";
+  sg.features=sg.features||{};
+  if(sg.onboarded==null)sg.onboarded=hasData; // anyone with data already knows the app — don't ambush them with setup
   st.game=st.game||{}; st.game.activeWeeks=st.game.activeWeeks||[]; st.game.records=st.game.records||{};
   const rr=st.game.records; rr.longestStreak=rr.longestStreak||0; rr.mostClearedAtOnce=rr.mostClearedAtOnce||0; rr.biggestCatchup=rr.biggestCatchup||0;
   if(st.game.seenStreak==null)st.game.seenStreak=0;
@@ -566,7 +699,57 @@ function closeSheet(){$("#sheet").classList.remove("open")}
 $("#sheetClose").onclick=closeSheet;
 $("#sheet").addEventListener("click",e=>{if(e.target.id==="sheet")closeSheet()});
 function curTheme(){return document.documentElement.getAttribute("data-theme")==="dark"?"dark":"light";}
-function setTheme(t){document.documentElement.setAttribute("data-theme",t);try{localStorage.setItem("tt_theme",t)}catch(e){} const b=$("#themeBtn");if(b)b.textContent=t==="dark"?"☀":"☾";}
+function systemTheme(){return (window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light";}
+/* stored preference: "light" | "dark" | "auto" (auto = no key, follow the device) */
+function themePref(){try{const t=localStorage.getItem("tt_theme");return (t==="light"||t==="dark")?t:"auto";}catch(e){return "auto";}}
+function setTheme(t){
+  if(t!=="light"&&t!=="dark")t="auto";
+  try{if(t==="auto")localStorage.removeItem("tt_theme");else localStorage.setItem("tt_theme",t);}catch(e){}
+  document.documentElement.setAttribute("data-theme",t==="auto"?systemTheme():t);
+  const b=$("#themeBtn");if(b)b.textContent=curTheme()==="dark"?"☀":"☾";
+  paintThemeColor();
+}
+(function(){try{const mq=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)");
+  if(mq){const h=()=>{if(themePref()==="auto")setTheme("auto");};
+    if(mq.addEventListener)mq.addEventListener("change",h);else if(mq.addListener)mq.addListener(h);}}catch(e){}})();
+/* keep the iOS status bar / Android chrome in step with the chosen scheme */
+function paintThemeColor(){try{const m=document.getElementById("tcMeta");if(!m)return;
+  const cs=getComputedStyle(document.documentElement);
+  m.setAttribute("content",(curTheme()==="dark"?cs.getPropertyValue("--bg"):cs.getPropertyValue("--brand")).trim()||"#5C7A6D");}catch(e){}}
+
+/* ---- colour schemes ---- */
+const PALETTES=[
+  {k:"sage",  n:"Sage",   d:"Calm green (original)", c:["#5C7A6D","#9A8C9E","#EDF1EF"], p:["#5C7A6D","#46594F"]},
+  {k:"ocean", n:"Ocean",  d:"Cool coastal blue",     c:["#3D6E8E","#7E93B8","#E8EFF4"], p:["#3D6E8E","#2C5169"]},
+  {k:"plum",  n:"Plum",   d:"Soft aubergine",        c:["#7A5C7E","#B08A8A","#F0EAF1"], p:["#7A5C7E","#5A4260"]},
+  {k:"clay",  n:"Clay",   d:"Warm terracotta",       c:["#B0623F","#8A8560","#F4ECE7"], p:["#B0623F","#7E442B"]},
+  {k:"indigo",n:"Indigo", d:"Deep evening blue",     c:["#55568F","#8C7FA8","#EDEDF4"], p:["#55568F","#3E3F6E"]},
+  {k:"slate", n:"Slate",  d:"Quiet neutral grey",    c:["#4E5A5E","#8A8A8A","#EDEFF0"], p:["#4E5A5E","#384245"]}
+];
+function curPalette(){const p=document.documentElement.getAttribute("data-palette")||"sage";
+  return PALETTES.some(x=>x.k===p)?p:"sage";}
+function applyPalette(k){if(!PALETTES.some(p=>p.k===k))k="sage";
+  document.documentElement.setAttribute("data-palette",k);
+  try{localStorage.setItem("tt_palette",k);}catch(e){}
+  paintThemeColor();}
+function paletteSwatch(p){return '<span class="pswatch"><i style="background:'+p.c[0]+'"></i><i style="background:'+p.c[1]+'"></i><i style="background:'+p.c[2]+'"></i></span>';}
+
+/* ---- practice branding + feature switches ---- */
+function settings(){if(!S.settings)S.settings={};return S.settings;}
+function practiceName(){const n=(S&&S.settings&&S.settings.practiceName||"").trim();return n||"Therapy Tracker";}
+function practiceTagline(){return (S&&S.settings&&S.settings.practiceTagline||"").trim();}
+function practiceInitials(){const i=practiceName().split(/\s+/).map(w=>w[0]||"").join("").replace(/[^A-Za-z0-9]/g,"").toUpperCase().slice(0,4);
+  return i||"TT";}
+/* a feature is on unless it has been explicitly switched off */
+function feat(k){try{const f=S&&S.settings&&S.settings.features;return !f||f[k]!==false;}catch(e){return true;}}
+function applyBranding(){const n=practiceName();
+  try{localStorage.setItem("tt_practice",n);}catch(e){}
+  document.documentElement.style.setProperty("--appname",JSON.stringify("⬡ "+n));
+  const ty=$("#topTY");if(ty)ty.textContent=n;
+  document.title=(n==="Therapy Tracker")?"Therapy Tracker":(n+" · Therapy Tracker");}
+/* re-apply everything that lives in S.settings (after load, restore or rollback) */
+function applySettings(){applyPalette(settings().palette||"sage");applyBranding();paintThemeColor();}
+
 (function(){const b=$("#themeBtn");if(b){b.textContent=curTheme()==="dark"?"☀":"☾";b.onclick=()=>setTheme(curTheme()==="dark"?"light":"dark");}})();
 (function(){const b=$("#settingsBtn");if(b)b.onclick=()=>go("settings");})();
 function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
@@ -612,7 +795,7 @@ const Confetti=(function(){
   const dpr=Math.min(window.devicePixelRatio||1,2);
   const COLORS=["#ff6b6b","#ffd23f","#4ecdc4","#5C7A6D","#9A8C9E","#16A88E","#ff8a1e","#6c8cff","#ff5ea8"];
   function size(){cv.width=Math.floor(innerWidth*dpr);cv.height=Math.floor(innerHeight*dpr);}
-  function spawn(n,o){o=o||{};size();ctx2=cv.getContext("2d");
+  function spawn(n,o){if(!feat("gamify"))return;o=o||{};size();ctx2=cv.getContext("2d");
     const ox=(o.x!=null?o.x:innerWidth/2), oy=(o.y!=null?o.y:innerHeight*0.4);
     for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,sp=(o.spread||1)*(4+Math.random()*9);
       parts.push({x:ox*dpr,y:oy*dpr,vx:Math.cos(a)*sp*dpr,vy:(Math.sin(a)*sp-(o.up||7))*dpr,
@@ -635,6 +818,10 @@ const Confetti=(function(){
 /* ---- Celebration overlay + floating reward pill ---- */
 let _celT;
 function celebrate(o){o=o||{};
+  if(!feat("gamify")){ // celebrations switched off — still acknowledge the action quietly
+    if(o.title)toast((o.emoji?o.emoji+" ":"")+o.title);
+    if(o.sound==="record")Sfx.record();else Sfx.complete();
+    return;}
   document.getElementById("celEmoji").textContent=o.emoji||"🎉";
   document.getElementById("celTitle").textContent=o.title||"Nice!";
   document.getElementById("celSub").textContent=o.sub||"";
@@ -754,17 +941,20 @@ const TABS=[
  {id:"home",ic:'<svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7"/><path d="M5 9.8V20h14V9.8"/></svg>',label:"Home"},
  {id:"sessions",ic:'<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2.5"/><path d="M4 9.5h16M8.5 3v3.5M15.5 3v3.5"/></svg>',label:"Sessions"},
  {id:"clients",ic:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.2 20c0-3.3 2.6-5.2 5.8-5.2S14.8 16.7 14.8 20"/><path d="M16.5 5.6a3 3 0 0 1 0 5.8M17 14.9c2.2.5 3.8 2 3.8 4.6"/></svg>',label:"Clients"},
- {id:"supervision",ic:'<svg viewBox="0 0 24 24"><path d="M20 11a7 7 0 0 1-10.4 6.1L4.5 19l1.4-4.3A7 7 0 1 1 20 11z"/><path d="M9 10.5h6M9 13h4"/></svg>',label:"Supervision"},
- {id:"income",ic:'<svg viewBox="0 0 24 24"><path d="M4 20h16"/><rect x="6" y="12" width="3.2" height="7" rx="1"/><rect x="10.4" y="7" width="3.2" height="12" rx="1"/><rect x="14.8" y="14" width="3.2" height="5" rx="1"/></svg>',label:"Revenue"},
- {id:"raw",ic:'<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16M10 10v9"/></svg>',label:"Table"},
+ {id:"supervision",ft:"supervision",ic:'<svg viewBox="0 0 24 24"><path d="M20 11a7 7 0 0 1-10.4 6.1L4.5 19l1.4-4.3A7 7 0 1 1 20 11z"/><path d="M9 10.5h6M9 13h4"/></svg>',label:"Supervision"},
+ {id:"income",ft:"income",ic:'<svg viewBox="0 0 24 24"><path d="M4 20h16"/><rect x="6" y="12" width="3.2" height="7" rx="1"/><rect x="10.4" y="7" width="3.2" height="12" rx="1"/><rect x="14.8" y="14" width="3.2" height="5" rx="1"/></svg>',label:"Revenue"},
+ {id:"raw",ft:"raw",ic:'<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16M10 10v9"/></svg>',label:"Table"},
 ];
+function visibleTabs(){return TABS.filter(t=>!t.ft||feat(t.ft));}
+function tabEnabled(id){const t=TABS.find(x=>x.id===id);return !t||!t.ft||feat(t.ft);}
 let cur="home";
 function renderTabs(){const overdue=S.sessions.filter(s=>derive(s).overdue).length;
-  $("#tabs").innerHTML=TABS.map(t=>`<button data-tab="${t.id}" class="${t.id===cur?"on":""}">
+  $("#tabs").innerHTML=visibleTabs().map(t=>`<button data-tab="${t.id}" class="${t.id===cur?"on":""}">
     <span class="ic">${t.ic}</span><span>${t.label}${t.id==="sessions"&&overdue?` <span class="badge">${overdue}</span>`:""}</span></button>`).join("");
   $("#tabs").querySelectorAll("button").forEach(b=>b.onclick=()=>go(b.dataset.tab));
 }
-function go(tab){cur=tab;renderTabs();$("#topTY").textContent="Charlotte Bloor Therapy";
+function go(tab){if(!VIEWS[tab]||!tabEnabled(tab))tab="home";
+  cur=tab;renderTabs();applyBranding();
   const m=main();m.innerHTML="";m.appendChild(VIEWS[tab]());window.scrollTo(0,0);
   $("#fab").style.display=(tab==="sessions"||tab==="home")?"flex":"none";
   updateBackupBanner();
@@ -786,7 +976,7 @@ VIEWS.home=function(){
   const next7=upcoming.filter(x=>parseD(x.s.date)<=addDays(t,7));
   /* ---- gamification cards ---- */
   const st=computeStreak(), goals=gameGoals(), rec=ensureGame().records;
-  const goalsCard='<div class="card"><h2>Goals</h2><div class="rings">'+
+  const goalsCard=!feat("gamify")?'':'<div class="card"><h2>Goals</h2><div class="rings">'+
     ringSVG(goals.paidPct,goals.over>0?(goals.over+" payment"+(goals.over===1?"":"s")+" overdue"):"All payments in ✓")+
     ringSVG(goals.compPct,goals.incomplete>0?(goals.incomplete+" session"+(goals.incomplete===1?"":"s")+" to complete"):"Notes & room all done ✓")+
     '</div>'+((goals.over>0||goals.incomplete>0)?'<p class="small muted center" style="margin:10px 0 0">'+(goals.over>0?'<span class="taxlink" id="goPay">Collect payments ›</span>':"")+(goals.over>0&&goals.incomplete>0?' &nbsp;·&nbsp; ':"")+(goals.incomplete>0?'<span class="taxlink" id="goInc">Complete sessions ›</span>':"")+'</p>':"")+'</div>';
@@ -794,7 +984,7 @@ VIEWS.home=function(){
   const cCounts=clientSessionCounts();
   const maxRel=Math.max(0,...S.clients.map(c=>cCounts[c.code.toLowerCase()]||0));
   const inCare=S.clients.filter(c=>clientCategory(c.status)==="Active").length;
-  const recCard='<div class="card"><h2>Records</h2><div class="badgegrid">'+
+  const recCard=!feat("gamify")?'':'<div class="card"><h2>Records</h2><div class="badgegrid">'+
     mk("🔥",(st.count||0)+(st.count===1?" wk":" wks"),"App-usage streak"+(st.status==="risk"?" · at risk":""),!st.count)+
     mk("🏅",(rec.longestStreak||0)+(rec.longestStreak===1?" wk":" wks"),"Longest streak",!rec.longestStreak)+
     mk("📈",maxRel?(maxRel+" sess"):"0","Most sessions with a client",!maxRel)+
@@ -814,8 +1004,8 @@ VIEWS.home=function(){
   const sparkVals=weekSeries.map(d=>d.revenue);
   const lastW=weekSeries[weekSeries.length-1];
   const sparkCard=S.sessions.length?'<div class="card"><div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Revenue trend</h2><span class="small muted">last 24 weeks</span></div>'+sparkline(sparkVals)+'<div class="row small muted" style="justify-content:space-between;margin-top:4px"><span>'+(weekSeries[0]?"w/c "+esc(weekSeries[0].l):"")+'</span><span><b style="color:var(--brand-dark)">'+gbp(lastW?lastW.revenue:0)+'</b> this week</span></div></div>':'';
-  v.innerHTML=(S.sessions.length?"":'<div class="hint" style="font-size:14px">👋 Welcome! No data yet. Tap the <b>⚙ Settings</b> icon (top-right) → <b>Restore from backup</b>, and choose your <b>therapy-tracker-data.json</b> file to load everything.</div>')+
-   (S.sessions.length?'<div class="card"><h2>Needs attention</h2><div class="attn" id="attn"></div></div>':'')+`
+  v.innerHTML=(S.sessions.length?"":'<div class="hint" style="font-size:14px">👋 <b>Nothing logged yet.</b> Tap <b>＋ New session</b> below to start, or open <b>⚙ Settings → Restore from backup</b> to load a <b>.json</b> backup from another device. Need a refresher? <span class="taxlink" id="hTour">Take the guided tour ›</span></div>')+
+   (S.sessions.length&&feat("attention")?'<div class="card"><h2>Needs attention</h2><div class="attn" id="attn"></div></div>':'')+`
    <div class="kpis mb">
      <div class="kpi"><div class="v" data-to="${billed}" data-fmt="m">${gbp(billed)}</div><div class="l">Billed this tax year</div></div>
      <div class="kpi good"><div class="v" data-to="${received}" data-fmt="m">${gbp(received)}</div><div class="l">Received</div></div>
@@ -824,17 +1014,17 @@ VIEWS.home=function(){
    </div>`+
    sparkCard+
    goalsCard+`
-   <div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Quick add</h2></div>
-     <div class="qlwrap mt">
+   <div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Quick add</h2></div>`+
+     (feat("quickadd")?`<div class="qlwrap mt">
        <input id="ql" placeholder="Type it: e.g. &quot;AB tue 14:00 paid&quot; or &quot;CD yesterday online&quot;" autocomplete="off" autocapitalize="off">
        <div class="qlchips" id="qlout"></div>
        <button class="btn sm" id="qlGo" style="display:none">Log it</button>
        <div class="qlhint">Client code + optional day/date, time, location, "online", "paid" — everything else fills in from their last session.</div>
-     </div>
+     </div>`:``)+`
      <div class="row mt" style="flex-wrap:wrap;gap:8px">
        <button class="btn" id="qNew">＋ New session</button>
-       <button class="btn sec" id="qRepeat">↻ Repeat last for…</button>
-       <button class="btn sec" id="qSup">＋ Supervision</button>
+       <button class="btn sec" id="qRepeat">↻ Repeat last for…</button>`+
+       (feat("supervision")?`<button class="btn sec" id="qSup">＋ Supervision</button>`:``)+`
      </div></div>
    <div class="card"><h2>Coming up</h2><div id="up"></div></div>`+
    loyalCard+recCard;
@@ -852,8 +1042,9 @@ VIEWS.home=function(){
   v.querySelectorAll(".list-item[data-cid]").forEach(li=>li.onclick=()=>clientProfile(S.clients.find(c=>c._id===li.dataset.cid)));
   v.querySelector("#qNew").onclick=()=>sessionForm(null);
   v.querySelector("#qRepeat").onclick=()=>repeatPicker();
-  v.querySelector("#qSup").onclick=()=>supervisionForm(null);
-  mountQuickLog(v);
+  const qs=v.querySelector("#qSup");if(qs)qs.onclick=()=>supervisionForm(null);
+  const ht=v.querySelector("#hTour");if(ht)ht.onclick=()=>startTour();
+  if(feat("quickadd"))mountQuickLog(v);
   const attnHost=v.querySelector("#attn");if(attnHost)renderAttention(attnHost);
   const gp=v.querySelector("#goPay");if(gp)gp.onclick=()=>{sessFilter.view="list";sessFilter.seg="unpaid";go("sessions");};
   const gi=v.querySelector("#goInc");if(gi)gi.onclick=()=>{sessFilter.view="list";sessFilter.seg="incomplete";go("sessions");};
@@ -991,7 +1182,7 @@ function clinicalStats(){const t=today();let inP=0,onl=0;
     if((s.mode||"")==="Online")onl++;else inP++;});
   return {inPerson:inP,online:onl,logged:inP+onl};}
 /* Form 3A accreditation card: clinical hrs (from sessions) vs supervision hrs (manual), ratio must stay ≤ 6 */
-function mountAccreditation(host){if(!host)return;
+function mountAccreditation(host){if(!host||!feat("accreditation"))return;
   const ac=S.accreditation;
   host.innerHTML=`<div class="card"><h2>Accreditation hours &amp; ratio</h2>
     <p class="small muted" style="margin:0 0 4px">Totals for Form 3A. <b>Clinical hours</b> = your logged client sessions, each counted as 1 hour (50-min minimum). Any session flagged as a <b>late cancellation</b> is excluded, in line with the rule that missed sessions don’t count. <b>Supervision hours</b> = each logged supervision session (1 hour) plus the training &amp; placement totals below.</p>
@@ -1757,12 +1948,25 @@ VIEWS.raw=function(){
 VIEWS.settings=function(){
   const v=el('<div class="view active"></div>');
   v.innerHTML=`
+   <div class="card"><h2>Your practice</h2>
+     <p class="small muted">Shown in the app header and at the top of printed receipts and statements.</p>
+     <label>Practice name</label><input id="setName" maxlength="60" value="${esc(practiceName())}">
+     <label>Strapline <span class="muted">(receipts only)</span></label><input id="setTag" maxlength="70" value="${esc(practiceTagline())}">
+     <button class="btn full mt" id="setNameSave">Save practice details</button>
+   </div>
    <div class="card"><h2>Appearance &amp; sound</h2>
-     <p class="small muted">Theme and sound effects for this device.</p>
-     <div class="row mt" style="gap:8px;flex-wrap:wrap">
-       <button class="btn sec" id="setTheme"></button>
+     <p class="small muted">Colour scheme, light/dark and sound effects. Stored on this device; the scheme also travels with your backups.</p>
+     <label>Colour scheme</label>
+     <div class="palgrid" id="setPal">${PALETTES.map(p=>'<button type="button" class="palopt'+(p.k===curPalette()?" on":"")+'" data-p="'+p.k+'">'+paletteSwatch(p)+'<span><span class="pn">'+p.n+'</span><span class="pd">'+p.d+'</span></span></button>').join("")}</div>
+     <label style="margin-top:16px">Light or dark</label>
+     <div class="seg" id="setThemeSeg" style="display:inline-flex">${["light","dark","auto"].map(t=>'<button data-t="'+t+'" class="'+(themePref()===t?"on":"")+'">'+(t==="light"?"☀ Light":t==="dark"?"☾ Dark":"⚙ Match device")+'</button>').join("")}</div>
+     <div class="mt">
        <button class="btn sec" id="setSound"></button>
      </div>
+   </div>
+   <div class="card"><h2>Features</h2>
+     <p class="small muted">Switch off anything you don’t use — it disappears from the app. Nothing is deleted, and you can switch it back on any time.</p>
+     <div class="mt" id="setFeat"></div>
    </div>
    <div class="card"><h2>Backup &amp; restore</h2>
      <p class="small muted">Your data lives on this device. Export regularly to a file you keep (iCloud/Files/email). The <b>.json backup is the complete copy</b> — it holds every session, supervision entry, client, room and setting. The CSVs are spreadsheet-friendly extracts.</p>
@@ -1802,8 +2006,14 @@ VIEWS.settings=function(){
      <button class="btn sec" id="checkData">Check data</button>
      <div id="dhResults" class="mt"></div>
    </div>
+   <div class="card"><h2>Setup &amp; help</h2>
+     <p class="small muted">The guided tour explains each tab, how to log a session and how your data is saved. It changes nothing.</p>
+     <button class="btn sec full" id="setTour">🧭 Replay the guided tour</button>
+     <p class="small muted mt" style="margin-bottom:6px">Re-running first-time setup walks through practice name, colours, features and defaults again — and <b>overwrites</b> them. Your clients, sessions and payments are untouched.</p>
+     <button class="btn ghost full" id="setRerun" style="color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent)">↻ Re-run first-time setup…</button>
+   </div>
    <div class="card"><h2>About</h2><p class="small muted">Therapy Tracker · offline · replaces the spreadsheet.
-     ${S.sessions.length} sessions, ${S.clients.length} clients. Add to your Home Screen for an app-like experience.</p></div>`;
+     ${S.sessions.length} sessions, ${S.clients.length} clients${S.settings&&S.settings.onboardedAt?" · set up "+fmtD(S.settings.onboardedAt):""}. Add to your Home Screen for an app-like experience.</p></div>`;
   v.querySelector("#checkData").onclick=()=>{
     const out=v.querySelector("#dhResults");const seen=new Set();const items=[];
     S.sessions.forEach(s=>{const vr=validateSession(s);
@@ -1823,8 +2033,34 @@ VIEWS.settings=function(){
     out.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>{const ss=S.sessions.find(x=>x._id===li.dataset.id);if(ss)sessionForm(ss);});
     Sfx.error();
   };
-  const tBtn=v.querySelector("#setTheme"),updT=()=>tBtn.textContent=curTheme()==="dark"?"☀ Switch to light":"☾ Switch to dark";
-  updT();tBtn.onclick=()=>{setTheme(curTheme()==="dark"?"light":"dark");updT();};
+  v.querySelector("#setNameSave").onclick=async()=>{
+    const n=v.querySelector("#setName").value.trim(),t=v.querySelector("#setTag").value.trim();
+    if(!n){toast("Enter a practice name");Sfx.error();return;}
+    const sg=settings();sg.practiceName=n;sg.practiceTagline=t;
+    await commit("Renamed practice to “"+n+"”");applyBranding();toast("Saved");Sfx.pop();};
+  v.querySelectorAll("#setPal .palopt").forEach(b=>b.onclick=async()=>{
+    const k=b.dataset.p;applyPalette(k);settings().palette=k;
+    v.querySelectorAll("#setPal .palopt").forEach(x=>x.classList.toggle("on",x===b));
+    Sfx.tick();await commit("Colour scheme: "+k);});
+  v.querySelectorAll("#setThemeSeg button").forEach(b=>b.onclick=()=>{setTheme(b.dataset.t);
+    v.querySelectorAll("#setThemeSeg button").forEach(x=>x.classList.toggle("on",x===b));});
+  (function(){const host=v.querySelector("#setFeat");
+    const sg=settings();sg.features=sg.features||{};
+    const on=k=>sg.features[k]!==false;
+    host.innerHTML=FEATURES.map(f=>ovToggleRow(f.k,f.ic,f.n,esc(f.d),on(f.k),false)).join("");
+    const paint=()=>FEATURES.forEach(f=>{
+      const live=on(f.k)&&(!f.dep||on(f.dep));
+      const sw=host.querySelector('[data-sw="'+f.k+'"]');if(!sw)return;
+      sw.classList.toggle("on",live);sw.disabled=!!(f.dep&&!on(f.dep));
+      host.querySelector('[data-row="'+f.k+'"]').classList.toggle("off",!live);});
+    FEATURES.forEach(f=>{const sw=host.querySelector('[data-sw="'+f.k+'"]');if(!sw)return;
+      sw.onclick=async()=>{if(sw.disabled)return;
+        sg.features[f.k]=!on(f.k);Sfx.tick();paint();
+        await commit((sg.features[f.k]?"Enabled":"Disabled")+" feature: "+f.n);
+        renderTabs();toast(f.n+(sg.features[f.k]?" on":" off"));};});
+    paint();})();
+  v.querySelector("#setTour").onclick=()=>startTour();
+  v.querySelector("#setRerun").onclick=()=>confirmRerunSetup();
   const soBtn=v.querySelector("#setSound"),updS=()=>{soBtn.textContent=Sfx.on?"🔊 Sound on":"🔇 Sound off";soBtn.classList.toggle("muted",!Sfx.on);};
   updS();soBtn.onclick=()=>{const nowOn=Sfx.toggle();updS();if(nowOn){Sfx.prime();Sfx.pop();toast("Sound on");}else toast("Sound muted");};
   const dEl=v.querySelector("#setBkDays"),aEl=v.querySelector("#setBkActs");
@@ -1856,7 +2092,7 @@ VIEWS.settings=function(){
   v.querySelector("#expSC").onclick=exportSupervisionCSV;
   v.querySelector("#impB").onclick=()=>v.querySelector("#impF").click();
   v.querySelector("#impF").onchange=importJSON;
-  v.querySelector("#undoB").onclick=async()=>{if(await undo()){toast("Reverted");go("settings")}};
+  v.querySelector("#undoB").onclick=async()=>{if(await undo()){normalize(S);applySettings();toast("Reverted");go("settings")}};
   v.querySelector("#snapB").onclick=showSnapshots;
   (_db?auditAll():Promise.resolve([])).then(a=>{a.sort((x,y)=>y.id-x.id);
     v.querySelector("#auditWrap").innerHTML='<details><summary>Recent activity ('+a.length+')</summary>'+
@@ -2350,7 +2586,7 @@ function clientProfile(c){
     '<h3 class="mt">Recent sessions</h3><div id="cpRecent"></div>'+
     '<div class="row mt" style="gap:8px;flex-wrap:wrap">'+
       '<button class="btn" id="cpNew">＋ New session</button>'+
-      '<button class="btn sec" id="cpReceipt">🧾 Receipt / statement</button>'+
+      (feat("receipts")?'<button class="btn sec" id="cpReceipt">🧾 Receipt / statement</button>':'')+
       '<button class="btn ghost" id="cpEdit">Edit client</button></div>';
   const rec=rows.slice(-6).reverse();
   body.querySelector("#cpRecent").innerHTML=rec.length?rec.map(x=>{const pay=payChip(x.s,x.d);
@@ -2360,7 +2596,7 @@ function clientProfile(c){
   body.querySelector("#cpNew").onclick=()=>{closeSheet();sessionForm(null);
     setTimeout(()=>{const sel=document.querySelector("#f_client");if(sel){sel.value=c.code;sel.onchange();}},60);};
   body.querySelector("#cpEdit").onclick=()=>{closeSheet();clientForm(c);};
-  body.querySelector("#cpReceipt").onclick=()=>{closeSheet();receiptSheet(c);};
+  const cpR=body.querySelector("#cpReceipt");if(cpR)cpR.onclick=()=>{closeSheet();receiptSheet(c);};
   openSheet("Client · "+c.code,body);
 }
 
@@ -2401,23 +2637,25 @@ function printReceipt(c,rows,label,paidOnly){
   const tot=rows.reduce((a,x)=>a+(x.d.rate||0),0);
   const paid=rows.filter(x=>x.d.clientPaid).reduce((a,x)=>a+(x.d.rate||0),0);
   const t=today();
-  const num="CBT-"+isoD(t).replace(/-/g,"")+"-"+(c.code||"").replace(/[^A-Za-z0-9]/g,"").toUpperCase();
+  const num=practiceInitials()+"-"+isoD(t).replace(/-/g,"")+"-"+(c.code||"").replace(/[^A-Za-z0-9]/g,"").toUpperCase();
+  /* print in the chosen scheme's light colours — the on-screen dark theme would be unreadable on paper */
+  const pal=PALETTES.find(p=>p.k===curPalette())||PALETTES[0], PB=pal.p[0], PD=pal.p[1];
   const trs=rows.map(x=>'<tr><td>'+fmtDMY(x.s.date)+'</td><td>#'+esc(x.s.num)+'</td><td>'+esc(x.s.mode||"")+'</td><td class="r">'+gbp(x.d.rate)+'</td><td>'+(x.d.clientPaid?("Paid "+fmtDMY(x.s.paidDate)):"Due")+'</td></tr>').join("");
   const html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+esc(num)+'</title><style>'+
     'body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1E2A26;margin:40px;font-size:14px}'+
-    'h1{font-size:22px;color:#46594F;margin:0}.sub{color:#6E7E78;font-size:12px}'+
-    '.head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #5C7A6D;padding-bottom:14px;margin-bottom:18px}'+
+    'h1{font-size:22px;color:'+PD+';margin:0}.sub{color:#6E7E78;font-size:12px}'+
+    '.head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid '+PB+';padding-bottom:14px;margin-bottom:18px}'+
     'table{width:100%;border-collapse:collapse;margin-top:10px}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #E6ECEA;font-size:13px}'+
     'th{font-size:11px;text-transform:uppercase;color:#6E7E78}.r{text-align:right}'+
-    '.tot{margin-top:14px;text-align:right;font-size:15px}.tot b{font-size:19px;color:#46594F}'+
+    '.tot{margin-top:14px;text-align:right;font-size:15px}.tot b{font-size:19px;color:'+PD+'}'+
     '.foot{margin-top:34px;color:#6E7E78;font-size:11px;border-top:1px solid #E6ECEA;padding-top:10px}'+
     '@media print{body{margin:16mm}}</style></head><body>'+
-    '<div class="head"><div><h1>Charlotte Bloor Therapy</h1><div class="sub">Counselling &amp; psychotherapy</div></div>'+
+    '<div class="head"><div><h1>'+esc(practiceName())+'</h1>'+(practiceTagline()?'<div class="sub">'+esc(practiceTagline())+'</div>':'')+'</div>'+
     '<div style="text-align:right"><div style="font-weight:700">'+(paidOnly?"RECEIPT":"STATEMENT")+'</div><div class="sub">'+esc(num)+'</div><div class="sub">Issued '+fmtD(t)+'</div></div></div>'+
     '<p><b>Client:</b> '+esc(c.code)+' &nbsp;·&nbsp; <b>Period:</b> '+esc(label)+'</p>'+
     '<table><thead><tr><th>Date</th><th>Session</th><th>Mode</th><th class="r">Fee</th><th>Status</th></tr></thead><tbody>'+trs+'</tbody></table>'+
     '<div class="tot">'+(paidOnly?('Total received: <b>'+gbp(tot)+'</b>'):('Total billed: <b>'+gbp(tot)+'</b>'+(paid<tot?'<br><span class="sub">of which paid '+gbp(paid)+' · outstanding '+gbp(tot-paid)+'</span>':'<br><span class="sub">paid in full</span>')))+'</div>'+
-    '<div class="foot">Generated by Therapy Tracker on '+fmtD(t)+'. Client identified by confidential code. This document confirms therapy sessions provided by Charlotte Bloor Therapy.</div>'+
+    '<div class="foot">Generated by Therapy Tracker on '+fmtD(t)+'. Client identified by confidential code. This document confirms therapy sessions provided by '+esc(practiceName())+'.</div>'+
     '</body></html>';
   const fr=document.createElement("iframe");
   fr.style.cssText="position:absolute;width:0;height:0;border:0;visibility:hidden";
@@ -2595,7 +2833,8 @@ function importJSON(e){const f=e.target.files[0];if(!f)return;const rd=new FileR
     msg+="\n\nCurrent data is kept as a restore point.";
     if(!confirm(msg))return;
     S=normalize(st);
-    await commit("Restored backup ("+(S.sessions.length)+" sessions)");markBackedUp();toast("Backup restored");go("home");
+    await commit("Restored backup ("+(S.sessions.length)+" sessions)");markBackedUp();
+    applySettings();toast("Backup restored");go("home");
   }catch(err){alert("Could not import: "+err.message)}};rd.readAsText(f);e.target.value="";}
 async function showSnapshots(){if(!_db){toast("Restore points need storage");return}
   const snaps=await snapAll();snaps.sort((a,b)=>b.id-a.id);
@@ -2605,8 +2844,409 @@ async function showSnapshots(){if(!_db){toast("Restore points need storage");ret
       <div class="li-title">${esc(s.label)}</div><div class="li-sub">${new Date(s.ts).toLocaleString("en-GB")} · ${s.data.sessions.length} sessions</div></div>
       <button class="btn sm sec">Restore</button></div>`).join("");
   body.querySelectorAll(".list-item").forEach(li=>li.onclick=async()=>{const id=+li.dataset.id;const snap=snaps.find(x=>x.id===id);
-    if(!confirm("Roll back to: "+snap.label+"?"))return;S=clone(snap.data);await commit("Rolled back to: "+snap.label);closeSheet();toast("Restored");go("home")});
+    if(!confirm("Roll back to: "+snap.label+"?"))return;S=normalize(clone(snap.data));await commit("Rolled back to: "+snap.label);
+    applySettings();closeSheet();toast("Restored");go("home")});
   openSheet("Restore points",body);
+}
+
+/* ============================================================
+   First-run setup + guided tour
+   ============================================================ */
+const FEATURES=[
+  {k:"supervision",  ic:"🗣", n:"Supervision",            d:"A tab for logging supervision sessions, costs and which clients you discussed."},
+  {k:"accreditation",ic:"📜", n:"Accreditation hours",    d:"Clinical vs supervision hours and the 1:6 ratio, for BACP Form 3A. Lives inside Supervision › Insights.",dep:"supervision"},
+  {k:"income",       ic:"💷", n:"Revenue & tax",          d:"Tax-year totals, UK sole-trader tax estimates, monthly take-home and a year-end forecast."},
+  {k:"raw",          ic:"▦", n:"Table view",             d:"A spreadsheet-style browser of every session, with sortable columns and a column picker."},
+  {k:"receipts",     ic:"🧾", n:"Receipts & statements",  d:"Printable statements for a client’s insurer, employer or their own records."},
+  {k:"quickadd",     ic:"⌨", n:"Quick add bar",          d:"Log a session by typing one line on Home — “AB tue 14:00 paid”."},
+  {k:"attention",    ic:"🔔", n:"Needs attention feed",   d:"A Home list of overdue payments, missing notes and clients you haven’t seen in a while."},
+  {k:"gamify",       ic:"🔥", n:"Streaks & celebrations", d:"Weekly usage streak, goal rings, personal records and confetti when you clear a backlog."}
+];
+function featureOn(w,k){return w.features[k]!==false;}
+
+/* ---- generic step-flow overlay, shared by setup and the tour ---- */
+let _flow=null;
+function flowRoot(){
+  let r=document.getElementById("ovRoot");
+  if(r)return r;
+  r=el('<div class="ov" id="ovRoot">'+
+    '<div class="ovtop"><span class="ovttl" id="ovTtl"></span><button class="ovskip" id="ovSkip">Skip</button></div>'+
+    '<div class="ovdots" id="ovDots"></div>'+
+    '<div class="ovbody" id="ovScroll"><div class="ovinner" id="ovBody"></div></div>'+
+    '<div class="ovfoot"><div class="ovinner ovbtns">'+
+      '<button class="btn ghost" id="ovBack">Back</button><button class="btn" id="ovNext">Continue</button>'+
+    '</div></div></div>');
+  document.body.appendChild(r);
+  r.querySelector("#ovBack").onclick=()=>{if(_flow)flowGo(_flow.i-1);};
+  r.querySelector("#ovNext").onclick=()=>flowNext();
+  r.querySelector("#ovSkip").onclick=()=>{if(_flow&&_flow.onSkip)_flow.onSkip();};
+  return r;
+}
+function flowStart(cfg){_flow=Object.assign({i:0},cfg);
+  const r=flowRoot();r.classList.add("show");flowGo(0);}
+function flowClose(){const r=document.getElementById("ovRoot");if(r)r.classList.remove("show");_flow=null;}
+function flowGo(i){
+  if(!_flow)return;
+  const steps=_flow.steps; i=Math.max(0,Math.min(steps.length-1,i)); _flow.i=i;
+  const st=steps[i], r=flowRoot();
+  r.querySelector("#ovTtl").textContent=_flow.title;
+  r.querySelector("#ovDots").innerHTML=steps.map((_,n)=>'<i class="'+(n===i?"on":(n<i?"done":""))+'"></i>').join("");
+  const body=r.querySelector("#ovBody");
+  body.innerHTML='<div class="ovhero">'+(st.emoji||"✨")+'</div>'+
+    '<h2 class="ovh">'+esc(st.h||"")+'</h2>'+
+    (st.sub?'<p class="ovsub">'+st.sub+'</p>':'')+
+    '<div id="ovStep">'+(st.html||"")+'</div>';
+  if(st.mount)st.mount(body.querySelector("#ovStep"));
+  r.querySelector("#ovBack").style.visibility=i>0?"visible":"hidden";
+  r.querySelector("#ovNext").textContent=(i===steps.length-1)?(_flow.doneLabel||"Finish"):(st.nextLabel||"Continue");
+  r.querySelector("#ovSkip").style.display=_flow.onSkip?"":"none";
+  r.querySelector("#ovScroll").scrollTop=0;
+}
+function flowNext(){
+  if(!_flow)return;
+  const st=_flow.steps[_flow.i];
+  if(st.validate&&st.validate()===false)return;
+  if(st.onLeave)st.onLeave();
+  if(_flow.i===_flow.steps.length-1){const done=_flow.onDone;flowClose();if(done)done();}
+  else flowGo(_flow.i+1);
+}
+/* small shared builders */
+function ovPoints(items){return '<div class="ovpts">'+items.map(p=>
+  '<div class="ovpt"><span class="pe">'+p[0]+'</span><span class="pt"><b>'+p[1]+'</b>'+(p[2]?'<span class="sub">'+p[2]+'</span>':'')+'</span></div>').join("")+'</div>';}
+function ovToggleRow(id,ic,name,desc,on,disabled){
+  return '<div class="ftrow'+(on?"":" off")+'" data-row="'+id+'"><span class="fic">'+ic+'</span>'+
+    '<span class="fmain"><span class="fn">'+esc(name)+'</span><span class="fd">'+desc+'</span></span>'+
+    '<button class="sw'+(on?" on":"")+'" data-sw="'+id+'"'+(disabled?" disabled":"")+' aria-label="'+esc(name)+'"></button></div>';}
+
+/* ---- setup steps ---- */
+function stepPractice(w){return{emoji:"🏷", h:"What should we call your practice?",
+  sub:"This appears in the app and at the top of anything you print. Change it any time in Settings.",
+  validate(){if(!(w.name||"").trim()){toast("Enter a name to continue");Sfx.error();return false;}},
+  mount(host){
+    host.innerHTML='<label>Practice name</label>'+
+      '<input id="spName" maxlength="60" placeholder="e.g. Jane Smith Counselling" value="'+esc(w.name)+'">'+
+      '<label>Strapline <span class="muted">(optional)</span></label>'+
+      '<input id="spTag" maxlength="70" placeholder="e.g. Counselling &amp; psychotherapy" value="'+esc(w.tagline)+'">'+
+      '<p class="prev">The strapline only shows on printed receipts and statements.</p>'+
+      '<div class="brandprev"><span class="bpt">⬡ Therapy Tracker</span><span class="bpn" id="spPrev"></span></div>'+
+      '<div class="ovnote">🔒 This is <b>your</b> name — never a client’s. Clients are only ever stored as short codes.</div>';
+    const n=host.querySelector("#spName"),t=host.querySelector("#spTag"),p=host.querySelector("#spPrev");
+    const upd=()=>{w.name=n.value;w.tagline=t.value;p.textContent=n.value.trim()||"Your practice name";};
+    n.oninput=upd;t.oninput=upd;upd();
+  }};}
+function stepLook(w){return{emoji:"🎨", h:"Pick a look",
+  sub:"Applied straight away so you can see it. Everything here is per-device.",
+  mount(host){
+    host.innerHTML='<label>Colour scheme</label><div class="palgrid" id="spPal">'+
+        PALETTES.map(p=>'<button type="button" class="palopt'+(p.k===w.palette?" on":"")+'" data-p="'+p.k+'">'+
+          paletteSwatch(p)+'<span><span class="pn">'+p.n+'</span><span class="pd">'+p.d+'</span></span></button>').join("")+'</div>'+
+      '<label style="margin-top:18px">Light or dark</label>'+
+      '<div class="seg" id="spTheme" style="display:inline-flex">'+
+        ["light","dark","auto"].map(t=>'<button data-t="'+t+'" class="'+(w.theme===t?"on":"")+'">'+
+          (t==="light"?"☀ Light":t==="dark"?"☾ Dark":"⚙ Match device")+'</button>').join("")+'</div>'+
+      '<div style="margin-top:16px">'+ovToggleRow("snd","🔊","Sound effects","Short synthesised chimes when you save, clear a backlog or hit a milestone.",w.sound)+'</div>';
+    host.querySelectorAll("#spPal .palopt").forEach(b=>b.onclick=()=>{
+      w.palette=b.dataset.p;applyPalette(w.palette);
+      host.querySelectorAll("#spPal .palopt").forEach(x=>x.classList.toggle("on",x===b));Sfx.tick();});
+    host.querySelectorAll("#spTheme button").forEach(b=>b.onclick=()=>{
+      w.theme=b.dataset.t;setTheme(w.theme);
+      host.querySelectorAll("#spTheme button").forEach(x=>x.classList.toggle("on",x===b));});
+    const sw=host.querySelector('[data-sw="snd"]');
+    sw.onclick=()=>{w.sound=!w.sound;Sfx.set(w.sound);sw.classList.toggle("on",w.sound);
+      sw.closest(".ftrow").classList.toggle("off",!w.sound);if(w.sound){Sfx.prime();Sfx.pop();}};
+  }};}
+function stepFeatures(w){return{emoji:"🧩", h:"Choose what you need",
+  sub:"Switch off anything that isn’t useful — it disappears from the app. Nothing is deleted, and you can turn it back on later.",
+  mount(host){
+    host.innerHTML=FEATURES.map(f=>ovToggleRow(f.k,f.ic,f.n,esc(f.d),featureOn(w,f.k),false)).join("")+
+      '<div class="ovnote">Switching a feature off only hides it. Any supervision entries, receipts or records you already have stay in your data.</div>';
+    const paint=()=>{FEATURES.forEach(f=>{
+      const on=featureOn(w,f.k)&&(!f.dep||featureOn(w,f.dep));
+      const sw=host.querySelector('[data-sw="'+f.k+'"]'),row=host.querySelector('[data-row="'+f.k+'"]');
+      if(!sw)return;
+      sw.classList.toggle("on",on);sw.disabled=!!(f.dep&&!featureOn(w,f.dep));
+      row.classList.toggle("off",!on);});};
+    FEATURES.forEach(f=>{const sw=host.querySelector('[data-sw="'+f.k+'"]');if(!sw)return;
+      sw.onclick=()=>{if(sw.disabled)return;w.features[f.k]=!featureOn(w,f.k);Sfx.tick();paint();};});
+    paint();
+  }};}
+function stepRooms(w){return{emoji:"🚪", h:"Where do you see clients?",
+  sub:"Add each room or location you use and what it costs you per session. Sessions at home usually cost <b>£0</b>.",
+  validate(){
+    const names=(w.rooms||[]).map(r=>(r.loc||"").trim().toLowerCase()).filter(Boolean);
+    if(!names.length){toast("Add at least one location");Sfx.error();return false;}
+    if(new Set(names).size!==names.length){toast("Two locations have the same name");Sfx.error();return false;}
+  },
+  mount(host){
+    if(!w.rooms){w.rooms=S.rooms.map(r=>({loc:r.location,rate:+effRoomRate(r.location,isoD(today()))||0,due:r.due||"n/a",orig:r.location}));}
+    if(!w.rooms.length)w.rooms=[{loc:"At home",rate:0,due:"n/a",orig:null}];
+    const draw=()=>{
+      host.innerHTML='<div class="rmhead"><span>Location</span><span>£ / session</span><span>Pay by</span><span></span></div>'+
+        '<div id="rmList">'+w.rooms.map((r,i)=>
+          '<div class="rmrow" data-i="'+i+'">'+
+            '<input data-f="loc" value="'+esc(r.loc)+'" placeholder="Room name">'+
+            '<input data-f="rate" type="number" min="0" step="0.5" value="'+(+r.rate||0)+'">'+
+            '<select data-f="due">'+opts(["n/a","EOM","EOW"],r.due||"n/a")+'</select>'+
+            '<button class="rmx" data-x="'+i+'" title="Remove">✕</button>'+
+          '</div>').join("")+'</div>'+
+        '<button class="btn sec sm mt" id="rmAdd">＋ Add a location</button>'+
+        '<div class="ovnote">“Pay by” is when the venue invoices you — <b>EOM</b> end of month, <b>EOW</b> end of week, <b>n/a</b> no charge. Room costs are dated, so changing one later never rewrites past sessions.</div>';
+      host.querySelectorAll(".rmrow").forEach(row=>{
+        const i=+row.dataset.i;
+        row.querySelectorAll("[data-f]").forEach(inp=>inp.oninput=inp.onchange=()=>{
+          const f=inp.dataset.f;w.rooms[i][f]=(f==="rate")?(+inp.value||0):inp.value;});});
+      host.querySelectorAll("[data-x]").forEach(b=>b.onclick=()=>{
+        const i=+b.dataset.x, r=w.rooms[i];
+        const used=r.orig&&S.sessions.some(s=>(s.location||"").toLowerCase()===(r.orig||"").toLowerCase());
+        if(used){toast("Sessions use this location — it can’t be removed");Sfx.error();return;}
+        w.rooms.splice(i,1);draw();});
+      host.querySelector("#rmAdd").onclick=()=>{w.rooms.push({loc:"",rate:0,due:"n/a",orig:null});draw();
+        const ins=host.querySelectorAll('.rmrow [data-f="loc"]');if(ins.length)ins[ins.length-1].focus();};
+    };
+    draw();
+  }};}
+function stepMoney(w){return{emoji:"💷", h:"Your usual numbers",
+  sub:"Starting points only — every client keeps their own dated fee history, so a rate change never rewrites past sessions.",
+  mount(host){
+    host.innerHTML='<label>Usual session fee for a new client (£)</label>'+
+      '<input id="spRate" type="number" min="0" step="1" value="'+(+w.rate||0)+'">'+
+      '<p class="prev">Pre-filled when you add a client. You can change it per client, and change it again from any date.</p>'+
+      '<label style="margin-top:14px">Monthly pension contribution (£)</label>'+
+      '<input id="spPen" type="number" min="0" step="5" value="'+(+w.pension||0)+'">'+
+      '<p class="prev">Used only by the “after pension” take-home figure on the Revenue tab. Set 0 if you’d rather not track it.</p>';
+    host.querySelector("#spRate").oninput=e=>w.rate=+e.target.value||0;
+    host.querySelector("#spPen").oninput=e=>w.pension=+e.target.value||0;
+  }};}
+function stepBackup(w){return{emoji:"💾", h:"How your data is kept safe",
+  sub:"Read this one properly — it’s the part that matters most.",
+  mount(host){
+    host.innerHTML=ovPoints([
+      ["📱","It lives on this device only","No account, no server, nothing uploaded. That’s what keeps client data private — and it means nobody else can recover it for you."],
+      ["⚠️","Deleting the app or clearing site data wipes it","So does “clear browsing data” in your browser. A backup is the only thing standing between you and starting over."],
+      ["⤓","The .json backup is a complete copy","Every session, client, room, rate and setting. Restore it on any device and you’re exactly where you left off. The CSVs are extracts for spreadsheets — they can’t be restored from."],
+      ["↩︎","Undo and restore points work inside the app","Every change is snapshotted, so a slip is easy to walk back. They live on this device too, so they’re no substitute for a backup."]
+    ])+
+    '<label style="margin-top:16px">Remind me to back up after</label>'+
+    '<div class="field2"><div><label>Days</label><input id="spDays" type="number" min="1" value="'+w.bkDays+'"></div>'+
+      '<div><label>…or changes</label><input id="spActs" type="number" min="1" value="'+w.bkActs+'"></div></div>'+
+    '<p class="prev">A banner appears when either limit is reached, and clears when you export.</p>'+
+    '<button class="btn sec full mt" id="spEnc">🔐 Add a backup passphrase (optional)</button>'+
+    '<p class="prev">Encrypts backups with AES-256 so they’re safe to keep in iCloud, Drive or email. <b>Lose the passphrase and the file can’t be opened</b> — by anyone.</p>';
+    host.querySelector("#spDays").oninput=e=>w.bkDays=Math.max(1,Math.round(+e.target.value)||7);
+    host.querySelector("#spActs").oninput=e=>w.bkActs=Math.max(1,Math.round(+e.target.value)||25);
+    const eb=host.querySelector("#spEnc");
+    const paint=()=>{eb.textContent=encReady()?"🔐 Passphrase set ✓ — change it":"🔐 Add a backup passphrase (optional)";};
+    eb.onclick=()=>encPromptSetup(paint);paint();
+  }};}
+function stepDone(w){return{emoji:"🎉", h:"That’s you set up",
+  sub:"Here’s what we saved. All of it is editable later in <b>⚙ Settings</b>.",
+  mount(host){
+    const pal=PALETTES.find(p=>p.k===w.palette)||PALETTES[0];
+    const offList=FEATURES.filter(f=>!featureOn(w,f.k)).map(f=>f.n);
+    host.innerHTML='<div class="setsum">'+
+      '<div><span>Practice</span><b>'+esc(w.name||"—")+'</b></div>'+
+      '<div><span>Colour scheme</span><b>'+pal.n+' · '+(w.theme==="auto"?"match device":w.theme)+'</b></div>'+
+      '<div><span>Locations</span><b>'+esc((w.rooms||[]).map(r=>r.loc).filter(Boolean).join(", ")||"—")+'</b></div>'+
+      '<div><span>Default fee</span><b>'+gbp(w.rate)+'</b></div>'+
+      '<div><span>Backup reminder</span><b>'+w.bkDays+' days / '+w.bkActs+' changes</b></div>'+
+      '<div><span>Switched off</span><b>'+(offList.length?esc(offList.join(", ")):"nothing")+'</b></div>'+
+      '</div>'+
+      '<div style="margin-top:14px">'+ovToggleRow("tour","🧭","Show me around","A short guided tour of each tab, how to log a session, and how saving and backups work.",w.tour!==false)+'</div>';
+    const sw=host.querySelector('[data-sw="tour"]');
+    sw.onclick=()=>{w.tour=(w.tour===false);sw.classList.toggle("on",w.tour!==false);
+      sw.closest(".ftrow").classList.toggle("off",w.tour===false);Sfx.tick();};
+  }};}
+
+/* apply the room rows the user built: rename → update → create → prune */
+function setupApplyRooms(w){
+  if(!w.rooms)return;
+  const list=w.rooms.map(r=>({loc:(r.loc||"").trim(),rate:+r.rate||0,due:r.due||"n/a",orig:r.orig})).filter(r=>r.loc);
+  if(!list.length)return;
+  S.roomRateHistory=S.roomRateHistory||[];
+  const fresh=S.sessions.length===0; // nothing logged yet, so cost history can start from the beginning of time
+  const find=loc=>S.rooms.find(x=>(x.location||"").toLowerCase()===(loc||"").toLowerCase());
+  list.forEach(r=>{
+    const ex=find(r.loc)||(r.orig?find(r.orig):null);
+    if(ex){
+      const before=ex.location||"";
+      if(before.toLowerCase()!==r.loc.toLowerCase()){ // rename: carry cost history and existing sessions across
+        S.roomRateHistory.forEach(h=>{if((h.location||"").toLowerCase()===before.toLowerCase())h.location=r.loc;});
+        S.sessions.forEach(s=>{if((s.location||"").toLowerCase()===before.toLowerCase())s.location=r.loc;});
+        ex.location=r.loc;
+      }
+      ex.due=r.due;
+      if(Math.abs((+effRoomRate(r.loc,isoD(today()))||0)-r.rate)>0.001){
+        ex.rate=r.rate;
+        if(fresh){S.roomRateHistory=S.roomRateHistory.filter(h=>(h.location||"").toLowerCase()!==r.loc.toLowerCase());
+          S.roomRateHistory.push({_id:uid(),location:r.loc,effectiveFrom:"2000-01-01",rate:r.rate});}
+        else S.roomRateHistory.push({_id:uid(),location:r.loc,effectiveFrom:isoD(today()),rate:r.rate});
+      }
+    }else{
+      S.rooms.push({_id:uid(),location:r.loc,rate:r.rate,due:r.due});
+      S.roomRateHistory.push({_id:uid(),location:r.loc,effectiveFrom:"2000-01-01",rate:r.rate});
+    }
+  });
+  /* drop rooms the user removed — unless a session still points at them — and their now-orphaned cost history */
+  const keep=new Set(list.map(r=>r.loc.toLowerCase()));
+  const used=new Set(S.sessions.map(s=>(s.location||"").toLowerCase()).filter(Boolean));
+  const alive=k=>keep.has(k)||used.has(k);
+  S.rooms=S.rooms.filter(r=>alive((r.location||"").toLowerCase()));
+  S.roomRateHistory=S.roomRateHistory.filter(h=>alive((h.location||"").toLowerCase()));
+}
+
+async function setupSave(w,opts){
+  const sg=settings();
+  sg.practiceName=(w.name||"").trim()||"Therapy Tracker";
+  sg.practiceTagline=(w.tagline||"").trim();
+  sg.palette=w.palette;
+  sg.features={};FEATURES.forEach(f=>{sg.features[f.k]=featureOn(w,f.k)&&(!f.dep||featureOn(w,f.dep));});
+  sg.onboarded=true; sg.onboardedAt=isoD(today());
+  sg.setupRuns=(sg.setupRuns||0)+1;
+  if(!opts||!opts.skipRooms)setupApplyRooms(w);
+  applyPalette(w.palette);setTheme(w.theme);Sfx.set(w.sound);
+  setDefaultRate(+w.rate||0);setPensionPcm(+w.pension||0);
+  try{localStorage.setItem("tt_backup_days",String(w.bkDays));localStorage.setItem("tt_backup_acts",String(w.bkActs));}catch(e){}
+  await commit("Setup: practice “"+sg.practiceName+"”");
+  applySettings();go("home");updateBackupBanner();
+}
+
+function startSetup(opts){
+  opts=opts||{};
+  const sg=settings();
+  const rerun=!!opts.rerun;
+  /* rooms are only offered on a genuinely fresh start — once sessions exist they belong in Clients › Rooms */
+  const withRooms=!rerun||S.sessions.length===0;
+  const w={
+    name:(sg.practiceName==="Therapy Tracker")?"":(sg.practiceName||""),
+    tagline:sg.practiceTagline||"",
+    palette:sg.palette||curPalette(),
+    theme:themePref(), sound:Sfx.on,
+    features:Object.assign({},sg.features||{}),
+    rate:defaultRate(), pension:pensionPcm(),
+    bkDays:backupDaysThreshold(), bkActs:backupActsThreshold(),
+    rooms:null, tour:!rerun
+  };
+  const welcome={emoji:"👋", h:rerun?"Let’s run through setup again":"Welcome to Therapy Tracker",
+    sub:rerun?"Your clients, sessions and payments stay exactly as they are — this only touches how the app looks and behaves."
+      :"A private, offline record of your practice: sessions, clients, rooms, supervision and money. Takes about two minutes to set up.",
+    html:ovPoints([
+      ["🔒","Private by design","Everything stays on this device. No account, no cloud, no analytics."],
+      ["✈️","Works with no signal","Install it to your Home Screen and it opens like a normal app, offline."],
+      ["🧾","Replaces the spreadsheet","Fees, room costs, unpaid sessions and tax estimates all work themselves out."]
+    ])};
+  const steps=[welcome,stepPractice(w),stepLook(w),stepFeatures(w)];
+  if(withRooms)steps.push(stepRooms(w));
+  steps.push(stepMoney(w),stepBackup(w),stepDone(w));
+  flowStart({
+    title:rerun?"Setup (re-run)":"Set up Therapy Tracker",
+    steps, doneLabel:"Finish setup",
+    onSkip:async()=>{
+      if(!confirm("Skip setup?\n\nSensible defaults will be used and you can run this again any time from ⚙ Settings."))return;
+      flowClose();await setupSave(w,{skipRooms:true});toast("Setup skipped — defaults applied");
+    },
+    onDone:async()=>{
+      await setupSave(w,{skipRooms:!withRooms});
+      if(w.tour!==false)setTimeout(()=>startTour(),260);
+      else celebrate({emoji:"🎉",title:"You’re all set",sub:"Tap ＋ to log your first session.",level:"big",sound:"fanfare"});
+    }
+  });
+}
+
+/* ---- guided tour ---- */
+function tourSteps(){
+  const st=[];
+  st.push({emoji:"🧭", h:"A quick tour", sub:"Seven or eight screens on what each tab does, how to enter data, and how it’s saved. You can leave at any point with <b>Skip</b>.",
+    html:ovPoints([["⏱","Two minutes","Nothing here changes your data."],
+      ["🔁","Repeatable","⚙ Settings › <b>Replay guided tour</b>, whenever you want it."]])});
+  st.push({emoji:"🏠", h:"Home", sub:"Where you land, and usually all you need.",
+    html:ovPoints([
+      ["💷","Four figures at the top","Billed and received this tax year, what’s outstanding right now, and how many sessions are in the next 7 days. Tap the last two to jump straight to that list."],
+      ["🔔","Needs attention","Overdue payments, sessions missing notes, clients you haven’t seen in a while — the short list of what to chase."],
+      ["⌨","Quick add","Type <span class=\"ovkey\">AB tue 14:00 paid</span> and it fills in the rest from that client’s last session."],
+      ["📅","Coming up","Everything booked ahead, with a flag if the room isn’t booked yet."]])});
+  st.push({emoji:"✍️", h:"Logging a session", sub:"Tap the round <b>＋</b> button, or ＋ New session on Home. The fields, in order:",
+    html:ovPoints([
+      ["🔤","Client","Pick from your list. Their fee and usual room fill themselves in."],
+      ["#️⃣","Session number","Auto-counts up per client, so you can always see how far into the work you are."],
+      ["📆","Date & time","Log ahead as well as behind — future sessions show under Coming up and count towards nothing until the date passes."],
+      ["🚪","Room & mode","In person or online, and which location. The room cost is picked up automatically from that room’s dated cost."],
+      ["💰","Paid date","Leave it empty until the money actually arrives. That’s what drives “outstanding”, so it’s worth being honest with it."],
+      ["📝","Notes","Free text. Tick <b>late cancellation</b> rather than deleting the session — it keeps your attendance figures accurate and is excluded from clinical hours."]])});
+  st.push({emoji:"🔒", h:"Client codes, not names", sub:"The single most important habit.",
+    html:ovPoints([
+      ["🆔","Use a short code","Initials, or anything only you can decode — <b>AB</b>, <b>JM2</b>. Never a full name."],
+      ["🗝","Keep the key elsewhere","Your record of who each code belongs to belongs in your normal confidential notes, not in this app."],
+      ["🧾","Receipts stay coded","A printed statement identifies the client by code only, so it can be handed over safely."]])});
+  st.push({emoji:"👥", h:"Clients & rooms", sub:"The <b>Clients</b> tab has three sub-tabs.",
+    html:ovPoints([
+      ["📇","Clients","Add someone with their code, status and starting fee. Tap a client for their profile — attendance, income, session history, receipts."],
+      ["💷","Fees change from a date","Use <b>Change rate</b> rather than editing the number. Past sessions keep the fee you actually charged."],
+      ["📈","Trends","Retention funnel, attendance against expected frequency, and how long people stay."],
+      ["🚪","Rooms","Add or rename locations and set what each costs you per session — also dated, same as fees."]])});
+  if(feat("supervision"))st.push({emoji:"🗣", h:"Supervision", sub:"Log each supervision session with its cost and who you discussed.",
+    html:ovPoints([
+      ["🧾","Costs come off your profit","Supervision is a business expense, so it’s deducted before the tax estimate."],
+      ["👀","Discussion recency","Insights shows how long since each active client was last taken to supervision — useful for spotting who’s been quietly missed."]].concat(
+      feat("accreditation")?[["📜","Accreditation hours","Clinical vs supervision hours and the 1:6 ratio for BACP Form 3A. Logged sessions count as clinical hours; training and placement totals you type in yourself."]]:[]))});
+  if(feat("income"))st.push({emoji:"💷", h:"Revenue & tax", sub:"Everything money, by tax year (6 April – 5 April).",
+    html:ovPoints([
+      ["📊","Per tax year","Billed, received, outstanding and net after room costs and supervision."],
+      ["🧮","Tax estimate","Income Tax plus Class 4 (and Class 2 before 2024/25) for a sole trader. Mid-year it shows a pro-rata projection — tap the figure for the full working."],
+      ["🏦","Take-home & forecast","What lands in your pocket monthly, before and after pension, plus a year-end projection from your current run-rate."],
+      ["⚠️","An estimate, not advice","It doesn’t know about other income, expenses or allowances. Treat it as a guide for setting money aside."]])});
+  st.push({emoji:"💾", h:"How your data is saved", sub:"The part worth remembering.",
+    html:ovPoints([
+      ["⚡","Saved the moment you tap Save","Straight into this device’s storage. There’s no separate “save file” step and nothing to lose by closing the app."],
+      ["↩︎","Undo and restore points","Settings › <b>Undo last change</b> reverts the last thing you did. <b>Restore points</b> lists the last 120 changes to roll back to."],
+      ["⤓","Back up regularly","Settings › <b>Export backup (.json)</b>. That one file is everything. Keep it somewhere that isn’t this device — iCloud, Drive, or email it to yourself."],
+      ["🔐","Encrypt it if you like","A passphrase makes the backup unreadable without it, so cloud storage is fine. On desktop Chrome or Edge it can re-save silently after every change."],
+      ["🩺","Data health","Settings › <b>Check data</b> sweeps every session for clashes, duplicate numbers, payment-date slips and rate mismatches."]])});
+  st.push({emoji:"📲", h:"Put it on your Home Screen", sub:"It behaves like a normal app once installed — full screen, offline, its own icon.",
+    html:ovPoints([
+      ["","iPhone / iPad","Share <b>⤴</b> → <b>Add to Home Screen</b>."],
+      ["🤖","Android","Chrome menu <b>⋮</b> → <b>Install app</b> / Add to Home screen."],
+      ["💻","Desktop","The install icon at the right-hand end of the address bar."]])});
+  st.push({emoji:"✅", h:"You’re ready", sub:"Start by adding a client, then log your first session.",
+    html:ovPoints([
+      ["＋","The round button","Bottom-right, on Home and Sessions — log a session from anywhere."],
+      ["⚙","Settings","Top-right. Appearance, features, backups, data health, and this tour again."],
+      ["💡","One habit","Back up after each week’s catch-up. It takes five seconds and it’s the whole safety net."]])});
+  return st;
+}
+function startTour(){
+  flowStart({title:"Guided tour", steps:tourSteps(), doneLabel:"Done",
+    onSkip:()=>{flowClose();toast("Tour closed — replay it from ⚙ Settings");},
+    onDone:()=>{toast("Tour complete");}});
+}
+
+/* re-running setup is behind a deliberate, typed confirmation */
+function confirmRerunSetup(){
+  const body=el('<div></div>');
+  const withRooms=S.sessions.length===0;
+  body.innerHTML='<div class="vmsg warn">⚠️ This restarts the <b>whole first-time setup</b> from the beginning.</div>'+
+    '<p class="small" style="margin:12px 0 4px"><b>It will overwrite:</b></p>'+
+    '<div class="acc-work"><div>• Practice name and strapline</div><div>• Colour scheme, light/dark and sound</div>'+
+      '<div>• Which features are switched on</div><div>• Default session fee and monthly pension</div>'+
+      '<div>• Backup reminder thresholds</div>'+(withRooms?'<div>• Your rooms and their costs</div>':'')+'</div>'+
+    '<p class="small" style="margin:14px 0 4px"><b>It will not touch:</b></p>'+
+    '<div class="acc-work"><div>• Clients, sessions or supervision entries</div><div>• Payments, fee history or room cost history</div>'+
+      '<div>• Your backups or restore points</div></div>'+
+    (withRooms?'<div class="vmsg err" style="margin-top:14px">You have no sessions logged, so setup will also rebuild your <b>rooms list</b>. Rooms you remove there are gone from the list.</div>'
+      :'<div class="vmsg ok" style="margin-top:14px">You already have sessions logged, so the rooms step will be <b>skipped</b> — manage rooms in Clients › Rooms instead.</div>')+
+    '<p class="small muted mt">A restore point is saved before anything changes, and ↩︎ Undo will bring your settings back.</p>'+
+    '<button class="btn sec full mt" id="rsExp">⤓ Export a backup first</button>'+
+    '<label style="margin-top:16px">Type <b>RESET SETUP</b> to confirm</label>'+
+    '<input id="rsIn" placeholder="RESET SETUP" autocapitalize="characters" autocomplete="off" spellcheck="false">'+
+    '<button class="btn danger full mt" id="rsGo" disabled>Re-run setup</button>'+
+    '<button class="btn ghost full mt" id="rsNo">Cancel</button>';
+  const inp=body.querySelector("#rsIn"),go2=body.querySelector("#rsGo");
+  inp.oninput=()=>{const ok=inp.value.trim().toUpperCase()==="RESET SETUP";go2.disabled=!ok;
+    go2.style.opacity=ok?"1":".5";};
+  go2.style.opacity=".5";
+  body.querySelector("#rsExp").onclick=exportJSON;
+  body.querySelector("#rsNo").onclick=closeSheet;
+  go2.onclick=()=>{if(go2.disabled)return;closeSheet();startSetup({rerun:true});};
+  openSheet("Re-run first-time setup",body);
 }
 
 /* ============ Init ============ */
@@ -2618,7 +3258,9 @@ async function showSnapshots(){if(!_db){toast("Restore points need storage");ret
   }
   initBackupTracking();
   const bk=document.getElementById("bkNow");if(bk)bk.onclick=exportJSON;
+  applySettings();
   go("home");
+  if(!settings().onboarded)setTimeout(()=>startSetup(),120); // first run on this device
 })();
 </script>
 <script>if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(function(){});}</script></body>
