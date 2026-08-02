@@ -1,4 +1,4 @@
-const C="tt-v3";
+const C="tt-v4";
 /* The app shell must be precached at install time. The service worker does not control the
    navigation that registers it, so without this a first-time visitor who goes offline before
    their second visit gets nothing at all. */
