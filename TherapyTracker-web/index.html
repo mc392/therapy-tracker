@@ -100,6 +100,20 @@ main{flex:1;padding:18px 16px 96px}
   background:color-mix(in srgb,var(--warn) 16%,var(--card));border-bottom:1px solid color-mix(in srgb,var(--warn) 45%,transparent);
   color:var(--ink);padding:9px 16px;font-size:13px}
 .bkbar.show{display:flex}
+.bkbar.err{background:color-mix(in srgb,var(--bad) 17%,var(--card));border-bottom-color:color-mix(in srgb,var(--bad) 52%,transparent)}
+.bkbar.err .btn{background:var(--bad)}
+.dzchk{display:flex;align-items:flex-start;gap:9px;margin:16px 0 0;font-size:13.5px;color:var(--ink);font-weight:600;line-height:1.4;cursor:pointer}
+.dzchk input{width:auto;flex:0 0 auto;margin-top:2px}
+details.dz{margin-top:10px}
+details.dz>summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--muted);padding:8px 0;list-style:none}
+details.dz>summary::-webkit-details-marker{display:none}
+details.dz>summary::before{content:"▸ ";display:inline-block;transition:transform .15s}
+details.dz[open]>summary::before{content:"▾ "}
+.dzpick{max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:2px 12px;margin-top:8px}
+.dzpick label{display:flex;align-items:center;gap:10px;margin:0;padding:11px 2px;border-bottom:1px solid var(--line);font-size:14.5px;color:var(--ink);font-weight:600;cursor:pointer}
+.dzpick label:last-child{border-bottom:0}
+.dzpick input{width:auto;flex:0 0 auto}
+.dzpick .dzsub{font-size:12px;color:var(--muted);font-weight:500;margin-left:auto;text-align:right}
 .bkbar .bkmsg{flex:1;min-width:170px;line-height:1.4}
 .bkbar .bkdetail{color:var(--muted)}
 .bkbar .btn{white-space:nowrap}
@@ -488,6 +502,7 @@ summary{font-weight:600;cursor:pointer}
 <body>
 <div class="app">
   <header class="top"><h1 id="topTitle">Therapy Tracker</h1><span class="ty" id="topTY"></span><button class="themebtn" id="settingsBtn" title="Settings" aria-label="Settings">⚙</button></header>
+  <div id="saveBanner" class="bkbar err"><span class="bkmsg">⛔ <b>Your last change was not saved.</b> <span id="svdetail" class="bkdetail"></span></span><button class="btn sm" id="svExport">Export now</button></div>
   <div id="backupBanner" class="bkbar"><span class="bkmsg">⚠️ <b>Time to back up your data.</b> <span id="bkdetail" class="bkdetail"></span></span><button class="btn sm" id="bkNow">Back up now</button></div>
   <main id="main"></main>
   <nav class="tabs" id="tabs"></nav>
@@ -523,15 +538,60 @@ async function kvPut(k,v){return pr(tx("state","readwrite").put(v,k))}
 async function auditAdd(rec){return pr(tx("audit","readwrite").add(rec))}
 async function auditAll(){return pr(tx("audit","readonly").getAll())}
 async function snapAdd(rec){return pr(tx("snapshots","readwrite").add(rec))}
-async function snapAll(){return pr(tx("snapshots","readonly").getAll())}
 async function snapDel(id){return pr(tx("snapshots","readwrite").delete(id))}
+async function snapCount(){return pr(tx("snapshots","readonly").count())}
+/* Cursor helpers: never load every snapshot just to count or trim them. Reading all 120
+   deserialises tens of MB and was ~97% of the cost of a save. Keys are autoIncrement, so
+   ascending key order is oldest-first. */
+function snapCursor(dir,limit,keysOnly){return new Promise((res,rej)=>{
+  const store=tx("snapshots","readonly");
+  const rq=keysOnly?store.openKeyCursor(null,dir):store.openCursor(null,dir);
+  const out=[];
+  rq.onsuccess=e=>{const c=e.target.result;
+    if(!c||out.length>=limit)return res(out);
+    out.push(keysOnly?c.key:c.value); c.continue();};
+  rq.onerror=e=>rej(e.target.error);
+})}
+async function snapRecent(n){return snapCursor("prev",n,false)}   // newest first
+async function snapOldestIds(n){return snapCursor("next",n,true)} // oldest first, keys only
+async function snapPrune(){
+  const n=await snapCount();
+  if(n<=MAX_SNAP)return;
+  for(const id of await snapOldestIds(n-MAX_SNAP))await snapDel(id);
+}
 
-/* localStorage mirror as extra safety net */
-function mirror(state){try{localStorage.setItem("tt_state",JSON.stringify(state));localStorage.setItem("tt_state_ts",new Date().toISOString())}catch(e){}}
+/* localStorage mirror as extra safety net. Returns false if it could not be written
+   (quota, private mode) so callers can treat that as the save failure it is. */
+function mirror(state){try{localStorage.setItem("tt_state",JSON.stringify(state));localStorage.setItem("tt_state_ts",new Date().toISOString());return true}catch(e){return false}}
+
+/* ===== Durability: ask the browser not to evict this app's storage =====
+   Site storage is disposable by default: browsers reclaim it under disk pressure, and iOS
+   Safari evicts it after ~7 days without a visit. This device holds the only copy of the
+   data, so request a persistence grant and report the answer in Settings. */
+let _persisted=null;
+async function requestPersistence(){
+  try{
+    if(!navigator.storage||!navigator.storage.persist)return (_persisted="unsupported");
+    if(await navigator.storage.persisted())return (_persisted="granted");
+    _persisted=(await navigator.storage.persist())?"granted":"denied";
+  }catch(e){_persisted="unsupported";}
+  return _persisted;
+}
+async function storageStatus(){
+  const persisted=_persisted||await requestPersistence();
+  let usage=null,quota=null;
+  try{if(navigator.storage&&navigator.storage.estimate){const est=await navigator.storage.estimate();usage=est.usage;quota=est.quota;}}catch(e){}
+  return {persisted,usage,quota};
+}
 
 /* ============ App state ============ */
 let S=null; // {clients,rooms,sessions,supervision,rateHistory,clientCategories}
 const MAX_SNAP=120;
+/* Data schema version, stamped on state and on every backup. Bump when a change would be
+   misread by an older build, and add the matching step to migrate(). Data with no stamp is v1
+   (everything written before versioning existed). */
+const SCHEMA_VERSION=2;
+function stateSchemaVersion(st){const v=st&&st.meta&&+st.meta.schemaVersion;return v>0?v:1;}
 
 function clone(o){return JSON.parse(JSON.stringify(o))}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
@@ -569,6 +629,12 @@ function normalize(st){
     (st.supervision||[]).forEach(sv=>{if(sv)sv.count=Math.max(1,(sv.clients||[]).length);});
     st.meta.supCountBackfill=true;
   }
+  /* Ordered migrations run here as the schema grows:
+       if(stateSchemaVersion(st)<3){ ...upgrade...; }
+     Data stamped newer than this build is left completely untouched — never downgrade it in
+     place. Import refuses it outright (see validateImport); this path only guards the unlikely
+     case of a newer build having written to this device's own database. */
+  if(stateSchemaVersion(st)<=SCHEMA_VERSION)st.meta.schemaVersion=SCHEMA_VERSION;
   return st;
 }
 async function loadState(){
@@ -609,26 +675,53 @@ function updateBackupBanner(){const info=backupDueInfo();
       d.textContent=parts.join(" · ")+".";}}}
   const st=document.getElementById("bkStatus"); // settings status line, when that view is open
   if(st)st.textContent="Last backed up: "+lastBackupLabel()+(info.acts?" · "+info.acts+" change"+(info.acts===1?"":"s")+" not backed up":"");}
+/* ===== Save health =====
+   A failed write used to be a console warning while the caller still toasted "Saved".
+   Failures now raise a banner that stays up until a save succeeds. */
+let _saveFail=null;
+function noteSaveFailure(e){
+  _saveFail={ts:Date.now(),msg:(e&&e.message)||String(e||"unknown error")};
+  updateSaveBanner();
+  try{Sfx.error();}catch(_){}
+  // the caller toasts "Saved" immediately after awaiting us — correct it on the next tick
+  setTimeout(()=>{try{toast("⚠️ NOT saved — see the red banner");}catch(_){}},60);
+}
+function clearSaveFailure(){if(_saveFail){_saveFail=null;updateSaveBanner();}}
+function updateSaveBanner(){
+  const bar=document.getElementById("saveBanner");if(!bar)return;
+  bar.classList.toggle("show",!!_saveFail);
+  const d=document.getElementById("svdetail");
+  if(d&&_saveFail)d.textContent="This device refused to store the change ("+_saveFail.msg+"). Export a backup now, then reload the app.";
+}
 async function commit(summary){
   try{gameTouch();}catch(e){}      // record weekly activity (streak)
   try{bumpBackupActs();updateBackupBanner();}catch(e){} // count change toward the backup nudge
   try{autoEncBackup();}catch(e){}  // silent encrypted auto-save, when configured
-  mirror(S);                       // localStorage first (always works)
-  if(!_db)return;                  // running in fallback mode
+  const mirrored=mirror(S);        // localStorage first (always works)
+  if(!_db){                        // running in fallback mode
+    if(!mirrored)noteSaveFailure(new Error("no storage available on this device"));
+    else clearSaveFailure();
+    return mirrored;
+  }
   try{
     await kvPut("current",S);
     await auditAdd({ts:new Date().toISOString(),summary});
     await snapAdd({ts:new Date().toISOString(),label:summary,data:clone(S)});
-    let snaps=await snapAll();
-    if(snaps.length>MAX_SNAP){snaps.sort((a,b)=>a.id-b.id);for(let i=0;i<snaps.length-MAX_SNAP;i++)await snapDel(snaps[i].id);}
-  }catch(e){console.warn("DB save failed, kept in localStorage",e);}
+    await snapPrune();
+    clearSaveFailure();
+    return true;
+  }catch(e){
+    console.error("DB save failed",e);
+    noteSaveFailure(e);
+    return false;
+  }
 }
 async function undo(){
   if(!_db){toast("Undo needs storage (unavailable)");return false}
-  let snaps=await snapAll(); snaps.sort((a,b)=>a.id-b.id);
-  if(snaps.length<2){toast("Nothing to undo");return false}
-  const cur=snaps[snaps.length-1]; await snapDel(cur.id);
-  const prev=snaps[snaps.length-2];
+  const recent=await snapRecent(2);          // [current, previous]
+  if(recent.length<2){toast("Nothing to undo");return false}
+  const cur=recent[0], prev=recent[1];
+  await snapDel(cur.id);
   S=clone(prev.data); await kvPut("current",S); mirror(S);
   await auditAdd({ts:new Date().toISOString(),summary:"↩︎ Undo: reverted '"+cur.label+"'"});
   return true;
@@ -953,11 +1046,38 @@ function renderTabs(){const overdue=S.sessions.filter(s=>derive(s).overdue).leng
     <span class="ic">${t.ic}</span><span>${t.label}${t.id==="sessions"&&overdue?` <span class="badge">${overdue}</span>`:""}</span></button>`).join("");
   $("#tabs").querySelectorAll("button").forEach(b=>b.onclick=()=>go(b.dataset.tab));
 }
+/* Recovery screen. A view that throws used to leave <main> empty — a blank app, with no way
+   to reach Settings and therefore no way to export the data out of it. Export is always here. */
+function crashScreen(err,tab){
+  const m=main();
+  m.innerHTML='<div class="card"><h2 style="color:var(--bad)">This screen couldn\'t be shown</h2>'+
+    '<p class="small">Something went wrong while drawing the <b>'+esc(tab)+'</b> screen. '+
+    '<b>Your data has not been changed</b> — it is still saved on this device.</p>'+
+    '<p class="small muted" style="margin-top:10px">First, export a backup. Then try another screen, or reload.</p>'+
+    '<div class="row mt" style="flex-wrap:wrap;gap:8px">'+
+      '<button class="btn" id="crExp">⤓ Export a backup now</button>'+
+      '<button class="btn sec" id="crHome">Go to Home</button>'+
+      '<button class="btn ghost" id="crRel">↻ Reload the app</button>'+
+    '</div>'+
+    '<details class="dz" style="margin-top:14px"><summary>Technical detail</summary>'+
+      '<p class="small muted" style="word-break:break-word">'+esc(String((err&&err.stack)||(err&&err.message)||err))+'</p></details></div>';
+  m.querySelector("#crExp").onclick=()=>{try{exportJSON();}catch(e){toast("Export failed: "+e.message);}};
+  m.querySelector("#crHome").onclick=()=>go("home");
+  m.querySelector("#crRel").onclick=()=>location.reload();
+}
 function go(tab){if(!VIEWS[tab]||!tabEnabled(tab))tab="home";
-  cur=tab;renderTabs();applyBranding();
-  const m=main();m.innerHTML="";m.appendChild(VIEWS[tab]());window.scrollTo(0,0);
+  cur=tab;
+  try{renderTabs();applyBranding();}catch(e){console.error("Chrome render failed",e);}
+  const m=main();
+  try{
+    m.innerHTML="";m.appendChild(VIEWS[tab]());
+  }catch(e){
+    console.error("Render failed for tab:",tab,e);
+    try{crashScreen(e,tab);}catch(e2){m.innerHTML='<div class="card"><h2>Something went wrong</h2><p class="small">Reload the app.</p></div>';}
+  }
+  window.scrollTo(0,0);
   $("#fab").style.display=(tab==="sessions"||tab==="home")?"flex":"none";
-  updateBackupBanner();
+  try{updateBackupBanner();updateSaveBanner();}catch(e){}
 }
 $("#fab").onclick=()=>sessionForm(null);
 /* ============ VIEWS ============ */
@@ -1978,6 +2098,11 @@ VIEWS.settings=function(){
        <input type="file" id="impF" accept=".json,application/json" style="display:none">
      </div>
    </div>
+   <div class="card"><h2>Storage on this device</h2>
+     <p class="small" id="stStatus" style="font-weight:600">Checking…</p>
+     <p class="small muted" id="stHint"></p>
+     <button class="btn sec mt" id="stAsk" style="display:none">Ask the browser to protect it</button>
+   </div>
    <div class="card"><h2>Encrypted backup 🔐</h2>
      <p class="small muted">Protect backups with a passphrase (AES-256). The file is unreadable without it — safe to keep in iCloud, Drive or email. On desktop Chrome/Edge you can also pick a file that backups <b>auto-save to silently</b> after every change. <b>If you forget the passphrase, encrypted backups cannot be opened.</b></p>
      <p class="small" id="encStatus" style="font-weight:600"></p>
@@ -2013,7 +2138,14 @@ VIEWS.settings=function(){
      <button class="btn ghost full" id="setRerun" style="color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent)">↻ Re-run first-time setup…</button>
    </div>
    <div class="card"><h2>About</h2><p class="small muted">Therapy Tracker · offline · replaces the spreadsheet.
-     ${S.sessions.length} sessions, ${S.clients.length} clients${S.settings&&S.settings.onboardedAt?" · set up "+fmtD(S.settings.onboardedAt):""}. Add to your Home Screen for an app-like experience.</p></div>`;
+     ${S.sessions.length} sessions, ${S.clients.length} clients${S.settings&&S.settings.onboardedAt?" · set up "+fmtD(S.settings.onboardedAt):""}. Add to your Home Screen for an app-like experience.</p></div>
+   <div class="card"><h2>Privacy &amp; removal</h2>
+     <p class="small muted">Tools for anonymising or deleting client information — for example when a client asks you to erase their data, or before you replace this device.</p>
+     <details class="dz"><summary>Show data removal tools</summary>
+       <p class="small muted" style="margin-top:6px">These actions are permanent and are not what you want for day-to-day tidying up. To stop seeing a client, set their status to <b>Finished</b> instead.</p>
+       <button class="btn ghost full mt" id="setDanger" style="color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent)">⚠️ Open data removal tools…</button>
+     </details>
+   </div>`;
   v.querySelector("#checkData").onclick=()=>{
     const out=v.querySelector("#dhResults");const seen=new Set();const items=[];
     S.sessions.forEach(s=>{const vr=validateSession(s);
@@ -2061,6 +2193,32 @@ VIEWS.settings=function(){
     paint();})();
   v.querySelector("#setTour").onclick=()=>startTour();
   v.querySelector("#setRerun").onclick=()=>confirmRerunSetup();
+  v.querySelector("#setDanger").onclick=()=>dzMenu();
+  (async function paintStorage(){
+    const stEl=v.querySelector("#stStatus"),hintEl=v.querySelector("#stHint"),askB=v.querySelector("#stAsk");
+    if(!stEl)return;
+    const info=await storageStatus();
+    const used=info.usage!=null?(info.usage/1048576).toFixed(1)+" MB used on this device.":"";
+    if(info.persisted==="granted"){
+      stEl.textContent="✓ Protected — this browser has agreed not to clear the app's data on its own.";
+      stEl.style.color="var(--good)";
+      hintEl.textContent=used+" Keep exporting backups anyway: this protects against the browser tidying up, not against a lost or broken device.";
+      askB.style.display="none";
+    }else if(info.persisted==="denied"){
+      stEl.textContent="⚠️ Not protected — the browser may clear this app's data by itself.";
+      stEl.style.color="var(--bad)";
+      hintEl.innerHTML=esc(used)+" That can happen if the device runs low on space, or on iPhone/iPad if you don't open the app for a couple of weeks. "+
+        "Adding the app to your <b>Home Screen</b> and opening it regularly usually earns protection. <b>Exported backups are the real safety net.</b>";
+      askB.style.display="inline-flex";
+    }else{
+      stEl.textContent="This browser can't say whether the app's data is protected.";
+      stEl.style.color="var(--muted)";
+      hintEl.textContent=used+" Export backups regularly — that is what keeps your data safe.";
+      askB.style.display="none";
+    }
+    askB.onclick=async()=>{_persisted=null;await requestPersistence();paintStorage();
+      toast(_persisted==="granted"?"Storage protected":"The browser declined for now");};
+  })();
   const soBtn=v.querySelector("#setSound"),updS=()=>{soBtn.textContent=Sfx.on?"🔊 Sound on":"🔇 Sound off";soBtn.classList.toggle("muted",!Sfx.on);};
   updS();soBtn.onclick=()=>{const nowOn=Sfx.toggle();updS();if(nowOn){Sfx.prime();Sfx.pop();toast("Sound on");}else toast("Sound muted");};
   const dEl=v.querySelector("#setBkDays"),aEl=v.querySelector("#setBkActs");
@@ -2703,8 +2861,9 @@ function incomeForecast(){
 /* ============ Export / import ============ */
 function download(name,text,type){const b=new Blob([text],{type:type||"application/json"});const u=URL.createObjectURL(b);
   const a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500)}
-async function exportJSON(){const audit=await auditAll();
-  const out={app:"TherapyTracker",version:1,exportedAt:new Date().toISOString(),state:S,audit:audit.slice(-800)};
+async function exportJSON(){
+  const audit=_db?await auditAll():[]; // must still work with no database — the crash screen relies on it
+  const out={app:"TherapyTracker",version:1,schemaVersion:SCHEMA_VERSION,exportedAt:new Date().toISOString(),state:S,audit:audit.slice(-800)};
   download("therapy-tracker-backup-"+isoD(today())+".json",JSON.stringify(out));markBackedUp();toast("Backup downloaded")}
 
 /* ===== Encrypted backups (AES-256-GCM via WebCrypto, passphrase-derived key) =====
@@ -2731,7 +2890,7 @@ async function encPayload(){
   const key=await kvGet("encKey"),saltB=await kvGet("encSalt");
   if(!key||!saltB)throw new Error("no passphrase set");
   const audit=_db?await auditAll():[];
-  const plain=JSON.stringify({app:"TherapyTracker",version:1,exportedAt:new Date().toISOString(),state:S,audit:audit.slice(-800)});
+  const plain=JSON.stringify({app:"TherapyTracker",version:1,schemaVersion:SCHEMA_VERSION,exportedAt:new Date().toISOString(),state:S,audit:audit.slice(-800)});
   const iv=crypto.getRandomValues(new Uint8Array(12));
   const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv:iv},key,new TextEncoder().encode(plain));
   return JSON.stringify({app:"TherapyTracker",enc:1,cipher:"AES-256-GCM",kdf:"PBKDF2-SHA256",iter:ENC_ITER,salt:saltB,iv:bufToB64(iv.buffer),data:bufToB64(ct)});
@@ -2771,14 +2930,76 @@ async function encChooseFile(after){
     toast("Auto-save on — backups now write here silently");if(after)after();
   }catch(e){if(e&&e.name!=="AbortError")toast("Could not set location");}
 }
+/* Passphrase entry uses a masked sheet, not window.prompt: prompt() shows the passphrase in
+   clear text over the page and behaves badly in iOS home-screen apps. Resolves null if the
+   sheet is dismissed by any route. */
+const PP_ATTRS='type="password" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="••••••••"';
+function sheetPromise(title,body,wire){
+  return new Promise(res=>{
+    let settled=false;
+    const sheet=$("#sheet");
+    const obs=new MutationObserver(()=>{if(!sheet.classList.contains("open"))fin(null);});
+    function fin(v){if(settled)return;settled=true;obs.disconnect();if(sheet.classList.contains("open"))closeSheet();res(v);}
+    wire(body,fin);
+    obs.observe(sheet,{attributes:true,attributeFilter:["class"]});
+    openSheet(title,body);
+  });
+}
+function showToggle(body,inputSel,chkSel){
+  const chk=body.querySelector(chkSel);if(!chk)return;
+  chk.onchange=()=>body.querySelectorAll(inputSel).forEach(i=>i.type=chk.checked?"text":"password");
+}
+/* Ask for an existing passphrase (restoring an encrypted backup). */
+function askPassphrase(o){
+  const body=el('<div></div>');
+  body.innerHTML='<p class="small muted">'+esc(o.msg)+'</p>'+
+    '<label>Passphrase</label><input id="apIn" class="ppIn" '+PP_ATTRS+'>'+
+    '<label class="dzchk"><input type="checkbox" id="apShow"> Show passphrase</label>'+
+    '<button class="btn full mt" id="apGo">'+esc(o.verb||"Continue")+'</button>'+
+    '<button class="btn ghost full mt" id="apNo">Cancel</button>';
+  return sheetPromise(o.title||"Passphrase",body,(b,fin)=>{
+    showToggle(b,".ppIn","#apShow");
+    const inp=b.querySelector("#apIn");
+    b.querySelector("#apGo").onclick=()=>{const v=inp.value;if(!v){toast("Enter the passphrase");return;}fin(v);};
+    b.querySelector("#apNo").onclick=()=>fin(null);
+    inp.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();b.querySelector("#apGo").click();}};
+    setTimeout(()=>inp.focus(),120);
+  });
+}
+/* Choose a new passphrase, entered twice, validated live. */
 function encPromptSetup(after){
-  const p1=prompt("Choose a backup passphrase (keep it safe — without it an encrypted backup CANNOT be opened):");
-  if(!p1)return;
-  if(p1.length<8){alert("Use at least 8 characters.");return;}
-  const p2=prompt("Type the passphrase again to confirm:");
-  if(p1!==p2){alert("Passphrases didn't match — nothing changed.");return;}
-  encSetup(p1).then(()=>{toast("Encrypted backups on");if(after)after();})
-    .catch(e=>{toast("Setup failed: "+e.message);});
+  const body=el('<div></div>');
+  body.innerHTML='<div class="vmsg err">⚠️ If you forget this passphrase, encrypted backups <b>cannot be opened</b> — not by you, not by anyone. There is no reset.</div>'+
+    '<p class="small muted">Write it down somewhere safe before you continue, or store it in a password manager.</p>'+
+    '<label>Passphrase (at least 8 characters)</label><input id="pp1" class="ppIn" '+PP_ATTRS+'>'+
+    '<label>Type it again to confirm</label><input id="pp2" class="ppIn" '+PP_ATTRS+'>'+
+    '<label class="dzchk"><input type="checkbox" id="ppShow"> Show passphrase</label>'+
+    '<div id="ppMsg" class="small" style="min-height:20px;margin-top:10px;font-weight:600"></div>'+
+    '<button class="btn full" id="ppGo" disabled>Turn on encrypted backups</button>'+
+    '<button class="btn ghost full mt" id="ppNo">Cancel</button>';
+  sheetPromise("Backup passphrase",body,(b,fin)=>{
+    showToggle(b,".ppIn","#ppShow");
+    const p1=b.querySelector("#pp1"),p2=b.querySelector("#pp2"),msg=b.querySelector("#ppMsg"),go2=b.querySelector("#ppGo");
+    go2.style.opacity=".5";
+    const check=()=>{
+      const a=p1.value,c=p2.value;let ok=false,txt="",col="var(--muted)";
+      if(!a){txt="";}
+      else if(a.length<8){txt="Too short — use at least 8 characters.";col="var(--bad)";}
+      else if(!c){txt="Now type it again to confirm.";}
+      else if(a!==c){txt="The two entries don't match yet.";col="var(--bad)";}
+      else{ok=true;txt="✓ Passphrases match.";col="var(--good)";}
+      msg.textContent=txt;msg.style.color=col;
+      go2.disabled=!ok;go2.style.opacity=ok?"1":".5";
+    };
+    p1.oninput=p2.oninput=check;
+    go2.onclick=()=>{if(!go2.disabled)fin(p1.value);};
+    b.querySelector("#ppNo").onclick=()=>fin(null);
+    setTimeout(()=>p1.focus(),120);
+  }).then(pass=>{
+    if(!pass)return;
+    encSetup(pass).then(()=>{toast("Encrypted backups on");Sfx.complete&&Sfx.complete();if(after)after();})
+      .catch(e=>{toast("Setup failed: "+e.message);});
+  });
 }
 
 /* ===== Import validation (schema + sanity report before restore) ===== */
@@ -2786,6 +3007,12 @@ function validateImport(st){
   const problems=[];
   if(!st||typeof st!=="object")return {ok:false,problems:["Not a recognisable backup file"]};
   if(!Array.isArray(st.sessions)||!Array.isArray(st.clients))return {ok:false,problems:["Missing sessions or clients — not a Therapy Tracker backup"]};
+  /* Refuse anything written by a newer build. Importing it would silently drop the fields this
+     version doesn't know about, and then save that loss back over the good data. */
+  const sv=stateSchemaVersion(st);
+  if(sv>SCHEMA_VERSION)return {ok:false,problems:[
+    "This backup was made by a newer version of Therapy Tracker (data version "+sv+"; this app reads version "+SCHEMA_VERSION+"). "+
+    "Restoring it here would quietly discard the newer information. Open the app on this device while online to update it first, then try again."]};
   const badDates=st.sessions.filter(s=>!s||!s.date||!/^\d{4}-\d{2}-\d{2}$/.test(String(s.date))).length;
   if(badDates)problems.push(badDates+" session(s) with missing/invalid dates");
   const codeSet=new Set((st.clients||[]).map(c=>(c&&c.code||"").toLowerCase()));
@@ -2817,7 +3044,8 @@ function exportSupervisionCSV(){
 function importJSON(e){const f=e.target.files[0];if(!f)return;const rd=new FileReader();
   rd.onload=async()=>{try{let o=JSON.parse(rd.result);
     if(o&&o.enc===1){
-      const pass=prompt("This backup is encrypted. Enter its passphrase:");
+      const pass=await askPassphrase({title:"Encrypted backup",verb:"Unlock backup",
+        msg:"This backup file is encrypted. Enter the passphrase it was saved with."});
       if(!pass)return;
       try{
         const key=await encDeriveKey(pass,new Uint8Array(b64ToBuf(o.salt)));
@@ -2837,10 +3065,10 @@ function importJSON(e){const f=e.target.files[0];if(!f)return;const rd=new FileR
     applySettings();toast("Backup restored");go("home");
   }catch(err){alert("Could not import: "+err.message)}};rd.readAsText(f);e.target.value="";}
 async function showSnapshots(){if(!_db){toast("Restore points need storage");return}
-  const snaps=await snapAll();snaps.sort((a,b)=>b.id-a.id);
+  const snaps=await snapRecent(80); // newest first, straight off the cursor
   const body=el('<div></div>');
   body.innerHTML='<p class="muted small">Every change creates a restore point. Tap to roll back.</p>'+
-    snaps.slice(0,80).map(s=>`<div class="list-item" data-id="${s.id}"><div class="li-main">
+    snaps.map(s=>`<div class="list-item" data-id="${s.id}"><div class="li-main">
       <div class="li-title">${esc(s.label)}</div><div class="li-sub">${new Date(s.ts).toLocaleString("en-GB")} · ${s.data.sessions.length} sessions</div></div>
       <button class="btn sm sec">Restore</button></div>`).join("");
   body.querySelectorAll(".list-item").forEach(li=>li.onclick=async()=>{const id=+li.dataset.id;const snap=snaps.find(x=>x.id===id);
@@ -3249,17 +3477,265 @@ function confirmRerunSetup(){
   openSheet("Re-run first-time setup",body);
 }
 
+/* ============================================================
+   Data removal: anonymise or erase, for chosen clients or everything.
+   Every route is gated: a summary of exactly what changes, an offer to back up first, an
+   explicit acknowledgement, a typed phrase, and a short delay on the final button.
+   ============================================================ */
+
+/* Stable, unique replacement codes that don't collide with any client that is staying. */
+function dzPseudonyms(codes){
+  const taken=new Set(S.clients.map(c=>(c.code||"").toLowerCase()));
+  const map={};let n=1;
+  codes.forEach(code=>{
+    let p;
+    do{p="Client "+String(n++).padStart(3,"0");}while(taken.has(p.toLowerCase()));
+    taken.add(p.toLowerCase());
+    map[String(code||"").toLowerCase()]=p;
+  });
+  return map;
+}
+function dzStats(codes){
+  const set=new Set(codes.map(c=>String(c).toLowerCase()));
+  const sess=S.sessions.filter(s=>set.has((s.client||"").toLowerCase()));
+  const rates=(S.rateHistory||[]).filter(r=>set.has((r.client||"").toLowerCase()));
+  const sups=(S.supervision||[]).filter(sv=>Array.isArray(sv.clients)&&sv.clients.some(c=>set.has(String(c||"").toLowerCase())));
+  return {clients:codes.length,sessions:sess.length,rates:rates.length,sups:sups.length};
+}
+/* Anonymise: identity goes, the financial and clinical shape stays, so tax figures,
+   session counts and attendance history all still add up. */
+async function anonymiseClients(codes){
+  const set=new Set(codes.map(c=>String(c).toLowerCase()));
+  const map=dzPseudonyms(codes);
+  S.clients.forEach(c=>{const lc=(c.code||"").toLowerCase();if(!set.has(lc))return;
+    c.code=map[lc];c.notes="";});
+  S.sessions.forEach(s=>{const lc=(s.client||"").toLowerCase();if(!set.has(lc))return;
+    s.lateCancel=isLateCancel(s);                                 // capture before the notes text goes
+    s.client=map[lc];
+    s.notes=(s.notes&&String(s.notes).trim())?"Y":"";             // keeps the session "complete", drops the content
+    s.invoice="";s.receipt="";});
+  (S.rateHistory||[]).forEach(r=>{const lc=(r.client||"").toLowerCase();if(set.has(lc))r.client=map[lc];});
+  (S.supervision||[]).forEach(sv=>{if(!Array.isArray(sv.clients))return;
+    sv.clients=sv.clients.map(c=>{const lc=String(c||"").toLowerCase();return set.has(lc)?map[lc]:c;});});
+  return commit("Anonymised "+codes.length+" client"+(codes.length===1?"":"s"));
+}
+/* Erase selected: the clients, their sessions and their fee history go. Supervision entries
+   are kept — they are the therapist's own CPD and tax record — but the names are removed. */
+async function eraseClients(codes){
+  const set=new Set(codes.map(c=>String(c).toLowerCase()));
+  const before=S.sessions.length;
+  S.sessions=S.sessions.filter(s=>!set.has((s.client||"").toLowerCase()));
+  S.clients=S.clients.filter(c=>!set.has((c.code||"").toLowerCase()));
+  S.rateHistory=(S.rateHistory||[]).filter(r=>!set.has((r.client||"").toLowerCase()));
+  (S.supervision||[]).forEach(sv=>{if(Array.isArray(sv.clients))
+    sv.clients=sv.clients.filter(c=>!set.has(String(c||"").toLowerCase()));});
+  return commit("Erased "+codes.length+" client"+(codes.length===1?"":"s")+" and "+(before-S.sessions.length)+" session(s)");
+}
+/* Erase everything: a factory reset of this device. Object stores are cleared first — that
+   always succeeds — before attempting to drop the database, which another open tab can defer. */
+async function eraseEverything(){
+  try{if(_db){
+    await pr(tx("state","readwrite").clear());
+    await pr(tx("audit","readwrite").clear());
+    await pr(tx("snapshots","readwrite").clear());
+  }}catch(e){console.error("store clear failed",e);}
+  try{if(_db){_db.close();_db=null;}
+    await new Promise(res=>{const rq=indexedDB.deleteDatabase(DBN);rq.onsuccess=rq.onerror=rq.onblocked=()=>res();});
+  }catch(e){console.error("db delete failed",e);}
+  try{Object.keys(localStorage).filter(k=>k.indexOf("tt_")===0).forEach(k=>localStorage.removeItem(k));}catch(e){}
+  // the cached app files hold no client data, so they are left alone — the app still opens offline
+  location.reload();
+}
+
+/* The confirmation ladder, shared by every destructive route. */
+function dzConfirm(o){
+  const body=el('<div></div>');
+  const bullets=arr=>(arr&&arr.length)?'<div class="acc-work">'+arr.map(x=>'<div>• '+x+'</div>').join("")+'</div>':"";
+  return sheetPromise(o.title,body,(b,fin)=>{
+    function step1(){
+      b.innerHTML='<div class="vmsg err">⚠️ '+o.lead+'</div>'+
+        '<p class="small" style="margin:12px 0 4px"><b>What this changes:</b></p>'+bullets(o.destroys)+
+        (o.keeps&&o.keeps.length?'<p class="small" style="margin:14px 0 4px"><b>What it leaves alone:</b></p>'+bullets(o.keeps):"")+
+        '<div class="vmsg '+(o.undoable?"warn":"err")+'" style="margin-top:14px">'+
+          (o.undoable
+            ?"A restore point is saved first, so <b>↩︎ Undo</b> in Settings can bring this back — until the restore points roll over."
+            :"This <b>cannot be undone</b>. Restore points, undo history and the audit log go too.")+'</div>'+
+        '<button class="btn sec full mt" id="dzExp">⤓ Export a backup first</button>'+
+        '<label class="dzchk"><input type="checkbox" id="dzAck"> I understand what this does, and I have a backup if I ever need this data again.</label>'+
+        '<button class="btn danger full mt" id="dzNext" disabled>Continue…</button>'+
+        '<button class="btn ghost full mt" id="dzNo">Cancel</button>';
+      const ack=b.querySelector("#dzAck"),nx=b.querySelector("#dzNext");
+      nx.style.opacity=".5";
+      ack.onchange=()=>{nx.disabled=!ack.checked;nx.style.opacity=ack.checked?"1":".5";};
+      b.querySelector("#dzExp").onclick=()=>{try{exportJSON();}catch(e){toast("Export failed: "+e.message);}};
+      b.querySelector("#dzNo").onclick=()=>fin(false);
+      nx.onclick=()=>{if(!nx.disabled)step2();};
+    }
+    function step2(){
+      b.innerHTML='<div class="vmsg err">Last chance — '+esc(o.summary)+'</div>'+
+        '<label>Type <b>'+esc(o.phrase)+'</b> below to confirm</label>'+
+        '<input id="dzIn" placeholder="'+esc(o.phrase)+'" autocapitalize="characters" autocomplete="off" spellcheck="false">'+
+        '<button class="btn danger full mt" id="dzGo" disabled>'+esc(o.verb)+'</button>'+
+        '<button class="btn ghost full mt" id="dzBack">Cancel — keep my data</button>';
+      const inp=b.querySelector("#dzIn"),g=b.querySelector("#dzGo");
+      let timer=null;
+      g.style.opacity=".5";
+      inp.oninput=()=>{
+        clearInterval(timer);
+        if(inp.value.trim().toUpperCase()!==o.phrase){g.disabled=true;g.style.opacity=".5";g.textContent=o.verb;return;}
+        let n=3;                                  // a beat before the button arms, against muscle memory
+        g.disabled=true;g.style.opacity=".7";g.textContent=o.verb+" in "+n+"…";
+        timer=setInterval(()=>{n--;
+          if(n>0){g.textContent=o.verb+" in "+n+"…";return;}
+          clearInterval(timer);g.disabled=false;g.style.opacity="1";g.textContent=o.verb;},1000);
+      };
+      b.querySelector("#dzBack").onclick=()=>{clearInterval(timer);fin(false);};
+      g.onclick=()=>{if(g.disabled)return;clearInterval(timer);fin(true);};
+      setTimeout(()=>inp.focus(),120);
+    }
+    step1();
+  });
+}
+
+async function dzRunAnonymise(codes){
+  const st=dzStats(codes);
+  const ok=await dzConfirm({
+    title:"Anonymise "+(st.clients===1?"a client":st.clients+" clients"),
+    lead:"This permanently replaces identifying details for <b>"+st.clients+" client"+(st.clients===1?"":"s")+"</b>. The original codes and notes cannot be recovered from this app afterwards.",
+    destroys:["Client code becomes a neutral label such as <b>Client 001</b>",
+      "Client notes are cleared",
+      st.sessions+" session"+(st.sessions===1?"":"s")+": notes text, invoice and receipt references are cleared",
+      st.sups?("Their names are replaced in "+st.sups+" supervision entr"+(st.sups===1?"y":"ies")):null,
+      "Fee history is re-labelled to the new code"].filter(Boolean),
+    keeps:["Every session date, time, fee and payment — your accounts still add up",
+      "Whether a session was attended, cancelled late, paid or complete",
+      "Room bookings, room costs and supervision costs"],
+    undoable:true,summary:st.clients+" client"+(st.clients===1?"":"s")+" and "+st.sessions+" session"+(st.sessions===1?"":"s")+" will be rewritten.",
+    phrase:"ANONYMISE",verb:"Anonymise now"});
+  if(!ok)return;
+  await anonymiseClients(codes);
+  toast("Anonymised "+st.clients+" client"+(st.clients===1?"":"s"));go("settings");
+}
+async function dzRunErase(codes){
+  const st=dzStats(codes);
+  const ok=await dzConfirm({
+    title:"Erase "+(st.clients===1?"a client":st.clients+" clients"),
+    lead:"This permanently deletes <b>"+st.clients+" client"+(st.clients===1?"":"s")+"</b> and everything recorded against them.",
+    destroys:[st.clients+" client record"+(st.clients===1?"":"s"),
+      st.sessions+" session"+(st.sessions===1?"":"s")+", including their fees and payment history",
+      st.rates?(st.rates+" fee-history entr"+(st.rates===1?"y":"ies")):null,
+      st.sups?("Their names are removed from "+st.sups+" supervision entr"+(st.sups===1?"y":"ies")):null].filter(Boolean),
+    keeps:["All other clients and their sessions",
+      "Supervision entries themselves, with their dates and costs",
+      "Rooms, room costs and your settings"],
+    undoable:true,
+    summary:"income from those "+st.sessions+" session"+(st.sessions===1?"":"s")+" will disappear from past tax years.",
+    phrase:"ERASE",verb:"Erase now"});
+  if(!ok)return;
+  await eraseClients(codes);
+  toast("Erased "+st.clients+" client"+(st.clients===1?"":"s"));go("settings");
+}
+async function dzRunEraseAll(){
+  const n=S.sessions.length,c=S.clients.length,sv=(S.supervision||[]).length;
+  const ok=await dzConfirm({
+    title:"Erase everything on this device",
+    lead:"This wipes <b>the entire app</b> on this device and returns it to a blank first-time setup.",
+    destroys:[c+" client"+(c===1?"":"s"),n+" session"+(n===1?"":"s")+" with all fees and payments",
+      sv+" supervision entr"+(sv===1?"y":"ies"),"All fee history and room cost history",
+      "Every restore point, the undo history and the activity log",
+      "Your saved backup passphrase and auto-save location",
+      "Practice name, colours, features and all other settings"],
+    keeps:["Backup files you have already exported or saved elsewhere",
+      "Data on any other device or browser"],
+    undoable:false,
+    summary:"everything above is destroyed. Backup files you exported are the only way back.",
+    phrase:"ERASE EVERYTHING",verb:"Erase everything"});
+  if(!ok)return;
+  toast("Erasing…");
+  await eraseEverything();
+}
+function dzMenu(){
+  const body=el('<div></div>');
+  const hasClients=S.clients.length>0;
+  body.innerHTML='<p class="small muted">Use these when a client asks you to delete their data, or before you hand on, sell or replace this device. Export a backup first if there is any chance you will need the data again.</p>'+
+    '<div class="grp-h" style="margin-top:16px">Selected clients</div>'+
+    '<button class="btn sec full" id="dzAnonSel"'+(hasClients?"":" disabled")+'>🎭 Anonymise selected clients…</button>'+
+    '<p class="small muted" style="margin:5px 0 0">Keeps every session, date and fee so your accounts and tax figures are unchanged — only the identity goes.</p>'+
+    '<button class="btn full mt" id="dzErsSel" style="background:var(--bad)"'+(hasClients?"":" disabled")+'>🗑 Erase selected clients…</button>'+
+    '<p class="small muted" style="margin:5px 0 0">Removes those clients and all of their sessions. Past income from them disappears from your reports.</p>'+
+    '<div class="grp-h" style="margin-top:20px">Everything</div>'+
+    '<button class="btn sec full" id="dzAnonAll"'+(hasClients?"":" disabled")+'>🎭 Anonymise every client…</button>'+
+    '<p class="small muted" style="margin:5px 0 0">The whole client list becomes Client 001, Client 002 and so on. Useful before sharing the app or a screenshot.</p>'+
+    '<button class="btn full mt" id="dzErsAll" style="background:var(--bad)">☠️ Erase everything on this device…</button>'+
+    '<p class="small muted" style="margin:5px 0 6px">A full factory reset: all clients, sessions, supervision, restore points, settings and the saved backup passphrase.</p>';
+  const wrap=fn=>()=>{closeSheet();setTimeout(fn,180);}; // let the menu close before the next sheet
+  body.querySelector("#dzAnonSel").onclick=wrap(async()=>{
+    const codes=await dzPickClients({title:"Anonymise which clients?",msg:"Tick the clients to anonymise. Their sessions and fees stay exactly as they are."});
+    if(codes&&codes.length)dzRunAnonymise(codes);});
+  body.querySelector("#dzErsSel").onclick=wrap(async()=>{
+    const codes=await dzPickClients({title:"Erase which clients?",msg:"Tick the clients to erase. Everything recorded against them is deleted."});
+    if(codes&&codes.length)dzRunErase(codes);});
+  body.querySelector("#dzAnonAll").onclick=wrap(()=>{
+    const codes=S.clients.map(c=>c.code).filter(Boolean);
+    if(codes.length)dzRunAnonymise(codes);});
+  body.querySelector("#dzErsAll").onclick=wrap(()=>dzRunEraseAll());
+  openSheet("Data removal tools",body);
+}
+function dzPickClients(o){
+  const body=el('<div></div>');
+  const byCode={};S.sessions.forEach(s=>{const k=(s.client||"").toLowerCase();if(k)byCode[k]=(byCode[k]||0)+1;});
+  const list=S.clients.slice().sort((a,b)=>String(a.code||"").localeCompare(String(b.code||"")));
+  const row=c=>{const lc=(c.code||"").toLowerCase(),n=byCode[lc]||0;
+    return '<label><input type="checkbox" class="dzc" value="'+esc(c.code)+'"><span>'+esc(c.code)+'</span>'+
+      '<span class="dzsub">'+n+' session'+(n===1?'':'s')+(c.status?' · '+esc(c.status):'')+'</span></label>';};
+  body.innerHTML='<p class="small muted">'+esc(o.msg)+'</p>'+
+    '<div class="row mt" style="gap:8px"><button class="btn sm sec" id="dzAll">Select all</button>'+
+      '<button class="btn sm ghost" id="dzNone">Clear</button></div>'+
+    (list.length?'<div class="dzpick">'+list.map(row).join("")+'</div>'
+                :'<div class="vmsg warn" style="margin-top:12px">There are no clients to choose from.</div>')+
+    '<button class="btn danger full mt" id="dzOk" disabled>Continue</button>'+
+    '<button class="btn ghost full mt" id="dzCancel">Cancel</button>';
+  return sheetPromise(o.title,body,(b,fin)=>{
+    const boxes=Array.prototype.slice.call(b.querySelectorAll(".dzc")),ok=b.querySelector("#dzOk");
+    const upd=()=>{const n=boxes.filter(x=>x.checked).length;
+      ok.textContent=n?("Continue with "+n+" client"+(n===1?"":"s")):"Continue";
+      ok.disabled=!n;ok.style.opacity=n?"1":".5";};
+    boxes.forEach(x=>x.onchange=upd);
+    b.querySelector("#dzAll").onclick=()=>{boxes.forEach(x=>x.checked=true);upd();};
+    b.querySelector("#dzNone").onclick=()=>{boxes.forEach(x=>x.checked=false);upd();};
+    ok.onclick=()=>{if(!ok.disabled)fin(boxes.filter(x=>x.checked).map(x=>x.value));};
+    b.querySelector("#dzCancel").onclick=()=>fin(null);
+    upd();
+  });
+}
+
 /* ============ Init ============ */
+/* Nothing should fail silently. These catch what escapes the per-view boundary in go(). */
+let _loggedGlobalErr=false;
+function reportGlobalError(what,err){
+  console.error(what,err);
+  if(_loggedGlobalErr)return;                       // one nudge per session; the console keeps the rest
+  _loggedGlobalErr=true;
+  setTimeout(()=>{try{toast("Something went wrong in the background — if anything looks wrong, export a backup and reload.");}catch(_){}},400);
+}
+window.addEventListener("error",e=>reportGlobalError("Uncaught error:",e.error||e.message));
+window.addEventListener("unhandledrejection",e=>reportGlobalError("Unhandled promise rejection:",e.reason));
+
 (async function(){
   try{await openDB();await loadState();}
   catch(e){ // fallback to localStorage
+    console.error("Database unavailable, falling back to localStorage",e);
     try{const ls=localStorage.getItem("tt_state");S=ls?JSON.parse(ls):clone(window.SEED);}catch(_){S=clone(window.SEED);}
     if(!S.sessions)S=clone(window.SEED);
+    try{normalize(S);}catch(_){}
+    noteSaveFailure(new Error("this browser would not open the app's database"));
   }
   initBackupTracking();
   const bk=document.getElementById("bkNow");if(bk)bk.onclick=exportJSON;
+  const sx=document.getElementById("svExport");if(sx)sx.onclick=exportJSON;
   applySettings();
   go("home");
+  requestPersistence(); // ask the browser not to evict us; the answer is shown in Settings
   if(!settings().onboarded)setTimeout(()=>startSetup(),120); // first run on this device
 })();
 </script>
