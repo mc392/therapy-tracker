@@ -590,11 +590,22 @@ const MAX_SNAP=120;
 /* Data schema version, stamped on state and on every backup. Bump when a change would be
    misread by an older build, and add the matching step to migrate(). Data with no stamp is v1
    (everything written before versioning existed). */
-const SCHEMA_VERSION=2;
+const SCHEMA_VERSION=3;
 function stateSchemaVersion(st){const v=st&&st.meta&&+st.meta.schemaVersion;return v>0?v:1;}
 
 function clone(o){return JSON.parse(JSON.stringify(o))}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+
+/* Which client statuses mean "no longer seeing them", for the retention review. Status is free
+   text, so read it off the status→category mapping the therapist already maintains rather than
+   guessing at the words. Paused / Active enquiry sit under Pipeline and are deliberately not
+   ended — those clients may come back. */
+function defaultEndedStatuses(st){
+  const out=new Set();
+  (st.clientCategories||[]).forEach(c=>{if(c&&c.status&&String(c.category||"").toLowerCase()==="finished")out.add(c.status);});
+  if(!out.size)out.add("Finished");
+  return Array.from(out);
+}
 
 function normalize(st){
   st.clients=st.clients||[];st.rooms=st.rooms||[];st.sessions=st.sessions||[];
@@ -615,6 +626,24 @@ function normalize(st){
   st.game=st.game||{}; st.game.activeWeeks=st.game.activeWeeks||[]; st.game.records=st.game.records||{};
   const rr=st.game.records; rr.longestStreak=rr.longestStreak||0; rr.mostClearedAtOnce=rr.mostClearedAtOnce||0; rr.biggestCatchup=rr.biggestCatchup||0;
   if(st.game.seenStreak==null)st.game.seenStreak=0;
+  /* records retention (flag only, never auto-deletes): review periods in years, counted from a
+     client's last logged session once their status is an "ended" one. Notes and financial records
+     get their own timer because they have different compliance rationale — 6 yrs each by default
+     (BACP complaint window ~3 yrs; insurers commonly want 6). */
+  const rt=sg.retention=sg.retention||{};
+  if(rt.notesYears==null)rt.notesYears=6;
+  if(rt.financeYears==null)rt.financeYears=6;
+  if(!Array.isArray(rt.endedStatuses)||!rt.endedStatuses.length)rt.endedStatuses=defaultEndedStatuses(st);
+  /* business finances: dated monthly room rent alongside the existing per-session roomRateHistory,
+     plus standalone expense and other-income ledgers. Recurring rows are expanded at report time
+     (see ledgerBetween) rather than generated into the data, so correcting an amount corrects
+     every period it applies to and there is nothing to keep in sync. */
+  st.roomRentHistory=st.roomRentHistory||[];
+  st.expenses=st.expenses||[]; st.otherIncome=st.otherIncome||[];
+  /* peer supervision: counts toward total accreditation hours, excluded from the 1:6 ratio */
+  st.peerSupervision=st.peerSupervision||[];
+  ["roomRentHistory","expenses","otherIncome","peerSupervision"].forEach(k=>st[k].forEach(x=>{if(x&&!x._id)x._id=uid()}));
+  st.rooms.forEach(r=>{if(r&&r.billing==null)r.billing="session"}); // absent billing mode = per-session, the only mode before v3
   /* accreditation hours (Form 3A): supervision totals are entered manually; clinical hours come from logged sessions */
   st.accreditation=st.accreditation||{}; const ac=st.accreditation;
   if(ac.trainingSupHrs==null)ac.trainingSupHrs=108; if(ac.placementSupHrs==null)ac.placementSupHrs=0; if(ac.otherClinicalHrs==null)ac.otherClinicalHrs=0;
@@ -630,10 +659,16 @@ function normalize(st){
     st.meta.supCountBackfill=true;
   }
   /* Ordered migrations run here as the schema grows:
-       if(stateSchemaVersion(st)<3){ ...upgrade...; }
+       if(stateSchemaVersion(st)<4){ ...upgrade...; }
      Data stamped newer than this build is left completely untouched — never downgrade it in
      place. Import refuses it outright (see validateImport); this path only guards the unlikely
-     case of a newer build having written to this device's own database. */
+     case of a newer build having written to this device's own database.
+
+     v2 → v3 needs no in-place rewrite: every field added above is absent in v2 data and its
+     absence means exactly what it meant then (no expenses, no other income, no peer supervision,
+     every room billed per session). The version bump is there for the other direction — a v3
+     backup carries money that a v2 build cannot see, and restoring it there would drop those
+     rows and then save the loss back over good data. validateImport refuses that. */
   if(stateSchemaVersion(st)<=SCHEMA_VERSION)st.meta.schemaVersion=SCHEMA_VERSION;
   return st;
 }
@@ -847,6 +882,8 @@ function applySettings(){applyPalette(settings().palette||"sage");applyBranding(
 (function(){const b=$("#settingsBtn");if(b)b.onclick=()=>go("settings");})();
 function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 function opts(arr,sel){return arr.map(o=>`<option value="${esc(o)}"${o===sel?" selected":""}>${esc(o)}</option>`).join("")}
+/* same, for [value,label] pairs where the stored value isn't what the user should read */
+function opts2(pairs,sel){return pairs.map(p=>`<option value="${esc(p[0])}"${p[0]===sel?" selected":""}>${esc(p[1])}</option>`).join("")}
 
 /* ============================================================
    Gamification layer: sound · confetti · celebration · streak
@@ -1184,19 +1221,37 @@ function pkey(dstr,gran){if(gran==="week"){const ws=weekStart(dstr);return[isoD(
   const k=monthKey(dstr);return[k,parseD(k+"-01").toLocaleDateString("en-GB",{month:"short",year:"2-digit"})];}
 function periodSeries(gran){
   const der=S.sessions.map(s=>({s,d:derive(s)}));const map={};
-  const get=(key,lab)=>map[key]||(map[key]={lab,revenue:0,room:0,sup:0,clients:new Set()});
+  const get=(key,lab)=>map[key]||(map[key]={lab,revenue:0,room:0,sup:0,costs:0,oth:0,clients:new Set()});
   der.forEach(x=>{const dt=parseD(x.s.date);if(!dt)return;const[key,lab]=pkey(x.s.date,gran);
     const e=get(key,lab);e.revenue+=x.d.rate||0;e.room+=x.d.roomRate||0;if(x.s.client)e.clients.add(x.s.client.toLowerCase());});
   (S.supervision||[]).forEach(sv=>{if(!sv.date)return;const[key,lab]=pkey(sv.date,gran);const e=get(key,lab);e.sup+=(+sv.cost||0);});
+  (S.peerSupervision||[]).forEach(pv=>{if(!pv.date||!(+pv.cost))return;const[key,lab]=pkey(pv.date,gran);const e=get(key,lab);e.sup+=(+pv.cost||0);});
+  /* business costs and other practice income, expanded across the whole span the chart covers so
+     a recurring bill still lands in months with no sessions of their own */
+  const span=[];
+  S.sessions.forEach(s=>{const d=parseD(s.date);if(d)span.push(+d);});
+  (S.supervision||[]).forEach(v=>{const d=v.date?parseD(v.date):null;if(d)span.push(+d);});
+  (S.expenses||[]).concat(S.otherIncome||[]).forEach(x=>{const d=x.date?parseD(x.date):null;if(d)span.push(+d);});
+  (S.roomRentHistory||[]).forEach(h=>{const d=parseD(h.effectiveFrom);if(d)span.push(+d);});
+  if(span.length){
+    const from=new Date(Math.min.apply(null,span)), to=new Date(Math.max.apply(null,span.concat([+today()])));
+    const add=(dt,field,amt)=>{const[key,lab]=pkey(isoD(dt),gran);get(key,lab)[field]+=amt;};
+    (S.expenses||[]).forEach(x=>moneyOccurrences(x,from,to).forEach(o=>add(o.date,"costs",o.amount)));
+    (S.otherIncome||[]).forEach(x=>{if(String(x.scope||"practice")==="personal")return;   /* a different trade — never in the practice's net */
+      moneyOccurrences(x,from,to).forEach(o=>add(o.date,"oth",o.amount));});
+    roomRentOccurrences(from,to).forEach(o=>add(o.date,"costs",o.amount));
+  }
   const allKeys=Object.keys(map).sort();
-  const netArr=allKeys.map(k=>map[k].revenue-map[k].room-map[k].sup);
+  const netOf=e=>e.revenue+e.oth-e.room-e.sup-e.costs;
+  const netArr=allKeys.map(k=>netOf(map[k]));
   const cliArr=allKeys.map(k=>map[k].clients.size);
   const W=gran==="week"?26:6;
   const mov=(arr,i)=>{const s=Math.max(0,i-W+1);let t=0;for(let q=s;q<=i;q++)t+=arr[q];return t/(i-s+1);};
   const startIdx=0;
   return allKeys.slice(startIdx).map((k,idx)=>{const i=startIdx+idx;const e=map[k];
     return{l:e.lab,revenue:Math.round(e.revenue),room:Math.round(e.room),sup:Math.round(e.sup),
-      net:Math.round(e.revenue-e.room-e.sup),clients:e.clients.size,
+      costs:Math.round(e.costs),oth:Math.round(e.oth),
+      net:Math.round(netOf(e)),clients:e.clients.size,
       netAvg:Math.round(mov(netArr,i)),cliAvg:Math.round(mov(cliArr,i)*10)/10};});
 }
 function chartBars(data,money){
@@ -1254,14 +1309,18 @@ function chartAttendance(data){
 function chartCombo(data,sel){
   const h=234,padT=18,padB=40,padL=8,padR=64,step=52,bw=30,n=data.length||1;
   const W=Math.max(padL+n*step+padR,320),innerH=h-padT-padB;
-  const posMax=Math.max(1,...data.map(d=>d.revenue),...data.map(d=>Math.max(0,d.net)));
-  const negMax=Math.max(1,...data.map(d=>d.room+d.sup));
+  const posMax=Math.max(1,...data.map(d=>d.revenue+(d.oth||0)),...data.map(d=>Math.max(0,d.net)));
+  const negMax=Math.max(1,...data.map(d=>d.room+d.sup+(d.costs||0)));
   const range=posMax+negMax;const zeroY=padT+innerH*posMax/range;
   const yOf=v=>zeroY-innerH*v/range;
   const bars=data.map((d,i)=>{const x=padL+i*step+(step-bw)/2;let out="";
-    const rh=innerH*d.revenue/range;out+='<rect x="'+x+'" y="'+(zeroY-rh).toFixed(1)+'" width="'+bw+'" height="'+rh.toFixed(1)+'" fill="var(--brand)"></rect>';
-    let y=zeroY;const rmh=innerH*d.room/range;if(rmh>0)out+='<rect x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+rmh.toFixed(1)+'" fill="var(--warn)"></rect>';y+=rmh;
-    const sph=innerH*d.sup/range;if(sph>0)out+='<rect x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+sph.toFixed(1)+'" fill="var(--accent)"></rect>';
+    let up=zeroY;                                            /* positives stack upward from zero */
+    const rh=innerH*d.revenue/range;if(rh>0){up-=rh;out+='<rect x="'+x+'" y="'+up.toFixed(1)+'" width="'+bw+'" height="'+rh.toFixed(1)+'" fill="var(--brand)"></rect>';}
+    const oh=innerH*(d.oth||0)/range;if(oh>0){up-=oh;out+='<rect x="'+x+'" y="'+up.toFixed(1)+'" width="'+bw+'" height="'+oh.toFixed(1)+'" fill="var(--good)"></rect>';}
+    let y=zeroY;                                             /* negatives stack downward */
+    const rmh=innerH*d.room/range;if(rmh>0){out+='<rect x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+rmh.toFixed(1)+'" fill="var(--warn)"></rect>';y+=rmh;}
+    const sph=innerH*d.sup/range;if(sph>0){out+='<rect x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+sph.toFixed(1)+'" fill="var(--accent)"></rect>';y+=sph;}
+    const ch=innerH*(d.costs||0)/range;if(ch>0){out+='<rect x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+ch.toFixed(1)+'" fill="var(--bad)"></rect>';y+=ch;}
     return out;}).join("");
   const npts=data.map((d,i)=>[padL+i*step+step/2,yOf(d.net)]);
   const nline=npts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
@@ -1269,13 +1328,18 @@ function chartCombo(data,sel){
   const labs=data.map((d,i)=>'<text x="'+(padL+i*step+step/2)+'" y="'+(h-padB+22)+'" text-anchor="middle" font-size="10" fill="var(--muted)">'+esc(d.l)+'</text>').join("");
   const hot=data.map((d,i)=>'<rect class="hot" data-i="'+i+'" x="'+(padL+i*step)+'" y="'+padT+'" width="'+step+'" height="'+innerH+'" fill="transparent"></rect>').join("");
   let tip="";
-  if(sel!=null&&data[sel]){const d=data[sel];const cx=padL+sel*step+step/2;const tw=128,th=70;let tx=cx-tw/2;tx=Math.max(padL,Math.min(tx,W-tw-padL));const ty=padT+2;
+  if(sel!=null&&data[sel]){const d=data[sel];const cx=padL+sel*step+step/2;
+    /* rows are built from what's actually there, so the box grows only when there's more to say */
+    const rows=[["Revenue "+gbp(d.revenue),"#9fe0d3"]];
+    if(d.oth)rows.push(["Other income "+gbp(d.oth),"#a8e6a3"]);
+    if(d.room)rows.push(["Room −"+gbp(d.room),"#f0b27a"]);
+    if(d.sup)rows.push(["Supervision −"+gbp(d.sup),"#c5a8f0"]);
+    if(d.costs)rows.push(["Business costs −"+gbp(d.costs),"#f2a2a2"]);
+    const tw=140,th=30+rows.length*13+14;let tx=cx-tw/2;tx=Math.max(padL,Math.min(tx,W-tw-padL));const ty=padT+2;
     tip='<g><rect x="'+tx+'" y="'+ty+'" width="'+tw+'" height="'+th+'" rx="6" fill="#1f2a2a" opacity="0.92"></rect>'+
       '<text x="'+(tx+8)+'" y="'+(ty+15)+'" font-size="10" fill="#fff" font-weight="700">'+esc(d.l)+'</text>'+
-      '<text x="'+(tx+8)+'" y="'+(ty+30)+'" font-size="10" fill="#9fe0d3">Revenue '+gbp(d.revenue)+'</text>'+
-      '<text x="'+(tx+8)+'" y="'+(ty+43)+'" font-size="10" fill="#f0b27a">Room −'+gbp(d.room)+'</text>'+
-      '<text x="'+(tx+8)+'" y="'+(ty+56)+'" font-size="10" fill="#c5a8f0">Supervision −'+gbp(d.sup)+'</text>'+
-      '<text x="'+(tx+8)+'" y="'+(ty+68)+'" font-size="10" fill="#fff" font-weight="700">Net '+gbp(d.net)+'</text></g>';}
+      rows.map((r,i)=>'<text x="'+(tx+8)+'" y="'+(ty+30+i*13)+'" font-size="10" fill="'+r[1]+'">'+r[0]+'</text>').join("")+
+      '<text x="'+(tx+8)+'" y="'+(ty+30+rows.length*13+8)+'" font-size="10" fill="#fff" font-weight="700">Net '+gbp(d.net)+'</text></g>';}
   const avgPts=data.map((d,i)=>[padL+i*step+step/2,yOf(d.netAvg||0)]);
   const avgLine=avgPts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
   const avgSvg='<path d="'+avgLine+'" fill="none" stroke="var(--card)" stroke-width="4.2" stroke-dasharray="2.4 3.6" stroke-linecap="round"></path><path d="'+avgLine+'" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-dasharray="2.4 3.6" stroke-linecap="round"></path>';
@@ -1288,7 +1352,13 @@ function chartCombo(data,sel){
     bars+'<line x1="'+padL+'" y1="'+zeroY.toFixed(1)+'" x2="'+(W-padL)+'" y2="'+zeroY.toFixed(1)+'" stroke="var(--ink)" stroke-width="0.7" opacity="0.5"></line>'+
     avgSvg+'<path d="'+nline+'" fill="none" stroke="var(--hi)" stroke-width="2.9" stroke-linejoin="round"></path>'+ndots+avgCall+labs+hot+tip+'</svg></div>';
 }
-function comboLegend(){return '<div class="legend"><span class="lgi"><i style="background:var(--brand)"></i>Revenue</span><span class="lgi"><i style="background:var(--warn)"></i>Room</span><span class="lgi"><i style="background:var(--accent)"></i>Supervision</span><span class="lgi"><i class="line"></i>Net income</span><span class="lgi"><i class="dash"></i>6-mo avg</span></div>';}
+/* the extra bands only earn a legend chip when the data actually has them */
+function comboLegend(series){const has=f=>(series||[]).some(d=>d[f]);
+  return '<div class="legend"><span class="lgi"><i style="background:var(--brand)"></i>Revenue</span>'+
+    (has("oth")?'<span class="lgi"><i style="background:var(--good)"></i>Other income</span>':'')+
+    '<span class="lgi"><i style="background:var(--warn)"></i>Room</span><span class="lgi"><i style="background:var(--accent)"></i>Supervision</span>'+
+    (has("costs")?'<span class="lgi"><i style="background:var(--bad)"></i>Business costs</span>':'')+
+    '<span class="lgi"><i class="line"></i>Net income</span><span class="lgi"><i class="dash"></i>6-mo avg</span></div>';}
 function payChip(s,d){return d.clientPaid?'<span class="chip y">paid '+fmtDM(s.paidDate)+'</span>':(d.overdue?'<span class="chip n">overdue · due '+fmtDM(s.date)+'</span>':'<span class="chip na">awaiting</span>');}
 function missingReasons(s){const m=[];
   if(!(s.notes&&String(s.notes).trim()))m.push("notes");
@@ -1319,10 +1389,15 @@ function mountAccreditation(host){if(!host||!feat("accreditation"))return;
     const supSess=(S.supervision||[]).filter(s=>{const d=s.date?parseD(s.date):null;return d&&d<=t;}).length;
     const other=+g("#ac_other").value||0, train=+g("#ac_train").value||0, place=+g("#ac_place").value||0;
     const clinical=cs.logged+other, sup=supSess+train+place;
+    /* peer hours are additive to the total and deliberately absent from `sup`, which is the
+       only figure the 1:6 ratio is allowed to see */
+    const peer=feat("peer")?(S.peerSupervision||[]).reduce((a,p)=>{const d=p.date?parseD(p.date):null;
+      return a+((d&&d<=t)?(+p.hours||0):0);},0):0;
     const ratio=sup>0?clinical/sup:null, minSup=clinical/6;
     out.innerHTML='<div class="kpis" style="margin-top:12px">'+
         '<div class="kpi"><div class="v">'+r1(clinical)+'</div><div class="l">Clinical hrs</div></div>'+
         '<div class="kpi"><div class="v">'+r1(sup)+'</div><div class="l">Supervision hrs</div></div>'+
+        (peer?'<div class="kpi"><div class="v">'+r1(peer)+'</div><div class="l">Peer hrs (not in ratio)</div></div>':'')+
         '<div class="kpi'+(ratio!=null?(ratio<=6?' good':' bad'):'')+'"><div class="v">'+(ratio!=null?r1(ratio):'—')+'</div><div class="l">Ratio (≤6)</div></div>'+
       '</div>'+
       (ratio==null?'<div class="vmsg warn" style="margin-top:10px">⚠️ Enter supervision hours to calculate the ratio.</div>'
@@ -1331,8 +1406,10 @@ function mountAccreditation(host){if(!host||!feat("accreditation"))return;
       '<div class="acc-work">'+
         '<div><b>Clinical</b> = logged sessions '+cs.logged+(other?' + other '+r1(other):'')+' = <b>'+r1(clinical)+' hrs</b> <span class="muted">(late cancellations excluded)</span></div>'+
         '<div><b>Supervision</b> = logged sessions '+supSess+' + training '+r1(train)+' + placement '+r1(place)+' = <b>'+r1(sup)+' hrs</b></div>'+
+        (peer?'<div><b>Peer supervision</b> = '+r1(peer)+' hrs <span class="muted">(counted in your total hours, never in the ratio)</span></div>':'')+
         '<div><b>Ratio</b> = '+r1(clinical)+' ÷ '+r1(sup)+' = <b>'+(ratio!=null?r1(ratio):'—')+'</b> &nbsp;(must be ≤ 6; lower = more supervision)</div>'+
-        '<div class="small muted" style="margin-top:5px">Guideline: min 1½ hrs supervision per month. Peer supervision doesn’t count.</div>'+
+        (peer?'<div><b>Total accreditation hours</b> = clinical '+r1(clinical)+' + supervision '+r1(sup)+' + peer '+r1(peer)+' = <b>'+r1(clinical+sup+peer)+' hrs</b></div>':'')+
+        '<div class="small muted" style="margin-top:5px">Guideline: min 1½ hrs supervision per month. Peer supervision counts toward your total hours but not toward the 1:6 ratio.</div>'+
       '</div>';
   }
   ["#ac_train","#ac_place","#ac_other"].forEach(id=>{const inp=g(id);
@@ -1583,7 +1660,9 @@ VIEWS.sessions=function(){
 
 VIEWS.supervision=function(){
   const v=el('<div class="view active"></div>');
-  v.innerHTML='<div class="seg mb" id="suptab" style="display:inline-flex"><button data-st="log" class="'+(supTab==="log"?"on":"")+'">Log</button><button data-st="metrics" class="'+(supTab==="metrics"?"on":"")+'">Insights</button></div><div id="supbody"></div>';
+  v.innerHTML='<div class="seg mb" id="suptab" style="display:inline-flex"><button data-st="log" class="'+(supTab==="log"?"on":"")+'">Log</button>'+
+    (feat("peer")?'<button data-st="peer" class="'+(supTab==="peer"?"on":"")+'">Peer</button>':'')+
+    '<button data-st="metrics" class="'+(supTab==="metrics"?"on":"")+'">Insights</button></div><div id="supbody"></div>';
   const sb=v.querySelector("#supbody");
   {
     function drawLog(){
@@ -1595,6 +1674,25 @@ VIEWS.supervision=function(){
         '<p class="small muted center">Total logged: '+gbp(total)+' across '+sup.length+' session(s).</p>';
       sb.querySelector("#addSup").onclick=()=>supervisionForm(null);
       sb.querySelectorAll(".list-item").forEach(li=>li.onclick=()=>supervisionForm(S.supervision.find(s=>s._id===li.dataset.id)));
+    }
+    /* Peer supervision is kept apart from clinical on purpose: it counts toward total
+       accreditation hours but never toward the 1:6 ratio. Mixing the two lists would make
+       that distinction impossible to see. */
+    function drawPeer(){
+      const pv=(S.peerSupervision||[]).slice().sort((a,b)=>parseD(b.date)-parseD(a.date));
+      const hrs=pv.reduce((a,p)=>a+(+p.hours||0),0);
+      const cost=pv.reduce((a,p)=>a+(+p.cost||0),0);
+      sb.innerHTML='<div class="toolbar"><button class="btn sm" id="addPeer">＋ Log peer supervision</button></div>'+
+        '<div class="card" style="padding:4px 12px">'+(pv.length?pv.map(p=>
+          '<div class="list-item" data-id="'+p._id+'"><div class="li-main"><div class="li-title">'+esc(p.with||"Peer supervision")+'</div>'+
+          '<div class="li-sub">'+fmtDshort(p.date)+' · '+(Math.round((+p.hours||0)*10)/10)+' hr'+((+p.hours)===1?'':'s')+
+          (p.notes?' · '+esc(p.notes):'')+'</div></div>'+
+          '<div class="li-right">'+(+p.cost?gbp(p.cost):'<span class="small muted">free</span>')+'</div></div>').join("")
+          :'<p class="muted small center" style="padding:18px">No peer supervision logged yet.</p>')+'</div>'+
+        '<p class="small muted center">'+(Math.round(hrs*10)/10)+' hr'+(hrs===1?'':'s')+' logged'+(cost?' · '+gbp(cost)+' spent':'')+'.</p>'+
+        '<div class="card"><h2>What this counts toward</h2><p class="small muted" style="margin:0">Peer supervision adds to your <b>total accreditation hours</b> on the Insights tab. It is deliberately left out of the <b>1:6 clinical-to-supervision ratio</b>, which only counts formal clinical supervision — that’s the BACP rule, not an app decision.</p></div>';
+      sb.querySelector("#addPeer").onclick=()=>peerForm(null);
+      sb.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>peerForm((S.peerSupervision||[]).find(p=>p._id===li.dataset.id)));
     }
     function drawMetrics(){
       const t=today();
@@ -1624,7 +1722,8 @@ VIEWS.supervision=function(){
         '<div class="legend" style="margin-top:10px"><span class="lgi"><i style="background:var(--good)"></i>≤4 wks</span><span class="lgi"><i style="background:var(--accent)"></i>4–8 wks</span><span class="lgi"><i style="background:var(--bad)"></i>8+ wks / never</span></div></div>';
       mountAccreditation(sb.querySelector("#accMount"));
     }
-    const route=()=>supTab==="metrics"?drawMetrics():drawLog();
+    if(supTab==="peer"&&!feat("peer"))supTab="log";   // feature switched off since it was last open
+    const route=()=>supTab==="metrics"?drawMetrics():supTab==="peer"?drawPeer():drawLog();
     v.querySelector("#suptab").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{supTab=bt.dataset.st;
       v.querySelector("#suptab").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));route();});
     route();
@@ -1655,9 +1754,11 @@ VIEWS.clients=function(){
     body.innerHTML='<div class="toolbar"><button class="btn sm" id="addR">＋ New room / location</button></div><div id="rlist"></div>';
     const r=()=>{
       body.querySelector("#rlist").innerHTML='<div class="card" style="padding:4px 12px">'+S.rooms.map(rm=>{
-        const rate=effRoomRate(rm.location,isoD(today()));
-        return '<div class="list-item" data-id="'+rm._id+'"><div class="li-main"><div class="li-title">'+esc(rm.location)+'</div><div class="li-sub">Payment due: '+esc(rm.due||"n/a")+'</div></div><div class="li-right">'+gbp(rate)+'</div></div>';}).join("")+'</div>'+
-        '<p class="small muted">Tap a room to edit it or change its cost from a date (history is kept, like client rates).</p>';
+        const monthly=roomBilling(rm)==="monthly";
+        return '<div class="list-item" data-id="'+rm._id+'"><div class="li-main"><div class="li-title">'+esc(rm.location)+
+          (monthly?' <span class="chip f">monthly</span>':'')+'</div><div class="li-sub">Payment due: '+esc(rm.due||"n/a")+'</div></div>'+
+          '<div class="li-right">'+roomCostLabel(rm)+'</div></div>';}).join("")+'</div>'+
+        '<p class="small muted">Tap a room to edit it, change its cost from a date, or switch it between a per-session cost and a flat monthly rent (history is kept, like client rates).</p>';
       body.querySelectorAll("#rlist .list-item").forEach(li=>li.onclick=()=>roomForm(S.rooms.find(x=>x._id===li.dataset.id)));
     };
     body.querySelector("#addR").onclick=()=>roomForm(null); r();
@@ -1752,26 +1853,69 @@ VIEWS.clients=function(){
     v.querySelector("#crtab").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));route();});
   route();return v;
 };
+/* Rooms bill one of two ways. Per-session is the original: a dated roomRateHistory step that
+   derive() picks up per session. Monthly is a dated roomRentHistory step that the finances
+   ledger charges once a month, with the per-session rate held at 0 so the same room can never
+   charge twice for the same booking. Switching modes writes both steps — see roomBillingSwitch. */
+function roomBilling(rm){return (rm&&rm.billing==="monthly")?"monthly":"session";}
+function roomCostLabel(rm){
+  const monthly=roomBilling(rm)==="monthly", iso=isoD(today());
+  const unit=monthly?" / month":" / session";
+  const now=monthly?effRoomRent(rm.location,iso):effRoomRate(rm.location,iso);
+  if(!now){
+    /* a change dated in the future would otherwise read as "£0" until the day it lands */
+    const arr=monthly?(S.roomRentHistory||[]):(S.roomRateHistory||[]);
+    const next=arr.filter(h=>(h.location||"").toLowerCase()===(rm.location||"").toLowerCase()&&parseD(h.effectiveFrom)>today())
+      .sort((a,b)=>parseD(a.effectiveFrom)-parseD(b.effectiveFrom))[0];
+    const amt=next?(monthly?+next.amount:+next.rate):0;
+    if(amt)return gbp(amt)+unit+' <span class="small muted">from '+fmtDshort(next.effectiveFrom)+'</span>';
+  }
+  return gbp(now)+unit;
+}
 function roomForm(rm){
-  const isNew=!rm; const m=rm?clone(rm):{_id:uid(),location:"",due:"n/a"};
+  const isNew=!rm; const m=rm?clone(rm):{_id:uid(),location:"",due:"n/a",billing:"session"};
   const body=el('<div></div>');
-  const rateNow=isNew?"":effRoomRate(m.location,isoD(today()));
-  const hist=(S.roomRateHistory||[]).filter(r=>(r.location||"").toLowerCase()===(m.location||"").toLowerCase()).sort((a,b)=>parseD(b.effectiveFrom)-parseD(a.effectiveFrom));
+  const mode=roomBilling(m);
+  const hist=(mode==="monthly"?(S.roomRentHistory||[]):(S.roomRateHistory||[]))
+    .filter(r=>(r.location||"").toLowerCase()===(m.location||"").toLowerCase())
+    .sort((a,b)=>parseD(b.effectiveFrom)-parseD(a.effectiveFrom));
   body.innerHTML='<label>Location / room name</label><input id="r_loc" value="'+esc(m.location)+'">'+
+    (isNew?'<label>How is this room charged?</label>'+
+      '<div class="seg" id="r_bill" style="display:inline-flex"><button type="button" data-b="session" class="on">Per session</button><button type="button" data-b="monthly">Monthly rent</button></div>':'')+
     '<label>When is payment due?</label><select id="r_due">'+opts(["n/a","EOM","EOW"],m.due||"n/a")+'</select>'+
     '<p class="small muted">EOM = end of month · EOW = end of week · n/a = no room charge.</p>'+
-    (isNew?'<label>Cost per session (£)</label><input type="number" id="r_rate" value="0">':
-      '<div class="hint">Current cost: <b>'+gbp(rateNow)+'</b> <button class="btn sm" id="chR" style="float:right">Change cost</button></div><div id="rhist"></div>')+
+    (isNew?'<label id="r_amtL">Cost per session (£)</label><input type="number" id="r_rate" value="0">':
+      '<div class="hint">Charged <b>'+esc(mode==="monthly"?"monthly":"per session")+'</b> · current '+
+        '<b>'+roomCostLabel(m)+'</b> <button class="btn sm" id="chR" style="float:right">Change cost</button></div>'+
+      '<div id="rhist"></div>'+
+      '<button class="btn sec full mt" id="chB">⇄ Switch to '+(mode==="monthly"?"a per-session cost":"monthly rent")+'…</button>'+
+      '<p class="small muted" style="margin:5px 0 0">'+(mode==="monthly"
+        ? 'Sessions here would start carrying a per-session room cost again from the date you choose.'
+        : 'A flat monthly rent instead of a charge per session — sessions here stop carrying a room cost from the date you choose.')+'</p>')+
     '<button class="btn full mt" id="rSave">Save room</button>'+
     (isNew?"":'<button class="btn danger full mt" id="rDel">Delete room</button>');
-  if(!isNew){body.querySelector("#rhist").innerHTML='<details><summary>Cost history ('+hist.length+')</summary>'+hist.map(r=>'<div class="audit-row"><b>'+gbp(r.rate)+'</b> from '+fmtD(r.effectiveFrom)+'</div>').join("")+'</details>';
-    body.querySelector("#chR").onclick=()=>roomRateChange(m.location);}
+  if(isNew){
+    const seg=body.querySelector("#r_bill");
+    seg.querySelectorAll("button").forEach(b=>b.onclick=()=>{
+      seg.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+      m.billing=b.dataset.b;
+      body.querySelector("#r_amtL").textContent=(m.billing==="monthly")?"Monthly rent (£)":"Cost per session (£)";});
+  }else{
+    body.querySelector("#rhist").innerHTML='<details><summary>Cost history ('+hist.length+')</summary>'+
+      (hist.length?hist.map(r=>'<div class="audit-row"><b>'+gbp(mode==="monthly"?r.amount:r.rate)+(mode==="monthly"?' / month':'')+'</b> from '+fmtD(r.effectiveFrom)+'</div>').join("")
+                  :'<div class="audit-row muted">Nothing recorded yet.</div>')+'</details>';
+    body.querySelector("#chR").onclick=()=>mode==="monthly"?roomRentChange(m.location):roomRateChange(m.location);
+    body.querySelector("#chB").onclick=()=>roomBillingSwitch(m);
+  }
   body.querySelector("#rSave").onclick=async()=>{const loc=body.querySelector("#r_loc").value.trim();const dueV=body.querySelector("#r_due").value;
     if(!loc){toast("Enter a name");return}
     if(isNew){if(S.rooms.find(x=>x.location.toLowerCase()===loc.toLowerCase())){toast("Already exists");return}
-      const rate=+body.querySelector("#r_rate").value||0;m.location=loc;m.due=dueV;m.rate=rate;S.rooms.push(m);
-      S.roomRateHistory.push({_id:uid(),location:loc,effectiveFrom:isoD(today()),rate:rate});
-      await commit("Added room: "+loc+" @ "+gbp(rate));}
+      const amt=+body.querySelector("#r_rate").value||0;const monthly=(m.billing==="monthly");
+      m.location=loc;m.due=dueV;m.rate=monthly?0:amt;S.rooms.push(m);
+      /* a monthly room still gets a 0 per-session step, so derive() never charges its sessions */
+      S.roomRateHistory.push({_id:uid(),location:loc,effectiveFrom:isoD(today()),rate:monthly?0:amt});
+      if(monthly)S.roomRentHistory.push({_id:uid(),location:loc,effectiveFrom:isoD(today()),amount:amt});
+      await commit("Added room: "+loc+" @ "+gbp(amt)+(monthly?"/month":"/session"));}
     else{const ex=S.rooms.find(x=>x._id===m._id);ex.location=loc;ex.due=dueV;await commit("Edited room: "+loc);}
     closeSheet();toast("Saved");go("clients");};
   if(!isNew)body.querySelector("#rDel").onclick=async()=>{if(!confirm("Delete room "+m.location+"? (sessions are kept)"))return;
@@ -1790,6 +1934,178 @@ function roomRateChange(loc){
     const rm=S.rooms.find(r=>r.location.toLowerCase()===loc.toLowerCase());if(rm&&parseD(dt)<=today())rm.rate=amt;
     await commit("Room cost change: "+loc+" → "+gbp(amt)+" from "+dt);closeSheet();toast("Cost updated");go("clients");};
   openSheet("Change cost · "+loc,body);
+}
+function roomRentChange(loc){
+  const body=el('<div></div>');
+  body.innerHTML='<p class="muted small">Adds a new monthly rent from a date you choose. <b>Past months keep the old rent.</b></p>'+
+    '<label>Effective from</label><input type="date" id="rnD" value="'+isoD(today())+'">'+
+    '<label>New monthly rent (£)</label><input type="number" id="rnA" value="'+(effRoomRent(loc,isoD(today()))||0)+'">'+
+    '<p class="small muted">Rent is counted once a month, on the day of the month the rent started.</p>'+
+    '<button class="btn full mt" id="rnS">Apply new rent</button>';
+  body.querySelector("#rnS").onclick=async()=>{const dt=body.querySelector("#rnD").value;const amt=+body.querySelector("#rnA").value;
+    if(!dt||isNaN(amt)){toast("Enter date and amount");return}
+    S.roomRentHistory.push({_id:uid(),location:loc,effectiveFrom:dt,amount:amt});
+    await commit("Room rent change: "+loc+" → "+gbp(amt)+"/month from "+dt);closeSheet();toast("Rent updated");go("clients");};
+  openSheet("Change rent · "+loc,body);
+}
+/* Switch a room between billing modes from a date. Both histories get a step, so the room is
+   charged exactly one way on any given day and nothing already logged is rewritten. */
+function roomBillingSwitch(rm){
+  const to=roomBilling(rm)==="monthly"?"session":"monthly";
+  const loc=rm.location;
+  const body=el('<div></div>');
+  const suggest=to==="monthly"?(effRoomRent(loc,isoD(today()))||0):(effRoomRate(loc,isoD(today()))||0);
+  body.innerHTML='<p class="muted small">'+(to==="monthly"
+      ? 'From this date <b>'+esc(loc)+'</b> costs a flat monthly rent, and sessions there stop carrying a per-session room cost.'
+      : 'From this date <b>'+esc(loc)+'</b> costs a set amount per session again, and the monthly rent stops.')+
+    ' <b>Sessions before it keep exactly what they cost at the time.</b></p>'+
+    '<label>Effective from</label><input type="date" id="rbD" value="'+isoD(today())+'">'+
+    '<label>'+(to==="monthly"?"Monthly rent (£)":"Cost per session (£)")+'</label>'+
+    '<input type="number" id="rbA" value="'+suggest+'">'+
+    '<button class="btn full mt" id="rbS">Switch to '+(to==="monthly"?"monthly rent":"a per-session cost")+'</button>';
+  body.querySelector("#rbS").onclick=async()=>{
+    const dt=body.querySelector("#rbD").value, amt=+body.querySelector("#rbA").value;
+    if(!dt||isNaN(amt)){toast("Enter date and amount");return}
+    const ex=S.rooms.find(x=>x._id===rm._id); if(!ex){toast("Room not found");return}
+    if(to==="monthly"){
+      S.roomRateHistory.push({_id:uid(),location:loc,effectiveFrom:dt,rate:0});
+      S.roomRentHistory.push({_id:uid(),location:loc,effectiveFrom:dt,amount:amt});
+      ex.billing="monthly"; if(parseD(dt)<=today())ex.rate=0;
+    }else{
+      S.roomRentHistory.push({_id:uid(),location:loc,effectiveFrom:dt,amount:0});
+      S.roomRateHistory.push({_id:uid(),location:loc,effectiveFrom:dt,rate:amt});
+      ex.billing="session"; if(parseD(dt)<=today())ex.rate=amt;
+    }
+    await commit("Room billing: "+loc+" → "+(to==="monthly"?gbp(amt)+"/month":gbp(amt)+"/session")+" from "+dt);
+    closeSheet();toast("Billing updated");go("clients");};
+  openSheet("Switch billing · "+loc,body);
+}
+
+/* ===== Business costs & other income =====
+   Two ledgers with the same shape, so one form serves both. A monthly row is stored once and
+   expanded at read time by ledgerBetween — editing the amount corrects every month it covers. */
+const FIN_CATS={
+  /* "Room rent" is deliberately not first: a room set to monthly billing already charges its own
+     rent, and a therapist accepting the default category would silently count it twice. */
+  exp:["Insurance","Utilities","Professional fees","Training & CPD","Travel","Equipment","Software","Marketing","Bank & card fees","Room hire","Other"],
+  inc:["Room sublet","Workshops & training","Supervision provided","Writing & consultancy","Other"]
+};
+function finArr(kind){return kind==="exp"?(S.expenses=S.expenses||[]):(S.otherIncome=S.otherIncome||[]);}
+function finRecurring(x){return String(x&&x.recurrence||"once")==="monthly";}
+function finPersonal(x){return String(x&&x.scope||"practice")==="personal";}
+function financeForm(kind,rec){
+  const isNew=!rec, isInc=(kind==="inc");
+  const m=rec?clone(rec):{_id:uid(),desc:"",amount:0,date:isoD(today()),recurrence:"once",endDate:"",category:FIN_CATS[kind][0]};
+  if(isInc&&m.scope==null)m.scope="practice";
+  const body=el('<div></div>');
+  body.innerHTML='<label>Description</label><input id="f_desc" maxlength="60" value="'+esc(m.desc||"")+'" placeholder="'+(isInc?"Room sublet to a colleague":"Electricity")+'">'+
+    '<div class="field2"><div><label>Amount (£)</label><input type="number" min="0" step="0.01" id="f_amt" value="'+(+m.amount||0)+'"></div>'+
+      '<div><label>Category</label><select id="f_cat">'+opts(FIN_CATS[kind],m.category||FIN_CATS[kind][0])+'</select></div></div>'+
+    '<label>How often?</label>'+
+    '<div class="seg" id="f_rec" style="display:inline-flex"><button type="button" data-r="once" class="'+(finRecurring(m)?"":"on")+'">One-off</button>'+
+      '<button type="button" data-r="monthly" class="'+(finRecurring(m)?"on":"")+'">Every month</button></div>'+
+    '<label id="f_dateL" style="margin-top:12px"></label><input type="date" id="f_date" value="'+esc(m.date||"")+'">'+
+    '<div id="f_endWrap"><label>Ends <span class="muted small">(optional — leave blank if it still runs)</span></label>'+
+      '<input type="date" id="f_end" value="'+esc(m.endDate||"")+'"></div>'+
+    (isInc?'<label style="margin-top:12px">Is this part of the practice?</label>'+
+      '<div class="seg" id="f_scope" style="display:inline-flex"><button type="button" data-s="practice" class="'+(finPersonal(m)?"":"on")+'">Practice income</button>'+
+        '<button type="button" data-s="personal" class="'+(finPersonal(m)?"on":"")+'">Separate work</button></div>'+
+      '<p class="small muted" id="f_scopeNote"></p>':'')+
+    (isInc?'':'<p class="small muted" id="f_rentWarn" style="display:none"></p>')+
+    '<button class="btn full mt" id="f_save">Save</button>'+
+    (isNew?'':'<button class="btn danger full mt" id="f_del">Delete</button>');
+  const g=s=>body.querySelector(s);
+  const paint=()=>{
+    const mo=finRecurring(m);
+    g("#f_dateL").textContent=mo?"First charged on":(isInc?"Date received":"Date");
+    g("#f_endWrap").style.display=mo?"":"none";
+    if(!isInc){
+      /* rooms already on monthly billing charge their own rent — warn before it's counted twice */
+      const w=g("#f_rentWarn"), monthlyRooms=S.rooms.filter(r=>roomBilling(r)==="monthly").map(r=>r.location);
+      const looksLikeRent=/rent/i.test(g("#f_cat").value)||/rent/i.test(g("#f_desc").value);
+      if(w){w.style.display=(looksLikeRent&&monthlyRooms.length)?"":"none";
+        w.innerHTML="⚠️ "+esc(monthlyRooms.join(", "))+(monthlyRooms.length===1?" is":" are")+
+          " already billed as monthly rent from <b>Clients › Rooms</b>, and counted in your costs automatically. Only add rent here for a room the app doesn’t know about.";}
+    }
+    if(isInc)g("#f_scopeNote").innerHTML=finPersonal(m)
+      ? "Kept out of your practice’s net income and tax estimate — a second job or tutoring is a separate trade, taxed on its own. It’s still logged and totalled here."
+      : "Counted in your practice’s net income and tax-year figures, alongside session fees.";
+  };
+  g("#f_cat").onchange=paint; g("#f_desc").oninput=paint;
+  g("#f_rec").querySelectorAll("button").forEach(b=>b.onclick=()=>{m.recurrence=b.dataset.r;
+    g("#f_rec").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));paint();});
+  if(isInc)g("#f_scope").querySelectorAll("button").forEach(b=>b.onclick=()=>{m.scope=b.dataset.s;
+    g("#f_scope").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));paint();});
+  paint();
+  g("#f_save").onclick=async()=>{
+    m.desc=g("#f_desc").value.trim(); m.amount=+g("#f_amt").value||0;
+    m.category=g("#f_cat").value; m.date=g("#f_date").value;
+    m.endDate=finRecurring(m)?g("#f_end").value:"";
+    if(!m.desc){toast("Add a description");Sfx.error();return;}
+    if(!(m.amount>0)){toast("Enter an amount");Sfx.error();return;}
+    if(!m.date){toast("Pick a date");Sfx.error();return;}
+    if(m.endDate&&parseD(m.endDate)<parseD(m.date)){toast("The end date is before the start");Sfx.error();return;}
+    const arr=finArr(kind), ex=arr.find(x=>x._id===m._id);
+    if(ex)Object.assign(ex,m); else arr.push(m);
+    const what=(isInc?"income":"cost")+": "+m.desc+" "+gbp(m.amount)+(finRecurring(m)?"/month":"");
+    await commit((ex?"Edited ":"Added ")+what);
+    closeSheet();toast("Saved");go("income");};
+  if(!isNew)g("#f_del").onclick=async()=>{
+    if(!confirm("Delete “"+m.desc+"”?\n\nIt stops counting in every tax year it covered."))return;
+    const arr=finArr(kind); const i=arr.findIndex(x=>x._id===m._id); if(i>=0)arr.splice(i,1);
+    await commit("Deleted "+(isInc?"income":"cost")+": "+m.desc);
+    closeSheet();toast("Deleted");go("income");};
+  openSheet((isNew?"New ":"Edit ")+(isInc?"other income":"business cost"),body);
+}
+/* The two ledger cards on the Revenue tab, plus the monthly rents that come from Rooms. */
+function financeCards(){
+  if(!feat("finances"))return "";
+  const ty=curTaxYear(), b=tyBounds(ty), led=ledgerBetween(b.start,b.end,{});
+  const rentRooms=S.rooms.filter(r=>roomBilling(r)==="monthly");
+  const line=(x,kind)=>'<div class="list-item" data-fin="'+kind+'" data-id="'+esc(x._id)+'">'+
+    '<div class="li-main"><div class="li-title">'+esc(x.desc||"(no description)")+
+      (finRecurring(x)?' <span class="chip f">monthly</span>':'')+
+      (kind==="inc"&&finPersonal(x)?' <span class="chip na">separate</span>':'')+'</div>'+
+    '<div class="li-sub">'+esc(x.category||"")+' · '+(finRecurring(x)
+        ? ('from '+fmtDshort(x.date)+(x.endDate?' to '+fmtDshort(x.endDate):''))
+        : fmtDshort(x.date))+'</div></div>'+
+    '<div class="li-right">'+gbp(x.amount)+(finRecurring(x)?'<span class="small muted"> /mo</span>':'')+'</div></div>';
+  const sortFin=a=>a.slice().sort((x,y)=>parseD(y.date)-parseD(x.date));
+  const rentRows=rentRooms.map(r=>{
+    const amt=effRoomRent(r.location,isoD(today()));
+    const inTY=roomRentOccurrences(b.start,b.end).filter(o=>(o.location||"").toLowerCase()===(r.location||"").toLowerCase())
+      .reduce((a,o)=>a+o.amount,0);
+    return '<div class="list-item"><div class="li-main"><div class="li-title">'+esc(r.location)+' <span class="chip f">rent</span></div>'+
+      '<div class="li-sub">Set in Clients › Rooms · '+gbp(inTY)+' this tax year</div></div>'+
+      '<div class="li-right">'+gbp(amt)+'<span class="small muted"> /mo</span></div></div>';}).join("");
+  const exps=sortFin(S.expenses||[]), incs=sortFin(S.otherIncome||[]);
+  const costTotal=led.expenses+led.roomRent;
+  const expCard='<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
+      '<h2 style="margin:0">Business costs</h2><button class="btn sm" id="addExp">＋ Add a cost</button></div>'+
+    '<p class="small muted">Everything you pay to run the practice that isn’t a room charge on a session — insurance, wifi, CPD. Monthly costs repeat on their own.</p>'+
+    '<div class="kpis mt" style="grid-template-columns:1fr 1fr">'+
+      '<div class="kpi"><div class="v">'+gbp(Math.round(costTotal))+'</div><div class="l">'+ty+' costs</div></div>'+
+      '<div class="kpi"><div class="v">'+gbp(Math.round(led.roomRent))+'</div><div class="l">of that, room rent</div></div></div>'+
+    (rentRows||exps.length?'<div style="padding:0 2px;margin-top:8px">'+rentRows+exps.map(x=>line(x,"exp")).join("")+'</div>'
+      :'<p class="muted small mt">No costs logged yet.</p>')+
+    '<p class="small muted" style="margin-top:8px">These come off your net income and tax estimate. Room rent is shown here but edited on the room itself.</p></div>';
+  const incCard='<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
+      '<h2 style="margin:0">Other income</h2><button class="btn sm" id="addInc">＋ Add income</button></div>'+
+    '<p class="small muted">Money in that isn’t a client session — subletting a room, running a workshop.</p>'+
+    '<div class="kpis mt" style="grid-template-columns:1fr 1fr">'+
+      '<div class="kpi good"><div class="v">'+gbp(Math.round(led.otherIncome))+'</div><div class="l">'+ty+' practice income</div></div>'+
+      '<div class="kpi"><div class="v">'+gbp(Math.round(led.personalIncome))+'</div><div class="l">separate work (not counted)</div></div></div>'+
+    (incs.length?'<div style="padding:0 2px;margin-top:8px">'+incs.map(x=>line(x,"inc")).join("")+'</div>'
+      :'<p class="muted small mt">No other income logged yet.</p>')+
+    '<p class="small muted" style="margin-top:8px">Practice income counts toward your net and tax estimate. Anything marked <b>separate</b> — a second job, tutoring — is a different trade, so it’s totalled here but kept out of both.</p></div>';
+  return expCard+incCard;
+}
+function wireFinance(v){
+  const ae=v.querySelector("#addExp"); if(ae)ae.onclick=()=>financeForm("exp",null);
+  const ai=v.querySelector("#addInc"); if(ai)ai.onclick=()=>financeForm("inc",null);
+  v.querySelectorAll("[data-fin]").forEach(li=>li.onclick=()=>{
+    const kind=li.dataset.fin, rec=finArr(kind).find(x=>x._id===li.dataset.id);
+    if(rec)financeForm(kind,rec);});
 }
 
 
@@ -1811,9 +2127,83 @@ function ukTax(profit,ty){profit=Math.max(0,profit||0);const r=taxRates(ty);
   const total=incomeTax+n1+n2+class2;
   return {profit,pa,b1,b2,b3,incomeTax,n1,n2,class2,total,effective:profit>0?total/profit:0,r};}
 function tyBounds(ty){const sy=parseInt(ty.slice(0,4));return {start:new Date(sy,3,6),end:new Date(sy+1,3,5)};}
+
+/* ===== Business finances ledger: expenses, other income and monthly room rent =====
+   Recurring rows are stored once and expanded here rather than generated into the data, so
+   correcting an amount corrects every period it applies to and there is nothing to keep in sync.
+   Every figure that reports money comes through ledgerBetween(), so the Net column, the tax
+   estimate and the charts cannot drift apart. */
+
+/* Occurrences of one expense/income row inside [from,to]. A monthly row repeats on its own
+   day of the month (clamped in short months) from its date until endDate, or forever. */
+function moneyOccurrences(item,from,to){
+  const start=item&&item.date?parseD(item.date):null;
+  if(!start)return [];
+  const amount=+item.amount||0;
+  if(String(item.recurrence||"once")!=="monthly")
+    return (start>=from&&start<=to)?[{date:start,amount}]:[];
+  const stop=item.endDate?parseD(item.endDate):null;
+  const last=(stop&&stop<to)?stop:to;
+  const out=[],dom=start.getDate();
+  let cur=new Date(start.getFullYear(),start.getMonth(),1);
+  for(let i=0;i<1200&&cur<=last;i++){                       /* 100 years of months, then give up */
+    const dim=new Date(cur.getFullYear(),cur.getMonth()+1,0).getDate();
+    const d=new Date(cur.getFullYear(),cur.getMonth(),Math.min(dom,dim));
+    if(d>last)break;
+    if(d>=start&&d>=from)out.push({date:d,amount});
+    cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);
+  }
+  return out;
+}
+/* Monthly rent effective on a date — dated steps, exactly like effRoomRate. 0 = no rent. */
+function effRoomRent(loc,dateStr){const d=parseD(dateStr);const L=(loc||"").toLowerCase();let best=null;
+  for(const h of (S.roomRentHistory||[])){ if((h.location||"").toLowerCase()!==L)continue;
+    const ef=parseD(h.effectiveFrom); if(d&&ef<=d){ if(!best||parseD(best.effectiveFrom)<ef)best=h; } }
+  return best?(+best.amount||0):0;}
+/* Rent charges landing inside [from,to]. Each room bills on the day of the month its rent
+   started, so a mid-month tax-year boundary lands the charge in the year it was actually due. */
+function roomRentOccurrences(from,to){
+  const out=[],byLoc={};
+  (S.roomRentHistory||[]).forEach(h=>{const k=(h.location||"").toLowerCase();if(!k)return;(byLoc[k]=byLoc[k]||[]).push(h);});
+  Object.keys(byLoc).forEach(k=>{
+    const steps=byLoc[k].slice().sort((a,b)=>parseD(a.effectiveFrom)-parseD(b.effectiveFrom));
+    const first=parseD(steps[0].effectiveFrom); if(!first)return;
+    const loc=steps[0].location, dom=first.getDate();
+    let cur=new Date(first.getFullYear(),first.getMonth(),1);
+    for(let i=0;i<1200;i++){
+      const dim=new Date(cur.getFullYear(),cur.getMonth()+1,0).getDate();
+      const d=new Date(cur.getFullYear(),cur.getMonth(),Math.min(dom,dim));
+      if(d>to)break;
+      if(d>=first&&d>=from){const amt=effRoomRent(loc,isoD(d));if(amt>0)out.push({location:loc,date:d,amount:amt});}
+      cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);
+    }
+  });
+  return out;
+}
+/* Totals for a date range. `total` is the effect on taxable profit: practice income less costs.
+   Income marked personal (a second job, tutoring — a different trade) is counted separately and
+   deliberately kept out of `total`, so it never inflates the practice's Self Assessment figure. */
+function ledgerBetween(from,to,opts){
+  opts=opts||{};
+  if(typeof from==="string")from=parseD(from);
+  if(typeof to==="string")to=parseD(to);
+  if(opts.toDate){const t=today();if(to&&to>t)to=t;}
+  const zero={expenses:0,otherIncome:0,personalIncome:0,roomRent:0,total:0};
+  if(!from||!to||from>to)return zero;
+  let expenses=0,otherIncome=0,personalIncome=0,roomRent=0;
+  (S.expenses||[]).forEach(x=>moneyOccurrences(x,from,to).forEach(o=>{expenses+=o.amount;}));
+  (S.otherIncome||[]).forEach(x=>{const personal=String(x.scope||"practice")==="personal";
+    moneyOccurrences(x,from,to).forEach(o=>{if(personal)personalIncome+=o.amount;else otherIncome+=o.amount;});});
+  roomRentOccurrences(from,to).forEach(o=>{roomRent+=o.amount;});
+  return {expenses,otherIncome,personalIncome,roomRent,total:otherIncome-expenses-roomRent};
+}
+
 function tyNet(y,toDateOnly){const t=today();let net=0;
   S.sessions.forEach(s=>{const d=derive(s);if(d.taxYear!==y)return;if(toDateOnly){const dd=parseD(s.date);if(!dd||dd>t)return;}net+=(d.rate||0)-(d.roomRate||0);});
   (S.supervision||[]).forEach(sv=>{if(!sv.date||taxYear(sv.date)!==y)return;if(toDateOnly){const dd=parseD(sv.date);if(!dd||dd>t)return;}net-=(+sv.cost||0);});
+  (S.peerSupervision||[]).forEach(pv=>{if(!pv.date||taxYear(pv.date)!==y)return;if(toDateOnly){const dd=parseD(pv.date);if(!dd||dd>t)return;}net-=(+pv.cost||0);});
+  const b=tyBounds(y);
+  net+=ledgerBetween(b.start,b.end,{toDate:toDateOnly}).total;
   return Math.round(net);}
 function taxForYear(y){const b=tyBounds(y),t=today();
   const status=b.end<t?"complete":(b.start<=t?"inprogress":"future");
@@ -1882,15 +2272,14 @@ VIEWS.income=function(){
   const der=S.sessions.map(s=>({s,d:derive(s)}));
   const sum=(rows,f)=>rows.reduce((a,x)=>a+(f(x)||0),0);
   const years=[...new Set(der.map(x=>x.d.taxYear).filter(Boolean))].sort().reverse();
-  const supByTY={}; (S.supervision||[]).forEach(sv=>{if(!sv.date)return;const ty=taxYear(sv.date);supByTY[ty]=(supByTY[ty]||0)+(+sv.cost||0);});
   const tyTable=years.map(y=>{const rs=der.filter(x=>x.d.taxYear===y);
     const billed=sum(rs,x=>x.d.rate),rec=sum(rs.filter(x=>x.d.clientPaid),x=>x.d.rate),
-    over=sum(rs.filter(x=>x.d.overdue),x=>x.d.rate),room=sum(rs,x=>x.d.roomRate),sup=supByTY[y]||0;
+    over=sum(rs.filter(x=>x.d.overdue),x=>x.d.rate);
     const tx=taxForYear(y);let taxCell;
     if(tx.status==="future"){taxCell='<td class="num">–</td>';}
     else{const val=tx.status==="complete"?tx.display:tx.display[taxMode];
       taxCell='<td class="num"><span class="taxlink" data-y="'+y+'">'+gbp(Math.round(val))+(tx.status==="inprogress"?'*':'')+'</span></td>';}
-    return '<tr><td><b>'+y+'</b></td><td class="num">'+rs.length+'</td><td class="num">'+gbp(billed)+'</td><td class="num">'+gbp(rec)+'</td><td class="num">'+(over?gbp(over):"–")+'</td><td class="num">'+gbp(billed-room-sup)+'</td>'+taxCell+'</tr>';}).join("");
+    return '<tr><td><b>'+y+'</b></td><td class="num">'+rs.length+'</td><td class="num">'+gbp(billed)+'</td><td class="num">'+gbp(rec)+'</td><td class="num">'+(over?gbp(over):"–")+'</td><td class="num">'+gbp(tx.netAll)+'</td>'+taxCell+'</tr>';}).join("");
   const t=today();const months=[];for(let i=0;i<12;i++)months.push(new Date(t.getFullYear(),t.getMonth()-i,1));
   const mTable=months.map(m=>{const end=new Date(m.getFullYear(),m.getMonth()+1,1);
     const rs=der.filter(x=>{const d=parseD(x.s.date);return d&&d>=m&&d<end});
@@ -1927,15 +2316,17 @@ VIEWS.income=function(){
     '<p class="small muted" style="margin:12px 0 4px">Sessions per day, last 12 months — each column is a week.</p>'+
     yearHeatmapHTML()+
     '<p class="small muted" style="margin:8px 0 0">Projection = billed to date + the larger of (sessions already booked this month) and (your 8-week average daily revenue × days left).</p></div>';
+  const series=periodSeries(statGran);
   v.innerHTML=thCard+fcCard+'<div class="card"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Revenue &amp; net income</h2>'+
     '<div class="seg" id="gran"><button data-g="week" class="'+(statGran==="week"?"on":"")+'">Weekly</button><button data-g="month" class="'+(statGran==="month"?"on":"")+'">Monthly</button></div></div>'+
-    comboLegend()+'<div id="chCombo"></div><p class="small muted center" id="comboHint">Tap a bar to see revenue, room &amp; supervision values.</p>'+
+    comboLegend(series)+'<div id="chCombo"></div><p class="small muted center" id="comboHint">Tap a bar to break the period down.</p>'+
     '<div class="small muted mt" style="font-weight:600">Clients seen per '+statGran+'</div><div id="chCli"></div></div>'+
-    '<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">By tax year</h2><div class="seg" id="taxmode" style="display:inline-flex"><button data-m="proj" class="'+(taxMode==="proj"?"on":"")+'">Projected</button><button data-m="todate" class="'+(taxMode==="todate"?"on":"")+'">To date</button></div></div><div class="rawscroll"><table><thead><tr><th>Year</th><th class="num">Sess</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Overdue</th><th class="num">Net</th><th class="num">Tax</th></tr></thead><tbody>'+tyTable+'</tbody></table></div><p class="small muted">Net = billed less room &amp; supervision costs. Tax = Income Tax + Class 4 NIC (sole trader); tap a figure for the breakdown. <b>*</b> in-progress year shown as '+(taxMode==="proj"?"a pro-rata projection":"tax on income to date")+'.</p></div>'+
+    '<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">By tax year</h2><div class="seg" id="taxmode" style="display:inline-flex"><button data-m="proj" class="'+(taxMode==="proj"?"on":"")+'">Projected</button><button data-m="todate" class="'+(taxMode==="todate"?"on":"")+'">To date</button></div></div><div class="rawscroll"><table><thead><tr><th>Year</th><th class="num">Sess</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Overdue</th><th class="num">Net</th><th class="num">Tax</th></tr></thead><tbody>'+tyTable+'</tbody></table></div><p class="small muted">Net = billed less room, supervision and business costs, plus any other practice income. Tax = Income Tax + Class 4 NIC (sole trader); tap a figure for the breakdown. <b>*</b> in-progress year shown as '+(taxMode==="proj"?"a pro-rata projection":"tax on income to date")+'.</p></div>'+
     '<div class="card"><h2>Last 12 months</h2><table><thead><tr><th>Month</th><th class="num">Sess</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Open</th></tr></thead><tbody>'+mTable+'</tbody></table></div>'+
     '<div class="card"><h2>Outstanding by client</h2>'+(byClient.length?'<table><thead><tr><th>Client</th><th class="num">Sessions</th><th class="num">Amount</th></tr></thead><tbody>'+byClient.map(x=>'<tr><td>'+esc(x.code)+'</td><td class="num">'+x.n+'</td><td class="num">'+gbp(x.amt)+'</td></tr>').join("")+'</tbody></table>':'<p class="muted small">Nothing outstanding 🎉</p>')+'</div>'+
-    '<div class="card"><h2>Room payments due</h2>'+(roomRows?'<table><thead><tr><th>Room</th><th class="num">Sessions</th><th>Dates</th><th class="num">Total</th></tr></thead><tbody>'+roomRows+'</tbody></table>':'<p class="muted small">No room payments outstanding.</p>')+'</div>';
-  const series=periodSeries(statGran);
+    '<div class="card"><h2>Room payments due</h2>'+(roomRows?'<table><thead><tr><th>Room</th><th class="num">Sessions</th><th>Dates</th><th class="num">Total</th></tr></thead><tbody>'+roomRows+'</tbody></table>':'<p class="muted small">No room payments outstanding.</p>')+
+      (S.rooms.some(r=>roomBilling(r)==="monthly")?'<p class="small muted" style="margin-top:8px">Rooms on a monthly rent aren’t listed here — their rent is counted in <b>Business costs</b> below, not per session.</p>':'')+'</div>'+
+    financeCards();
   let sel=null;
   const drawCombo=()=>{v.querySelector("#chCombo").innerHTML=chartCombo(series,sel);
     v.querySelectorAll("#chCombo .hot").forEach(r=>{const set=()=>{sel=+r.dataset.i;drawCombo();};
@@ -1944,6 +2335,7 @@ VIEWS.income=function(){
   v.querySelector("#chCli").innerHTML=chartLine(series.map(d=>({l:d.l,v:d.clients,avg:d.cliAvg})));
   v.querySelector("#gran").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{statGran=bt.dataset.g;go("income");});
   v.querySelectorAll(".taxlink").forEach(elx=>elx.onclick=()=>taxDetailsSheet(elx.dataset.y));
+  wireFinance(v);
   var tmx=v.querySelector("#taxmode");if(tmx)tmx.querySelectorAll("button").forEach(b=>b.onclick=()=>{taxMode=b.dataset.m;go("income");});
   function paintTH(){const pen=pensionPcm();
     const mainV=thMode==="pension"?Math.round(th.monthly-pen):Math.round(th.monthly);
@@ -2094,9 +2486,14 @@ VIEWS.settings=function(){
        <button class="btn" id="expJ">⤓ Export backup (.json)</button>
        <button class="btn sec" id="expC">⤓ Export sessions (.csv)</button>
        <button class="btn sec" id="expSC">⤓ Export supervision (.csv)</button>
+       <button class="btn sec" id="expFC">⤓ Export finances (.csv)</button>
        <button class="btn ghost" id="impB">⤒ Restore from backup</button>
        <input type="file" id="impF" accept=".json,application/json" style="display:none">
      </div>
+   </div>
+   <div class="card"><h2>Import from a spreadsheet</h2>
+     <p class="small muted">Moving over from Excel, Numbers or Google Sheets? Paste your rows or pick a <b>.csv</b> and match your columns to the app’s fields. Your existing data is <b>kept</b> — this only adds to it, and one Undo reverses the whole import.</p>
+     <button class="btn sec full mt" id="impSheet">📥 Import old sessions…</button>
    </div>
    <div class="card"><h2>Storage on this device</h2>
      <p class="small" id="stStatus" style="font-weight:600">Checking…</p>
@@ -2134,11 +2531,14 @@ VIEWS.settings=function(){
    <div class="card"><h2>Setup &amp; help</h2>
      <p class="small muted">The guided tour explains each tab, how to log a session and how your data is saved. It changes nothing.</p>
      <button class="btn sec full" id="setTour">🧭 Replay the guided tour</button>
+     <button class="btn sec full mt" id="setNew">✨ What’s new in this update</button>
      <p class="small muted mt" style="margin-bottom:6px">Re-running first-time setup walks through practice name, colours, features and defaults again — and <b>overwrites</b> them. Your clients, sessions and payments are untouched.</p>
      <button class="btn ghost full" id="setRerun" style="color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent)">↻ Re-run first-time setup…</button>
    </div>
    <div class="card"><h2>About</h2><p class="small muted">Therapy Tracker · offline · replaces the spreadsheet.
-     ${S.sessions.length} sessions, ${S.clients.length} clients${S.settings&&S.settings.onboardedAt?" · set up "+fmtD(S.settings.onboardedAt):""}. Add to your Home Screen for an app-like experience.</p></div>
+     ${S.sessions.length} sessions, ${S.clients.length} clients${S.settings&&S.settings.onboardedAt?" · set up "+fmtD(S.settings.onboardedAt):""}. Add to your Home Screen for an app-like experience.</p>
+     <p class="small muted"><a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a></p></div>
+   ${retentionCardHTML()}
    <div class="card"><h2>Privacy &amp; removal</h2>
      <p class="small muted">Tools for anonymising or deleting client information — for example when a client asks you to erase their data, or before you replace this device.</p>
      <details class="dz"><summary>Show data removal tools</summary>
@@ -2192,8 +2592,10 @@ VIEWS.settings=function(){
         renderTabs();toast(f.n+(sg.features[f.k]?" on":" off"));};});
     paint();})();
   v.querySelector("#setTour").onclick=()=>startTour();
+  v.querySelector("#setNew").onclick=()=>showWhatsNew();
   v.querySelector("#setRerun").onclick=()=>confirmRerunSetup();
   v.querySelector("#setDanger").onclick=()=>dzMenu();
+  wireRetention(v);
   (async function paintStorage(){
     const stEl=v.querySelector("#stStatus"),hintEl=v.querySelector("#stHint"),askB=v.querySelector("#stAsk");
     if(!stEl)return;
@@ -2246,8 +2648,10 @@ VIEWS.settings=function(){
     paintEnc();
   })();
   v.querySelector("#expJ").onclick=exportJSON;
+  v.querySelector("#impSheet").onclick=()=>impOpen();
   v.querySelector("#expC").onclick=exportCSV;
   v.querySelector("#expSC").onclick=exportSupervisionCSV;
+  v.querySelector("#expFC").onclick=exportFinanceCSV;
   v.querySelector("#impB").onclick=()=>v.querySelector("#impF").click();
   v.querySelector("#impF").onchange=importJSON;
   v.querySelector("#undoB").onclick=async()=>{if(await undo()){normalize(S);applySettings();toast("Reverted");go("settings")}};
@@ -2540,6 +2944,35 @@ function supervisionForm(s){
   if(!isNew)body.querySelector("#sDel").onclick=async()=>{S.supervision=S.supervision.filter(x=>x._id!==m._id);
     await commit("Deleted supervision: "+m.date);closeSheet();toast("Deleted");go(cur);};
   openSheet(isNew?"New supervision":"Edit supervision",body);
+}
+/* Peer supervision: hours toward the accreditation total, never toward the 1:6 ratio. */
+function peerForm(p){
+  const isNew=!p;
+  const m=p?clone(p):{_id:uid(),date:isoD(today()),hours:1.5,with:((S.peerSupervision||[]).slice(-1)[0]||{}).with||"",cost:0,notes:""};
+  const body=el('<div></div>');
+  body.innerHTML='<div class="field2"><div><label>Date</label><input type="date" id="p_date" value="'+esc(m.date)+'"></div>'+
+      '<div><label>Hours</label><input type="number" min="0" step="0.25" id="p_hrs" value="'+esc(m.hours)+'"></div></div>'+
+    '<label>Who with <span class="muted small">(group or colleague)</span></label><input id="p_with" maxlength="60" value="'+esc(m.with||"")+'">'+
+    '<label>Cost (£) <span class="muted small">(leave 0 if it costs nothing)</span></label><input type="number" min="0" step="0.01" id="p_cost" value="'+(+m.cost||0)+'">'+
+    '<label>Notes <span class="muted small">(optional)</span></label><input id="p_notes" maxlength="120" value="'+esc(m.notes||"")+'">'+
+    '<p class="small muted">Counts toward your total accreditation hours. It does <b>not</b> count toward the 1:6 clinical-to-supervision ratio — only formal clinical supervision does. Any cost is treated as a business expense.</p>'+
+    '<button class="btn full mt" id="pSave">Save</button>'+
+    (isNew?"":'<button class="btn danger full mt" id="pDel">Delete</button>');
+  const g=s=>body.querySelector(s);
+  g("#pSave").onclick=async()=>{
+    m.date=g("#p_date").value; m.hours=+g("#p_hrs").value||0;
+    m.with=g("#p_with").value.trim(); m.cost=+g("#p_cost").value||0; m.notes=g("#p_notes").value.trim();
+    if(!m.date){toast("Pick a date");Sfx.error();return;}
+    if(!(m.hours>0)){toast("Enter how many hours");Sfx.error();return;}
+    S.peerSupervision=S.peerSupervision||[];
+    const ex=S.peerSupervision.find(x=>x._id===m._id);
+    if(ex)Object.assign(ex,m); else S.peerSupervision.push(m);
+    await commit((ex?"Edited":"Added")+" peer supervision: "+m.date+" ("+m.hours+" hr)");
+    closeSheet();toast("Saved");go(cur);};
+  if(!isNew)g("#pDel").onclick=async()=>{
+    S.peerSupervision=(S.peerSupervision||[]).filter(x=>x._id!==m._id);
+    await commit("Deleted peer supervision: "+m.date);closeSheet();toast("Deleted");go(cur);};
+  openSheet(isNew?"New peer supervision":"Edit peer supervision",body);
 }
 
 /* ============ Quick-log command bar (natural-language session entry) ============ */
@@ -3022,7 +3455,8 @@ function validateImport(st){
   st.sessions.forEach(s=>{if(s&&s._id){if(dupIds[s._id])dups++;dupIds[s._id]=1;}});
   if(dups)problems.push(dups+" duplicate internal id(s)");
   return {ok:true,problems,counts:{sessions:st.sessions.length,clients:st.clients.length,
-    supervision:(st.supervision||[]).length,rooms:(st.rooms||[]).length}};
+    supervision:(st.supervision||[]).length,rooms:(st.rooms||[]).length,
+    peer:(st.peerSupervision||[]).length,expenses:(st.expenses||[]).length,otherIncome:(st.otherIncome||[]).length}};
 }
 function exportCSV(){
   const cols=["client","num","date","time","mode","location","room","invoice","paidDate","notes","roomPaid","rate","clientPaid","overdue","roomRate","roomDue","status","taxYear","week"];
@@ -3032,15 +3466,536 @@ function exportCSV(){
       v=v==null?"":String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v});
     rows.push(r.join(","))});
   download("therapy-sessions-"+isoD(today())+".csv",rows.join("\n"),"text/csv");toast("Sessions CSV downloaded")}
+function csvCell(v){v=v==null?"":String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
 function exportSupervisionCSV(){
-  const cols=["date","supervisor","clientHrsReviewed","cost","clientsDiscussed","taxYear"];
+  /* peer rows ride along with a type column — leaving them out would silently lose hours
+     from the one export a therapist takes to their accreditation paperwork */
+  const cols=["type","date","supervisor","clientHrsReviewed","hours","cost","clientsDiscussed","taxYear"];
   const rows=[cols.join(",")];
-  (S.supervision||[]).slice().sort((a,b)=>parseD(a.date)-parseD(b.date)).forEach(s=>{
-    const rec={date:s.date||"",supervisor:s.supervisor||"",clientHrsReviewed:(+s.count||1),cost:(+s.cost||0),
-      clientsDiscussed:(s.clients||[]).join("; "),taxYear:s.date?taxYear(s.date):""};
-    const r=cols.map(c=>{let v=rec[c];v=v==null?"":String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v});
-    rows.push(r.join(","))});
+  const out=[];
+  (S.supervision||[]).forEach(s=>out.push({type:"clinical",date:s.date||"",supervisor:s.supervisor||"",
+    clientHrsReviewed:(+s.count||1),hours:1,cost:(+s.cost||0),
+    clientsDiscussed:(s.clients||[]).join("; "),taxYear:s.date?taxYear(s.date):""}));
+  (S.peerSupervision||[]).forEach(p=>out.push({type:"peer",date:p.date||"",supervisor:p.with||"",
+    clientHrsReviewed:"",hours:(+p.hours||0),cost:(+p.cost||0),
+    clientsDiscussed:p.notes||"",taxYear:p.date?taxYear(p.date):""}));
+  out.sort((a,b)=>parseD(a.date)-parseD(b.date)).forEach(rec=>rows.push(cols.map(c=>csvCell(rec[c])).join(",")));
   download("therapy-supervision-"+isoD(today())+".csv",rows.join("\n"),"text/csv");toast("Supervision CSV downloaded")}
+/* Costs and other income, with each recurring row expanded into the months it actually covers
+   for the chosen tax year — the shape an accountant asks for. */
+function exportFinanceCSV(){
+  const cols=["type","date","description","category","amount","recurrence","scope","taxYear"];
+  const rows=[cols.join(",")];
+  const all=[];
+  const span=[];
+  (S.expenses||[]).concat(S.otherIncome||[]).forEach(x=>{const d=x.date?parseD(x.date):null;if(d)span.push(+d);});
+  (S.roomRentHistory||[]).forEach(h=>{const d=parseD(h.effectiveFrom);if(d)span.push(+d);});
+  if(span.length){
+    const from=new Date(Math.min.apply(null,span)), to=new Date(Math.max.apply(null,span.concat([+today()])));
+    (S.expenses||[]).forEach(x=>moneyOccurrences(x,from,to).forEach(o=>all.push({type:"cost",date:isoD(o.date),
+      description:x.desc||"",category:x.category||"",amount:o.amount,recurrence:x.recurrence||"once",scope:"practice",taxYear:taxYear(o.date)})));
+    (S.otherIncome||[]).forEach(x=>moneyOccurrences(x,from,to).forEach(o=>all.push({type:"income",date:isoD(o.date),
+      description:x.desc||"",category:x.category||"",amount:o.amount,recurrence:x.recurrence||"once",scope:finPersonal(x)?"personal":"practice",taxYear:taxYear(o.date)})));
+    roomRentOccurrences(from,to).forEach(o=>all.push({type:"cost",date:isoD(o.date),description:"Room rent — "+o.location,
+      category:"Room rent",amount:o.amount,recurrence:"monthly",scope:"practice",taxYear:taxYear(o.date)}));
+  }
+  if(!all.length){toast("Nothing to export yet");return;}
+  all.sort((a,b)=>parseD(a.date)-parseD(b.date)).forEach(rec=>rows.push(cols.map(c=>csvCell(rec[c])).join(",")));
+  download("therapy-finances-"+isoD(today())+".csv",rows.join("\n"),"text/csv");toast("Finances CSV downloaded")}
+/* ============================================================
+   Spreadsheet import — paste from Excel, or a .csv file
+   ------------------------------------------------------------
+   Three stages: source → column mapping → dry-run preview.
+   Nothing is written until the final confirm. Unlike importJSON (a whole-state
+   REPLACE, for backups), this MERGES into the existing data: it appends
+   sessions, auto-creates the clients and rooms they reference, and builds dated
+   fee history so past sessions keep the fee they were actually charged.
+   A snapshot is taken before the write, so one Undo reverses the whole import.
+   ============================================================ */
+const IMP_FIELDS=[
+  {k:"client",      n:"Client code",          req:true, t:"text",  syn:["client","clientcode","code","initials","clientname","clientref","ref","reference","who"]},
+  {k:"date",        n:"Session date",         req:true, t:"date",  syn:["date","sessiondate","when","day","appointmentdate","appointment"]},
+  {k:"num",         n:"Session number",                 t:"int",   syn:["num","no","number","sessionnumber","sessionno","sessionnum","session","seq","count"]},
+  {k:"time",        n:"Time",                           t:"time",  syn:["time","start","starttime","sessiontime","slot"]},
+  {k:"mode",        n:"Mode (in-person/online)",        t:"mode",  syn:["mode","type","format","delivery","medium","inpersononline"]},
+  {k:"location",    n:"Location",                       t:"text",  syn:["location","room","venue","place","where","site","roomname","clinic"]},
+  {k:"room",        n:"Room booked (ref or Y)",         t:"text",  syn:["roombooked","booked","bookingref","roomref","room"]},
+  {k:"rate",        n:"Session fee (£)",                t:"money", syn:["rate","fee","sessionfee","price","charge","chargedamount","amount","cost","feecharged"]},
+  {k:"paidDate",    n:"Client paid on (date)",          t:"date",  syn:["paiddate","datepaid","paidon","paymentdate","datereceived","received","settledon"]},
+  {k:"paidYN",      n:"Client paid? (Y/N)",             t:"yn",    syn:["paid","paidyn","clientpaid","ispaid","paymentstatus","settled","payment"]},
+  {k:"invoice",     n:"Invoice reference",              t:"text",  syn:["invoice","invoiceno","invoicenumber","invoiceref","inv"]},
+  {k:"notes",       n:"Notes",                          t:"text",  syn:["notes","note","comment","comments","details","detail","remarks"]},
+  {k:"roomPaid",    n:"Room paid? (Y/N)",               t:"yn",    syn:["roompaid","roompaidyn","roomfeepaid","roomsettled","rentpaid"]},
+  {k:"roomPaidDate",n:"Room paid on (date)",            t:"date",  syn:["roompaiddate","roomdatepaid","roompaidon"]},
+  {k:"roomRate",    n:"Room cost (£)",                  t:"money", syn:["roomrate","roomcost","roomfee","roomcharge","rent"]},
+  {k:"lateCancel",  n:"Late cancellation? (Y/N)",       t:"yn",    syn:["latecancel","latecancellation","latecancelled","lc","cancelledlate","dna","noshow"]},
+  {k:"status",      n:"Client status",                  t:"text",  syn:["status","clientstatus","state"]}
+];
+
+/* ---- tolerant parsing helpers (dirty spreadsheet values) ---- */
+function impCountOutside(line,d){let n=0,q=false;
+  for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){q=!q;continue}if(!q&&c===d)n++;}return n;}
+/* RFC4180-ish splitter. Delimiter is whichever of tab/comma/semicolon/pipe appears most on the
+   header line outside quotes — a paste from Excel is tab-separated, a saved file is comma. */
+function impSplit(text){
+  const t=String(text||"").replace(/^﻿/,"").replace(/\r\n/g,"\n").replace(/\r/g,"\n");
+  if(!t.trim())return [];
+  let best="\t",bestN=-1;
+  ["\t",",",";","|"].forEach(d=>{const n=impCountOutside(t.split("\n")[0],d);if(n>bestN){bestN=n;best=d;}});
+  const rows=[];let row=[],cell="",q=false;
+  for(let i=0;i<t.length;i++){const c=t[i];
+    if(q){ if(c==='"'){ if(t[i+1]==='"'){cell+='"';i++;} else q=false; } else cell+=c; }
+    else if(c==='"')q=true;
+    else if(c===best){row.push(cell);cell="";}
+    else if(c==="\n"){row.push(cell);rows.push(row);row=[];cell="";}
+    else cell+=c;
+  }
+  row.push(cell);rows.push(row);
+  return rows.filter(r=>r.some(x=>String(x).trim()!==""));
+}
+const IMP_MONTHS={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+function impYear(y){return y<100?(y<70?2000+y:1900+y):y;}
+/* Returns {y, a, b, iso} where for iso a=month/b=day; for an ambiguous d/m/y style
+   a and b are simply the first and second numbers, resolved later by the column-wide order. */
+function impDateParts(v){
+  const s=String(v==null?"":v).trim();
+  if(!s)return null;
+  let m=s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  if(m)return {y:+m[1],a:+m[2],b:+m[3],iso:true};
+  m=s.match(/^(\d{1,2})(?:st|nd|rd|th)?[\s-]*([A-Za-z]{3,9})[\s-,]+(\d{2,4})$/);          /* 12 Mar 2025 */
+  if(m){const mo=IMP_MONTHS[m[2].slice(0,3).toLowerCase()];if(mo)return {y:impYear(+m[3]),a:mo,b:+m[1],iso:true};}
+  m=s.match(/^([A-Za-z]{3,9})[\s-]+(\d{1,2})(?:st|nd|rd|th)?[\s-,]+(\d{2,4})$/);           /* Mar 12, 2025 */
+  if(m){const mo=IMP_MONTHS[m[1].slice(0,3).toLowerCase()];if(mo)return {y:impYear(+m[3]),a:mo,b:+m[2],iso:true};}
+  m=s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/);                                    /* ambiguous */
+  if(m)return {y:impYear(+m[3]),a:+m[1],b:+m[2],iso:false};
+  if(/^\d{5}(\.\d+)?$/.test(s)){                                                           /* Excel serial */
+    const d=new Date(Date.UTC(1899,11,30)+Math.floor(+s)*86400000);
+    return {y:d.getUTCFullYear(),a:d.getUTCMonth()+1,b:d.getUTCDate(),iso:true};
+  }
+  return null;
+}
+/* 03/04/2026 is 3 April here and 4 March to a US reader. Decide once for the whole column —
+   any single row with a first number above 12 settles it — and show the user the reading chosen. */
+function impDateScan(values){
+  let dmy=0,mdy=0,unres=0,bad=0,ok=0,iso=0;
+  values.forEach(v=>{
+    if(v==null||String(v).trim()==="")return;
+    const p=impDateParts(v);
+    if(!p){bad++;return}
+    ok++;
+    if(p.iso){iso++;return}
+    if(p.a>12&&p.b<=12)dmy++;
+    else if(p.b>12&&p.a<=12)mdy++;
+    else if(p.a>12&&p.b>12)bad++;
+    else unres++;
+  });
+  let order="DMY",why,conflict=false;
+  if(dmy&&mdy){conflict=true;order="DMY";
+    why="Mixed: "+dmy+" row(s) only read as day-first and "+mdy+" only as month-first. Check the file — some dates will be wrong whichever you pick.";}
+  else if(dmy)why=dmy+" row"+(dmy===1?"":"s")+" can only be day-first (a day above 12), so day-first it is.";
+  else if(mdy){order="MDY";why=mdy+" row"+(mdy===1?"":"s")+" can only be month-first (a month above 12), so month-first it is.";}
+  else if(unres)why="Every day and month is 12 or under, so the file can’t prove which it is. Defaulting to UK day-first — check the preview.";
+  else why=iso?"Already in an unambiguous format (year-first or a named month).":"No dates read yet.";
+  return {order,why,conflict,ambiguous:!!unres&&!dmy&&!mdy,counts:{ok,bad,iso,unres,dmy,mdy}};
+}
+function impDate(v,order){
+  const p=impDateParts(v);if(!p)return null;
+  let d,mo;
+  if(p.iso){mo=p.a;d=p.b;}
+  else if(order==="MDY"){mo=p.a;d=p.b;}
+  else {d=p.a;mo=p.b;}
+  if(mo<1||mo>12||d<1||d>31)return null;
+  const dt=new Date(p.y,mo-1,d);
+  if(dt.getMonth()!==mo-1||dt.getDate()!==d)return null;  /* 31 Feb and friends */
+  return isoD(dt);
+}
+function impMoney(v){
+  if(v==null)return null;
+  let s=String(v).trim();if(!s)return null;
+  let neg=/^\(.*\)$/.test(s);
+  s=s.replace(/[()]/g,"").replace(/[£$€\s,]/g,"");
+  if(s.charAt(0)==="-"){neg=true;s=s.slice(1);}
+  if(s===""||!/^\d*\.?\d+$/.test(s))return null;
+  const n=parseFloat(s);
+  return isNaN(n)?null:(neg?-n:n);
+}
+function impYN(v){
+  const s=String(v==null?"":v).trim().toLowerCase();
+  if(!s)return "";
+  if(/^(n\/a|na|none|not applicable|-|—)$/.test(s))return "n/a";
+  if(/^(y|yes|true|1|paid|done|complete|✓|✔|x)$/.test(s))return "Y";
+  if(/^(n|no|false|0|unpaid|outstanding|due|✗|✘)$/.test(s))return "N";
+  return "";
+}
+function impTime(v){
+  let s=String(v==null?"":v).trim().toLowerCase();
+  if(!s)return "";
+  if(/^0?\.\d+$/.test(s)){                                  /* Excel stores times as a day fraction */
+    const tot=Math.round(parseFloat(s)*1440)%1440;          /* round to the minute first, so .5833 → 14:00 not 13:60 */
+    return String(Math.floor(tot/60)).padStart(2,"0")+":"+String(tot%60).padStart(2,"0");
+  }
+  const ap=/(a\.?m\.?|p\.?m\.?)$/.exec(s);
+  let pm=false,am=false;
+  if(ap){pm=/p/.test(ap[1]);am=!pm;s=s.slice(0,ap.index).trim();}
+  const m=s.match(/^(\d{1,2})(?:[:.h]?(\d{2}))?$/);
+  if(!m)return "";
+  let h=+m[1];const mi=+(m[2]||0);
+  if(pm&&h<12)h+=12;
+  if(am&&h===12)h=0;
+  if(h>23||mi>59)return "";
+  return String(h).padStart(2,"0")+":"+String(mi).padStart(2,"0");
+}
+function impMode(v){
+  const s=String(v==null?"":v).trim().toLowerCase();
+  if(!s)return "";
+  if(/online|zoom|teams|video|remote|virtual|skype|phone|tel/.test(s))return "Online";
+  if(/person|face|f2f|ftf|clinic|office|room|studio/.test(s))return "In-person";
+  return "";
+}
+function impNorm(h){return String(h==null?"":h).toLowerCase().replace(/[^a-z0-9]/g,"");}
+/* Guess field per column: exact header match first across all columns, then substring.
+   One field per column, one column per field. */
+function impGuess(headers){
+  const map=headers.map(()=>null), used={};
+  for(let pass=0;pass<2;pass++){
+    headers.forEach((h,i)=>{
+      if(map[i])return;
+      const n=impNorm(h);if(!n)return;
+      for(const f of IMP_FIELDS){
+        if(used[f.k])continue;
+        const hit=f.syn.some(s=>{const sn=impNorm(s);
+          return pass===0?n===sn:(sn.length>=4&&n.indexOf(sn)>=0);});
+        if(hit){map[i]=f.k;used[f.k]=1;break;}
+      }
+    });
+  }
+  return map;
+}
+function impSame(a,b){return String(a||"").trim().toLowerCase()===String(b||"").trim().toLowerCase();}
+function impKey(client,date,time){return String(client||"").trim().toLowerCase()+"|"+(date||"")+"|"+(time||"");}
+
+/* ---- dry run: build the full plan without touching S ---- */
+function impPlan(rows,map,order,opt){
+  const body=rows.slice(1), col={};
+  map.forEach((k,i)=>{if(k&&col[k]==null)col[k]=i;});
+  const get=(r,k)=>col[k]==null?"":String(r[col[k]]==null?"":r[col[k]]).trim();
+  const plan={recs:[],skipped:[],warn:[],newClients:new Map(),newRooms:new Map(),
+              fresh:0,updates:0,dupes:0,order};
+  const seen=new Map();
+  const existing=new Map();
+  S.sessions.forEach(s=>existing.set(impKey(s.client,s.date,s.time),s));
+  body.forEach((r,n)=>{
+    const line=n+2;                                   /* +1 for the header, +1 for 1-based */
+    const code=get(r,"client");
+    if(!code){plan.skipped.push({line,why:"no client code"});return;}
+    const rawD=get(r,"date");
+    const date=impDate(rawD,order);
+    if(!date){plan.skipped.push({line,why:rawD?("date not understood — “"+rawD+"”"):"no date"});return;}
+    const time=impTime(get(r,"time"));
+    const key=impKey(code,date,time);
+    if(seen.has(key)){plan.skipped.push({line,why:"same client, date and time as line "+seen.get(key)});return;}
+    seen.set(key,line);
+    const prior=existing.get(key);
+    if(prior&&opt.onDupe!=="update"){plan.dupes++;plan.skipped.push({line,why:"already in the app"});return;}
+
+    const notes=get(r,"notes");
+    const num=parseInt(get(r,"num").replace(/[^0-9]/g,""),10);
+    const paidYN=impYN(get(r,"paidYN"));
+    const paidOn=impDate(get(r,"paidDate"),order);
+    const roomPaidOn=impDate(get(r,"roomPaidDate"),order);
+    let roomPaid=impYN(get(r,"roomPaid"));
+    if(!roomPaid&&roomPaidOn)roomPaid="Y";
+    const loc=get(r,"location")||"At home";
+    const rec={
+      _id:prior?prior._id:uid(),
+      client:code,
+      num:isNaN(num)?"":num,
+      date, time,
+      mode:impMode(get(r,"mode"))||"In-person",
+      location:loc,
+      room:get(r,"room"),
+      invoice:get(r,"invoice"),
+      /* paid-on date wins; a bare "Y" with no date means paid on the day */
+      paidDate:paidOn||(paidYN==="Y"?date:""),
+      receipt:"",
+      notes,
+      roomPaid,
+      roomPaidDate:roomPaidOn||"",
+      /* historical convention put this in the notes text; honour both (see isLateCancel) */
+      lateCancel:impYN(get(r,"lateCancel"))==="Y"||/late cancellation/i.test(notes),
+      _rate:impMoney(get(r,"rate")),
+      _roomRate:impMoney(get(r,"roomRate")),
+      _update:!!prior,_line:line
+    };
+    if(prior)plan.updates++;else plan.fresh++;
+    plan.recs.push(rec);
+
+    const ck=code.toLowerCase();
+    if(!S.clients.some(c=>impSame(c.code,code))&&!plan.newClients.has(ck))
+      plan.newClients.set(ck,{code,status:get(r,"status")||"Ongoing",first:date});
+    const lk=loc.toLowerCase();
+    if(loc&&lk!=="at home"&&!S.rooms.some(x=>impSame(x.location,loc))){
+      const nr=plan.newRooms.get(lk)||{location:loc,rate:0};
+      if(!nr.rate&&rec._roomRate)nr.rate=rec._roomRate;
+      plan.newRooms.set(lk,nr);
+    }
+    if(!prior&&plan.warn.length<12&&S.sessions.some(s=>impSame(s.client,code)&&s.date===date))
+      plan.warn.push("Line "+line+": "+code+" already has a session on "+fmtDMY(date)+" at a different time — check it isn’t the same one.");
+  });
+  /* keep the earliest date per new client for their "created" stamp */
+  plan.recs.forEach(rec=>{const c=plan.newClients.get(rec.client.toLowerCase());
+    if(c&&rec.date<c.first)c.first=rec.date;});
+  return plan;
+}
+
+/* ---- apply: merge into S, then one commit (undoable in a single tap) ---- */
+async function impCommit(plan){
+  /* commit() snapshots the state it writes, so the snapshot already sitting at the top of the
+     stack IS the pre-import state — one Undo is enough. Only a database with no snapshots at all
+     (a first run that has never committed) needs one laying down first, or there'd be nothing
+     to go back to. */
+  try{ if(_db && (await snapCount())===0)
+    await snapAdd({ts:new Date().toISOString(),label:"Before spreadsheet import",data:clone(S)}); }
+  catch(e){ console.warn("pre-import snapshot failed",e); }
+
+  plan.newClients.forEach(c=>{
+    const cat=S.clientCategories.find(x=>x.status===c.status);
+    S.clients.push({_id:uid(),code:c.code,status:c.status,category:cat?cat.category:c.status,
+      frequency:"Weekly",insurance:"N",notes:"",rate:0,created:c.first});
+  });
+  plan.newRooms.forEach(r=>{
+    S.rooms.push({_id:uid(),location:r.location,rate:r.rate,due:"n/a"});
+    S.roomRateHistory.push({_id:uid(),location:r.location,effectiveFrom:"2000-01-01",rate:r.rate});
+  });
+
+  /* oldest first, so each fee change is stamped from the session that first charged it */
+  const recs=plan.recs.slice().sort((a,b)=>parseD(a.date)-parseD(b.date));
+  const touchedC=new Set(), touchedR=new Set();
+  recs.forEach(rec=>{
+    if(rec._rate!=null){
+      const first=!S.rateHistory.some(h=>impSame(h.client,rec.client));
+      if(first||Math.abs((+effRate(rec.client,rec.date)||0)-rec._rate)>0.005){
+        S.rateHistory.push({_id:uid(),client:rec.client,
+          effectiveFrom:first?"2000-01-01":rec.date,rate:rec._rate});
+        touchedC.add(rec.client.toLowerCase());
+      }
+    }
+    if(rec._roomRate!=null&&rec.location&&!impSame(rec.location,"At home")){
+      const first=!S.roomRateHistory.some(h=>impSame(h.location,rec.location));
+      if(first||Math.abs((+effRoomRate(rec.location,rec.date)||0)-rec._roomRate)>0.005){
+        S.roomRateHistory.push({_id:uid(),location:rec.location,
+          effectiveFrom:first?"2000-01-01":rec.date,rate:rec._roomRate});
+        touchedR.add(rec.location.toLowerCase());
+      }
+    }
+    const clean=Object.assign({},rec);
+    delete clean._rate;delete clean._roomRate;delete clean._update;delete clean._line;
+    if(rec._update){
+      const ex=S.sessions.find(s=>s._id===rec._id);
+      if(ex)Object.assign(ex,clean); else S.sessions.push(clean);
+    }else S.sessions.push(clean);
+  });
+  /* headline rate on the client/room record = whatever is effective today */
+  const t=isoD(today());
+  S.clients.forEach(c=>{if(touchedC.has((c.code||"").toLowerCase()))c.rate=effRate(c.code,t);});
+  S.rooms.forEach(r=>{if(touchedR.has((r.location||"").toLowerCase()))r.rate=effRoomRate(r.location,t);});
+
+  const n=plan.fresh+plan.updates;
+  const ok=await commit("Imported "+n+" session"+(n===1?"":"s")+" from a spreadsheet");
+  return {ok,n};
+}
+
+/* ---- template: generated from IMP_FIELDS, so headers can never drift from the parser ---- */
+function impTemplate(){
+  const cols=IMP_FIELDS.filter(f=>f.k!=="status").map(f=>f.k);
+  const ex=[
+    {client:"AB",num:1,date:"2026-04-07",time:"10:00",mode:"In-person",location:"At home",room:"",
+     rate:"60",paidDate:"2026-04-07",paidYN:"Y",invoice:"INV-001",notes:"First session",
+     roomPaid:"n/a",roomPaidDate:"",roomRate:"0",lateCancel:"N"},
+    {client:"CD",num:12,date:"2026-04-09",time:"14:30",mode:"Online",location:"The Practice Rooms",room:"2",
+     rate:"55",paidDate:"",paidYN:"N",invoice:"",notes:"",
+     roomPaid:"N",roomPaidDate:"",roomRate:"15",lateCancel:"N"}
+  ];
+  const q=v=>{v=v==null?"":String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+  const rows=[cols.join(",")].concat(ex.map(e=>cols.map(c=>q(e[c])).join(",")));
+  download("therapy-tracker-import-template.csv",rows.join("\n"),"text/csv");
+  toast("Template downloaded");
+}
+
+/* ---- UI: three sheet stages ---- */
+let _imp=null;
+/* opts.quiet — called from inside the setup overlay: don't navigate or celebrate over it.
+   opts.done(n) — fired after a successful import. */
+function impOpen(opts){
+  _imp={rows:null,map:null,scan:null,order:"DMY",onDupe:"skip",plan:null,
+        quiet:!!(opts&&opts.quiet),done:opts&&opts.done};
+  impStageSource();
+}
+function impStageSource(){
+  const b=el('<div></div>');
+  b.innerHTML=
+    '<p class="small muted">Bring your old spreadsheet in. Nothing is written until you’ve seen exactly what will change — and one <b>Undo</b> reverses the whole import.</p>'+
+    '<div class="hint"><b>Easiest way:</b> open your spreadsheet, select the rows <b>including the header row</b>, copy, then paste in the box below.</div>'+
+    '<label>Paste from Excel / Numbers / Sheets</label>'+
+    '<textarea id="impTA" rows="6" placeholder="Client	Date	Time	Fee	Paid&#10;AB	07/04/2026	10:00	£60	Y"></textarea>'+
+    '<div class="row mt" style="gap:8px;flex-wrap:wrap">'+
+      '<button class="btn sec" id="impFileB">⤒ Choose a .csv file</button>'+
+      '<button class="btn ghost" id="impTpl">⤓ Blank template (.csv)</button>'+
+    '</div>'+
+    '<input type="file" id="impFile" accept=".csv,.tsv,.txt,text/csv,text/plain" style="display:none">'+
+    '<p class="prev">Any spreadsheet can produce a .csv with <b>File › Save as</b> or <b>Export</b>. Column names don’t have to match ours — you’ll match them up on the next screen.</p>'+
+    '<button class="btn full mt" id="impGo">Continue</button>';
+  const ta=b.querySelector("#impTA");
+  b.querySelector("#impTpl").onclick=impTemplate;
+  b.querySelector("#impFileB").onclick=()=>b.querySelector("#impFile").click();
+  b.querySelector("#impFile").onchange=e=>{
+    const f=e.target.files[0];if(!f)return;
+    const rd=new FileReader();
+    rd.onload=()=>{ta.value=rd.result;toast("Loaded "+f.name);impTake(ta.value);};
+    rd.onerror=()=>toast("Could not read that file");
+    rd.readAsText(f);e.target.value="";
+  };
+  b.querySelector("#impGo").onclick=()=>impTake(ta.value);
+  openSheet("Import from a spreadsheet",b);
+}
+function impTake(text){
+  const rows=impSplit(text);
+  if(rows.length<2){toast("Need a header row and at least one row of data");Sfx.error&&Sfx.error();return;}
+  const width=Math.max.apply(null,rows.map(r=>r.length));
+  rows.forEach(r=>{while(r.length<width)r.push("");});
+  _imp.rows=rows;
+  _imp.map=impGuess(rows[0]);
+  impRescan();
+  impStageMap();
+}
+/* re-read the date column under the current mapping */
+function impRescan(){
+  const i=_imp.map.indexOf("date");
+  const vals=i<0?[]:_imp.rows.slice(1).map(r=>r[i]);
+  _imp.scan=impDateScan(vals);
+  _imp.order=_imp.scan.order;
+}
+function impStageMap(){
+  const rows=_imp.rows, head=rows[0], sample=rows.slice(1,4);
+  const b=el('<div></div>');
+  const opt=k=>'<option value=""'+(k?"":" selected")+'>— ignore —</option>'+
+    IMP_FIELDS.map(f=>'<option value="'+f.k+'"'+(f.k===k?" selected":"")+'>'+esc(f.n)+(f.req?" *":"")+'</option>').join("");
+  b.innerHTML=
+    '<p class="small muted">'+(rows.length-1)+' row'+(rows.length===2?"":"s")+' read. Match your columns to the app’s fields — we’ve guessed from the headings. <b>Client code</b> and <b>Session date</b> are required; anything else can be ignored.</p>'+
+    '<div id="impDateBox"></div>'+
+    '<div style="overflow:auto"><table><thead><tr><th>Your column</th><th>Becomes</th></tr></thead><tbody>'+
+    head.map((h,i)=>{
+      const ex=sample.map(r=>r[i]).filter(x=>String(x).trim()!=="")[0]||"";
+      return '<tr><td><b>'+esc(h||"(column "+(i+1)+")")+'</b>'+
+        (ex?'<div class="prev">e.g. '+esc(String(ex).slice(0,28))+'</div>':'')+'</td>'+
+        '<td><select data-c="'+i+'" style="margin:0">'+opt(_imp.map[i])+'</select></td></tr>';
+    }).join("")+
+    '</tbody></table></div>'+
+    '<div id="impMapWarn"></div>'+
+    '<button class="btn full mt" id="impNext">Preview the import</button>'+
+    '<button class="btn ghost full mt" id="impBack">Back</button>';
+  const paintDate=()=>{
+    const box=b.querySelector("#impDateBox");
+    if(_imp.map.indexOf("date")<0){box.innerHTML='';return;}
+    const sc=_imp.scan, c=sc.counts;
+    const eg=(()=>{const i=_imp.map.indexOf("date");
+      const v=(rows.slice(1).map(r=>r[i]).filter(x=>String(x).trim()!==""))[0];
+      const d=v?impDate(v,_imp.order):null;
+      return v?('“'+esc(String(v))+'” → <b>'+(d?fmtD(d):"not understood")+'</b>'):"";})();
+    box.innerHTML='<div class="hint" style="'+(sc.conflict?'border-color:var(--bad);color:var(--bad)':'')+'">'+
+      '<b>Date format</b><br>'+esc(sc.why)+
+      (eg?'<div style="margin-top:6px">'+eg+'</div>':'')+
+      '<div class="row" style="gap:8px;margin-top:8px">'+
+        '<select id="impOrder" style="margin:0">'+
+          '<option value="DMY"'+(_imp.order==="DMY"?" selected":"")+'>Day first — 03/04/2026 = 3 April (UK)</option>'+
+          '<option value="MDY"'+(_imp.order==="MDY"?" selected":"")+'>Month first — 03/04/2026 = 4 March (US)</option>'+
+        '</select></div>'+
+      (c.bad?'<div class="prev" style="margin-top:6px">'+c.bad+' value(s) in that column aren’t dates at all — those rows will be skipped.</div>':'')+
+      '</div>';
+    const sel=box.querySelector("#impOrder");
+    if(sel)sel.onchange=e=>{_imp.order=e.target.value;paintDate();};
+  };
+  const paintWarn=()=>{
+    const miss=IMP_FIELDS.filter(f=>f.req&&_imp.map.indexOf(f.k)<0).map(f=>f.n);
+    b.querySelector("#impMapWarn").innerHTML=miss.length?
+      '<p class="small" style="color:var(--bad);font-weight:600">Still needed: '+esc(miss.join(", "))+'</p>':'';
+    b.querySelector("#impNext").disabled=!!miss.length;
+  };
+  b.querySelectorAll("select[data-c]").forEach(s=>s.onchange=e=>{
+    const i=+e.target.dataset.c, k=e.target.value||null;
+    if(k)_imp.map.forEach((v,j)=>{if(j!==i&&v===k)_imp.map[j]=null;});   /* one column per field */
+    _imp.map[i]=k;
+    b.querySelectorAll("select[data-c]").forEach(o=>{const j=+o.dataset.c;o.value=_imp.map[j]||"";});
+    if(k==="date"||_imp.map.indexOf("date")<0)impRescan();
+    paintDate();paintWarn();
+  });
+  b.querySelector("#impBack").onclick=impStageSource;
+  b.querySelector("#impNext").onclick=()=>impStagePreview();
+  paintDate();paintWarn();
+  openSheet("Import · match your columns",b);
+}
+function impStagePreview(){
+  _imp.plan=impPlan(_imp.rows,_imp.map,_imp.order,{onDupe:_imp.onDupe});
+  const p=_imp.plan;
+  const b=el('<div></div>');
+  const show=p.recs.slice().sort((a,b2)=>parseD(a.date)-parseD(b2.date)).slice(0,10);
+  const money=v=>v==null?'<span class="muted">—</span>':gbp(v);
+  b.innerHTML=
+    '<div class="setsum">'+
+      '<div><span>New sessions</span><b>'+p.fresh+'</b></div>'+
+      '<div><span>Existing sessions updated</span><b>'+p.updates+'</b></div>'+
+      '<div><span>Rows skipped</span><b>'+p.skipped.length+'</b></div>'+
+      '<div><span>Clients created</span><b>'+(p.newClients.size||"none")+'</b></div>'+
+      '<div><span>Locations created</span><b>'+(p.newRooms.size||"none")+'</b></div>'+
+    '</div>'+
+    '<label style="margin-top:14px">Rows that already exist (same client, date and time)</label>'+
+    '<select id="impDupe">'+
+      '<option value="skip"'+(_imp.onDupe==="skip"?" selected":"")+'>Leave the app’s version alone (skip)</option>'+
+      '<option value="update"'+(_imp.onDupe==="update"?" selected":"")+'>Overwrite with the spreadsheet’s version</option>'+
+    '</select>'+
+    '<p class="prev">Re-importing a corrected file? Choose overwrite — matching rows update in place instead of duplicating.</p>'+
+    (p.newClients.size?'<div class="hint" style="margin-top:12px"><b>Clients that will be created</b><br>'+
+      esc([...p.newClients.values()].map(c=>c.code).join(", "))+'</div>':'')+
+    (p.newRooms.size?'<div class="hint"><b>Locations that will be created</b><br>'+
+      esc([...p.newRooms.values()].map(r=>r.location+" ("+gbp(r.rate)+"/session)").join(", "))+
+      '<div class="prev" style="margin-top:6px">Set when each room’s fee falls due in <b>Clients › Rooms</b> — imported rooms start as “n/a”.</div></div>':'')+
+    '<h3 style="margin:16px 0 6px;font-size:15px">First '+show.length+' of '+p.recs.length+'</h3>'+
+    '<div style="overflow:auto"><table><thead><tr><th>Client</th><th>Date</th><th>Time</th><th class="num">Fee</th><th>Paid</th><th>Room</th></tr></thead><tbody>'+
+    show.map(r=>'<tr><td><b>'+esc(r.client)+'</b>'+(r._update?' <span class="chip s">update</span>':'')+'</td>'+
+      '<td>'+fmtD(r.date)+'</td><td>'+esc(r.time||"—")+'</td>'+
+      '<td class="num">'+money(r._rate)+'</td>'+
+      '<td><span class="chip '+(r.paidDate?"y":"n")+'">'+(r.paidDate?"Y":"N")+'</span></td>'+
+      '<td>'+esc(r.location)+'</td></tr>').join("")+
+    '</tbody></table></div>'+
+    (p.warn.length?'<details class="mt"><summary>Possible duplicates ('+p.warn.length+')</summary>'+
+      p.warn.map(w=>'<div class="audit-row">'+esc(w)+'</div>').join("")+'</details>':'')+
+    (p.skipped.length?'<details class="mt"><summary>Skipped rows ('+p.skipped.length+')</summary>'+
+      p.skipped.slice(0,60).map(s=>'<div class="audit-row">Line '+s.line+' — '+esc(s.why)+'</div>').join("")+
+      (p.skipped.length>60?'<div class="audit-row muted">…and '+(p.skipped.length-60)+' more</div>':'')+
+      '</details>':'')+
+    '<p class="small muted mt">Your existing '+S.sessions.length+' session'+(S.sessions.length===1?"":"s")+
+      ' stay exactly as they are — this only adds to them. The state you’re in right now is kept as a restore point, so <b>Settings › Undo</b> reverses the whole import in one tap.</p>'+
+    '<button class="btn full mt" id="impDo"'+(p.recs.length?"":" disabled")+'>Import '+p.recs.length+' row'+(p.recs.length===1?"":"s")+'</button>'+
+    '<button class="btn ghost full mt" id="impBack2">Back to columns</button>';
+  b.querySelector("#impDupe").onchange=e=>{_imp.onDupe=e.target.value;impStagePreview();};
+  b.querySelector("#impBack2").onclick=impStageMap;
+  const go2=b.querySelector("#impDo");
+  go2.onclick=async()=>{
+    go2.disabled=true;go2.textContent="Importing…";
+    const res=await impCommit(p);
+    const quiet=_imp.quiet, done=_imp.done;
+    closeSheet();
+    if(!res.ok){toast("Import could not be saved — see the banner");return;}
+    _imp=null;
+    toast("Imported "+res.n+" session"+(res.n===1?"":"s"));
+    if(done)done(res.n);
+    if(quiet)return;                       /* setup overlay is still up — don't render behind it */
+    celebrate({emoji:"📥",title:"Your history is in",sub:res.n+" sessions imported.",level:"big",sound:"fanfare"});
+    go("sessions");
+  };
+  openSheet("Import · preview",b);
+}
+
 function importJSON(e){const f=e.target.files[0];if(!f)return;const rd=new FileReader();
   rd.onload=async()=>{try{let o=JSON.parse(rd.result);
     if(o&&o.enc===1){
@@ -3057,6 +4012,8 @@ function importJSON(e){const f=e.target.files[0];if(!f)return;const rd=new FileR
     const rep=validateImport(st);
     if(!rep.ok)throw new Error(rep.problems.join("; "));
     let msg="Restore this backup?\n\n"+rep.counts.sessions+" sessions · "+rep.counts.clients+" clients · "+rep.counts.supervision+" supervision · "+rep.counts.rooms+" rooms";
+    if(rep.counts.peer)msg+=" · "+rep.counts.peer+" peer supervision";
+    if(rep.counts.expenses||rep.counts.otherIncome)msg+="\n"+rep.counts.expenses+" business costs · "+rep.counts.otherIncome+" other income";
     if(rep.problems.length)msg+="\n\n⚠️ Checks found:\n– "+rep.problems.join("\n– ");
     msg+="\n\nCurrent data is kept as a restore point.";
     if(!confirm(msg))return;
@@ -3083,6 +4040,8 @@ async function showSnapshots(){if(!_db){toast("Restore points need storage");ret
 const FEATURES=[
   {k:"supervision",  ic:"🗣", n:"Supervision",            d:"A tab for logging supervision sessions, costs and which clients you discussed."},
   {k:"accreditation",ic:"📜", n:"Accreditation hours",    d:"Clinical vs supervision hours and the 1:6 ratio, for BACP Form 3A. Lives inside Supervision › Insights.",dep:"supervision"},
+  {k:"peer",         ic:"👥", n:"Peer supervision",       d:"A separate log for peer supervision hours — added to your total accreditation hours, kept out of the 1:6 ratio.",dep:"supervision"},
+  {k:"finances",     ic:"🧮", n:"Costs & other income",   d:"Business costs (insurance, wifi, monthly room rent) and income that isn’t a client session. Both feed your net income and tax figures.",dep:"income"},
   {k:"income",       ic:"💷", n:"Revenue & tax",          d:"Tax-year totals, UK sole-trader tax estimates, monthly take-home and a year-end forecast."},
   {k:"raw",          ic:"▦", n:"Table view",             d:"A spreadsheet-style browser of every session, with sortable columns and a column picker."},
   {k:"receipts",     ic:"🧾", n:"Receipts & statements",  d:"Printable statements for a client’s insurer, employer or their own records."},
@@ -3206,19 +4165,21 @@ function stepRooms(w){return{emoji:"🚪", h:"Where do you see clients?",
     if(new Set(names).size!==names.length){toast("Two locations have the same name");Sfx.error();return false;}
   },
   mount(host){
-    if(!w.rooms){w.rooms=S.rooms.map(r=>({loc:r.location,rate:+effRoomRate(r.location,isoD(today()))||0,due:r.due||"n/a",orig:r.location}));}
-    if(!w.rooms.length)w.rooms=[{loc:"At home",rate:0,due:"n/a",orig:null}];
+    if(!w.rooms){w.rooms=S.rooms.map(r=>{const monthly=roomBilling(r)==="monthly";
+      return {loc:r.location,rate:monthly?(+effRoomRent(r.location,isoD(today()))||0):(+effRoomRate(r.location,isoD(today()))||0),
+              due:r.due||"n/a",orig:r.location,billing:monthly?"monthly":"session"};});}
+    if(!w.rooms.length)w.rooms=[{loc:"At home",rate:0,due:"n/a",orig:null,billing:"session"}];
     const draw=()=>{
-      host.innerHTML='<div class="rmhead"><span>Location</span><span>£ / session</span><span>Pay by</span><span></span></div>'+
+      host.innerHTML='<div class="rmhead"><span>Location</span><span>Cost</span><span>Charged</span><span></span></div>'+
         '<div id="rmList">'+w.rooms.map((r,i)=>
           '<div class="rmrow" data-i="'+i+'">'+
             '<input data-f="loc" value="'+esc(r.loc)+'" placeholder="Room name">'+
             '<input data-f="rate" type="number" min="0" step="0.5" value="'+(+r.rate||0)+'">'+
-            '<select data-f="due">'+opts(["n/a","EOM","EOW"],r.due||"n/a")+'</select>'+
+            '<select data-f="billing">'+opts2([["session","per session"],["monthly","per month"]],r.billing||"session")+'</select>'+
             '<button class="rmx" data-x="'+i+'" title="Remove">✕</button>'+
           '</div>').join("")+'</div>'+
         '<button class="btn sec sm mt" id="rmAdd">＋ Add a location</button>'+
-        '<div class="ovnote">“Pay by” is when the venue invoices you — <b>EOM</b> end of month, <b>EOW</b> end of week, <b>n/a</b> no charge. Room costs are dated, so changing one later never rewrites past sessions.</div>';
+        '<div class="ovnote">Most rooms charge <b>per session</b>. Pick <b>per month</b> for a room you rent at a flat monthly rate — those sessions then carry no room cost of their own. Costs are dated, so changing one later never rewrites past sessions. You can set when each venue invoices you (end of month / week) in <b>Clients › Rooms</b>.</div>';
       host.querySelectorAll(".rmrow").forEach(row=>{
         const i=+row.dataset.i;
         row.querySelectorAll("[data-f]").forEach(inp=>inp.oninput=inp.onchange=()=>{
@@ -3228,7 +4189,7 @@ function stepRooms(w){return{emoji:"🚪", h:"Where do you see clients?",
         const used=r.orig&&S.sessions.some(s=>(s.location||"").toLowerCase()===(r.orig||"").toLowerCase());
         if(used){toast("Sessions use this location — it can’t be removed");Sfx.error();return;}
         w.rooms.splice(i,1);draw();});
-      host.querySelector("#rmAdd").onclick=()=>{w.rooms.push({loc:"",rate:0,due:"n/a",orig:null});draw();
+      host.querySelector("#rmAdd").onclick=()=>{w.rooms.push({loc:"",rate:0,due:"n/a",orig:null,billing:"session"});draw();
         const ins=host.querySelectorAll('.rmrow [data-f="loc"]');if(ins.length)ins[ins.length-1].focus();};
     };
     draw();
@@ -3244,6 +4205,47 @@ function stepMoney(w){return{emoji:"💷", h:"Your usual numbers",
       '<p class="prev">Used only by the “after pension” take-home figure on the Revenue tab. Set 0 if you’d rather not track it.</p>';
     host.querySelector("#spRate").oninput=e=>w.rate=+e.target.value||0;
     host.querySelector("#spPen").oninput=e=>w.pension=+e.target.value||0;
+  }};}
+/* Offered during setup so the "starting from nothing" hump is dealt with on day one,
+   rather than being discovered in Settings six months later. Entirely optional. */
+function stepImport(w){return{emoji:"📥", h:"Already keep a spreadsheet?",
+  sub:"Bring the history across now and your totals, tax figures and client histories start out complete. You can also do this later in <b>⚙ Settings</b>.",
+  mount(host){
+    const paint=()=>{
+      const n=S.sessions.length;
+      host.innerHTML=ovPoints([
+        ["📋","Paste it straight in","Select your rows in Excel, Numbers or Sheets — header row included — copy, and paste. No file wrangling."],
+        ["🔤","Your column names are fine","You match them to the app’s fields on the next screen. We guess most of them from the headings."],
+        ["👀","You see it before it lands","A preview shows exactly what will be added, what’s being skipped and why. Nothing saves until you say so."]
+      ])+
+      '<button class="btn full mt" id="spImp">'+(n?"📥 Import more rows":"📥 Import my spreadsheet…")+'</button>'+
+      (n?'<p class="prev" style="text-align:center">'+n+' session'+(n===1?"":"s")+' in the app so far.</p>'
+        :'<p class="prev" style="text-align:center">No history to bring? Skip straight past — Continue.</p>');
+      host.querySelector("#spImp").onclick=()=>impOpen({quiet:true,done:paint});
+    };
+    paint();
+  }};}
+/* Not skippable-with-blanks: a retention period the therapist never chose is a compliance
+   decision made by a default, which is exactly what this step exists to avoid. */
+function stepRetention(w){return{emoji:"🗄", h:"How long do you keep records?",
+  sub:"After a client finishes, records are usually kept for a set number of years. The app flags them when the time is up — it never deletes anything by itself.",
+  validate(){
+    const n=+w.rtNotes, f=+w.rtFin;
+    if(!(n>=1&&n<=50)||!(f>=1&&f<=50)){toast("Enter both periods, between 1 and 50 years");Sfx.error();return false;}
+  },
+  mount(host){
+    host.innerHTML='<div class="field2">'+
+        '<div><label>Clinical notes (years)</label><input id="spRtN" type="number" min="1" max="50" step="1" value="'+esc(w.rtNotes)+'"></div>'+
+        '<div><label>Financial records (years)</label><input id="spRtF" type="number" min="1" max="50" step="1" value="'+esc(w.rtFin)+'"></div>'+
+      '</div>'+
+      ovPoints([
+        ["📋","Six years is the usual answer","The BACP complaint window is around three years, and insurers commonly ask for six. Your insurer or supervisor may say different — this is your professional call."],
+        ["🔀","Two clocks, on purpose","Notes and money are kept for different reasons, so they get their own periods. You can clear the notes and still keep the dates and fees your tax return needs."],
+        ["🔔","A flag, never a delete","When a client passes their date they appear in <b>Settings › Records retention</b>, with the anonymise and erase tools one tap away. Nothing happens without you."]
+      ])+
+      '<p class="prev">Both are editable later in <b>⚙ Settings</b>.</p>';
+    host.querySelector("#spRtN").oninput=e=>w.rtNotes=+e.target.value||0;
+    host.querySelector("#spRtF").oninput=e=>w.rtFin=+e.target.value||0;
   }};}
 function stepBackup(w){return{emoji:"💾", h:"How your data is kept safe",
   sub:"Read this one properly — it’s the part that matters most.",
@@ -3277,6 +4279,7 @@ function stepDone(w){return{emoji:"🎉", h:"That’s you set up",
       '<div><span>Locations</span><b>'+esc((w.rooms||[]).map(r=>r.loc).filter(Boolean).join(", ")||"—")+'</b></div>'+
       '<div><span>Default fee</span><b>'+gbp(w.rate)+'</b></div>'+
       '<div><span>Backup reminder</span><b>'+w.bkDays+' days / '+w.bkActs+' changes</b></div>'+
+      '<div><span>Keep records</span><b>notes '+w.rtNotes+' yrs · financial '+w.rtFin+' yrs</b></div>'+
       '<div><span>Switched off</span><b>'+(offList.length?esc(offList.join(", ")):"nothing")+'</b></div>'+
       '</div>'+
       '<div style="margin-top:14px">'+ovToggleRow("tour","🧭","Show me around","A short guided tour of each tab, how to log a session, and how saving and backups work.",w.tour!==false)+'</div>';
@@ -3288,30 +4291,39 @@ function stepDone(w){return{emoji:"🎉", h:"That’s you set up",
 /* apply the room rows the user built: rename → update → create → prune */
 function setupApplyRooms(w){
   if(!w.rooms)return;
-  const list=w.rooms.map(r=>({loc:(r.loc||"").trim(),rate:+r.rate||0,due:r.due||"n/a",orig:r.orig})).filter(r=>r.loc);
+  const list=w.rooms.map(r=>({loc:(r.loc||"").trim(),rate:+r.rate||0,due:r.due||"n/a",orig:r.orig,
+                              monthly:(r.billing==="monthly")})).filter(r=>r.loc);
   if(!list.length)return;
-  S.roomRateHistory=S.roomRateHistory||[];
+  S.roomRateHistory=S.roomRateHistory||[]; S.roomRentHistory=S.roomRentHistory||[];
   const fresh=S.sessions.length===0; // nothing logged yet, so cost history can start from the beginning of time
   const find=loc=>S.rooms.find(x=>(x.location||"").toLowerCase()===(loc||"").toLowerCase());
+  /* One dated step per history, written only when the amount actually moved. A monthly room's
+     amount is its rent and its per-session cost is pinned to 0, so it can't charge both ways. */
+  const step=(arr,loc,field,amt,cur)=>{
+    if(Math.abs((+cur||0)-amt)<=0.001)return;
+    if(fresh)for(let i=arr.length-1;i>=0;i--)if((arr[i].location||"").toLowerCase()===loc.toLowerCase())arr.splice(i,1);
+    const rec={_id:uid(),location:loc,effectiveFrom:fresh?"2000-01-01":isoD(today())};
+    rec[field]=amt; arr.push(rec);
+  };
   list.forEach(r=>{
     const ex=find(r.loc)||(r.orig?find(r.orig):null);
+    const perSession=r.monthly?0:r.rate;
     if(ex){
       const before=ex.location||"";
       if(before.toLowerCase()!==r.loc.toLowerCase()){ // rename: carry cost history and existing sessions across
         S.roomRateHistory.forEach(h=>{if((h.location||"").toLowerCase()===before.toLowerCase())h.location=r.loc;});
+        S.roomRentHistory.forEach(h=>{if((h.location||"").toLowerCase()===before.toLowerCase())h.location=r.loc;});
         S.sessions.forEach(s=>{if((s.location||"").toLowerCase()===before.toLowerCase())s.location=r.loc;});
         ex.location=r.loc;
       }
-      ex.due=r.due;
-      if(Math.abs((+effRoomRate(r.loc,isoD(today()))||0)-r.rate)>0.001){
-        ex.rate=r.rate;
-        if(fresh){S.roomRateHistory=S.roomRateHistory.filter(h=>(h.location||"").toLowerCase()!==r.loc.toLowerCase());
-          S.roomRateHistory.push({_id:uid(),location:r.loc,effectiveFrom:"2000-01-01",rate:r.rate});}
-        else S.roomRateHistory.push({_id:uid(),location:r.loc,effectiveFrom:isoD(today()),rate:r.rate});
-      }
+      ex.due=r.due; ex.billing=r.monthly?"monthly":"session";
+      step(S.roomRateHistory,r.loc,"rate",perSession,effRoomRate(r.loc,isoD(today())));
+      step(S.roomRentHistory,r.loc,"amount",r.monthly?r.rate:0,effRoomRent(r.loc,isoD(today())));
+      ex.rate=perSession;
     }else{
-      S.rooms.push({_id:uid(),location:r.loc,rate:r.rate,due:r.due});
-      S.roomRateHistory.push({_id:uid(),location:r.loc,effectiveFrom:"2000-01-01",rate:r.rate});
+      S.rooms.push({_id:uid(),location:r.loc,rate:perSession,due:r.due,billing:r.monthly?"monthly":"session"});
+      S.roomRateHistory.push({_id:uid(),location:r.loc,effectiveFrom:"2000-01-01",rate:perSession});
+      if(r.monthly)S.roomRentHistory.push({_id:uid(),location:r.loc,effectiveFrom:"2000-01-01",amount:r.rate});
     }
   });
   /* drop rooms the user removed — unless a session still points at them — and their now-orphaned cost history */
@@ -3320,6 +4332,7 @@ function setupApplyRooms(w){
   const alive=k=>keep.has(k)||used.has(k);
   S.rooms=S.rooms.filter(r=>alive((r.location||"").toLowerCase()));
   S.roomRateHistory=S.roomRateHistory.filter(h=>alive((h.location||"").toLowerCase()));
+  S.roomRentHistory=S.roomRentHistory.filter(h=>alive((h.location||"").toLowerCase()));
 }
 
 async function setupSave(w,opts){
@@ -3330,6 +4343,10 @@ async function setupSave(w,opts){
   sg.features={};FEATURES.forEach(f=>{sg.features[f.k]=featureOn(w,f.k)&&(!f.dep||featureOn(w,f.dep));});
   sg.onboarded=true; sg.onboardedAt=isoD(today());
   sg.setupRuns=(sg.setupRuns||0)+1;
+  const rt=sg.retention=sg.retention||{};
+  if(+w.rtNotes>=1)rt.notesYears=Math.round(+w.rtNotes);
+  if(+w.rtFin>=1)rt.financeYears=Math.round(+w.rtFin);
+  if(!Array.isArray(rt.endedStatuses)||!rt.endedStatuses.length)rt.endedStatuses=defaultEndedStatuses(S);
   if(!opts||!opts.skipRooms)setupApplyRooms(w);
   applyPalette(w.palette);setTheme(w.theme);Sfx.set(w.sound);
   setDefaultRate(+w.rate||0);setPensionPcm(+w.pension||0);
@@ -3338,6 +4355,32 @@ async function setupSave(w,opts){
   applySettings();go("home");updateBackupBanner();
 }
 
+/* one-time beta acknowledgement — shown before setup on a fresh install, and once (only) to
+   existing testers who already have data, since setup itself won't fire for them again */
+function showBetaGate(after){
+  const w={ack:false};
+  const step={emoji:"🧪", h:"Before you dive in — beta software",
+    sub:"Please read this once, it only takes a moment.",
+    validate(){if(!w.ack){toast("Tick the box to continue");Sfx.error();return false;}},
+    mount(host){
+      host.innerHTML=ovPoints([
+        ["📱","Beta, still moving","Features and data formats may change as this gets finished. Keep independent backups (Settings → Backups) — don’t rely on this as your only record yet."],
+        ["🖥️","One device at a time","Changes made in two open tabs or devices at once aren’t merged — whichever saves last silently wins. Stick to a single active device per dataset for now."],
+        ["📄","The details","Full terms in the <a href=\"terms.html\" target=\"_blank\" rel=\"noopener\">Terms of Service</a> and <a href=\"privacy.html\" target=\"_blank\" rel=\"noopener\">Privacy Policy</a> — short version: everything stays on this device, nothing is ever sent anywhere."]
+      ])+
+      '<label class="row" style="align-items:flex-start;gap:10px;margin-top:16px;cursor:pointer">'+
+        '<input type="checkbox" id="betaAckBox" style="margin-top:3px">'+
+        '<span>I understand this is beta software and I’ll keep independent backups</span>'+
+      '</label>';
+      host.querySelector("#betaAckBox").onchange=e=>{w.ack=e.target.checked;};
+    }};
+  flowStart({title:"Before you start", steps:[step], doneLabel:"Continue",
+    onDone:async()=>{
+      const sg=settings(); sg.betaAck=true; sg.betaAckAt=isoD(today());
+      await commit("Acknowledged beta terms");
+      if(after)after();
+    }});
+}
 function startSetup(opts){
   opts=opts||{};
   const sg=settings();
@@ -3352,6 +4395,7 @@ function startSetup(opts){
     features:Object.assign({},sg.features||{}),
     rate:defaultRate(), pension:pensionPcm(),
     bkDays:backupDaysThreshold(), bkActs:backupActsThreshold(),
+    rtNotes:retentionCfg().notesYears, rtFin:retentionCfg().financeYears,
     rooms:null, tour:!rerun
   };
   const welcome={emoji:"👋", h:rerun?"Let’s run through setup again":"Welcome to Therapy Tracker",
@@ -3364,7 +4408,9 @@ function startSetup(opts){
     ])};
   const steps=[welcome,stepPractice(w),stepLook(w),stepFeatures(w)];
   if(withRooms)steps.push(stepRooms(w));
-  steps.push(stepMoney(w),stepBackup(w),stepDone(w));
+  steps.push(stepMoney(w),stepRetention(w));
+  if(!rerun)steps.push(stepImport(w));   /* re-runs promise not to touch client data — leave it to Settings */
+  steps.push(stepBackup(w),stepDone(w));
   flowStart({
     title:rerun?"Setup (re-run)":"Set up Therapy Tracker",
     steps, doneLabel:"Finish setup",
@@ -3378,6 +4424,64 @@ function startSetup(opts){
       else celebrate({emoji:"🎉",title:"You’re all set",sub:"Tap ＋ to log your first session.",level:"big",sound:"fanfare"});
     }
   });
+}
+
+/* ===== What's new =====
+   Shown once per release, to people who already had the app — a brand-new user meets all of this
+   in setup and the tour instead. Deliberately has **no onSkip**: flowGo only renders the Skip
+   button when a flow supplies one, and nothing else dismisses the overlay (no backdrop click, no
+   Escape), so the Continue/Got it button is the only way past it.
+   Bump WHATS_NEW and rewrite whatsNewSteps() for the next release. */
+const WHATS_NEW=1;
+function whatsNewSeen(){try{return +localStorage.getItem("tt_whatsnew")||0;}catch(e){return 0;}}
+function markWhatsNewSeen(){try{localStorage.setItem("tt_whatsnew",String(WHATS_NEW));}catch(e){}}
+function whatsNewDue(){return whatsNewSeen()<WHATS_NEW;}
+function whatsNewSteps(){
+  const st=[];
+  st.push({emoji:"✨", h:"A few new things", sub:"This update adds the things you and your colleague asked for. One screen each — then you’re back to normal.",
+    html:ovPoints([
+      ["📥","Bring your spreadsheet in","Paste or upload your old records and they become real sessions, with fees and room costs dated properly."],
+      ["🏠","Rooms you rent monthly","A room can now cost a flat monthly rent instead of a fee per session."],
+      ["🧮","Costs and other income","Insurance, wifi, CPD, subletting a room — all feeding your net income and tax figures."],
+      ["👥","Peer supervision","Logged separately, counted toward your total hours."],
+      ["🗄","A retention reminder","The app tells you when a finished client’s records are past the age you chose to keep them."]
+    ])});
+  st.push({emoji:"📥", h:"Your old spreadsheet, imported", sub:"In <b>⚙ Settings › Import from a spreadsheet</b>.",
+    html:ovPoints([
+      ["📋","Paste it straight in","Select the rows in Excel, Numbers or Sheets — header row included — copy, paste. Or upload a .csv."],
+      ["🔤","Your column names are fine","You match them up on screen; most are guessed from the headings."],
+      ["👀","Nothing lands unseen","A preview shows exactly what will be added, what’s skipped and why. One <b>Undo</b> reverses the whole import."]
+    ])});
+  st.push({emoji:"💷", h:"Money: costs, rent and other income", sub:"All on the <b>Revenue</b> tab, under the charts.",
+    html:ovPoints([
+      ["🏠","Monthly room rent","In <b>Clients › Rooms</b>, a room can be switched to a flat monthly rent from a date you choose. Sessions in that room then carry no separate room cost — and every past session keeps exactly what it cost at the time."],
+      ["🧾","Business costs","One-off or every month. Monthly ones repeat by themselves, so you enter the wifi bill once."],
+      ["💰","Other income","Subletting a room, a workshop. Income from separate work — tutoring, a second job — can be marked as such: it’s totalled for you but kept out of the practice’s tax figures, because it’s a different trade."],
+      ["📊","It all reaches your tax estimate","Net income, the tax-year table and the charts all include these now."]
+    ])});
+  st.push({emoji:"👥", h:"Peer supervision", sub:"A new <b>Peer</b> tab inside Supervision.",
+    html:ovPoints([
+      ["🕑","Hours you can count","Logged apart from clinical supervision, with who it was with and any cost."],
+      ["📜","Added to your total hours","It shows on the accreditation card as its own line, inside your total accreditation hours."],
+      ["⚖️","Still out of the 1:6 ratio","Peer supervision doesn’t count toward the clinical-to-supervision ratio — that hasn’t changed, and keeping the two logs apart is what keeps it honest."]
+    ])});
+  st.push({emoji:"🗄", h:"Records retention", sub:"In <b>⚙ Settings › Records retention</b>.",
+    html:ovPoints([
+      ["📅","Two periods, both yours to set","How long to keep clinical notes, and how long to keep financial records. Six years each to start with — the BACP complaint window is around three years and insurers often ask for six. Change them to whatever you and your insurer agree."],
+      ["🔔","A flag, never a deletion","When a finished client passes one of those dates they appear in that section. <b>The app will never delete anything on its own.</b>"],
+      ["🧹","The tools are one tap away","Anonymise clears their notes and identity but keeps every date and fee, so your tax figures don’t move. Erase removes them completely. Both still ask you to confirm properly."]
+    ])});
+  st.push({emoji:"📄", h:"Terms and privacy", sub:"Worth thirty seconds.",
+    html:ovPoints([
+      ["🔒","Nothing has changed about your data","It still lives only on this device. No account, no cloud, no analytics, nothing sent anywhere."],
+      ["📃","Now written down","There’s a <a href=\"terms.html\" target=\"_blank\" rel=\"noopener\">Terms of Service</a> and a <a href=\"privacy.html\" target=\"_blank\" rel=\"noopener\">Privacy Policy</a> so it’s on the record rather than just implied."],
+      ["💾","The one thing to keep doing","Export a backup regularly. It’s still the only copy that survives losing this device."]
+    ])});
+  return st;
+}
+function showWhatsNew(){
+  flowStart({title:"What’s new", steps:whatsNewSteps(), doneLabel:"Got it",
+    onDone:()=>{markWhatsNewSeen();toast("You can replay this any time from ⚙ Settings");}});
 }
 
 /* ---- guided tour ---- */
@@ -3410,18 +4514,20 @@ function tourSteps(){
       ["📇","Clients","Add someone with their code, status and starting fee. Tap a client for their profile — attendance, income, session history, receipts."],
       ["💷","Fees change from a date","Use <b>Change rate</b> rather than editing the number. Past sessions keep the fee you actually charged."],
       ["📈","Trends","Retention funnel, attendance against expected frequency, and how long people stay."],
-      ["🚪","Rooms","Add or rename locations and set what each costs you per session — also dated, same as fees."]])});
+      ["🚪","Rooms","Add or rename locations and set what each costs — per session, or a flat monthly rent if that’s how you pay. Also dated, same as fees."]])});
   if(feat("supervision"))st.push({emoji:"🗣", h:"Supervision", sub:"Log each supervision session with its cost and who you discussed.",
     html:ovPoints([
       ["🧾","Costs come off your profit","Supervision is a business expense, so it’s deducted before the tax estimate."],
       ["👀","Discussion recency","Insights shows how long since each active client was last taken to supervision — useful for spotting who’s been quietly missed."]].concat(
+      feat("peer")?[["👥","Peer supervision","Logged separately on its own sub-tab. Those hours add to your total accreditation hours but never to the 1:6 ratio — that’s the rule, and keeping the logs apart is what makes it visible."]]:[],
       feat("accreditation")?[["📜","Accreditation hours","Clinical vs supervision hours and the 1:6 ratio for BACP Form 3A. Logged sessions count as clinical hours; training and placement totals you type in yourself."]]:[]))});
   if(feat("income"))st.push({emoji:"💷", h:"Revenue & tax", sub:"Everything money, by tax year (6 April – 5 April).",
     html:ovPoints([
-      ["📊","Per tax year","Billed, received, outstanding and net after room costs and supervision."],
+      ["📊","Per tax year","Billed, received, outstanding and net after room costs, supervision and your business costs."]].concat(
+      feat("finances")?[["🧮","Costs & other income","Log insurance, wifi, CPD — one-off or monthly — and income that isn’t a session, like subletting a room. Both feed the net and tax figures. Income from separate work (tutoring, a second job) can be marked as such and is kept out of the practice’s figures."]]:[],[
       ["🧮","Tax estimate","Income Tax plus Class 4 (and Class 2 before 2024/25) for a sole trader. Mid-year it shows a pro-rata projection — tap the figure for the full working."],
       ["🏦","Take-home & forecast","What lands in your pocket monthly, before and after pension, plus a year-end projection from your current run-rate."],
-      ["⚠️","An estimate, not advice","It doesn’t know about other income, expenses or allowances. Treat it as a guide for setting money aside."]])});
+      ["⚠️","An estimate, not advice","It works from what you’ve logged here and assumes the standard allowances. Treat it as a guide for setting money aside, not as a tax return."]]))});
   st.push({emoji:"💾", h:"How your data is saved", sub:"The part worth remembering.",
     html:ovPoints([
       ["⚡","Saved the moment you tap Save","Straight into this device’s storage. There’s no separate “save file” step and nothing to lose by closing the app."],
@@ -3654,6 +4760,88 @@ async function dzRunEraseAll(){
   toast("Erasing…");
   await eraseEverything();
 }
+/* ===== Records retention review (flags only, never deletes) =====
+   N years after a client's last logged session, once their status counts as "ended". Notes and
+   financial records run on separate clocks because they're kept for different reasons — the
+   complaint window versus the insurer/HMRC one. Crossing a threshold means the therapist may
+   now act; the app only says so, and hands them to the existing removal routes. */
+function retentionCfg(){
+  const r=(settings().retention)||{};
+  return {notesYears:(+r.notesYears>0)?+r.notesYears:6,
+          financeYears:(+r.financeYears>0)?+r.financeYears:6,
+          endedStatuses:(Array.isArray(r.endedStatuses)&&r.endedStatuses.length)?r.endedStatuses:defaultEndedStatuses(S)};
+}
+function addYears(d,n){const x=new Date(d);x.setFullYear(x.getFullYear()+n);return x;}
+function retentionRows(){
+  const cfg=retentionCfg(), t=today();
+  const ended=new Set(cfg.endedStatuses.map(s=>String(s).toLowerCase()));
+  const last={},count={};
+  S.sessions.forEach(s=>{const k=(s.client||"").toLowerCase();const d=parseD(s.date);
+    if(!k)return; count[k]=(count[k]||0)+1;
+    if(!d||d>t)return; if(!last[k]||d>last[k])last[k]=d;});
+  return S.clients.filter(c=>ended.has(String(c.status||"").toLowerCase())).map(c=>{
+    const k=(c.code||"").toLowerCase(), ld=last[k];
+    if(!ld)return null;                       /* nothing logged — no clock to count from */
+    const nd=addYears(ld,cfg.notesYears), fd=addYears(ld,cfg.financeYears);
+    return {code:c.code,status:c.status||"",last:ld,notesDue:nd,finDue:fd,
+            notesOver:nd<=t,finOver:fd<=t,sessions:count[k]||0};
+  }).filter(r=>r&&(r.notesOver||r.finOver)).sort((a,b)=>a.last-b.last);
+}
+function retentionCardHTML(){
+  const cfg=retentionCfg(), rows=retentionRows();
+  const statuses=[...new Set(S.clients.map(c=>c.status).filter(Boolean)
+    .concat(S.clientCategories.map(x=>x.status).filter(Boolean)).concat(cfg.endedStatuses))];
+  const on=new Set(cfg.endedStatuses.map(s=>String(s).toLowerCase()));
+  const rowHTML=r=>'<div class="list-item"><div class="li-main">'+
+      '<div class="li-title">'+esc(r.code)+' '+
+        (r.notesOver?'<span class="chip n">notes</span> ':'')+
+        (r.finOver?'<span class="chip n">records</span>':'')+'</div>'+
+      '<div class="li-sub">Last session '+fmtD(r.last)+' · '+r.sessions+' session'+(r.sessions===1?'':'s')+' · '+esc(r.status)+'</div></div>'+
+      '<div class="li-right" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'+
+        (r.notesOver?'<button class="btn sm sec" data-rtanon="'+esc(r.code)+'">Anonymise</button>':'')+
+        (r.finOver?'<button class="btn sm ghost" data-rters="'+esc(r.code)+'" style="color:var(--bad)">Erase</button>':'')+
+      '</div></div>';
+  return '<div class="card"><h2>Records retention</h2>'+
+    '<p class="small muted">How long you keep records after a client finishes. Nothing is ever deleted for you — when a client passes one of these dates they appear below, and you decide.</p>'+
+    '<div class="field2">'+
+      '<div><label>Keep clinical notes for (years)</label><input type="number" min="1" max="50" step="1" id="rtNotes" value="'+esc(cfg.notesYears)+'"></div>'+
+      '<div><label>Keep financial records for (years)</label><input type="number" min="1" max="50" step="1" id="rtFin" value="'+esc(cfg.financeYears)+'"></div>'+
+    '</div>'+
+    '<p class="small muted">Six years each is the common default: the BACP complaint window is around three years, and insurers often ask for six. Your own insurer or supervisor may say otherwise — this is your call, not the app’s.</p>'+
+    '<details class="dz" style="margin-top:10px"><summary>Which statuses count as finished? ('+cfg.endedStatuses.length+')</summary>'+
+      '<p class="small muted" style="margin-top:6px">The clock starts at the last session of clients with these statuses. Paused clients are usually left out — they may come back.</p>'+
+      '<div class="dzpick">'+statuses.map(s=>'<label><input type="checkbox" class="rtst" value="'+esc(s)+'"'+(on.has(String(s).toLowerCase())?" checked":"")+'><span>'+esc(s)+'</span></label>').join("")+'</div>'+
+    '</details>'+
+    (rows.length
+      ? '<div class="vmsg warn" style="margin-top:12px">'+rows.length+' client'+(rows.length===1?' has':'s have')+' passed a retention date.</div>'+
+        '<div style="padding:0 2px">'+rows.map(rowHTML).join("")+'</div>'+
+        '<p class="small muted" style="margin-top:8px"><b>Anonymise</b> clears their notes and identity but keeps every date and fee, so your tax figures don’t move. <b>Erase</b> removes the client and their sessions entirely — past income from them disappears from your reports.</p>'
+      : '<div class="vmsg ok" style="margin-top:12px">✓ Nothing is past its retention date.</div>')+
+    '</div>';
+}
+function wireRetention(v){
+  const n=v.querySelector("#rtNotes"), f=v.querySelector("#rtFin");
+  if(!n||!f)return;
+  const save=async()=>{
+    const rt=settings().retention=settings().retention||{};
+    const nv=Math.max(1,Math.min(50,Math.round(+n.value||0))), fv=Math.max(1,Math.min(50,Math.round(+f.value||0)));
+    n.value=nv; f.value=fv;
+    if(rt.notesYears===nv&&rt.financeYears===fv)return;
+    rt.notesYears=nv; rt.financeYears=fv;
+    await commit("Retention: notes "+nv+" yrs, records "+fv+" yrs");
+    go("settings");
+  };
+  n.onchange=save; f.onchange=save;
+  v.querySelectorAll(".rtst").forEach(cb=>cb.onchange=async()=>{
+    const picked=Array.prototype.slice.call(v.querySelectorAll(".rtst")).filter(x=>x.checked).map(x=>x.value);
+    if(!picked.length){toast("Pick at least one finished status");cb.checked=true;return;}
+    const rt=settings().retention=settings().retention||{};
+    rt.endedStatuses=picked;
+    await commit("Retention: finished statuses = "+picked.join(", "));
+    go("settings");});
+  v.querySelectorAll("[data-rtanon]").forEach(b=>b.onclick=()=>dzRunAnonymise([b.dataset.rtanon]));
+  v.querySelectorAll("[data-rters]").forEach(b=>b.onclick=()=>dzRunErase([b.dataset.rters]));
+}
 function dzMenu(){
   const body=el('<div></div>');
   const hasClients=S.clients.length>0;
@@ -3736,7 +4924,15 @@ window.addEventListener("unhandledrejection",e=>reportGlobalError("Unhandled pro
   applySettings();
   go("home");
   requestPersistence(); // ask the browser not to evict us; the answer is shown in Settings
-  if(!settings().onboarded)setTimeout(()=>startSetup(),120); // first run on this device
+  /* One overlay, one queue. The beta gate, first-run setup and What's new all drive the same
+     #ovRoot, so they're chained rather than fired together — otherwise the last one to start
+     would silently replace whatever was already on screen. */
+  const afterGates=()=>{
+    if(!settings().onboarded){startSetup();markWhatsNewSeen();return;} // new here: setup and the tour cover all of it
+    if(whatsNewDue())showWhatsNew();
+  };
+  if(!settings().betaAck)setTimeout(()=>showBetaGate(afterGates),120);
+  else setTimeout(afterGates,120);
 })();
 </script>
 <script>if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(function(){});}</script></body>

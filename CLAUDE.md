@@ -35,11 +35,15 @@ Global `S` object — persisted to IndexedDB (`TherapyTrackerDB`) with a localSt
 ```js
 S = {
   clients: [],          // each has _id
-  rooms: [],            // {location, rate, due}
+  rooms: [],            // {location, rate, due, billing:"session"|"monthly"}
   sessions: [],         // therapy sessions
-  supervision: [],      // supervision sessions
+  supervision: [],      // clinical supervision (counts toward the 1:6 ratio)
+  peerSupervision: [],  // peer supervision (total hours only, never the ratio — added Aug 2026)
   rateHistory: [],      // therapist fee history
-  roomRateHistory: [],  // per-room rate history
+  roomRateHistory: [],  // per-room per-session rate history
+  roomRentHistory: [],  // per-room monthly rent history (added Aug 2026)
+  expenses: [],         // {desc, amount, date, recurrence:"once"|"monthly", endDate, category}
+  otherIncome: [],      // as expenses + scope:"practice"|"personal"
   clientCategories: [], // {status, category} mapping
   game: {               // gamification (added June 2026)
     activeWeeks: [],    // ISO week strings for streak tracking
@@ -50,6 +54,7 @@ S = {
     practiceName, practiceTagline,
     palette,            // key into PALETTES: sage|ocean|plum|clay|indigo|slate
     features: {},       // key → false to disable; absent/true = on
+    retention: {},      // {notesYears:6, financeYears:6, endedStatuses:[]} — review flags only
     onboarded, onboardedAt, setupRuns
   }
 }
@@ -69,13 +74,35 @@ Key functions:
 - **`exportJSON()` must work with `_db === null`** — the crash screen is the only way out of a broken render and it offers Export.
 
 ### Schema versioning
-`SCHEMA_VERSION` (currently `2`) is stamped on `S.meta.schemaVersion` and on every backup envelope. Unstamped data is treated as v1.
+`SCHEMA_VERSION` (currently `3`) is stamped on `S.meta.schemaVersion` and on every backup envelope. Unstamped data is treated as v1.
+- **v3 (Aug 2026)** added expenses, other income, peer supervision and monthly room rent. No in-place migration: every new field's absence means exactly what it meant in v2. The bump exists for the other direction — a v3 backup carries money a v2 build cannot see, so restoring it there would drop those rows and save the loss back.
 - Bump it when a change would be **misread** by an older build, and add the matching step to the ordered migration block in `normalize()`.
 - `validateImport()` **refuses** a backup whose version is newer than the running app — importing would silently drop unknown fields and then save that loss back over good data.
 - `normalize()` never downgrades newer data in place.
 
+### Business finances (added Aug 2026 — one choke point)
+`ledgerBetween(from, to, {toDate})` is the **only** place expenses, other income and monthly room rent are totalled. `tyNet()` adds its `total`; the tax-year table's Net column now prints `tx.netAll` (i.e. `tyNet`) rather than recomputing `billed - room - sup` inline, so the Net and Tax columns cannot drift apart. Anything new that reports money goes through it too.
+- Recurring rows are **expanded at read time** (`moneyOccurrences`) — never generated into the data. Correcting an amount corrects every period it applies to. A monthly row repeats on its own day of the month, clamped in short months (31 Jan → 28 Feb → 31 Mar, no drift).
+- `scope:"personal"` income (a second job, tutoring — a different trade) is totalled separately as `personalIncome` and deliberately **excluded** from `total`, so it never inflates the practice's Self Assessment figure.
+- Monthly rooms: switching a room to monthly pushes a `roomRateHistory` step of `0` **and** a `roomRentHistory` step, both dated. `derive()` and `effRoomRate()` are untouched — past sessions keep their historical per-session charge and new ones stop charging per session by themselves. `room.billing` only drives the UI.
+
 ### Error boundary
 `go(tab)` wraps the view render; a throw shows `crashScreen(err, tab)` — which always offers **Export a backup**, Home and Reload — instead of leaving `<main>` empty. `window.onerror` / `unhandledrejection` route to `reportGlobalError()` (console always, one toast per session).
+
+## Spreadsheet import (Settings › Import from a spreadsheet)
+Onboarding path for a therapist arriving with history in Excel. `impOpen()` drives three sheet stages: **source** (`impStageSource` — paste TSV / pick .csv / download template) → **mapping** (`impStageMap`) → **dry-run preview** (`impStagePreview`) → `impCommit(plan)`.
+
+Rules that must not regress:
+- **Merge, never replace.** `importJSON()` is a whole-state replace and is for *backups only*. `impCommit()` appends to `S.sessions` and auto-creates the clients/rooms the rows reference. Nothing is written until the final button.
+- **`impPlan()` is pure** — builds the whole plan without touching `S`, so the preview is exactly what will happen.
+- **Fees become dated history, not a flat field.** Sessions have no `rate`; `derive()` reads `effRate(client,date)`. `impCommit()` walks rows oldest-first and pushes `rateHistory` / `roomRateHistory` entries only where the fee differs from what's already effective at that date. The first entry for a brand-new client/room is stamped `2000-01-01` so earlier sessions still resolve. **A £60 session imported before a rise to £65 must still derive £60** — that's the tax figures.
+- **Dedupe key is `client|date|time`** (`impKey`). `onDupe:"skip"` leaves the app's version; `"update"` overwrites in place by `_id` — so re-importing a corrected file never duplicates.
+- **Date ambiguity is resolved per column, not per row.** `impDateScan()` takes the whole column: any row with a first number >12 settles day-first vs month-first; nothing conclusive defaults to UK DMY and *says so*. Conflicts (both readings forced) are flagged red. The user can override, and the banner shows a worked example (`"03/04/2026" → 03 Apr 2026`) that updates live. Excel serials, named months and 2-digit years are handled in `impDateParts()`.
+- **Late cancellation** is set at import from either the mapped column *or* `/late cancellation/i` in notes — `normalize()`'s backfill is one-time and gated by `meta.lateCancelBackfill`, so it will never see imported rows.
+- **One Undo reverses the whole import.** `commit()` already snapshots, so the snapshot on top of the stack *is* the pre-import state; `impCommit()` only lays down its own `"Before spreadsheet import"` snapshot when `snapCount()===0`. Adding one unconditionally makes Undo take two taps — don't.
+- **`impTemplate()` generates the template from `IMP_FIELDS`**, so template headers can never drift from the parser. There's a test for this: the template's own column list must guess back to itself exactly.
+- `impGuess()` matches header synonyms exact-first then substring, one field per column. Field order in `IMP_FIELDS` breaks ties (`location` claims a bare "Room" before the `room` field does).
+- Offered as a setup-wizard step (`stepImport`) on first run only — a re-run promises not to touch client data. Inside the overlay it runs with `{quiet:true}` so it doesn't `go()` or `celebrate()` behind it.
 
 ## Data removal (Settings › Privacy & removal)
 Collapsed `<details class="dz">` → `dzMenu()`. Four routes, all gated by `dzConfirm()`: a summary of what changes, an export-first button, an acknowledgement checkbox, a typed phrase, and a 3-second arming delay on the final button.
@@ -83,6 +110,15 @@ Collapsed `<details class="dz">` → `dzMenu()`. Four routes, all gated by `dzCo
 - `eraseClients(codes)` — removes clients, their sessions and their `rateHistory`; strips their names from `supervision[].clients` but **keeps the supervision entries** (therapist's own CPD/tax record).
 - `eraseEverything()` — clears the three object stores **first** (always succeeds), then deletes the DB (another open tab can defer this), then removes `tt_*` localStorage keys. **Leaves the SW caches alone** — they hold no client data, and clearing them would strand the user offline with no app.
 - `dzPickClients()` / `sheetPromise()` — sheet-based promises that resolve `null` when dismissed by any route (a MutationObserver on `#sheet`'s class), so no promise hangs.
+
+## Records retention (Settings › Records retention — added Aug 2026)
+`retentionRows()` flags clients whose status is in `settings.retention.endedStatuses` and whose **last logged session** is more than `notesYears` / `financeYears` ago. Two clocks, because notes and money are kept for different reasons.
+- **Flag only — it never deletes.** The row's Anonymise / Erase buttons hand off to `dzRunAnonymise([code])` / `dzRunErase([code])`, so every removal still goes through the full `dzConfirm()` gauntlet. Don't add a shortcut that skips it.
+- `defaultEndedStatuses(st)` reads the therapist's own status→category mapping and takes the statuses under category `Finished`. **Paused / Active enquiry are Pipeline, not ended** — those clients may return, and flagging them would be wrong.
+- A client with no logged sessions has no clock to count from and is skipped.
+
+## Peer supervision (added Aug 2026)
+`S.peerSupervision` is a separate log from `S.supervision`, reached from a third sub-tab on Supervision. Its hours are added to the **total accreditation hours** in `mountAccreditation()` and are deliberately absent from `sup`, the only figure the 1:6 ratio sees. Keeping the two arrays apart is what makes that rule visible — don't merge them with a `type` field. A peer entry's optional `cost` feeds `tyNet()` like clinical supervision does.
 
 ## Gamification (S.game)
 - **Streak**: any `commit()` call marks the current ISO week as active via `gameTouch()`.
@@ -96,7 +132,8 @@ Collapsed `<details class="dz">` → `dzMenu()`. Four routes, all gated by `dzCo
 - **Flow engine**: `flowStart/flowGo/flowNext/flowClose` drive a full-screen `.ov` overlay (z-index 45 — above the tab bar, below `#sheet`) from an array of step objects `{emoji,h,sub,html,mount,validate,onLeave}`. Shared by setup and the tour.
 - **Tour**: `startTour()` — feature-aware, read-only. Replayable from Settings › Setup & help.
 - **Re-run**: `confirmRerunSetup()` — warning sheet requiring the user to type `RESET SETUP`. Skips the rooms step once sessions exist.
-- **Feature flags**: `feat(key)` gates tabs (`TABS[].ft`), gamification (`celebrate`, `Confetti.burst`), quick-add, attention feed, receipts and accreditation. Off = hidden, never deleted.
+- **Feature flags**: `feat(key)` gates tabs (`TABS[].ft`), gamification (`celebrate`, `Confetti.burst`), quick-add, attention feed, receipts, accreditation, `peer` (peer supervision, dep: supervision) and `finances` (costs & other income, dep: income). Off = hidden, never deleted.
+- **Retention step**: `stepRetention()` sits between money and backup, and its `validate()` refuses blanks or anything outside 1–50 years — a retention period nobody chose is a compliance decision made by a default.
 - **Palettes**: `PALETTES` + `html[data-palette]` CSS blocks. `applyPalette()` mirrors to `localStorage('tt_palette')` so the head script applies it before first paint. `paintThemeColor()` keeps `#tcMeta` in sync.
 - **Branding**: `practiceName()` / `practiceTagline()` feed the header pill, `--appname` (desktop sidebar title), `document.title` and printed receipts. `applySettings()` re-applies everything after load, import or rollback.
 
@@ -118,7 +155,9 @@ Collapsed `<details class="dz">` → `dzMenu()`. Four routes, all gated by `dzCo
 | `renderIncomplete()` | Bulk room-paid + notes editor |
 | `renderUnpaid()` | Bulk unpaid session payment screen |
 | `renderCalendar()` | Calendar view |
-| `renderRooms()` | Room management |
+| `renderRooms()` | Room management (per-session or monthly billing) |
+| `financeCards()` / `financeForm()` | Business costs & other income (inside Revenue) |
+| `retentionCardHTML()` | Records retention review (inside Settings) |
 | `renderReports()` | Raw data / reports |
 | `renderSettings()` | Settings / data management |
 
