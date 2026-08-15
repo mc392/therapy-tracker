@@ -35,15 +35,16 @@ Global `S` object — persisted to IndexedDB (`TherapyTrackerDB`) with a localSt
 ```js
 S = {
   clients: [],          // each has _id
-  rooms: [],            // {location, rate, due, billing:"session"|"monthly"}
+  rooms: [],            // {location, rate, due, billing:"session"|"monthly", pay:{freq,day}}
   sessions: [],         // therapy sessions
   supervision: [],      // clinical supervision (counts toward the 1:6 ratio)
   peerSupervision: [],  // peer supervision (total hours only, never the ratio — added Aug 2026)
   rateHistory: [],      // therapist fee history
   roomRateHistory: [],  // per-room per-session rate history
   roomRentHistory: [],  // per-room monthly rent history (added Aug 2026)
-  expenses: [],         // {desc, amount, date, recurrence:"once"|"monthly", endDate, category}
+  expenses: [],         // {desc, amount, date, recurrence (see FREQS), endDate, category}
   otherIncome: [],      // as expenses + scope:"practice"|"personal"
+  paidCharges: {},      // "kind:ref|dueDate" -> date settled. Reminders only, never the tax figures
   clientCategories: [], // {status, category} mapping
   game: {               // gamification (added June 2026)
     activeWeeks: [],    // ISO week strings for streak tracking
@@ -55,6 +56,7 @@ S = {
     palette,            // key into PALETTES: sage|ocean|plum|clay|indigo|slate
     features: {},       // key → false to disable; absent/true = on
     retention: {},      // {notesYears:6, financeYears:6, endedStatuses:[]} — review flags only
+    cpdTarget,          // annual CPD hours target (default 30)
     onboarded, onboardedAt, setupRuns
   }
 }
@@ -85,6 +87,26 @@ Key functions:
 - Recurring rows are **expanded at read time** (`moneyOccurrences`) — never generated into the data. Correcting an amount corrects every period it applies to. A monthly row repeats on its own day of the month, clamped in short months (31 Jan → 28 Feb → 31 Mar, no drift).
 - `scope:"personal"` income (a second job, tutoring — a different trade) is totalled separately as `personalIncome` and deliberately **excluded** from `total`, so it never inflates the practice's Self Assessment figure.
 - Monthly rooms: switching a room to monthly pushes a `roomRateHistory` step of `0` **and** a `roomRentHistory` step, both dated. `derive()` and `effRoomRate()` are untouched — past sessions keep their historical per-session charge and new ones stop charging per session by themselves. `room.billing` only drives the UI.
+
+### Payment schedules & what's been paid (added Aug 2026)
+`FREQS` is the one vocabulary for repeats (once / weekly / fortnightly / monthly / quarterly / annually), and `freqStep(anchor,freq,n)` is the only place the maths lives — used by both `moneyOccurrences()` and `schedNext()`.
+- **A schedule never moves an accrual date.** `roomRentOccurrences()` anchors each charge to the rent history's own day and attaches the payment date separately as `due`. Letting `room.pay` drive the accrual date silently shifted historical rent between tax years — don't reintroduce it.
+- `roomSchedule(rm)` reads the legacy `due` field (`EOM` → monthly/last, `EOW` → weekly/Sunday) when `pay` is absent, so old rooms keep working. `roomForm` writes both.
+- `S.paidCharges` is a tick-list, **not accounting**: `ledgerBetween()` ignores it entirely, because a cost belongs to the year it fell due whether or not it's been settled.
+- Paid rows stay in the list for a fortnight **after being ticked** (not after falling due), or settling an old overdue charge would make the row vanish mid-tap with no undo.
+
+### Room billing and the session form
+A room on monthly rent has no per-session room fee to settle, so `derive()` returns `roomPaidNA` and the session form hides the room-paid controls entirely (`paintRoomPaid`). `missingReasons()` and `derive().complete` both honour it, so those sessions never show up as incomplete for a question that doesn't apply to them.
+
+### CPD vs accreditation (added Aug 2026)
+`mountCPD()` is the card everyone sees: supervision + peer hours over a rolling 12 months against `settings.cpdTarget`. `mountAccreditation()` (Form 3A, the 1:6 ratio) is gated behind the `accreditation` feature, which `normalize()` defaults **off for new installs and on for anyone who already has data** — pulling it from someone mid-accreditation would lose them the screen they keep records for. `stepCPD()` asks in setup.
+
+### Scrolling rules
+- `go(tab,{keepScroll:true})` re-renders without throwing the reader to the top. Use it for anything redrawing the screen the user is already on (segment toggles, saving from a sheet); plain `go(tab)` is for real navigation.
+- `scrollChart(wrap,keep)` positions a horizontally-scrolling chart. Charts are built **before their view is attached**, so it has no width at draw time — hence the rAF *and* the `setTimeout(...,0)`. Redraws pass the old `scrollLeft`, so tapping a bar no longer flings the chart back to the oldest period.
+
+### Settings layout
+Five collapsible `<details class="sgrp">` groups (practice / data / records / help / about). Open state is per-device in `localStorage('tt_setgrp')`. Every card lives inside a group — don't add loose cards to the settings view.
 
 ### Error boundary
 `go(tab)` wraps the view render; a throw shows `crashScreen(err, tab)` — which always offers **Export a backup**, Home and Reload — instead of leaving `<main>` empty. `window.onerror` / `unhandledrejection` route to `reportGlobalError()` (console always, one toast per session).

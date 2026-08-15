@@ -206,6 +206,19 @@ nav.tabs button.on{color:var(--brand);
 .prev{font-size:11px;color:var(--muted);margin-top:3px}
 .acc-work{margin-top:10px;padding:11px 13px;border:1px solid var(--line);border-radius:12px;background:var(--soft);font-size:12.5px;line-height:1.75;color:var(--ink)}
 .acc-work div{margin:1px 0} .acc-work b{font-weight:700}
+/* Settings groups: collapsed sections so the page opens as a short menu, not a wall of cards */
+.sgrp{background:var(--card);border:1px solid var(--line);border-radius:var(--r);margin:0 0 10px;overflow:hidden}
+.sgrp>summary{list-style:none;cursor:pointer;padding:14px 16px;display:flex;flex-direction:column;gap:2px;position:relative;user-select:none}
+.sgrp>summary::-webkit-details-marker{display:none}
+.sgrp>summary::after{content:"›";position:absolute;right:16px;top:50%;transform:translateY(-50%) rotate(90deg);
+  font-size:20px;color:var(--muted);transition:transform .18s ease}
+.sgrp[open]>summary::after{transform:translateY(-50%) rotate(-90deg)}
+.sgrp>summary:hover{background:color-mix(in srgb,var(--brand) 6%,transparent)}
+.sgrp .sgt{font-weight:700;font-size:15.5px;padding-right:24px}
+.sgrp .sgs{font-size:12.5px;color:var(--muted);padding-right:24px}
+.sgrp[open]>summary{border-bottom:1px solid var(--line)}
+.sgb{padding:2px 10px 10px}
+.sgb>.card{border:0;border-radius:10px;margin:10px 0 0;background:color-mix(in srgb,var(--bg) 55%,transparent)}
 .svgwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:6px -4px 0}
 .svgwrap svg{display:block}
 .calnav{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
@@ -336,6 +349,7 @@ summary{font-weight:600;cursor:pointer}
 .bdg .be{font-size:24px;flex:none}
 .bdg .bv{font-size:17px;font-weight:800;color:var(--brand-dark);line-height:1}
 .bdg .bl{font-size:11px;color:var(--muted);margin-top:2px}
+.bdg .bbest{font-size:11px;font-weight:600;color:var(--muted)}
 .bdg.locked{opacity:.55}
 .bdg.fresh{animation:freshpop .8s cubic-bezier(.18,1.4,.5,1);border-color:color-mix(in srgb,var(--hi) 55%,transparent)}
 @keyframes freshpop{0%{transform:scale(.85);box-shadow:0 0 0 0 color-mix(in srgb,var(--hi) 50%,transparent)}50%{transform:scale(1.04)}100%{transform:scale(1);box-shadow:0 0 0 0 transparent}}
@@ -622,9 +636,17 @@ function normalize(st){
   if(sg.practiceTagline==null)sg.practiceTagline="Counselling & psychotherapy";
   if(sg.palette==null)sg.palette="sage";
   sg.features=sg.features||{};
+  /* Accreditation is a minority need — only therapists working toward it. It's opt-in for anyone
+     new, but anyone already running with it keeps it: pulling a feature out from under someone
+     mid-accreditation would lose them the one screen they're keeping records for. */
+  if(sg.features.accreditation==null)sg.features.accreditation=hasData?true:false;
+  if(sg.cpdTarget==null)sg.cpdTarget=30;
   if(sg.onboarded==null)sg.onboarded=hasData; // anyone with data already knows the app — don't ambush them with setup
   st.game=st.game||{}; st.game.activeWeeks=st.game.activeWeeks||[]; st.game.records=st.game.records||{};
-  const rr=st.game.records; rr.longestStreak=rr.longestStreak||0; rr.mostClearedAtOnce=rr.mostClearedAtOnce||0; rr.biggestCatchup=rr.biggestCatchup||0;
+  const rr=st.game.records; rr.longestStreak=rr.longestStreak||0; rr.mostClearedAtOnce=rr.mostClearedAtOnce||0;
+  /* Seed the concurrent-clients best from where the practice stands today. Starting at 0 would
+     show "Best: 0" next to a live count of 12 until the next save corrected it. */
+  if(rr.mostActiveClients==null)rr.mostActiveClients=activeClientCountIn(st);
   if(st.game.seenStreak==null)st.game.seenStreak=0;
   /* records retention (flag only, never auto-deletes): review periods in years, counted from a
      client's last logged session once their status is an "ended" one. Notes and financial records
@@ -640,6 +662,7 @@ function normalize(st){
      every period it applies to and there is nothing to keep in sync. */
   st.roomRentHistory=st.roomRentHistory||[];
   st.expenses=st.expenses||[]; st.otherIncome=st.otherIncome||[];
+  st.paidCharges=st.paidCharges||{};   /* key "kind:ref|dueDate" → date settled; reminders only, never the tax figures */
   /* peer supervision: counts toward total accreditation hours, excluded from the 1:6 ratio */
   st.peerSupervision=st.peerSupervision||[];
   ["roomRentHistory","expenses","otherIncome","peerSupervision"].forEach(k=>st[k].forEach(x=>{if(x&&!x._id)x._id=uid()}));
@@ -789,6 +812,15 @@ function effRate(client,dateStr){
   if(best)return best.rate;
   const c=S.clients.find(c=>(c.code||"").toLowerCase()===cl); return c?c.rate:0;
 }
+function addYears(d,n){const x=new Date(d);x.setFullYear(x.getFullYear()+n);return x;}
+/* Clients on the books right now — those whose status maps to the Active category. Paused and
+   Active enquiry are Pipeline, so they are deliberately not counted. */
+function activeClientCountIn(st){
+  const cats=st.clientCategories||[];
+  const catOf=v=>{const c=cats.find(x=>x.status===v);return c?c.category:(v||"");};
+  return (st.clients||[]).filter(c=>c&&catOf(c.status)==="Active").length;
+}
+function activeClientCount(){return activeClientCountIn(S);}
 function roomFor(loc){return S.rooms.find(r=>(r.location||"").toLowerCase()===(loc||"").toLowerCase())}
 function effRoomRate(loc,dateStr){const d=parseD(dateStr);const L=(loc||"").toLowerCase();let best=null;
   for(const r of (S.roomRateHistory||[])){ if((r.location||"").toLowerCase()!==L)continue;
@@ -802,18 +834,21 @@ function derive(s){
   const past=d?d<t:false;
   const overdue=past&&!clientPaid;
   let roomBooked = s.room==="-"||s.location==="At home" ? "n/a" : (s.room?"Y":"N");
+  /* A room on monthly rent is settled once a month in Business costs, not session by session,
+     so its sessions carry no room-paid state at all. */
+  const roomPaidNA = !room || roomBilling(room)==="monthly";
   let roomDue="n/a";
-  if(roomRate>0 && s.roomPaid!=="Y"){
-    if(due==="EOM"){ roomDue = (addDays(eomonth(d),1) < t)?"Y":"N"; }
-    else if(due==="EOW"){ roomDue = ((t - d)/86400000 > 7)?"Y":"N"; }
+  if(roomRate>0 && s.roomPaid!=="Y" && !roomPaidNA && d){
+    const next=schedNext(roomSchedule(room),d);            /* first payment date on/after the session */
+    if(next)roomDue = (next < t)?"Y":"N";
   }
   const cl=S.clients.find(c=>(c.code||"").toLowerCase()===(s.client||"").toLowerCase());
   const status=cl?cl.status:""; const category=cl?cl.category:"";
-  const complete = (s.notes&&String(s.notes).trim())&&(s.roomPaid&&String(s.roomPaid).trim());
+  const complete = (s.notes&&String(s.notes).trim()) && (roomPaidNA || (s.roomPaid&&String(s.roomPaid).trim()));
   let cancelBy=null,canCancel=false;
   if(d){ const tm=(s.time||"00:00").split(":"); const dt=new Date(d); dt.setHours(+tm[0]||0,+tm[1]||0);
     cancelBy=addDays(dt,-3); canCancel=cancelBy>new Date(); }
-  return {rate,roomRate,due,clientPaid,past,overdue,roomBooked,roomDue,status,category,complete,cancelBy,canCancel,
+  return {rate,roomRate,due,roomPaidNA,clientPaid,past,overdue,roomBooked,roomDue,status,category,complete,cancelBy,canCancel,
     week:d?weekNum(d):"",year:d?d.getFullYear():"",taxYear:d?taxYear(d):""};
 }
 
@@ -989,7 +1024,8 @@ function ringSVG(pct,label){pct=Math.round(pct);const R=34,C=2*Math.PI*R,w=80;
 function weekMonday(d){if(typeof d==="string")d=parseD(d);const x=new Date(d);const dow=(x.getDay()+6)%7;x.setDate(x.getDate()-dow);x.setHours(0,0,0,0);return x;}
 function weekKey(d){return isoD(weekMonday(d));}
 function ensureGame(){ if(!S.game)S.game={}; const g=S.game; g.activeWeeks=g.activeWeeks||[]; g.records=g.records||{};
-  const r=g.records; r.longestStreak=r.longestStreak||0; r.mostClearedAtOnce=r.mostClearedAtOnce||0; r.biggestCatchup=r.biggestCatchup||0;
+  const r=g.records; r.longestStreak=r.longestStreak||0; r.mostClearedAtOnce=r.mostClearedAtOnce||0;
+  if(r.mostActiveClients==null)r.mostActiveClients=activeClientCount();
   if(g.seenStreak==null)g.seenStreak=0; return g; }
 function computeStreak(){ const g=ensureGame(); const set=new Set(g.activeWeeks); const cur=weekMonday(today());
   let recent=null; set.forEach(k=>{const d=weekMonday(k); if(d<=cur&&(!recent||d>recent))recent=d;});
@@ -1002,7 +1038,8 @@ function computeStreak(){ const g=ensureGame(); const set=new Set(g.activeWeeks)
 function gameTouch(){ const g=ensureGame(); const k=weekKey(today());
   if(g.activeWeeks.indexOf(k)<0)g.activeWeeks.push(k);
   g.activeWeeks.sort(); if(g.activeWeeks.length>520)g.activeWeeks=g.activeWeeks.slice(-520);
-  const st=computeStreak(); if(st.count>g.records.longestStreak)g.records.longestStreak=st.count; }
+  const st=computeStreak(); if(st.count>g.records.longestStreak)g.records.longestStreak=st.count;
+  const ac=activeClientCount(); if(ac>(g.records.mostActiveClients||0))g.records.mostActiveClients=ac; }
 function saveGameQuiet(){try{mirror(S);if(_db)kvPut("current",S);}catch(e){}}
 function gameGoals(){ const der=S.sessions.map(s=>({s,d:derive(s)}));
   const past=der.filter(x=>x.d.past);
@@ -1014,16 +1051,16 @@ function gameGoals(){ const der=S.sessions.map(s=>({s,d:derive(s)}));
   return {paidPct,paid,over,compPct,complete,incomplete:past.length-complete,totalPast:past.length}; }
 
 /* update records BEFORE commit so they persist; returns flags */
+/* No "biggest catch-up" record: rewarding the size of a backlog cleared rewards letting one
+   build up in the first place. Staying on top is the behaviour worth encouraging. */
 function gameNoteBatch(m){const g=ensureGame();const f={};
   if(m.cleared!=null&&m.cleared>g.records.mostClearedAtOnce){g.records.mostClearedAtOnce=m.cleared;f.recCleared=m.cleared;}
-  if(m.amount!=null&&m.amount>g.records.biggestCatchup&&m.amount>0){g.records.biggestCatchup=Math.round(m.amount);f.recAmount=Math.round(m.amount);}
   return f;}
 /* choose + show ONE celebration AFTER commit (commit already ran gameTouch) */
 function gameShow(m,f){ f=f||{}; const g=ensureGame(); const st=computeStreak(); let streakUp=false;
   if(st.status==="active"&&st.count>(g.seenStreak||0)){streakUp=true;g.seenStreak=st.count;saveGameQuiet();}
   else if(st.status==="none"&&g.seenStreak!==0){g.seenStreak=0;saveGameQuiet();}
   if(f.recCleared){celebrate({emoji:"🏆",title:"New record!",sub:"Cleared "+f.recCleared+" in one sweep — your best ever.",ribbon:"Personal best",level:"mega",sound:"record"});return;}
-  if(f.recAmount){celebrate({emoji:"🏆",title:"New record!",sub:"Biggest catch-up yet — "+gbp(f.recAmount)+" collected.",ribbon:"Personal best",level:"mega",sound:"record"});return;}
   if(m.milestone){celebrate({emoji:"🎯",title:m.milestone+" sessions with "+m.milestoneClient+"!",sub:"A significant therapeutic milestone — steady, consistent work.",ribbon:"Session milestone",level:"big",sound:"fanfare"});
     if(streakUp)setTimeout(()=>toast("🔥 "+st.count+"-week streak!"),600);return;}
   if(m.allClear){celebrate({emoji:m.allClearEmoji||"✨",title:m.allClearTitle||"All caught up!",sub:m.allClearSub||"",level:"big",sound:"fanfare"});
@@ -1102,7 +1139,11 @@ function crashScreen(err,tab){
   m.querySelector("#crHome").onclick=()=>go("home");
   m.querySelector("#crRel").onclick=()=>location.reload();
 }
-function go(tab){if(!VIEWS[tab]||!tabEnabled(tab))tab="home";
+/* opts.keepScroll — re-render in place without throwing the reader back to the top. Anything
+   that redraws the screen the user is already looking at (a Weekly/Monthly toggle, saving a
+   row from a sheet) should pass it; only genuine navigation between tabs should scroll to top. */
+function go(tab,opts){if(!VIEWS[tab]||!tabEnabled(tab))tab="home";
+  const keep=(opts&&opts.keepScroll)?(window.scrollY||window.pageYOffset||0):null;
   cur=tab;
   try{renderTabs();applyBranding();}catch(e){console.error("Chrome render failed",e);}
   const m=main();
@@ -1112,7 +1153,8 @@ function go(tab){if(!VIEWS[tab]||!tabEnabled(tab))tab="home";
     console.error("Render failed for tab:",tab,e);
     try{crashScreen(e,tab);}catch(e2){m.innerHTML='<div class="card"><h2>Something went wrong</h2><p class="small">Reload the app.</p></div>';}
   }
-  window.scrollTo(0,0);
+  if(keep!=null)window.scrollTo(0,Math.min(keep,Math.max(0,document.body.scrollHeight-window.innerHeight)));
+  else window.scrollTo(0,0);
   $("#fab").style.display=(tab==="sessions"||tab==="home")?"flex":"none";
   try{updateBackupBanner();updateSaveBanner();}catch(e){}
 }
@@ -1140,14 +1182,13 @@ VIEWS.home=function(){
   const mk=(emoji,val,lab,locked)=>'<div class="bdg'+(locked?" locked":"")+'"><span class="be">'+emoji+'</span><div><div class="bv">'+val+'</div><div class="bl">'+lab+'</div></div></div>';
   const cCounts=clientSessionCounts();
   const maxRel=Math.max(0,...S.clients.map(c=>cCounts[c.code.toLowerCase()]||0));
-  const inCare=S.clients.filter(c=>clientCategory(c.status)==="Active").length;
+  const inCare=activeClientCount(), bestActive=Math.max(inCare,rec.mostActiveClients||0);
   const recCard=!feat("gamify")?'':'<div class="card"><h2>Records</h2><div class="badgegrid">'+
     mk("🔥",(st.count||0)+(st.count===1?" wk":" wks"),"App-usage streak"+(st.status==="risk"?" · at risk":""),!st.count)+
     mk("🏅",(rec.longestStreak||0)+(rec.longestStreak===1?" wk":" wks"),"Longest streak",!rec.longestStreak)+
     mk("📈",maxRel?(maxRel+" sess"):"0","Most sessions with a client",!maxRel)+
-    mk("🌱",inCare,"Clients in care",!inCare)+
+    mk("🌱",inCare+(bestActive?' <span class="bbest">(Best: '+bestActive+')</span>':""),"Active clients",!inCare)+
     mk("⚡",(rec.mostClearedAtOnce||0),"Most cleared at once",!rec.mostClearedAtOnce)+
-    mk("💷",gbp(rec.biggestCatchup||0),"Biggest catch-up",!rec.biggestCatchup)+
     mk("✅",goals.complete,"Sessions completed",!goals.complete)+
     '</div></div>';
   const topClients=S.clients.map(c=>({code:c.code,_id:c._id,n:cCounts[c.code.toLowerCase()]||0,status:c.status})).filter(x=>x.n>=6).sort((a,b)=>b.n-a.n).slice(0,3);
@@ -1253,6 +1294,17 @@ function periodSeries(gran){
       costs:Math.round(e.costs),oth:Math.round(e.oth),
       net:Math.round(netOf(e)),clients:e.clients.size,
       netAvg:Math.round(mov(netArr,i)),cliAvg:Math.round(mov(cliArr,i)*10)/10};});
+}
+/* Position a horizontally-scrolling chart: back where it was, or at the newest period.
+   The width isn't final until layout has run, hence the rAF for the first paint. */
+function scrollChart(wrap,keep){
+  if(!wrap)return;
+  const put=()=>{if(!wrap.isConnected&&keep==null)return;
+    wrap.scrollLeft=(keep!=null)?keep:Math.max(0,wrap.scrollWidth-wrap.clientWidth);};
+  /* The chart is built before its view is attached, so at this point it has no width to scroll.
+     Both callbacks re-run it once layout exists — rAF for a visible tab, the timer for one that
+     is hidden or backgrounded, where rAF may never fire. */
+  put(); requestAnimationFrame(put); setTimeout(put,0);
 }
 function chartBars(data,money){
   const h=180,padT=20,padB=36,padL=8,step=44,bw=26,n=data.length||1;
@@ -1362,7 +1414,7 @@ function comboLegend(series){const has=f=>(series||[]).some(d=>d[f]);
 function payChip(s,d){return d.clientPaid?'<span class="chip y">paid '+fmtDM(s.paidDate)+'</span>':(d.overdue?'<span class="chip n">overdue · due '+fmtDM(s.date)+'</span>':'<span class="chip na">awaiting</span>');}
 function missingReasons(s){const m=[];
   if(!(s.notes&&String(s.notes).trim()))m.push("notes");
-  if(!(s.roomPaid&&String(s.roomPaid).trim()))m.push("room-paid status");
+  if(!derive(s).roomPaidNA&&!(s.roomPaid&&String(s.roomPaid).trim()))m.push("room-paid status");
   return m;}
 /* late cancellation: explicit flag, with fallback to the historical notes convention */
 function isLateCancel(s){return !!(s&&(s.lateCancel||(s.notes&&/late cancellation/i.test(String(s.notes)))));}
@@ -1371,6 +1423,49 @@ function clinicalStats(){const t=today();let inP=0,onl=0;
   S.sessions.forEach(s=>{const d=parseD(s.date);if(!d||d>t||isLateCancel(s))return;
     if((s.mode||"")==="Online")onl++;else inP++;});
   return {inPerson:inP,online:onl,logged:inP+onl};}
+/* ===== CPD hours =====
+   What nearly every practising therapist actually needs: hours done in the last 12 months against
+   their annual CPD requirement. Supervision and peer supervision both count toward it. The Form 3A
+   ratio below is a separate, narrower question that only matters while working toward accreditation,
+   so it only appears when that's switched on. */
+function cpdYearHours(){
+  const t=today(), from=addYears(t,-1);
+  const inWin=d=>{const x=d?parseD(d):null;return x&&x>from&&x<=t;};
+  const sup=(S.supervision||[]).filter(s=>inWin(s.date)).length;          /* 1 hr each, as before */
+  const peer=feat("peer")?(S.peerSupervision||[]).reduce((a,p)=>a+(inWin(p.date)?(+p.hours||0):0),0):0;
+  return {sup,peer,total:sup+peer,from,to:t};
+}
+function cpdTarget(){const v=+(settings().cpdTarget);return v>0?v:30;}
+function mountCPD(host){
+  if(!host||!feat("supervision"))return;
+  const c=cpdYearHours(), target=cpdTarget(), r1=x=>Math.round(x*10)/10;
+  const pct=Math.max(0,Math.min(100,Math.round(c.total/target*100)));
+  const short=Math.max(0,target-c.total);
+  host.innerHTML='<div class="card"><h2>CPD hours</h2>'+
+    '<p class="small muted" style="margin:0 0 4px">Continuing professional development in the <b>last 12 months</b> ('+fmtD(c.from)+' – '+fmtD(c.to)+'). Clinical supervision counts one hour per logged session'+(feat("peer")?', and peer supervision counts the hours you logged':'')+'.</p>'+
+    '<div class="kpis mt">'+
+      '<div class="kpi'+(c.total>=target?' good':'')+'"><div class="v">'+r1(c.total)+'</div><div class="l">hrs in 12 months</div></div>'+
+      '<div class="kpi"><div class="v">'+r1(c.sup)+'</div><div class="l">from supervision</div></div>'+
+      (feat("peer")?'<div class="kpi"><div class="v">'+r1(c.peer)+'</div><div class="l">from peer</div></div>':'')+
+      '<div class="kpi"><div class="v">'+target+'</div><div class="l">your target</div></div>'+
+    '</div>'+
+    '<div class="fbar" style="margin-top:12px"><i style="width:'+pct+'%"></i></div>'+
+    (c.total>=target
+      ? '<div class="vmsg ok" style="margin-top:10px">✓ '+r1(c.total)+' hrs logged — you’re at your '+target+'-hour target.</div>'
+      : '<div class="vmsg warn" style="margin-top:10px">'+r1(short)+' hr'+(short===1?'':'s')+' short of '+target+'. Anything you log from here counts.</div>')+
+    '<label style="margin-top:14px">Annual CPD target (hours)</label>'+
+    '<input type="number" min="1" max="200" step="1" id="cpdT" value="'+target+'">'+
+    '<p class="small muted">BACP asks accredited members for 30 hours a year; other bodies differ. Set whatever yours requires.</p>'+
+    '</div>';
+  const inp=host.querySelector("#cpdT");
+  inp.onchange=async()=>{
+    const v=Math.max(1,Math.min(200,Math.round(+inp.value||0)));
+    inp.value=v;
+    if(v===cpdTarget())return;
+    settings().cpdTarget=v;
+    await commit("CPD target: "+v+" hrs/yr");
+    go(cur,{keepScroll:true});};
+}
 /* Form 3A accreditation card: clinical hrs (from sessions) vs supervision hrs (manual), ratio must stay ≤ 6 */
 function mountAccreditation(host){if(!host||!feat("accreditation"))return;
   const ac=S.accreditation;
@@ -1559,7 +1654,7 @@ VIEWS.sessions=function(){
       let amount=0;
       checks.forEach(c=>{const di=prw.querySelector('.pdate[data-id="'+c.dataset.id+'"]');const ss=S.sessions.find(z=>z._id===c.dataset.id);if(ss){ss.paidDate=di.value||isoD(today());amount+=derive(ss).rate||0;}});
       const batch=checks.length;
-      const f=gameNoteBatch({cleared:batch,amount:amount});
+      const f=gameNoteBatch({cleared:batch});
       await commit("Marked "+batch+" session(s) paid");renderTabs();
       const stillOver=S.sessions.filter(s=>{const d=derive(s);return d.overdue&&(d.rate||0)>0;}).length;
       gameShow({batch:batch,amount:amount,toast:batch+" marked paid 🎉",
@@ -1582,7 +1677,8 @@ VIEWS.sessions=function(){
       const chargeable=(d.roomRate||0)>0;
       stage[s._id]={notes:false,room:false,rdate:td,chargeable:chargeable};
       const notesCtl=needNotes?'<button class="tgl" data-k="notes" data-id="'+s._id+'"><span class="tbox"></span>Notes done</button>':'<span class="chip y">✓ notes</span>';
-      const roomCtl=needRoom?'<button class="tgl" data-k="room" data-id="'+s._id+'"><span class="tbox"></span>'+(chargeable?'Room paid':'No room fee')+'</button>':'<span class="chip y">✓ room</span>';
+      const roomCtl=needRoom?'<button class="tgl" data-k="room" data-id="'+s._id+'"><span class="tbox"></span>'+(chargeable?'Room paid':'No room fee')+'</button>'
+        :(d.roomPaidNA?'<span class="chip na">rent billed monthly</span>':'<span class="chip y">✓ room</span>');
       const noteInput=needNotes?'<input class="ninp" data-id="'+s._id+'" placeholder="Y / type a note" style="display:none;flex:1;min-width:130px;padding:8px;font-size:13px">':'';
       const rdInput=(needRoom&&chargeable)?'<input type="date" class="rinp pdate2" data-id="'+s._id+'" value="'+td+'" style="display:none">':'';
       return '<div class="irow" data-id="'+s._id+'"><div class="itop"><div><span class="ittl">'+esc(s.client)+'</span> <span class="isub">'+fmtDshort(s.date)+' · #'+esc(s.num)+(chargeable?' · room '+gbp(d.roomRate):'')+'</span></div><div class="li-right small muted">'+gbp(d.rate)+'</div></div><div class="ctrls">'+notesCtl+roomCtl+noteInput+rdInput+'</div></div>';
@@ -1711,7 +1807,7 @@ VIEWS.supervision=function(){
         return {code:c.code,date:ld||null,days:ld?Math.floor((t-ld)/86400000):null};})
         .sort((a,b)=>{if(a.days==null&&b.days==null)return a.code.localeCompare(b.code);if(a.days==null)return -1;if(b.days==null)return 1;return b.days-a.days;});
       const recencyChip=r=>r.days==null?'<span class="chip n">never</span>':r.days>56?'<span class="chip n">'+r.days+'d</span>':r.days>28?'<span class="chip f">'+r.days+'d</span>':'<span class="chip y">'+r.days+'d</span>';
-      sb.innerHTML='<div id="accMount"></div><div class="kpis mb">'+
+      sb.innerHTML='<div id="cpdMount"></div><div id="accMount"></div><div class="kpis mb">'+
         '<div class="kpi"><div class="v">'+totalSess+'</div><div class="l">Sessions logged</div></div>'+
         '<div class="kpi"><div class="v">'+gbp(Math.round(totalCost))+'</div><div class="l">Total spent</div></div>'+
         '<div class="kpi"><div class="v">'+(Math.round(totalHrs*10)/10)+'</div><div class="l">Client-hrs reviewed</div></div>'+
@@ -1720,6 +1816,7 @@ VIEWS.supervision=function(){
         '<div class="card"><h2>Client discussion recency</h2><p class="small muted" style="margin:0 0 6px">Time since each active client was last discussed in supervision'+(avgGap!=null?' · avg '+avgGap+' days between supervisions':'')+'.</p>'+
         (rows.length?'<div style="padding:0 2px">'+rows.map(r=>'<div class="list-item"><div class="li-main"><div class="li-title">'+esc(r.code)+'</div><div class="li-sub">'+(r.date?'Last discussed '+fmtD(r.date):'Not yet discussed in supervision')+'</div></div><div class="li-right">'+recencyChip(r)+'</div></div>').join("")+'</div>':'<p class="muted small">No active clients to show.</p>')+
         '<div class="legend" style="margin-top:10px"><span class="lgi"><i style="background:var(--good)"></i>≤4 wks</span><span class="lgi"><i style="background:var(--accent)"></i>4–8 wks</span><span class="lgi"><i style="background:var(--bad)"></i>8+ wks / never</span></div></div>';
+      mountCPD(sb.querySelector("#cpdMount"));
       mountAccreditation(sb.querySelector("#accMount"));
     }
     if(supTab==="peer"&&!feat("peer"))supTab="log";   // feature switched off since it was last open
@@ -1872,6 +1969,39 @@ function roomCostLabel(rm){
   }
   return gbp(now)+unit;
 }
+/* Frequency + the day it lands on, in one control. Mutates the `sched` object it's handed and
+   shows the next two real dates underneath, so "the 31st" in February is never a surprise. */
+function mountSchedulePicker(host,sched,o){
+  if(!host)return;
+  o=o||{};
+  const dayOpts=[["last","the last day"]].concat(
+    Array.from({length:31},(_,i)=>[String(i+1),"the "+ordinalDay(i+1)]));
+  const draw=()=>{
+    const wk=(sched.freq==="weekly"||sched.freq==="fortnightly");
+    const none=(sched.freq==="none"||!sched.freq);
+    host.innerHTML='<label>'+esc(o.label||"When is it due?")+'</label>'+
+      '<div class="field2"><div><select id="sc_f">'+
+        opts2([["none","No set date"]].concat(FREQS.filter(f=>f[0]!=="once")),sched.freq||"none")+'</select></div>'+
+        '<div>'+(none?'':'<select id="sc_d">'+opts2(wk?WEEKDAYS:dayOpts,String(sched.day))+'</select>')+'</div></div>'+
+      (o.hint?'<p class="small muted">'+o.hint+'</p>':'')+
+      '<p class="small muted" id="sc_prev"></p>';
+    const prev=host.querySelector("#sc_prev");
+    if(none)prev.textContent="No reminder — nothing will appear in your payments list.";
+    else{
+      const t=today();const dates=[];let cur=t;
+      for(let i=0;i<2;i++){const d=schedNext(sched,cur);if(!d)break;dates.push(fmtD(d));cur=addDays(d,1);}
+      prev.innerHTML=dates.length?("Next: <b>"+dates.join("</b>, then <b>")+"</b>"):"";
+    }
+    const f=host.querySelector("#sc_f");
+    f.onchange=()=>{const was=sched.freq;sched.freq=f.value;
+      const wasWk=(was==="weekly"||was==="fortnightly"), nowWk=(sched.freq==="weekly"||sched.freq==="fortnightly");
+      if(wasWk!==nowWk)sched.day=nowWk?"0":"1";            /* day means a different thing either side */
+      draw();};
+    const dsel=host.querySelector("#sc_d");
+    if(dsel)dsel.onchange=()=>{sched.day=dsel.value;draw();};
+  };
+  draw();
+}
 function roomForm(rm){
   const isNew=!rm; const m=rm?clone(rm):{_id:uid(),location:"",due:"n/a",billing:"session"};
   const body=el('<div></div>');
@@ -1882,8 +2012,7 @@ function roomForm(rm){
   body.innerHTML='<label>Location / room name</label><input id="r_loc" value="'+esc(m.location)+'">'+
     (isNew?'<label>How is this room charged?</label>'+
       '<div class="seg" id="r_bill" style="display:inline-flex"><button type="button" data-b="session" class="on">Per session</button><button type="button" data-b="monthly">Monthly rent</button></div>':'')+
-    '<label>When is payment due?</label><select id="r_due">'+opts(["n/a","EOM","EOW"],m.due||"n/a")+'</select>'+
-    '<p class="small muted">EOM = end of month · EOW = end of week · n/a = no room charge.</p>'+
+    '<div id="r_sched"></div>'+
     (isNew?'<label id="r_amtL">Cost per session (£)</label><input type="number" id="r_rate" value="0">':
       '<div class="hint">Charged <b>'+esc(mode==="monthly"?"monthly":"per session")+'</b> · current '+
         '<b>'+roomCostLabel(m)+'</b> <button class="btn sm" id="chR" style="float:right">Change cost</button></div>'+
@@ -1894,6 +2023,10 @@ function roomForm(rm){
         : 'A flat monthly rent instead of a charge per session — sessions here stop carrying a room cost from the date you choose.')+'</p>')+
     '<button class="btn full mt" id="rSave">Save room</button>'+
     (isNew?"":'<button class="btn danger full mt" id="rDel">Delete room</button>');
+  const sched=roomSchedule(m);
+  mountSchedulePicker(body.querySelector("#r_sched"),sched,{
+    label:"When do you pay for this room?",
+    hint:"So the app can remind you before it’s due. Payments show up under <b>Revenue › Business costs</b>, where you tick them off."});
   if(isNew){
     const seg=body.querySelector("#r_bill");
     seg.querySelectorAll("button").forEach(b=>b.onclick=()=>{
@@ -1907,19 +2040,22 @@ function roomForm(rm){
     body.querySelector("#chR").onclick=()=>mode==="monthly"?roomRentChange(m.location):roomRateChange(m.location);
     body.querySelector("#chB").onclick=()=>roomBillingSwitch(m);
   }
-  body.querySelector("#rSave").onclick=async()=>{const loc=body.querySelector("#r_loc").value.trim();const dueV=body.querySelector("#r_due").value;
+  body.querySelector("#rSave").onclick=async()=>{const loc=body.querySelector("#r_loc").value.trim();
+    /* keep the legacy due field roughly in step so an older build still reads something sane */
+    const dueV=(sched.freq==="monthly"&&String(sched.day)==="last")?"EOM":(sched.freq==="weekly")?"EOW":(sched.freq==="none")?"n/a":"EOM";
     if(!loc){toast("Enter a name");return}
     if(isNew){if(S.rooms.find(x=>x.location.toLowerCase()===loc.toLowerCase())){toast("Already exists");return}
       const amt=+body.querySelector("#r_rate").value||0;const monthly=(m.billing==="monthly");
-      m.location=loc;m.due=dueV;m.rate=monthly?0:amt;S.rooms.push(m);
+      m.location=loc;m.due=dueV;m.pay={freq:sched.freq,day:sched.day};m.rate=monthly?0:amt;S.rooms.push(m);
       /* a monthly room still gets a 0 per-session step, so derive() never charges its sessions */
       S.roomRateHistory.push({_id:uid(),location:loc,effectiveFrom:isoD(today()),rate:monthly?0:amt});
       if(monthly)S.roomRentHistory.push({_id:uid(),location:loc,effectiveFrom:isoD(today()),amount:amt});
       await commit("Added room: "+loc+" @ "+gbp(amt)+(monthly?"/month":"/session"));}
-    else{const ex=S.rooms.find(x=>x._id===m._id);ex.location=loc;ex.due=dueV;await commit("Edited room: "+loc);}
-    closeSheet();toast("Saved");go("clients");};
+    else{const ex=S.rooms.find(x=>x._id===m._id);ex.location=loc;ex.due=dueV;ex.pay={freq:sched.freq,day:sched.day};
+      await commit("Edited room: "+loc);}
+    closeSheet();toast("Saved");go("clients",{keepScroll:true});};
   if(!isNew)body.querySelector("#rDel").onclick=async()=>{if(!confirm("Delete room "+m.location+"? (sessions are kept)"))return;
-    S.rooms=S.rooms.filter(x=>x._id!==m._id);await commit("Deleted room: "+m.location);closeSheet();toast("Deleted");go("clients");};
+    S.rooms=S.rooms.filter(x=>x._id!==m._id);await commit("Deleted room: "+m.location);closeSheet();toast("Deleted");go("clients",{keepScroll:true});};
   openSheet(isNew?"New room / location":"Room: "+m.location,body);
 }
 function roomRateChange(loc){
@@ -1932,7 +2068,7 @@ function roomRateChange(loc){
     if(!dt||isNaN(amt)){toast("Enter date and amount");return}
     S.roomRateHistory.push({_id:uid(),location:loc,effectiveFrom:dt,rate:amt});
     const rm=S.rooms.find(r=>r.location.toLowerCase()===loc.toLowerCase());if(rm&&parseD(dt)<=today())rm.rate=amt;
-    await commit("Room cost change: "+loc+" → "+gbp(amt)+" from "+dt);closeSheet();toast("Cost updated");go("clients");};
+    await commit("Room cost change: "+loc+" → "+gbp(amt)+" from "+dt);closeSheet();toast("Cost updated");go("clients",{keepScroll:true});};
   openSheet("Change cost · "+loc,body);
 }
 function roomRentChange(loc){
@@ -1945,7 +2081,7 @@ function roomRentChange(loc){
   body.querySelector("#rnS").onclick=async()=>{const dt=body.querySelector("#rnD").value;const amt=+body.querySelector("#rnA").value;
     if(!dt||isNaN(amt)){toast("Enter date and amount");return}
     S.roomRentHistory.push({_id:uid(),location:loc,effectiveFrom:dt,amount:amt});
-    await commit("Room rent change: "+loc+" → "+gbp(amt)+"/month from "+dt);closeSheet();toast("Rent updated");go("clients");};
+    await commit("Room rent change: "+loc+" → "+gbp(amt)+"/month from "+dt);closeSheet();toast("Rent updated");go("clients",{keepScroll:true});};
   openSheet("Change rent · "+loc,body);
 }
 /* Switch a room between billing modes from a date. Both histories get a step, so the room is
@@ -1977,7 +2113,7 @@ function roomBillingSwitch(rm){
       ex.billing="session"; if(parseD(dt)<=today())ex.rate=amt;
     }
     await commit("Room billing: "+loc+" → "+(to==="monthly"?gbp(amt)+"/month":gbp(amt)+"/session")+" from "+dt);
-    closeSheet();toast("Billing updated");go("clients");};
+    closeSheet();toast("Billing updated");go("clients",{keepScroll:true});};
   openSheet("Switch billing · "+loc,body);
 }
 
@@ -1991,7 +2127,7 @@ const FIN_CATS={
   inc:["Room sublet","Workshops & training","Supervision provided","Writing & consultancy","Other"]
 };
 function finArr(kind){return kind==="exp"?(S.expenses=S.expenses||[]):(S.otherIncome=S.otherIncome||[]);}
-function finRecurring(x){return String(x&&x.recurrence||"once")==="monthly";}
+function finRecurring(x){return String(x&&x.recurrence||"once")!=="once";}
 function finPersonal(x){return String(x&&x.scope||"practice")==="personal";}
 function financeForm(kind,rec){
   const isNew=!rec, isInc=(kind==="inc");
@@ -2001,10 +2137,9 @@ function financeForm(kind,rec){
   body.innerHTML='<label>Description</label><input id="f_desc" maxlength="60" value="'+esc(m.desc||"")+'" placeholder="'+(isInc?"Room sublet to a colleague":"Electricity")+'">'+
     '<div class="field2"><div><label>Amount (£)</label><input type="number" min="0" step="0.01" id="f_amt" value="'+(+m.amount||0)+'"></div>'+
       '<div><label>Category</label><select id="f_cat">'+opts(FIN_CATS[kind],m.category||FIN_CATS[kind][0])+'</select></div></div>'+
-    '<label>How often?</label>'+
-    '<div class="seg" id="f_rec" style="display:inline-flex"><button type="button" data-r="once" class="'+(finRecurring(m)?"":"on")+'">One-off</button>'+
-      '<button type="button" data-r="monthly" class="'+(finRecurring(m)?"on":"")+'">Every month</button></div>'+
+    '<label>How often?</label><select id="f_rec">'+opts2(FREQS,String(m.recurrence||"once"))+'</select>'+
     '<label id="f_dateL" style="margin-top:12px"></label><input type="date" id="f_date" value="'+esc(m.date||"")+'">'+
+    '<p class="small muted" id="f_next"></p>'+
     '<div id="f_endWrap"><label>Ends <span class="muted small">(optional — leave blank if it still runs)</span></label>'+
       '<input type="date" id="f_end" value="'+esc(m.endDate||"")+'"></div>'+
     (isInc?'<label style="margin-top:12px">Is this part of the practice?</label>'+
@@ -2017,8 +2152,16 @@ function financeForm(kind,rec){
   const g=s=>body.querySelector(s);
   const paint=()=>{
     const mo=finRecurring(m);
-    g("#f_dateL").textContent=mo?"First charged on":(isInc?"Date received":"Date");
+    g("#f_dateL").textContent=mo?(isInc?"First received on":"First due on"):(isInc?"Date received":"Date");
     g("#f_endWrap").style.display=mo?"":"none";
+    /* show the real dates, so "the 31st" landing on 28 Feb is visible before it's saved */
+    const nx=g("#f_next");
+    if(!mo||!g("#f_date").value)nx.textContent="";
+    else{
+      const anchor=parseD(g("#f_date").value);
+      const dates=[];for(let n=0;n<3;n++){const d=freqStep(anchor,m.recurrence,n);if(d)dates.push(fmtD(d));}
+      nx.innerHTML=dates.length?("Repeats "+esc(freqShort(m.recurrence))+": <b>"+dates.join("</b>, <b>")+"</b>, …"):"";
+    }
     if(!isInc){
       /* rooms already on monthly billing charge their own rent — warn before it's counted twice */
       const w=g("#f_rentWarn"), monthlyRooms=S.rooms.filter(r=>roomBilling(r)==="monthly").map(r=>r.location);
@@ -2031,9 +2174,8 @@ function financeForm(kind,rec){
       ? "Kept out of your practice’s net income and tax estimate — a second job or tutoring is a separate trade, taxed on its own. It’s still logged and totalled here."
       : "Counted in your practice’s net income and tax-year figures, alongside session fees.";
   };
-  g("#f_cat").onchange=paint; g("#f_desc").oninput=paint;
-  g("#f_rec").querySelectorAll("button").forEach(b=>b.onclick=()=>{m.recurrence=b.dataset.r;
-    g("#f_rec").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));paint();});
+  g("#f_cat").onchange=paint; g("#f_desc").oninput=paint; g("#f_date").onchange=paint;
+  g("#f_rec").onchange=()=>{m.recurrence=g("#f_rec").value;paint();};
   if(isInc)g("#f_scope").querySelectorAll("button").forEach(b=>b.onclick=()=>{m.scope=b.dataset.s;
     g("#f_scope").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));paint();});
   paint();
@@ -2049,27 +2191,81 @@ function financeForm(kind,rec){
     if(ex)Object.assign(ex,m); else arr.push(m);
     const what=(isInc?"income":"cost")+": "+m.desc+" "+gbp(m.amount)+(finRecurring(m)?"/month":"");
     await commit((ex?"Edited ":"Added ")+what);
-    closeSheet();toast("Saved");go("income");};
+    closeSheet();toast("Saved");go("income",{keepScroll:true});};
   if(!isNew)g("#f_del").onclick=async()=>{
     if(!confirm("Delete “"+m.desc+"”?\n\nIt stops counting in every tax year it covered."))return;
     const arr=finArr(kind); const i=arr.findIndex(x=>x._id===m._id); if(i>=0)arr.splice(i,1);
     await commit("Deleted "+(isInc?"income":"cost")+": "+m.desc);
-    closeSheet();toast("Deleted");go("income");};
+    closeSheet();toast("Deleted");go("income",{keepScroll:true});};
   openSheet((isNew?"New ":"Edit ")+(isInc?"other income":"business cost"),body);
+}
+/* ===== Payments due =====
+   The point of this card is not accounting — it's not missing a payment. Anything overdue or
+   landing in the next few weeks, newest first, each with one tap to tick it off. */
+function paymentsDueCard(){
+  if(!feat("finances"))return "";
+  const t=today();
+  const from=addDays(t,-120), to=addDays(t,35);
+  const rows=chargesBetween(from,to).filter(c=>{
+    if(c.personal)return false;                       /* separate work isn't the practice's diary */
+    /* Keep it visible for a fortnight after it was TICKED, not after it fell due — otherwise
+       settling an old overdue charge makes the row vanish the instant you tap it, with no ✓ and
+       no way back if you tapped it by mistake. */
+    if(c.paidOn)return parseD(c.paidOn)>=addDays(t,-14);
+    return true;
+  });
+  const overdue=rows.filter(c=>!c.paidOn&&c.due<t);
+  const soon=rows.filter(c=>!c.paidOn&&c.due>=t);
+  const done=rows.filter(c=>c.paidOn);
+  const owed=overdue.filter(c=>c.kind!=="inc").reduce((a,c)=>a+c.amount,0);
+  const row=c=>{
+    const late=!c.paidOn&&c.due<t, days=Math.round((t-c.due)/86400000);
+    const when=c.paidOn?('paid '+fmtDshort(c.paidOn))
+      :late?(days===0?'due today':days+' day'+(days===1?'':'s')+' late')
+      :('due '+fmtD(c.due));
+    return '<div class="list-item"><div class="li-main">'+
+      '<div class="li-title">'+esc(c.label)+' '+
+        (c.kind==="inc"?'<span class="chip na">expected in</span>':'')+
+        (late?'<span class="chip n">overdue</span>':'')+
+        (c.paidOn?'<span class="chip y">✓</span>':'')+'</div>'+
+      '<div class="li-sub">'+esc(when)+(c.paidOn?'':' · '+fmtD(c.due))+'</div></div>'+
+      '<div class="li-right" style="display:flex;align-items:center;gap:8px">'+gbp(c.amount)+
+        '<button class="btn sm '+(c.paidOn?'ghost':'sec')+'" data-pay="'+esc(c.key)+'" data-lbl="'+esc(c.label)+'" data-on="'+(c.paidOn?'1':'0')+'">'+
+          (c.paidOn?'Undo':(c.kind==="inc"?'Received':'Paid'))+'</button>'+
+      '</div></div>';
+  };
+  const body=(overdue.length||soon.length||done.length)
+    ? (overdue.length?'<div class="grp-h" style="margin-top:10px">Overdue</div>'+overdue.map(row).join(""):'')+
+      (soon.length?'<div class="grp-h" style="margin-top:10px">Coming up</div>'+soon.map(row).join(""):'')+
+      (done.length?'<details class="dz" style="margin-top:10px"><summary>Recently settled ('+done.length+')</summary>'+done.map(row).join("")+'</details>':'')
+    : '<p class="muted small mt">Nothing due. Costs and rents with a repeat show up here as their date approaches.</p>';
+  return '<div class="card"><h2>Payments due</h2>'+
+    '<p class="small muted">Room rent and repeating costs, so nothing slips. Ticking one off changes nothing in your tax figures — a cost still counts in the year it fell due.</p>'+
+    (overdue.length?'<div class="vmsg warn" style="margin-top:10px">⚠️ '+overdue.length+' payment'+(overdue.length===1?'':'s')+' overdue'+(owed?', '+gbp(Math.round(owed))+' outstanding':'')+'.</div>':'')+
+    '<div style="padding:0 2px">'+body+'</div></div>';
+}
+function wirePaymentsDue(v){
+  v.querySelectorAll("[data-pay]").forEach(b=>b.onclick=async()=>{
+    const on=b.dataset.on==="1";
+    b.disabled=true;
+    const ok=await setChargePaid(b.dataset.pay,on?null:isoD(today()),b.dataset.lbl);
+    if(ok){toast(on?"Marked unpaid":"Marked paid");if(!on)Sfx.pop();}
+    go("income",{keepScroll:true});});
 }
 /* The two ledger cards on the Revenue tab, plus the monthly rents that come from Rooms. */
 function financeCards(){
   if(!feat("finances"))return "";
   const ty=curTaxYear(), b=tyBounds(ty), led=ledgerBetween(b.start,b.end,{});
   const rentRooms=S.rooms.filter(r=>roomBilling(r)==="monthly");
+  const per={weekly:" /wk",fortnightly:" /2wk",monthly:" /mo",quarterly:" /qtr",annually:" /yr"};
   const line=(x,kind)=>'<div class="list-item" data-fin="'+kind+'" data-id="'+esc(x._id)+'">'+
     '<div class="li-main"><div class="li-title">'+esc(x.desc||"(no description)")+
-      (finRecurring(x)?' <span class="chip f">monthly</span>':'')+
+      (finRecurring(x)?' <span class="chip f">'+esc(freqShort(x.recurrence))+'</span>':'')+
       (kind==="inc"&&finPersonal(x)?' <span class="chip na">separate</span>':'')+'</div>'+
     '<div class="li-sub">'+esc(x.category||"")+' · '+(finRecurring(x)
         ? ('from '+fmtDshort(x.date)+(x.endDate?' to '+fmtDshort(x.endDate):''))
         : fmtDshort(x.date))+'</div></div>'+
-    '<div class="li-right">'+gbp(x.amount)+(finRecurring(x)?'<span class="small muted"> /mo</span>':'')+'</div></div>';
+    '<div class="li-right">'+gbp(x.amount)+(finRecurring(x)?'<span class="small muted">'+(per[x.recurrence]||"")+'</span>':'')+'</div></div>';
   const sortFin=a=>a.slice().sort((x,y)=>parseD(y.date)-parseD(x.date));
   const rentRows=rentRooms.map(r=>{
     const amt=effRoomRent(r.location,isoD(today()));
@@ -2098,7 +2294,7 @@ function financeCards(){
     (incs.length?'<div style="padding:0 2px;margin-top:8px">'+incs.map(x=>line(x,"inc")).join("")+'</div>'
       :'<p class="muted small mt">No other income logged yet.</p>')+
     '<p class="small muted" style="margin-top:8px">Practice income counts toward your net and tax estimate. Anything marked <b>separate</b> — a second job, tutoring — is a different trade, so it’s totalled here but kept out of both.</p></div>';
-  return expCard+incCard;
+  return paymentsDueCard()+expCard+incCard;
 }
 function wireFinance(v){
   const ae=v.querySelector("#addExp"); if(ae)ae.onclick=()=>financeForm("exp",null);
@@ -2134,26 +2330,93 @@ function tyBounds(ty){const sy=parseInt(ty.slice(0,4));return {start:new Date(sy
    Every figure that reports money comes through ledgerBetween(), so the Net column, the tax
    estimate and the charts cannot drift apart. */
 
-/* Occurrences of one expense/income row inside [from,to]. A monthly row repeats on its own
-   day of the month (clamped in short months) from its date until endDate, or forever. */
+/* ===== Repeat schedules =====
+   One vocabulary for every recurring thing: room rent, business costs, other income. A monthly
+   (or quarterly / annual) repeat lands on its anchor date's day of the month, clamped in short
+   months so 31 Jan → 28 Feb → 31 Mar with no drift. Weekly repeats keep the anchor's weekday. */
+const FREQS=[["once","One-off"],["weekly","Every week"],["fortnightly","Every 2 weeks"],
+             ["monthly","Every month"],["quarterly","Every 3 months"],["annually","Every year"]];
+function freqLabel(f){const p=FREQS.find(x=>x[0]===String(f||"once"));return p?p[1]:"One-off";}
+function freqShort(f){switch(String(f||"once")){
+  case "weekly":return "weekly"; case "fortnightly":return "fortnightly"; case "monthly":return "monthly";
+  case "quarterly":return "quarterly"; case "annually":return "yearly"; default:return "";}}
+/* nth occurrence of a schedule anchored at `start` (n = 0 is the anchor itself) */
+function freqStep(start,freq,n){
+  const dom=start.getDate();
+  switch(String(freq)){
+    case "weekly":      return addDays(start,7*n);
+    case "fortnightly": return addDays(start,14*n);
+    case "monthly":
+    case "quarterly":
+    case "annually":{
+      const mult=(freq==="monthly")?1:(freq==="quarterly")?3:12;
+      const y=start.getFullYear(), m=start.getMonth()+mult*n;
+      const dim=new Date(y,m+1,0).getDate();
+      return new Date(y,m,Math.min(dom,dim));
+    }
+    default: return n===0?new Date(start):null;
+  }
+}
+/* Occurrences of one expense/income row inside [from,to], honouring its end date. */
 function moneyOccurrences(item,from,to){
   const start=item&&item.date?parseD(item.date):null;
   if(!start)return [];
-  const amount=+item.amount||0;
-  if(String(item.recurrence||"once")!=="monthly")
+  const amount=+item.amount||0, freq=String(item.recurrence||"once");
+  if(freq==="once"||!FREQS.some(f=>f[0]===freq&&f[0]!=="once"))
     return (start>=from&&start<=to)?[{date:start,amount}]:[];
   const stop=item.endDate?parseD(item.endDate):null;
   const last=(stop&&stop<to)?stop:to;
-  const out=[],dom=start.getDate();
-  let cur=new Date(start.getFullYear(),start.getMonth(),1);
-  for(let i=0;i<1200&&cur<=last;i++){                       /* 100 years of months, then give up */
-    const dim=new Date(cur.getFullYear(),cur.getMonth()+1,0).getDate();
-    const d=new Date(cur.getFullYear(),cur.getMonth(),Math.min(dom,dim));
-    if(d>last)break;
-    if(d>=start&&d>=from)out.push({date:d,amount});
-    cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);
+  const out=[];
+  for(let n=0;n<4000;n++){                                  /* a long life, then give up */
+    const d=freqStep(start,freq,n);
+    if(!d||d>last)break;
+    if(d>=from)out.push({date:d,amount});
   }
   return out;
+}
+/* Next scheduled date on or after `from` for a room's payment schedule. */
+function schedNext(sched,from){
+  if(!sched||sched.freq==="none"||!sched.freq)return null;
+  const anchor=schedAnchor(sched);
+  if(!anchor)return null;
+  for(let n=0;n<4000;n++){
+    const d=freqStep(anchor,sched.freq,n);
+    if(!d)return null;
+    if(d>=from)return d;
+  }
+  return null;
+}
+/* The schedule's first date, derived from its day-of-month (or weekday) near the epoch of use. */
+function schedAnchor(sched){
+  const base=new Date(2000,0,1);
+  if(sched.freq==="weekly"||sched.freq==="fortnightly"){
+    const want=(+sched.day||0)%7;                            /* 0 = Monday */
+    const cur=(base.getDay()+6)%7;
+    return addDays(base,(want-cur+7)%7);
+  }
+  if(String(sched.day)==="last")return new Date(2000,1,0);   /* 31 Jan 2000 — clamps to each month's end */
+  const dom=Math.max(1,Math.min(31,+sched.day||1));
+  return new Date(2000,0,dom);
+}
+const WEEKDAYS=[["0","Monday"],["1","Tuesday"],["2","Wednesday"],["3","Thursday"],["4","Friday"],["5","Saturday"],["6","Sunday"]];
+function ordinalDay(n){n=+n;const s=["th","st","nd","rd"],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0]);}
+/* Legacy rooms stored due as n/a | EOM | EOW. Read either shape, always return the new one. */
+function roomSchedule(rm){
+  const p=rm&&rm.pay;
+  if(p&&p.freq)return {freq:p.freq,day:(p.day==null?1:p.day)};
+  const due=String(rm&&rm.due||"n/a");
+  if(due==="EOM")return {freq:"monthly",day:"last"};
+  if(due==="EOW")return {freq:"weekly",day:"6"};             /* end of week = Sunday */
+  return {freq:"none",day:1};
+}
+function schedLabel(sched){
+  if(!sched||sched.freq==="none")return "No set payment date";
+  if(sched.freq==="weekly"||sched.freq==="fortnightly"){
+    const wd=(WEEKDAYS.find(w=>w[0]===String(sched.day))||WEEKDAYS[0])[1];
+    return (sched.freq==="weekly"?"Every ":"Every other ")+wd;
+  }
+  const day=String(sched.day)==="last"?"the last day":"the "+ordinalDay(sched.day);
+  return (sched.freq==="monthly"?"Monthly on ":sched.freq==="quarterly"?"Quarterly on ":"Yearly on ")+day;
 }
 /* Monthly rent effective on a date — dated steps, exactly like effRoomRate. 0 = no rent. */
 function effRoomRent(loc,dateStr){const d=parseD(dateStr);const L=(loc||"").toLowerCase();let best=null;
@@ -2168,13 +2431,19 @@ function roomRentOccurrences(from,to){
   Object.keys(byLoc).forEach(k=>{
     const steps=byLoc[k].slice().sort((a,b)=>parseD(a.effectiveFrom)-parseD(b.effectiveFrom));
     const first=parseD(steps[0].effectiveFrom); if(!first)return;
-    const loc=steps[0].location, dom=first.getDate();
+    const loc=steps[0].location;
+    /* The accrual date stays anchored to when the rent started, NOT to the payment schedule:
+       the schedule is a reminder the therapist can change at any time, and letting it move this
+       date would silently shift historical rent between tax years. Each occurrence carries its
+       payment date separately (see `due` below) for the payments-due list. */
+    const rm=roomFor(loc), sc=rm?roomSchedule(rm):null, dom=first.getDate();
     let cur=new Date(first.getFullYear(),first.getMonth(),1);
     for(let i=0;i<1200;i++){
       const dim=new Date(cur.getFullYear(),cur.getMonth()+1,0).getDate();
       const d=new Date(cur.getFullYear(),cur.getMonth(),Math.min(dom,dim));
       if(d>to)break;
-      if(d>=first&&d>=from){const amt=effRoomRent(loc,isoD(d));if(amt>0)out.push({location:loc,date:d,amount:amt});}
+      if(d>=first&&d>=from){const amt=effRoomRent(loc,isoD(d));
+        if(amt>0)out.push({location:loc,date:d,amount:amt,due:(sc&&schedNext(sc,d))||d});}
       cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);
     }
   });
@@ -2183,6 +2452,34 @@ function roomRentOccurrences(from,to){
 /* Totals for a date range. `total` is the effect on taxable profit: practice income less costs.
    Income marked personal (a second job, tutoring — a different trade) is counted separately and
    deliberately kept out of `total`, so it never inflates the practice's Self Assessment figure. */
+/* ===== Which charges have actually been paid =====
+   Accrual is what the tax figures use, so ledgerBetween ignores this entirely — a cost counts in
+   the year it fell due whether or not it's been settled. This map exists purely so the therapist
+   can tick things off and see what's overdue. Key: kind:ref|dueDate. */
+function paidMap(){return (S.paidCharges=S.paidCharges||{});}
+function chargeKey(kind,ref,date){return kind+":"+String(ref||"").toLowerCase()+"|"+isoD(date);}
+function chargePaidOn(key){const v=paidMap()[key];return v||null;}
+async function setChargePaid(key,paidOn,label){
+  const m=paidMap();
+  if(paidOn)m[key]=paidOn; else delete m[key];
+  return commit((paidOn?"Marked paid: ":"Marked unpaid: ")+(label||key));
+}
+/* Every individual charge falling in [from,to] — rent, costs and expected income — each tagged
+   with whether it's been ticked off. This is what the "payments due" list reads. */
+function chargesBetween(from,to){
+  const out=[];
+  (S.expenses||[]).forEach(x=>moneyOccurrences(x,from,to).forEach(o=>out.push(
+    {kind:"exp",ref:x._id,label:x.desc||"Cost",cat:x.category||"",date:o.date,amount:o.amount,freq:x.recurrence})));
+  (S.otherIncome||[]).forEach(x=>moneyOccurrences(x,from,to).forEach(o=>out.push(
+    {kind:"inc",ref:x._id,label:x.desc||"Income",cat:x.category||"",date:o.date,amount:o.amount,freq:x.recurrence,personal:finPersonal(x)})));
+  roomRentOccurrences(from,to).forEach(o=>out.push(
+    {kind:"rent",ref:(o.location||"").toLowerCase(),label:(o.location||"Room")+" rent",cat:"Room rent",
+     date:o.date,due:o.due,amount:o.amount,freq:"monthly"}));
+  /* `date` is when it was incurred (identity, and what the tax figures use); `due` is when it
+     actually has to be handed over — that's what the list sorts and reads by. */
+  out.forEach(c=>{if(!c.due)c.due=c.date;c.key=chargeKey(c.kind,c.ref,c.date);c.paidOn=chargePaidOn(c.key);});
+  return out.sort((a,b)=>a.due-b.due);
+}
 function ledgerBetween(from,to,opts){
   opts=opts||{};
   if(typeof from==="string")from=parseD(from);
@@ -2328,15 +2625,24 @@ VIEWS.income=function(){
       (S.rooms.some(r=>roomBilling(r)==="monthly")?'<p class="small muted" style="margin-top:8px">Rooms on a monthly rent aren’t listed here — their rent is counted in <b>Business costs</b> below, not per session.</p>':'')+'</div>'+
     financeCards();
   let sel=null;
-  const drawCombo=()=>{v.querySelector("#chCombo").innerHTML=chartCombo(series,sel);
+  /* Redrawing replaces the .svgwrap, which resets its horizontal scroll — so tapping a bar used
+     to fling the chart back to the oldest period, hiding the very breakdown it just opened.
+     Carry the scroll across the redraw, and start both charts at the most recent period. */
+  const drawCombo=()=>{
+    const host=v.querySelector("#chCombo"), prev=host.querySelector(".svgwrap");
+    const keep=prev?prev.scrollLeft:null;
+    host.innerHTML=chartCombo(series,sel);
+    scrollChart(host.querySelector(".svgwrap"),keep);
     v.querySelectorAll("#chCombo .hot").forEach(r=>{const set=()=>{sel=+r.dataset.i;drawCombo();};
       r.addEventListener("click",set);r.addEventListener("mouseenter",set);});};
   drawCombo();
   v.querySelector("#chCli").innerHTML=chartLine(series.map(d=>({l:d.l,v:d.clients,avg:d.cliAvg})));
-  v.querySelector("#gran").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{statGran=bt.dataset.g;go("income");});
+  scrollChart(v.querySelector("#chCli .svgwrap"),null);
+  v.querySelector("#gran").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{statGran=bt.dataset.g;go("income",{keepScroll:true});});
   v.querySelectorAll(".taxlink").forEach(elx=>elx.onclick=()=>taxDetailsSheet(elx.dataset.y));
   wireFinance(v);
-  var tmx=v.querySelector("#taxmode");if(tmx)tmx.querySelectorAll("button").forEach(b=>b.onclick=()=>{taxMode=b.dataset.m;go("income");});
+  wirePaymentsDue(v);
+  var tmx=v.querySelector("#taxmode");if(tmx)tmx.querySelectorAll("button").forEach(b=>b.onclick=()=>{taxMode=b.dataset.m;go("income",{keepScroll:true});});
   function paintTH(){const pen=pensionPcm();
     const mainV=thMode==="pension"?Math.round(th.monthly-pen):Math.round(th.monthly);
     const yrV=thMode==="pension"?Math.round(th.annualHome-pen*12):Math.round(th.annualHome);
@@ -2460,6 +2766,7 @@ VIEWS.raw=function(){
 VIEWS.settings=function(){
   const v=el('<div class="view active"></div>');
   v.innerHTML=`
+   <details class="sgrp" data-g="practice" open><summary><span class="sgt">Your practice</span><span class="sgs">Name, look, and which features you use</span></summary><div class="sgb">
    <div class="card"><h2>Your practice</h2>
      <p class="small muted">Shown in the app header and at the top of printed receipts and statements.</p>
      <label>Practice name</label><input id="setName" maxlength="60" value="${esc(practiceName())}">
@@ -2480,6 +2787,8 @@ VIEWS.settings=function(){
      <p class="small muted">Switch off anything you don’t use — it disappears from the app. Nothing is deleted, and you can switch it back on any time.</p>
      <div class="mt" id="setFeat"></div>
    </div>
+   </div></details>
+   <details class="sgrp" data-g="data"><summary><span class="sgt">Data &amp; backup</span><span class="sgs">Backups, storage, import, undo and health checks</span></summary><div class="sgb">
    <div class="card"><h2>Backup &amp; restore</h2>
      <p class="small muted">Your data lives on this device. Export regularly to a file you keep (iCloud/Files/email). The <b>.json backup is the complete copy</b> — it holds every session, supervision entry, client, room and setting. The CSVs are spreadsheet-friendly extracts.</p>
      <div class="row mt" style="flex-wrap:wrap;gap:8px">
@@ -2528,16 +2837,8 @@ VIEWS.settings=function(){
      <button class="btn sec" id="checkData">Check data</button>
      <div id="dhResults" class="mt"></div>
    </div>
-   <div class="card"><h2>Setup &amp; help</h2>
-     <p class="small muted">The guided tour explains each tab, how to log a session and how your data is saved. It changes nothing.</p>
-     <button class="btn sec full" id="setTour">🧭 Replay the guided tour</button>
-     <button class="btn sec full mt" id="setNew">✨ What’s new in this update</button>
-     <p class="small muted mt" style="margin-bottom:6px">Re-running first-time setup walks through practice name, colours, features and defaults again — and <b>overwrites</b> them. Your clients, sessions and payments are untouched.</p>
-     <button class="btn ghost full" id="setRerun" style="color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent)">↻ Re-run first-time setup…</button>
-   </div>
-   <div class="card"><h2>About</h2><p class="small muted">Therapy Tracker · offline · replaces the spreadsheet.
-     ${S.sessions.length} sessions, ${S.clients.length} clients${S.settings&&S.settings.onboardedAt?" · set up "+fmtD(S.settings.onboardedAt):""}. Add to your Home Screen for an app-like experience.</p>
-     <p class="small muted"><a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a></p></div>
+   </div></details>
+   <details class="sgrp" data-g="records"><summary><span class="sgt">Records &amp; privacy</span><span class="sgs">How long you keep records, and how to remove them</span></summary><div class="sgb">
    ${retentionCardHTML()}
    <div class="card"><h2>Privacy &amp; removal</h2>
      <p class="small muted">Tools for anonymising or deleting client information — for example when a client asks you to erase their data, or before you replace this device.</p>
@@ -2545,7 +2846,23 @@ VIEWS.settings=function(){
        <p class="small muted" style="margin-top:6px">These actions are permanent and are not what you want for day-to-day tidying up. To stop seeing a client, set their status to <b>Finished</b> instead.</p>
        <button class="btn ghost full mt" id="setDanger" style="color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent)">⚠️ Open data removal tools…</button>
      </details>
-   </div>`;
+   </div>
+   </div></details>
+   <details class="sgrp" data-g="help"><summary><span class="sgt">Setup &amp; help</span><span class="sgs">The tour, what’s new, and re-running setup</span></summary><div class="sgb">
+   <div class="card"><h2>Setup &amp; help</h2>
+     <p class="small muted">The guided tour explains each tab, how to log a session and how your data is saved. It changes nothing.</p>
+     <button class="btn sec full" id="setTour">🧭 Replay the guided tour</button>
+     <button class="btn sec full mt" id="setNew">✨ What’s new in this update</button>
+     <p class="small muted mt" style="margin-bottom:6px">Re-running first-time setup walks through practice name, colours, features and defaults again — and <b>overwrites</b> them. Your clients, sessions and payments are untouched.</p>
+     <button class="btn ghost full" id="setRerun" style="color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent)">↻ Re-run first-time setup…</button>
+   </div>
+   </div></details>
+   <details class="sgrp" data-g="about"><summary><span class="sgt">About</span><span class="sgs">Version, policies and how to install it</span></summary><div class="sgb">
+   <div class="card"><h2>About</h2><p class="small muted">Therapy Tracker · offline · replaces the spreadsheet.
+     ${S.sessions.length} sessions, ${S.clients.length} clients${S.settings&&S.settings.onboardedAt?" · set up "+fmtD(S.settings.onboardedAt):""}. Add to your Home Screen for an app-like experience.</p>
+     <p class="small muted"><a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a></p></div>
+   </div></details>
+`;
   v.querySelector("#checkData").onclick=()=>{
     const out=v.querySelector("#dhResults");const seen=new Set();const items=[];
     S.sessions.forEach(s=>{const vr=validateSession(s);
@@ -2596,6 +2913,18 @@ VIEWS.settings=function(){
   v.querySelector("#setRerun").onclick=()=>confirmRerunSetup();
   v.querySelector("#setDanger").onclick=()=>dzMenu();
   wireRetention(v);
+  /* Remember which sections were left open — per device, not part of the practice data. */
+  (function(){
+    let open={};try{open=JSON.parse(localStorage.getItem("tt_setgrp")||"{}")||{};}catch(e){}
+    v.querySelectorAll(".sgrp").forEach(d=>{
+      const k=d.dataset.g;
+      if(open[k]!=null)d.open=!!open[k];
+      d.addEventListener("toggle",()=>{
+        open[k]=d.open;
+        try{localStorage.setItem("tt_setgrp",JSON.stringify(open));}catch(e){}
+      });
+    });
+  })();
   (async function paintStorage(){
     const stEl=v.querySelector("#stStatus"),hintEl=v.querySelector("#stHint"),askB=v.querySelector("#stAsk");
     if(!stEl)return;
@@ -2792,12 +3121,14 @@ function sessionForm(s,o){
      <div class="hint">Rate: <b>${gbp(d.rate)}</b>${d.roomRate?` · Room: ${gbp(d.roomRate)} (${esc(d.due)})`:""} · ${d.taxYear} ${d.past?"· past":"· upcoming"}</div>
      <label>Payment received date <span class="muted small">(blank = not paid)</span></label>
      <input type="date" id="f_paid" value="${esc(m.paidDate||"")}">
-     <div class="field2">
-       <div><label>Invoice #</label><input id="f_inv" value="${esc(m.invoice||"")}"></div>
-       <div><label>Room paid?</label><select id="f_rp">${opts(["","Y","N","n/a"],m.roomPaid||"")}</select></div>
+     <label>Invoice #</label><input id="f_inv" value="${esc(m.invoice||"")}">
+     <div id="f_rpWrap">
+       <div class="field2">
+         <div><label>Room paid?</label><select id="f_rp">${opts(["","Y","N","n/a"],m.roomPaid||"")}</select></div>
+         <div><label>Room payment date</label><input type="date" id="f_rpd" value="${esc(m.roomPaidDate||"")}"></div>
+       </div>
      </div>
-     <label>Room payment date <span class="muted small">(when the room fee was paid)</span></label>
-     <input type="date" id="f_rpd" value="${esc(m.roomPaidDate||"")}">
+     <p class="small muted" id="f_rpNote" style="display:none"></p>
      <label>Notes done?</label><input id="f_notes" value="${esc(m.notes||"")}" placeholder="Y / note">
      <label class="colchk" style="margin-top:14px"><input type="checkbox" id="f_latecancel"${m.lateCancel?" checked":""}> Late cancellation</label>
      <div class="vbanner" id="vbanner"></div>
@@ -2813,7 +3144,17 @@ function sessionForm(s,o){
         if(!lockDate)m.date=sg.date;}
       draw();
       if(isNew&&code)body.querySelector("#sugHint").innerHTML='<div class="hint">✨ Pre-filled from this client’s last session — adjust anything, then Save.</div>';};
-    ["#f_date","#f_loc","#f_paid","#f_rp"].forEach(id=>g(id).addEventListener("change",()=>{sync();
+    /* A room billed as monthly rent is settled once a month in Business costs, so asking whether
+       this session's room fee was paid is a question with no answer. Hide it and say where it went. */
+    const paintRoomPaid=()=>{
+      const rm=roomFor(g("#f_loc").value), monthly=rm&&roomBilling(rm)==="monthly";
+      g("#f_rpWrap").style.display=monthly?"none":"";
+      const note=g("#f_rpNote"); note.style.display=monthly?"":"none";
+      if(monthly)note.innerHTML="🏠 <b>"+esc(rm.location)+"</b> is on a monthly rent, so there’s nothing to settle per session. "+
+        "Tick its rent off each month in <b>Revenue › Business costs</b>.";
+    };
+    paintRoomPaid();
+    ["#f_date","#f_loc","#f_paid","#f_rp"].forEach(id=>g(id).addEventListener("change",()=>{sync();paintRoomPaid();
       const d=derive(m);body.querySelector(".hint").innerHTML=`Rate: <b>${gbp(d.rate)}</b>${d.roomRate?` · Room: ${gbp(d.roomRate)} (${esc(d.due)})`:""} · ${d.taxYear} ${d.past?"· past":"· upcoming"}`;}));
     g("#save").onclick=async()=>{sync();
       if(!m.client){toast("Choose a client");Sfx.error();return}
@@ -3120,7 +3461,7 @@ function attachSwipe(container,refresh){
       if(fired){const ss=S.sessions.find(z=>z._id===id);
         if(ss&&!ss.paidDate){ss.paidDate=isoD(today());
           const amt=derive(ss).rate||0;
-          gameNoteBatch({cleared:1,amount:amt});
+          gameNoteBatch({cleared:1});
           await commit("Marked paid (swipe): "+ss.client+" "+ss.date);renderTabs();
           Sfx.complete();Confetti.burst(16,{up:8,spread:0.8});
           toast(ss.client+" marked paid ✓");
@@ -4142,20 +4483,41 @@ function stepLook(w){return{emoji:"🎨", h:"Pick a look",
     sw.onclick=()=>{w.sound=!w.sound;Sfx.set(w.sound);sw.classList.toggle("on",w.sound);
       sw.closest(".ftrow").classList.toggle("off",!w.sound);if(w.sound){Sfx.prime();Sfx.pop();}};
   }};}
-function stepFeatures(w){return{emoji:"🧩", h:"Choose what you need",
+function stepFeatures(w){
+  /* accreditation gets its own question in stepCPD — asking twice would be noise */
+  const list=FEATURES.filter(f=>f.k!=="accreditation");
+  return{emoji:"🧩", h:"Choose what you need",
   sub:"Switch off anything that isn’t useful — it disappears from the app. Nothing is deleted, and you can turn it back on later.",
   mount(host){
-    host.innerHTML=FEATURES.map(f=>ovToggleRow(f.k,f.ic,f.n,esc(f.d),featureOn(w,f.k),false)).join("")+
+    host.innerHTML=list.map(f=>ovToggleRow(f.k,f.ic,f.n,esc(f.d),featureOn(w,f.k),false)).join("")+
       '<div class="ovnote">Switching a feature off only hides it. Any supervision entries, receipts or records you already have stay in your data.</div>';
-    const paint=()=>{FEATURES.forEach(f=>{
+    const paint=()=>{list.forEach(f=>{
       const on=featureOn(w,f.k)&&(!f.dep||featureOn(w,f.dep));
       const sw=host.querySelector('[data-sw="'+f.k+'"]'),row=host.querySelector('[data-row="'+f.k+'"]');
       if(!sw)return;
       sw.classList.toggle("on",on);sw.disabled=!!(f.dep&&!featureOn(w,f.dep));
       row.classList.toggle("off",!on);});};
-    FEATURES.forEach(f=>{const sw=host.querySelector('[data-sw="'+f.k+'"]');if(!sw)return;
+    list.forEach(f=>{const sw=host.querySelector('[data-sw="'+f.k+'"]');if(!sw)return;
       sw.onclick=()=>{if(sw.disabled)return;w.features[f.k]=!featureOn(w,f.k);Sfx.tick();paint();};});
     paint();
+  }};}
+/* CPD is everybody; accreditation is the minority working toward it. Ask plainly, default off. */
+function stepCPD(w){return{emoji:"📚", h:"CPD and accreditation",
+  sub:"Supervision hours count toward your yearly CPD. The app totals them for you.",
+  validate(){const v=+w.cpdTarget;if(!(v>=1&&v<=200)){toast("Enter a target between 1 and 200 hours");Sfx.error();return false;}},
+  mount(host){
+    host.innerHTML='<label>Your annual CPD target (hours)</label>'+
+      '<input id="spCpd" type="number" min="1" max="200" step="1" value="'+esc(w.cpdTarget)+'">'+
+      '<p class="prev">BACP asks accredited members for 30 hours a year. Other bodies differ — set yours.</p>'+
+      '<div style="margin-top:16px">'+ovToggleRow("acc","📜","I’m working toward accreditation",
+        "Adds the BACP Form 3A card: clinical vs supervision hours and the 1:6 ratio. Most therapists don’t need this — leave it off unless you’re actively accruing hours toward accreditation.",
+        featureOn(w,"accreditation"))+'</div>'+
+      '<div class="ovnote">Either way you can change this later in <b>⚙ Settings › Features</b>.</div>';
+    host.querySelector("#spCpd").oninput=e=>w.cpdTarget=+e.target.value||0;
+    const sw=host.querySelector('[data-sw="acc"]');
+    sw.onclick=()=>{w.features.accreditation=!featureOn(w,"accreditation");
+      const on=featureOn(w,"accreditation");
+      sw.classList.toggle("on",on);sw.closest(".ftrow").classList.toggle("off",!on);Sfx.tick();};
   }};}
 function stepRooms(w){return{emoji:"🚪", h:"Where do you see clients?",
   sub:"Add each room or location you use and what it costs you per session. Sessions at home usually cost <b>£0</b>.",
@@ -4280,6 +4642,7 @@ function stepDone(w){return{emoji:"🎉", h:"That’s you set up",
       '<div><span>Default fee</span><b>'+gbp(w.rate)+'</b></div>'+
       '<div><span>Backup reminder</span><b>'+w.bkDays+' days / '+w.bkActs+' changes</b></div>'+
       '<div><span>Keep records</span><b>notes '+w.rtNotes+' yrs · financial '+w.rtFin+' yrs</b></div>'+
+      (featureOn(w,"supervision")?'<div><span>CPD target</span><b>'+w.cpdTarget+' hrs/yr'+(featureOn(w,"accreditation")?' · accreditation tracking on':'')+'</b></div>':'')+
       '<div><span>Switched off</span><b>'+(offList.length?esc(offList.join(", ")):"nothing")+'</b></div>'+
       '</div>'+
       '<div style="margin-top:14px">'+ovToggleRow("tour","🧭","Show me around","A short guided tour of each tab, how to log a session, and how saving and backups work.",w.tour!==false)+'</div>';
@@ -4344,6 +4707,7 @@ async function setupSave(w,opts){
   sg.onboarded=true; sg.onboardedAt=isoD(today());
   sg.setupRuns=(sg.setupRuns||0)+1;
   const rt=sg.retention=sg.retention||{};
+  if(+w.cpdTarget>=1)sg.cpdTarget=Math.round(+w.cpdTarget);
   if(+w.rtNotes>=1)rt.notesYears=Math.round(+w.rtNotes);
   if(+w.rtFin>=1)rt.financeYears=Math.round(+w.rtFin);
   if(!Array.isArray(rt.endedStatuses)||!rt.endedStatuses.length)rt.endedStatuses=defaultEndedStatuses(S);
@@ -4396,6 +4760,7 @@ function startSetup(opts){
     rate:defaultRate(), pension:pensionPcm(),
     bkDays:backupDaysThreshold(), bkActs:backupActsThreshold(),
     rtNotes:retentionCfg().notesYears, rtFin:retentionCfg().financeYears,
+    cpdTarget:cpdTarget(),
     rooms:null, tour:!rerun
   };
   const welcome={emoji:"👋", h:rerun?"Let’s run through setup again":"Welcome to Therapy Tracker",
@@ -4407,6 +4772,7 @@ function startSetup(opts){
       ["🧾","Replaces the spreadsheet","Fees, room costs, unpaid sessions and tax estimates all work themselves out."]
     ])};
   const steps=[welcome,stepPractice(w),stepLook(w),stepFeatures(w)];
+  if(featureOn(w,"supervision"))steps.push(stepCPD(w));
   if(withRooms)steps.push(stepRooms(w));
   steps.push(stepMoney(w),stepRetention(w));
   if(!rerun)steps.push(stepImport(w));   /* re-runs promise not to touch client data — leave it to Settings */
@@ -4771,7 +5137,6 @@ function retentionCfg(){
           financeYears:(+r.financeYears>0)?+r.financeYears:6,
           endedStatuses:(Array.isArray(r.endedStatuses)&&r.endedStatuses.length)?r.endedStatuses:defaultEndedStatuses(S)};
 }
-function addYears(d,n){const x=new Date(d);x.setFullYear(x.getFullYear()+n);return x;}
 function retentionRows(){
   const cfg=retentionCfg(), t=today();
   const ended=new Set(cfg.endedStatuses.map(s=>String(s).toLowerCase()));
@@ -4829,7 +5194,7 @@ function wireRetention(v){
     if(rt.notesYears===nv&&rt.financeYears===fv)return;
     rt.notesYears=nv; rt.financeYears=fv;
     await commit("Retention: notes "+nv+" yrs, records "+fv+" yrs");
-    go("settings");
+    go("settings",{keepScroll:true});
   };
   n.onchange=save; f.onchange=save;
   v.querySelectorAll(".rtst").forEach(cb=>cb.onchange=async()=>{
@@ -4838,7 +5203,7 @@ function wireRetention(v){
     const rt=settings().retention=settings().retention||{};
     rt.endedStatuses=picked;
     await commit("Retention: finished statuses = "+picked.join(", "));
-    go("settings");});
+    go("settings",{keepScroll:true});});
   v.querySelectorAll("[data-rtanon]").forEach(b=>b.onclick=()=>dzRunAnonymise([b.dataset.rtanon]));
   v.querySelectorAll("[data-rters]").forEach(b=>b.onclick=()=>dzRunErase([b.dataset.rters]));
 }
