@@ -1,6 +1,7 @@
-/* Bumped for the GroundWork rename: manifest.webmanifest is served cache-first, so without a new
-   cache name an installed device would keep showing "Therapy Tracker" on the Home Screen. */
-const C="tt-v5";
+/* Bumped for the GroundWork rename, then again for the new icon artwork: the manifest and the
+   icons are all served cache-first, so without a new cache name an installed device keeps the old
+   name and the old icon on its Home Screen. */
+const C="tt-v6";
 /* The app shell must be precached at install time. The service worker does not control the
    navigation that registers it, so without this a first-time visitor who goes offline before
    their second visit gets nothing at all. */

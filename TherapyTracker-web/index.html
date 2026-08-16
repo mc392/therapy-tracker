@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-<meta name="theme-color" id="tcMeta" content="#5C7A6D"/>
+<meta name="theme-color" id="tcMeta" content="#6A8B7C"/>
 <title>GroundWork</title>
 <script>(function(){var d=document.documentElement;try{var t=localStorage.getItem('tt_theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';}d.setAttribute('data-theme',t);
 d.setAttribute('data-palette',localStorage.getItem('tt_palette')||'sage');
@@ -17,10 +17,15 @@ var n=localStorage.getItem('tt_practice');if(n)d.style.setProperty('--appname',J
    --g1/--g2 are the gradient pair; --brand is the flat version for icons and links; --brand-dark
    is the one that has to stay READABLE as text on a card, which is why it is not just a darker
    --brand. --glass/--hair build the frosted surfaces. */
+/* The default scheme IS the brand: these are the greens in the GroundWork mark, the launch screen
+   and the App Store icon (icon-ideas/groundwork). --bg is the launch screen's own top colour, so
+   the splash fades into the app rather than stepping to a different white. They had drifted teal
+   in the glassmorphic pass, which left the Sage swatch in Settings promising a green it never
+   rendered — anything that names a brand colour must be changed here and in the artwork together. */
 :root{
   color-scheme:light;
-  --bg:#F6F8FA; --card:#FFFFFF; --soft:#EEF3F1; --ink:#12211D; --muted:#5F7A72; --line:#E4EDE9;
-  --brand:#0C9683; --brand-dark:#07695C; --g1:#5FD9BE; --g2:#17A891;
+  --bg:#F5F8F5; --card:#FFFFFF; --soft:#EAF1EC; --ink:#16211C; --muted:#5F7268; --line:#E2EAE4;
+  --brand:#5C7A6D; --brand-dark:#3C4F44; --g1:#A9C9B7; --g2:#7FA391;
   --accent:#8B7BF0; --accent-ink:#5B49C7;
   --good:#0C7C46; --bad:#C42A2F; --warn:#96650A; --hi:#06B6D4; --hi-ink:#0A5F73;
   --glass:64%; --hair:rgba(255,255,255,.7); --on-bright:#0D1A17; --ring:rgba(15,23,42,.06);
@@ -28,18 +33,21 @@ var n=localStorage.getItem('tt_practice');if(n)d.style.setProperty('--appname',J
   --shadow-lg:0 2px 6px rgba(16,40,34,.06),0 20px 48px -12px rgba(16,40,34,.28);
   --radius:20px; --blur:blur(20px) saturate(1.8);
 
-  --gs1:#0A8172; --gs2:#076458;}
+  /* Header gradient: brand → brand-dark, the same construction every other palette uses. It is a
+     shade darker than the icon's own top stop (#6A8B7C) on purpose — the 18px/700 header title
+     falls just under the WCAG large-text threshold, and white on #6A8B7C is only 3.75:1. */
+  --gs1:#5C7A6D; --gs2:#3C4F44;}
 html[data-theme="dark"]{
   color-scheme:dark;
   --bg:#0C1512; --card:#16211E; --soft:#1E2C28; --ink:#E9F2EE; --muted:#93A8A1; --line:#243430;
-  --brand:#2DD4B4; --brand-dark:#7FF0DA; --g1:#5FE0C6; --g2:#22C9C0;
+  --brand:#8FBBA2; --brand-dark:#BCDCC7; --g1:#8FCFAB; --g2:#5E9E7E;
   --accent:#A99BF7; --accent-ink:#C7BDFB;
   --good:#3DD68C; --bad:#FF6369; --warn:#F5B544; --hi:#22D3EE; --hi-ink:#9DECFB;
   --glass:56%; --hair:rgba(255,255,255,.13); --on-bright:#0D1A17; --ring:rgba(0,0,0,.4);
   --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -10px rgba(0,0,0,.6);
   --shadow-lg:0 2px 8px rgba(0,0,0,.5),0 24px 56px -14px rgba(0,0,0,.75);
 
-  --gs1:#0A8172; --gs2:#076458;}
+  --gs1:#5C7A6D; --gs2:#3C4F44;}
 /* ====== Colour schemes ======
    Chosen in Setup / Settings, applied as data-palette on <html>. "sage" is the built-in default
    above, so it needs no block here. Each other scheme overrides the light values, then the
@@ -7049,7 +7057,7 @@ window.addEventListener("unhandledrejection",e=>reportGlobalError("Unhandled pro
    Held for a moment so a fast boot doesn't flash it, then faded. The failsafe matters more than
    the timing: if init throws before go() ever runs, nothing else would take the splash down and
    the app would look like it had hung, so a timer clears it regardless of what happened. */
-const SPLASH_MIN=520, _splashFrom=Date.now();
+const SPLASH_MIN=1200, _splashFrom=Date.now();
 let _splashGone=false;
 function splashHide(){
   if(_splashGone)return; _splashGone=true;

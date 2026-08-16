@@ -11,6 +11,12 @@ The product is **GroundWork**. The rename covered display strings only — these
 
 Renamed: the `<title>`, header, `--appname` tab-rail label, `practiceName()` fallback, manifest `name`/`short_name`, service-worker offline message, terms/privacy, export filenames (`groundwork-*`), and the `app:` marker in backup envelopes (informational only — nothing reads it, and older files say `TherapyTracker`).
 
+### Brand colours — the default palette IS the brand
+`:root` (and its `[data-theme="dark"]` pair) is the **sage/GroundWork** scheme; there is no `[data-palette="sage"]` block because sage is the built-in default. Its values are taken from the artwork: `--brand:#5C7A6D` and `--brand-dark:#3C4F44` are the launch screen's mark and wordmark colours, and `--bg:#F5F8F5` is the launch screen's own top colour so the splash fades into the app rather than stepping to a different white.
+- These had drifted **teal** (`#0C9683`) in the glassmorphic pass, which left the Sage swatch in Settings promising a green the app never rendered. Anything that names a brand colour must be changed here **and** in the artwork together.
+- `--gs1` is deliberately the brand green, a shade darker than the icon's own top stop (`#6A8B7C`): the header title is 18px/700, just under the WCAG large-text threshold, and white on `#6A8B7C` is only 3.75:1. Check contrast before touching the header gradient.
+- `icon-180/192/512.png` are downscales of `icon-ideas/groundwork/icon-1024.png`. Regenerate them from that source (PowerShell + `System.Drawing`, HighQualityBicubic) rather than editing them individually, and bump the SW cache — icons are served cache-first.
+
 ### Launch screen
 `#splash` in `index.html` — inline SVG of the bars-and-leaf mark plus the wordmark, painted before any script runs so a cold start never flashes white. `splashHide()` is called right after the first `go("home")`, with `SPLASH_MIN` (520ms) so a fast boot doesn't flicker and a **6s failsafe timer** that clears it even if init throws before `go()` ever runs. Brand colours are hard-coded rather than palette tokens — this is the product's identity, not the therapist's chosen scheme — and are sampled from the delivered artwork in `icon-ideas/groundwork/`. Those 2732² PNGs are **not** used by the web app (2.4MB the SW would have to precache); they are the source for the native iOS launch screen — see `docs/groundwork-app-store-roadmap.md`.
 
