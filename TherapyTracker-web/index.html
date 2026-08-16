@@ -3414,6 +3414,9 @@ VIEWS.money=function(){
     drawCombo();
     body.querySelector("#chCli").innerHTML=chartLine(series.map(d=>({l:d.l,v:d.clients,avg:d.cliAvg})));
     scrollChart(body.querySelector("#chCli .svgwrap"),null);
+    /* The heatmap scrolls too, and runs oldest-week-first like the charts, so it gets the same
+       treatment — land on this week rather than on the same date last year. */
+    scrollChart(body.querySelector(".hmgrid"),null);
     body.querySelector("#gran").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{statGran=bt.dataset.g;go("money",{keepScroll:true});});
   }
   function drawCosts(){
