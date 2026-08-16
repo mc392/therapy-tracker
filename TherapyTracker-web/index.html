@@ -514,6 +514,12 @@ summary{font-weight:600;cursor:pointer}
 .allclear{text-align:center;padding:14px 8px;color:var(--good);font-weight:600;font-size:14px}
 .allclear .ace{font-size:30px;display:block;margin-bottom:3px}
 
+/* ===== cancellation policy rows ===== */
+.cxrow{display:flex;align-items:center;gap:7px;margin:0 0 8px}
+.cxrow input{width:76px;margin:0;padding:9px 10px;text-align:right}
+.cxrow .cxl{font-size:13px;color:var(--muted);white-space:nowrap}
+.cxrow .rmx{margin-left:auto}
+
 /* ===== quick-log command bar ===== */
 .qlwrap{position:relative}
 .qlchips{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;min-height:26px;align-items:center}
@@ -703,7 +709,7 @@ const MAX_SNAP=120;
 /* Data schema version, stamped on state and on every backup. Bump when a change would be
    misread by an older build, and add the matching step to migrate(). Data with no stamp is v1
    (everything written before versioning existed). */
-const SCHEMA_VERSION=4;
+const SCHEMA_VERSION=5;
 function stateSchemaVersion(st){const v=st&&st.meta&&+st.meta.schemaVersion;return v>0?v:1;}
 
 function clone(o){return JSON.parse(JSON.stringify(o))}
@@ -771,6 +777,14 @@ function normalize(st){
   if(sg.studentLoan==null)sg.studentLoan="none";
   if(sg.class2Voluntary==null)sg.class2Voluntary=false;
   if(sg.onboarded==null)sg.onboarded=hasData; // anyone with data already knows the app — don't ambush them with setup
+  /* Gradual reveal. `mode` defaults to "all" for anyone who already has data, for the same
+     reason accreditation does above: hiding tabs from someone who is already using them is the
+     one outcome this feature must never produce. Only a genuinely fresh install can start
+     simple, and only by choosing to in setup. `shown` records which nudges have been offered,
+     accepted or declined, so nothing is ever suggested twice. */
+  sg.reveal=sg.reveal||{};
+  if(sg.reveal.mode==null)sg.reveal.mode="all";   /* only stepDepth ever sets "simple" */
+  if(!Array.isArray(sg.reveal.shown))sg.reveal.shown=[];
   st.game=st.game||{}; st.game.activeWeeks=st.game.activeWeeks||[]; st.game.records=st.game.records||{};
   const rr=st.game.records; rr.longestStreak=rr.longestStreak||0; rr.mostClearedAtOnce=rr.mostClearedAtOnce||0;
   /* Seed the concurrent-clients best from where the practice stands today. Starting at 0 would
@@ -814,11 +828,33 @@ function normalize(st){
     (st.supervision||[]).forEach(sv=>{if(sv)sv.count=Math.max(1,(sv.clients||[]).length);});
     st.meta.supCountBackfill=true;
   }
+  /* v5: what a missed session actually costs the client is now the practice's own policy rather
+     than always the full fee. `window` is read longest-notice-first by cancelPolicyPct; the
+     defaults reproduce the only behaviour this app has ever had (100% either way), so switching
+     to v5 moves nobody's figures until they choose to change the policy. */
+  if(!sg.cancelRules)sg.cancelRules={
+    window:[{hoursBefore:24,chargePct:100}],
+    dnaChargePct:100
+  };
+  /* v5 backfill: every historical late cancellation was billed in full, because there was no
+     other option. Stamping 100 says so explicitly, and is what keeps existing revenue and tax
+     totals identical across the upgrade. Gated, so it can never re-run over edited charges. */
+  if(!st.meta.cancelChargeBackfill){
+    st.sessions.forEach(s=>{
+      if(!s||s.cancelCharge!=null)return;
+      if(isLateCancel(s)){s.cancelKind=s.cancelKind||"late";s.cancelCharge=100;}
+    });
+    st.meta.cancelChargeBackfill=true;
+  }
   /* Ordered migrations run here as the schema grows:
        if(stateSchemaVersion(st)<4){ ...upgrade...; }
      Data stamped newer than this build is left completely untouched — never downgrade it in
      place. Import refuses it outright (see validateImport); this path only guards the unlikely
      case of a newer build having written to this device's own database.
+
+     v4 → v5 stamps a charge percentage on every cancelled session. A v5 backup can hold a
+     session charged at 50%; a v4 build has no such field and would bill it in full, so the
+     bump exists to stop that backup being restored there.
 
      v3 → v4 adds a category key per cost and income row, migrated from the old free-text
      label; the label itself is left alone.
@@ -903,6 +939,9 @@ async function commit(summary){
     await snapAdd({ts:new Date().toISOString(),label:summary,data:clone(S)});
     await snapPrune();
     clearSaveFailure();
+    /* after the write, never before: a nudge commits again when accepted, and it must not be
+       able to interleave with the save that triggered it */
+    try{revealCheck();}catch(e){}
     return true;
   }catch(e){
     console.error("DB save failed",e);
@@ -964,7 +1003,12 @@ function effRoomRate(loc,dateStr){const d=parseD(dateStr);const L=(loc||"").toLo
   if(best)return best.rate; const rm=roomFor(loc); return rm?rm.rate:0;}
 function derive(s){
   const t=today(); const d=parseD(s.date);
-  const rate=effRate(s.client,s.date);
+  /* `fullRate` is the fee that was in force; `rate` is what the session actually carries once the
+     stamped cancellation charge is applied. Everything downstream -- revenue, net, SA103, MTD --
+     reads `rate`, so a reduced charge flows through the whole app from this one place. */
+  const fullRate=effRate(s.client,s.date);
+  const cancelPct=cancelPctFor(s);
+  const rate=Math.round(fullRate*cancelPct)/100;
   const room=roomFor(s.location); const roomRate=effRoomRate(s.location,s.date); const due=room?room.due:"n/a";
   const clientPaid=!!s.paidDate;
   const past=d?d<t:false;
@@ -984,7 +1028,8 @@ function derive(s){
   let cancelBy=null,canCancel=false;
   if(d){ const tm=(s.time||"00:00").split(":"); const dt=new Date(d); dt.setHours(+tm[0]||0,+tm[1]||0);
     cancelBy=addDays(dt,-3); canCancel=cancelBy>new Date(); }
-  return {rate,roomRate,due,roomPaidNA,clientPaid,past,overdue,roomBooked,roomDue,status,category,complete,cancelBy,canCancel,
+  return {rate,fullRate,cancelPct,cancelKind:(s.cancelKind||(isLateCancel(s)?"late":null)),
+    roomRate,due,roomPaidNA,clientPaid,past,overdue,roomBooked,roomDue,status,category,complete,cancelBy,canCancel,
     week:d?weekNum(d):"",year:d?d.getFullYear():"",taxYear:d?taxYear(d):""};
 }
 
@@ -1212,7 +1257,7 @@ function gameShow(m,f){ f=f||{}; const g=ensureGame(); const st=computeStreak();
   window.addEventListener("pointerdown",function pr(){Sfx.prime();},{once:true});})();
 
 /* ============ Longevity / funnel / sparkline helpers ============ */
-function clientSessionCounts(){const m={};S.sessions.forEach(s=>{if(isLateCancel(s))return;const k=(s.client||"").toLowerCase();if(k)m[k]=(m[k]||0)+1;});return m;}
+function clientSessionCounts(){const m={};S.sessions.forEach(s=>{if(isCancelled(s))return;const k=(s.client||"").toLowerCase();if(k)m[k]=(m[k]||0)+1;});return m;}
 function clientAddedDate(c){if(c.created)return c.created;
   const rs=(S.rateHistory||[]).filter(r=>(r.client||"").toLowerCase()===(c.code||"").toLowerCase()).map(r=>r.effectiveFrom).filter(Boolean).sort();
   if(rs.length)return rs[0];
@@ -1580,16 +1625,68 @@ function comboLegend(series){const has=f=>(series||[]).some(d=>d[f]);
     '<span class="lgi"><i style="background:var(--warn)"></i>Room</span><span class="lgi"><i style="background:var(--accent)"></i>Supervision</span>'+
     (has("costs")?'<span class="lgi"><i style="background:var(--bad)"></i>Business costs</span>':'')+
     '<span class="lgi"><i class="line"></i>Net income</span><span class="lgi"><i class="dash"></i>6-mo avg</span></div>';}
+/* One label for a missed session wherever it is listed, so a 50%-charged late cancellation reads
+   the same on the client profile as it does in the sessions list. */
+function cancelLabel(kind){return kind==="dna"?"did not attend":"late cancel";}
+function cancelTag(s,d){
+  d=d||derive(s);
+  if(!d.cancelKind)return "";
+  return ' · '+cancelLabel(d.cancelKind)+(d.cancelPct<100?' · '+d.cancelPct+'% fee':'');
+}
 function payChip(s,d){return d.clientPaid?'<span class="chip y">paid '+fmtDM(s.paidDate)+'</span>':(d.overdue?'<span class="chip n">overdue · due '+fmtDM(s.date)+'</span>':'<span class="chip na">awaiting</span>');}
 function missingReasons(s){const m=[];
   if(!(s.notes&&String(s.notes).trim()))m.push("notes");
   if(!derive(s).roomPaidNA&&!(s.roomPaid&&String(s.roomPaid).trim()))m.push("room-paid status");
   return m;}
-/* late cancellation: explicit flag, with fallback to the historical notes convention */
+/* ===== Missed sessions =====
+   Two kinds, and the difference matters to the client's bill but never to the clinical record:
+   a LATE CANCELLATION was called off inside the notice period, a DNA was simply not attended.
+   `isLateCancel` keeps reading the historical notes convention ("Y (late cancellation)") and is
+   still what decides the late-cancel flag itself. `isCancelled` is the one to use anywhere a
+   session must be excluded from clinical hours, attendance or session counts -- a DNA has to be
+   excluded from all of those for exactly the same reasons a late cancellation is. */
 function isLateCancel(s){return !!(s&&(s.lateCancel||(s.notes&&/late cancellation/i.test(String(s.notes)))));}
+function isDNA(s){return !!(s&&s.cancelKind==="dna");}
+function isCancelled(s){return isDNA(s)||isLateCancel(s);}
+/* What the practice's policy says to charge for a session missed with `hrs` notice. A rule reads
+   "at least N hours' notice -> charge X%", so the windows are tried LONGEST FIRST and the first
+   one the notice clears wins.
+   Notice that clears no rule at all -- and notice that was never recorded -- charges the FULL
+   fee. That is the conservative direction on purpose: a draft that is too high gets corrected on
+   the spot, whereas one that is too low is a fee quietly written off. A therapist who does want
+   a lower floor says so with a rule at 0 hours. */
+function cancelPolicy(){const c=(settings().cancelRules)||{};
+  return {window:(c.window||[]).slice().sort((a,b)=>(+b.hoursBefore||0)-(+a.hoursBefore||0)),
+          dnaChargePct:(c.dnaChargePct==null?100:+c.dnaChargePct)};}
+function cancelPolicyPct(kind,hrs){
+  const p=cancelPolicy();
+  if(kind==="dna")return p.dnaChargePct;
+  if(hrs==null)return 100;
+  for(const w of p.window){if(hrs>=(+w.hoursBefore||0))return Math.max(0,Math.min(100,+w.chargePct||0));}
+  return 100;
+}
+/* Notice actually given, in hours, when the cancellation date was recorded. Null when it wasn't;
+   the caller then falls back to the shortest window, which is the safe reading of "we don't know". */
+function cancelNoticeHrs(s){
+  if(!s||!s.cancelledAt)return null;
+  const when=parseD(s.cancelledAt), d=parseD(s.date); if(!when||!d)return null;
+  const tm=(s.time||"00:00").split(":"); const start=new Date(d); start.setHours(+tm[0]||0,+tm[1]||0,0,0);
+  return (start-when)/3600000;
+}
+/* The percentage of the fee a session actually carries. **Read from the session, never from the
+   policy** -- the charge is stamped when the session is logged, so editing the policy later
+   cannot reach back and rewrite what a client was already billed. A session with nothing stamped
+   is a full-fee session, which is what every session was before v5. */
+/* the session form's three-way control: "" attended | "late" | "dna" */
+function attendVal(s){return (s&&s.cancelKind)?s.cancelKind:(isLateCancel(s)?"late":"");}
+function cancelPctFor(s){
+  if(!s)return 100;
+  const v=s.cancelCharge;
+  return (v==null||isNaN(+v))?100:Math.max(0,Math.min(100,+v));
+}
 /* clinical (client-contact) hours from logged sessions: each session that has taken place = 1 hr (50-min min); missed / late-cancelled excluded */
 function clinicalStats(){const t=today();let inP=0,onl=0;
-  S.sessions.forEach(s=>{const d=parseD(s.date);if(!d||d>t||isLateCancel(s))return;
+  S.sessions.forEach(s=>{const d=parseD(s.date);if(!d||d>t||isCancelled(s))return;
     if((s.mode||"")==="Online")onl++;else inP++;});
   return {inPerson:inP,online:onl,logged:inP+onl};}
 /* ===== CPD hours =====
@@ -1735,7 +1832,7 @@ function validateSession(m){
     else if(n>0&&next){const nx=+next.num||0;
       if(nx&&n>=nx)warnings.push({code:"seqlow",msg:"#"+n+" is not below the next session (#"+nx+" on "+fmtDMY(next.date)+")"});}}
   /* WARN: late cancellation on a future session */
-  if(m.lateCancel&&md&&md>t)warnings.push({code:"lcfuture",msg:"Late cancellation ticked on a future session"});
+  if(isCancelled(m)&&md&&md>t)warnings.push({code:"lcfuture",msg:(isDNA(m)?"DNA":"Late cancellation")+" recorded on a future session"});
   return {errors,warnings};
 }
 /* practice-wide integrity checks (beyond per-session validation) */
@@ -2046,34 +2143,52 @@ VIEWS.practice=function(){
     const totalSessions=withSess.reduce((a,x)=>a+x.n,0);
     const avg=base?Math.round(totalSessions/base*10)/10:0;
 
-    /* ---- late cancellation trends ---- */
+    /* ---- missed sessions: late cancellations and DNAs ----
+       `lost` is the fee that never arrived: full fee less what was actually charged, summed over
+       every missed session. It is the number that answers "what is this costing me?", and it
+       moves when the charging policy changes -- which is the point of being able to set one. */
     const t=today();
-    const totalLC=S.sessions.filter(isLateCancel).length;
+    const missed=S.sessions.filter(isCancelled);
+    const totalLC=missed.length;
+    const totalDNA=missed.filter(isDNA).length;
     const lcPct=S.sessions.length?Math.round(totalLC/S.sessions.length*1000)/10:0;
+    let lost=0,charged=0;
+    missed.forEach(s=>{const d=derive(s);lost+=Math.max(0,(d.fullRate||0)-(d.rate||0));charged+=(d.rate||0);});
     const byClient={};
     S.sessions.forEach(s=>{const k=(s.client||"").toLowerCase();if(!k)return;
-      const e=byClient[k]||(byClient[k]={code:s.client,total:0,lc:0,recent:0,prev:0,last:null});
+      const e=byClient[k]||(byClient[k]={code:s.client,total:0,lc:0,dna:0,lost:0,recent:0,prev:0,last:null});
       e.total++;
-      if(isLateCancel(s)){e.lc++;const d=parseD(s.date);if(d){if(!e.last||d>e.last)e.last=d;
-        const days=(t-d)/86400000;if(days<=90)e.recent++;else if(days<=180)e.prev++;}}});
+      if(isCancelled(s)){e.lc++;if(isDNA(s))e.dna++;
+        const dv=derive(s);e.lost+=Math.max(0,(dv.fullRate||0)-(dv.rate||0));
+        const d=parseD(s.date);if(d){if(!e.last||d>e.last)e.last=d;
+          const days=(t-d)/86400000;if(days<=90)e.recent++;else if(days<=180)e.prev++;}}});
     const lcClients=Object.values(byClient).filter(e=>e.lc>0).sort((a,b)=>b.lc-a.lc||b.total-a.total);
     const affected=lcClients.length;
     let recent90=0,prev90=0;
-    S.sessions.filter(isLateCancel).forEach(s=>{const d=parseD(s.date);if(!d)return;const days=(t-d)/86400000;if(days<=90)recent90++;else if(days<=180)prev90++;});
+    missed.forEach(s=>{const d=parseD(s.date);if(!d)return;const days=(t-d)/86400000;if(days<=90)recent90++;else if(days<=180)prev90++;});
+    /* a year's worth of the last 90 days, so the annual cost of the current rate is visible */
+    let lost90=0;
+    missed.forEach(s=>{const d=parseD(s.date);if(!d||(t-d)/86400000>90)return;
+      const dv=derive(s);lost90+=Math.max(0,(dv.fullRate||0)-(dv.rate||0));});
+    const projLost=Math.round(lost90*(365/90));
     const trendChip=(r,p)=>r>p?'<span class="chip n">↑ rising</span>':r<p?'<span class="chip y">↓ falling</span>':'<span class="chip na">→ steady</span>';
     const pctOf=e=>e.total?Math.round(e.lc/e.total*1000)/10:0;
     const rateChip=e=>{const p=pctOf(e);return '<span class="chip '+(p>=15?'n':p>=5?'f':'s')+'">'+p+'%</span>';};
-    const lcCard='<div class="card"><h2>Late cancellations</h2>'+
+    const lcCard='<div class="card"><h2>Missed sessions</h2>'+
       '<div class="kpis mb">'+
-        '<div class="kpi"><div class="v">'+totalLC+'</div><div class="l">Late cancellations</div></div>'+
+        '<div class="kpi"><div class="v">'+totalLC+'</div><div class="l">Missed'+(totalDNA?' · '+totalDNA+' DNA':'')+'</div></div>'+
         '<div class="kpi"><div class="v">'+lcPct+'%</div><div class="l">Of all sessions</div></div>'+
+        '<div class="kpi'+(lost>0?' bad':'')+'"><div class="v">'+gbp(Math.round(lost))+'</div><div class="l">Fees not charged</div></div>'+
+        '<div class="kpi"><div class="v">'+gbp(Math.round(charged))+'</div><div class="l">Charged anyway</div></div>'+
         '<div class="kpi"><div class="v">'+affected+'</div><div class="l">Clients affected</div></div>'+
         '<div class="kpi"><div class="v">'+recent90+'</div><div class="l">In the last 90 days</div></div>'+
       '</div>'+
-      '<p class="small muted" style="margin:0 0 6px">Trend '+trendChip(recent90,prev90)+' — '+recent90+' in the last 90 days vs '+prev90+' in the previous 90. The per-client % is each client’s share of their own sessions.</p>'+
+      '<p class="small muted" style="margin:0 0 6px">Trend '+trendChip(recent90,prev90)+' — '+recent90+' in the last 90 days vs '+prev90+' in the previous 90.'+
+        (projLost>0?' At the last 90 days’ rate that is about <b>'+gbp(projLost)+' a year</b> in fees you don’t charge.':'')+
+        ' The per-client % is each client’s share of their own sessions.</p>'+
       (lcClients.length?lcClients.map(e=>{const cl=S.clients.find(c=>(c.code||"").toLowerCase()===(e.code||"").toLowerCase());
-        return '<div class="list-item"'+(cl?' data-id="'+cl._id+'"':'')+'><div class="li-main"><div class="li-title">'+esc(e.code)+' '+rateChip(e)+'</div><div class="li-sub">'+e.lc+' of '+e.total+' sessions'+(e.last?' · last '+fmtDMY(e.last):'')+'</div></div><div class="li-right">'+trendChip(e.recent,e.prev)+'</div></div>';}).join("")
-        :'<p class="muted small">No late cancellations recorded yet.</p>')+'</div>';
+        return '<div class="list-item"'+(cl?' data-id="'+cl._id+'"':'')+'><div class="li-main"><div class="li-title">'+esc(e.code)+' '+rateChip(e)+'</div><div class="li-sub">'+e.lc+' of '+e.total+' sessions'+(e.dna?' · '+e.dna+' DNA':'')+(e.lost>0?' · '+gbp(Math.round(e.lost))+' not charged':'')+(e.last?' · last '+fmtDMY(e.last):'')+'</div></div><div class="li-right">'+trendChip(e.recent,e.prev)+'</div></div>';}).join("")
+        :'<p class="muted small">No missed sessions recorded yet.</p>')+'</div>';
 
     /* ---- attendance ---- */
     const attRows=S.clients.map(c=>({c,a:clientAttendance(c)})).filter(x=>x.a&&x.a.n>=2);
@@ -3662,15 +3777,66 @@ function drawAllowances(host){
   drawMethod();
 }
 
+/* ---- Settings › Cancellations & DNAs ----
+   Edits `settings.cancelRules` only. Nothing here reaches an existing session: the charge was
+   stamped when that session was logged (see cancelPctFor), which is the whole point of stamping
+   it. Windows are stored unsorted and read longest-first by cancelPolicy. */
+function wireCancelRules(v){
+  const host=v.querySelector("#cxRules"); if(!host)return;
+  const sg=settings();
+  const rules=()=>{sg.cancelRules=sg.cancelRules||{window:[],dnaChargePct:100};
+    sg.cancelRules.window=sg.cancelRules.window||[]; return sg.cancelRules;};
+  const save=async label=>{await commit(label);};
+  const draw=()=>{
+    const w=rules().window.slice().sort((a,b)=>(+b.hoursBefore||0)-(+a.hoursBefore||0));
+    host.innerHTML=w.length?w.map((r,i)=>
+      '<div class="cxrow" data-i="'+i+'">'+
+        '<span class="cxl">at least</span>'+
+        '<input type="number" min="0" step="1" data-f="hoursBefore" value="'+(+r.hoursBefore||0)+'">'+
+        '<span class="cxl">hrs notice →</span>'+
+        '<input type="number" min="0" max="100" step="5" data-f="chargePct" value="'+(+r.chargePct||0)+'">'+
+        '<span class="cxl">%</span>'+
+        '<button class="rmx" data-x="'+i+'" title="Remove">✕</button>'+
+      '</div>').join("")
+      :'<p class="small muted">No notice periods set — a late cancellation will be charged in full.</p>';
+    host.innerHTML+='<p class="small muted mt">Each line reads “at least this much notice → charge this much”. They are tried longest-notice first, and the first one a cancellation qualifies for applies. Less notice than every line — or no cancellation date recorded — charges the <b>full fee</b>; add a line at 0 hours if you want a lower floor than that.</p>';
+    host.querySelectorAll(".cxrow").forEach(row=>{
+      const i=+row.dataset.i;
+      row.querySelectorAll("[data-f]").forEach(inp=>inp.onchange=async()=>{
+        const sorted=rules().window.slice().sort((a,b)=>(+b.hoursBefore||0)-(+a.hoursBefore||0));
+        const tgt=sorted[i]; if(!tgt)return;
+        const f=inp.dataset.f;
+        tgt[f]=f==="chargePct"?Math.max(0,Math.min(100,Math.round(+inp.value||0))):Math.max(0,Math.round(+inp.value||0));
+        await save("Cancellation policy updated"); draw();});});
+    host.querySelectorAll("[data-x]").forEach(b=>b.onclick=async()=>{
+      const i=+b.dataset.x;
+      const sorted=rules().window.slice().sort((a,b2)=>(+b2.hoursBefore||0)-(+a.hoursBefore||0));
+      const tgt=sorted[i]; if(!tgt)return;
+      rules().window=rules().window.filter(x=>x!==tgt);
+      await save("Removed a cancellation notice period"); draw();});
+  };
+  const add=v.querySelector("#cxAdd");
+  if(add)add.onclick=async()=>{rules().window.push({hoursBefore:48,chargePct:50});
+    await save("Added a cancellation notice period"); draw(); Sfx.tick();};
+  const dna=v.querySelector("#cxDna");
+  if(dna){dna.value=rules().dnaChargePct;
+    dna.onchange=async()=>{rules().dnaChargePct=Math.max(0,Math.min(100,Math.round(+dna.value||0)));
+      dna.value=rules().dnaChargePct; await save("DNA charge: "+rules().dnaChargePct+"%");};}
+  draw();
+}
+
 const RAWCOLS=[
  {k:"client",t:"Client"},{k:"num",t:"#",n:1},{k:"date",t:"Date",d:1},{k:"time",t:"Time"},{k:"mode",t:"Mode"},
  {k:"location",t:"Location"},{k:"room",t:"Room"},{k:"rate",t:"Rate",n:1,m:1},{k:"paidYN",t:"Paid"},{k:"paidDate",t:"Paid date",d:1},
  {k:"overdueYN",t:"Overdue"},{k:"roomRate",t:"Room £",n:1,m:1},{k:"roomPaid",t:"Room paid"},{k:"roomPaidDate",t:"Room paid date",d:1},{k:"roomDue",t:"Room due"},
- {k:"lateCancel",t:"Late cancel"},
+ {k:"lateCancel",t:"Late cancel"},{k:"attend",t:"Attended"},{k:"chargePct",t:"Charge %",n:1},{k:"fullRate",t:"Full fee",n:1,m:1},
  {k:"invoice",t:"Invoice"},{k:"notes",t:"Notes"},{k:"status",t:"Status"},{k:"taxYear",t:"Tax yr"},{k:"week",t:"Wk",n:1}];
 function recOf(s,d){return {client:s.client,num:s.num,date:s.date,time:s.time||"",mode:s.mode||"",location:s.location||"",room:s.room||"",
   rate:d.rate,paidYN:d.clientPaid?"Y":"N",paidDate:s.paidDate||"",overdueYN:d.overdue?"Y":"N",roomRate:d.roomRate,roomPaid:s.roomPaid||"",
-  roomPaidDate:s.roomPaidDate||"",roomDue:d.roomDue,lateCancel:isLateCancel(s)?"Y":"",invoice:s.invoice||"",notes:s.notes||"",status:d.status||"",taxYear:d.taxYear,week:d.week};}
+  roomPaidDate:s.roomPaidDate||"",roomDue:d.roomDue,lateCancel:isLateCancel(s)?"Y":"",
+  attend:d.cancelKind==="dna"?"DNA":d.cancelKind==="late"?"Late cancel":"Y",
+  chargePct:d.cancelPct,fullRate:d.fullRate,
+  invoice:s.invoice||"",notes:s.notes||"",status:d.status||"",taxYear:d.taxYear,week:d.week};}
 let rawF={q:"",client:"",ty:"",paid:"",loc:"",sk:"date",sd:-1,cols:null};
 let supF={q:"",sk:"date",sd:-1,cols:null};
 let rawSeg="sessions";
@@ -3788,8 +3954,20 @@ VIEWS.settings=function(){
        <button class="btn sec" id="setSound"></button>
      </div>
    </div>
+   <div class="card"><h2>Cancellations &amp; DNAs</h2>
+     <p class="small muted">What a client is charged when a session is missed. The rule fills in the charge when you log one — you can always override it for a single session.</p>
+     <div class="vmsg warn mt">⏱ This is your policy <b>from now on</b>. Sessions you have already logged keep the charge they were given, so changing this never rewrites what a client was billed.</div>
+     <div class="grp-h">Cancelled with notice</div>
+     <div id="cxRules"></div>
+     <button class="btn sec sm mt" id="cxAdd">＋ Add a notice period</button>
+     <div class="grp-h" style="margin-top:16px">Did not attend</div>
+     <label>Charge when a client simply doesn’t come (%)</label>
+     <input type="number" min="0" max="100" step="5" id="cxDna">
+     <p class="prev">Set 0 if you don’t charge for these.</p>
+   </div>
    <div class="card"><h2>Features</h2>
      <p class="small muted">Switch off anything you don’t use — it disappears from the app. Nothing is deleted, and you can switch it back on any time.</p>
+     <div class="mt" id="setAdvanced"></div>
      <div class="mt" id="setFeat"></div>
    </div>
    </div></details>
@@ -3919,6 +4097,8 @@ VIEWS.settings=function(){
         await commit((sg.features[f.k]?"Enabled":"Disabled")+" feature: "+f.n);
         renderTabs();toast(f.n+(sg.features[f.k]?" on":" off"));};});
     paint();})();
+  wireCancelRules(v);
+  wireAdvancedMode(v);
   v.querySelector("#setTour").onclick=()=>startTour();
   v.querySelector("#setNew").onclick=()=>showWhatsNew();
   v.querySelector("#setRerun").onclick=()=>confirmRerunSetup();
@@ -4028,7 +4208,7 @@ function freqDays(c){const f=(c&&c.frequency||"").toLowerCase();
 function clientAttendance(c){
   const code=(c&&c.code||"").toLowerCase(); if(!code)return null;
   const rs=S.sessions.filter(s=>(s.client||"").toLowerCase()===code)
-    .map(s=>({d:parseD(s.date),lc:isLateCancel(s)})).filter(x=>x.d).sort((a,b)=>a.d-b.d);
+    .map(s=>({d:parseD(s.date),lc:isCancelled(s)})).filter(x=>x.d).sort((a,b)=>a.d-b.d);
   if(!rs.length)return null;
   const fd=freqDays(c);
   const ongoing=(c.status||"")==="Ongoing";
@@ -4069,7 +4249,7 @@ function rollingAttendanceSeries(rows){
   const overlap=(a0,a1,b0,b1)=>Math.max(0,Math.min(a1,b1)-Math.max(a0,b0));
   rows.forEach(x=>{
     const a=x.a,code=(x.c.code||"").toLowerCase();
-    const dates=S.sessions.filter(s=>(s.client||"").toLowerCase()===code&&!isLateCancel(s))
+    const dates=S.sessions.filter(s=>(s.client||"").toLowerCase()===code&&!isCancelled(s))
       .map(s=>parseD(s.date)).filter(Boolean);
     const activeEnd=(a.ongoing?t:a.last).getTime();
     const pauses=a.pauses.slice(); if(a.currentPause)pauses.push(a.currentPause);
@@ -4142,7 +4322,15 @@ function sessionForm(s,o){
      <p class="small muted" id="f_rpNote" style="display:none"></p>
      <label>Notes done?</label><input id="f_notes" value="${esc(m.notes||"")}" placeholder="Y / note">
      <p class="small muted">A marker that your notes are written up, not the notes themselves — keep the clinical record where you normally do.</p>
-     <label class="colchk" style="margin-top:14px"><input type="checkbox" id="f_latecancel"${m.lateCancel?" checked":""}> Late cancellation</label>
+     <label style="margin-top:14px">Did it go ahead?</label>
+     <select id="f_attend">${opts2([["","Yes — attended"],["late","Late cancellation"],["dna","Did not attend (DNA)"]],attendVal(m))}</select>
+     <div id="f_cxWrap" style="display:none">
+       <div class="field2">
+         <div><label>Cancelled on <span class="muted small">(optional)</span></label><input type="date" id="f_cxOn" value="${esc(m.cancelledAt||"")}"></div>
+         <div><label>Charge (% of fee)</label><input type="number" min="0" max="100" step="5" id="f_cxPct" value="${esc(m.cancelCharge==null?"":m.cancelCharge)}"></div>
+       </div>
+       <p class="small muted" id="f_cxNote"></p>
+     </div>
      <div class="vbanner" id="vbanner"></div>
      <div class="row mt" style="gap:8px"><button class="btn full" id="save">Save session</button></div>
      ${isNew?"":'<button class="btn danger full mt" id="del">Delete session</button>'}`;
@@ -4150,7 +4338,17 @@ function sessionForm(s,o){
     const sync=()=>{m.client=g("#f_client").value;m.date=g("#f_date").value;m.time=g("#f_time").value;m.mode=g("#f_mode").value;
       m.num=g("#f_num").value;m.location=g("#f_loc").value;m.room=g("#f_room").value;m.paidDate=g("#f_paid").value;
       m.invoice=g("#f_inv").value;m.roomPaid=g("#f_rp").value;m.roomPaidDate=g("#f_rpd").value;m.notes=g("#f_notes").value;
-      m.lateCancel=g("#f_latecancel").checked;};
+      /* `lateCancel` stays the flag it always was, so older builds and the notes convention still
+         read correctly; `cancelKind` carries the finer distinction and `cancelCharge` the money. */
+      const kind=g("#f_attend").value;
+      m.cancelKind=kind||null;
+      m.lateCancel=(kind==="late");
+      if(!kind){m.cancelledAt="";m.cancelCharge=null;}
+      else{
+        m.cancelledAt=g("#f_cxOn").value||"";
+        const raw=g("#f_cxPct").value.trim();
+        m.cancelCharge=raw===""?cancelPolicyPct(kind,cancelNoticeHrs(m)):Math.max(0,Math.min(100,+raw||0));
+      }};
     g("#f_client").onchange=()=>{const code=g("#f_client").value; sync(); m.client=code;
       if(isNew&&code){const sg=suggestFor(code);Object.assign(m,{num:sg.num,time:sg.time,mode:sg.mode,location:sg.location,room:sg.room});
         if(!lockDate)m.date=sg.date;}
@@ -4166,8 +4364,41 @@ function sessionForm(s,o){
         "Tick its rent off each month in <b>Revenue › Business costs</b>.";
     };
     paintRoomPaid();
-    ["#f_date","#f_loc","#f_paid","#f_rp"].forEach(id=>g(id).addEventListener("change",()=>{sync();paintRoomPaid();
-      const d=derive(m);body.querySelector(".hint").innerHTML=`Rate: <b>${gbp(d.rate)}</b>${d.roomRate?` · Room: ${gbp(d.roomRate)} (${esc(d.due)})`:""} · ${d.taxYear} ${d.past?"· past":"· upcoming"}`;}));
+    const refreshHint=()=>{const d=derive(m);
+      body.querySelector(".hint").innerHTML=`Rate: <b>${gbp(d.rate)}</b>`+
+        (d.cancelPct<100?` <span class="muted">(${d.cancelPct}% of ${gbp(d.fullRate)})</span>`:"")+
+        `${d.roomRate?` · Room: ${gbp(d.roomRate)} (${esc(d.due)})`:""} · ${d.taxYear} ${d.past?"· past":"· upcoming"}`;};
+    /* The policy supplies the opening figure; it is only ever a starting point, and whatever is
+       left in the box is what gets stamped on this session.
+       `data-auto` marks a figure this code put there rather than one the therapist typed, so
+       adding the cancellation date afterwards re-derives it — without that, the 100% filled in
+       while the date was unknown would silently stick even once the notice was known. Typing in
+       the box clears the mark and the number is then left alone. */
+    const paintCancel=()=>{
+      const kind=g("#f_attend").value;
+      g("#f_cxWrap").style.display=kind?"":"none";
+      if(!kind){refreshHint();return;}
+      const pctIn=g("#f_cxPct");
+      const probe={date:g("#f_date").value,time:g("#f_time").value,cancelledAt:g("#f_cxOn").value||""};
+      const hrs=cancelNoticeHrs(probe);
+      if(pctIn.value.trim()===""||pctIn.dataset.auto==="1"){
+        pctIn.value=cancelPolicyPct(kind,hrs); pctIn.dataset.auto="1";
+      }
+      const pct=Math.max(0,Math.min(100,+pctIn.value||0));
+      const full=effRate(g("#f_client").value,g("#f_date").value)||0;
+      g("#f_cxNote").innerHTML=(hrs==null
+          ? "No cancellation date given, so the full fee is assumed — add the date or set the charge yourself. "
+          : Math.max(0,Math.round(hrs))+" hours’ notice. ")+
+        "Charging <b>"+pct+"%</b> of "+gbp(full)+" = <b>"+gbp(Math.round(full*pct)/100)+"</b>. "+
+        "Change it here for this session only — the policy itself lives in <b>⚙ Settings › Cancellations &amp; DNAs</b>.";
+      refreshHint();
+    };
+    g("#f_attend").addEventListener("change",()=>{const p=g("#f_cxPct");p.value="";delete p.dataset.auto;sync();paintCancel();});
+    g("#f_cxOn").addEventListener("change",()=>{sync();paintCancel();});
+    g("#f_cxPct").addEventListener("input",()=>{delete g("#f_cxPct").dataset.auto;});
+    g("#f_cxPct").addEventListener("change",()=>{sync();paintCancel();});
+    paintCancel();
+    ["#f_date","#f_loc","#f_paid","#f_rp"].forEach(id=>g(id).addEventListener("change",()=>{sync();paintRoomPaid();paintCancel();}));
     g("#save").onclick=async()=>{sync();
       if(!m.client){toast("Choose a client");Sfx.error();return}
       if(!m.date){toast("Add a date");Sfx.error();return}
@@ -4181,7 +4412,7 @@ function sessionForm(s,o){
       else{S.sessions.push(m);await commit("Added session: "+m.client+" "+m.date);}
       const dNow=derive(m);const justCompleted=dNow.past&&dNow.complete&&!prevComplete;
       let milestone=null;
-      if(!exists&&!isLateCancel(m)){const cnt=S.sessions.filter(x=>(x.client||"").toLowerCase()===(m.client||"").toLowerCase()&&!isLateCancel(x)).length;
+      if(!exists&&!isCancelled(m)){const cnt=S.sessions.filter(x=>(x.client||"").toLowerCase()===(m.client||"").toLowerCase()&&!isCancelled(x)).length;
         milestone=[6,12,20,30,50,75,100].find(T=>cnt-1<T&&cnt>=T)||null;}
       closeSheet();
       gameShow({batch:1,completed:justCompleted,milestone:milestone,milestoneClient:m.client,toast:justCompleted?"Session complete ✓":(exists?"Saved":"Session logged ✨")},{});
@@ -4497,8 +4728,11 @@ function clientProfile(c){
   const rows=S.sessions.filter(s=>(s.client||"").toLowerCase()===lc).map(s=>({s,d:derive(s)}))
     .sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
   const past=rows.filter(x=>{const d=parseD(x.s.date);return d&&d<=t;});
-  const attended=past.filter(x=>!isLateCancel(x.s)).length;
-  const lcN=past.filter(x=>isLateCancel(x.s)).length;
+  const attended=past.filter(x=>!isCancelled(x.s)).length;
+  const lcN=past.filter(x=>isCancelled(x.s)).length;
+  const dnaN=past.filter(x=>isDNA(x.s)).length;
+  /* fee that never arrived because a session was missed and not charged in full */
+  const lostN=past.reduce((a,x)=>a+Math.max(0,(x.d.fullRate||0)-(x.d.rate||0)),0);
   const billed=past.reduce((a,x)=>a+(x.d.rate||0),0);
   const owedRows=rows.filter(x=>x.d.overdue&&(x.d.rate||0)>0);
   const owed=owedRows.reduce((a,x)=>a+(x.d.rate||0),0);
@@ -4512,8 +4746,8 @@ function clientProfile(c){
     const inWk=rows.filter(x=>{const d=parseD(x.s.date);return d&&d>=ws&&d<we;});
     let cls="";let tip=fmtDM(ws)+": no session";
     if(inWk.some(x=>parseD(x.s.date)>t)){cls="up";tip=fmtDM(ws)+": booked";}
-    if(inWk.some(x=>isLateCancel(x.s))){cls="lc";tip=fmtDM(ws)+": late cancellation";}
-    if(inWk.some(x=>parseD(x.s.date)<=t&&!isLateCancel(x.s))){cls="att";tip=fmtDM(ws)+": attended";}
+    if(inWk.some(x=>isCancelled(x.s))){cls="lc";tip=fmtDM(ws)+": "+(inWk.some(x=>isDNA(x.s))?"did not attend":"late cancellation");}
+    if(inWk.some(x=>parseD(x.s.date)<=t&&!isCancelled(x.s))){cls="att";tip=fmtDM(ws)+": attended";}
     dotArr.push('<i class="'+cls+'" title="'+esc(tip)+'"></i>');}
   /* 12-month income sparkline */
   const mVals=[];
@@ -4526,8 +4760,10 @@ function clientProfile(c){
     '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:17px">'+esc(c.code)+' <span class="chip '+ch+'">'+esc(c.status||"")+'</span></div>'+
     '<div class="small muted">'+(since?("since "+fmtD(since)+" · "):"")+esc(c.frequency||"")+' · '+gbp(rate)+'/session</div></div></div>'+
     '<div class="kpis mb" style="grid-template-columns:1fr 1fr">'+
-      '<div class="kpi"><div class="v">'+attended+'</div><div class="l">Sessions attended'+(lcN?' · '+lcN+' late-cancelled':'')+'</div></div>'+
-      '<div class="kpi"><div class="v">'+gbp(Math.round(billed))+'</div><div class="l">Lifetime billed</div></div>'+
+      '<div class="kpi"><div class="v">'+attended+'</div><div class="l">Sessions attended'+
+        (lcN?' · '+lcN+' missed'+(dnaN?' ('+dnaN+' DNA)':''):'')+'</div></div>'+
+      '<div class="kpi"><div class="v">'+gbp(Math.round(billed))+'</div><div class="l">Lifetime billed'+
+        (lostN>0?' · '+gbp(Math.round(lostN))+' not charged':'')+'</div></div>'+
       '<div class="kpi'+(owed?' bad':' good')+'"><div class="v">'+gbp(Math.round(owed))+'</div><div class="l">'+(owed?("Outstanding · "+owedRows.length+" session"+(owedRows.length===1?"":"s")):"Nothing owed")+'</div></div>'+
       '<div class="kpi"><div class="v">'+(att?att.pct+"%":"—")+'</div><div class="l">Attendance'+(att&&att.currentPause?' · ⏸ paused '+att.currentPause.days+'d':'')+'</div></div>'+
     '</div>'+
@@ -4542,7 +4778,7 @@ function clientProfile(c){
       '<button class="btn ghost" id="cpEdit">Edit client</button></div>';
   const rec=rows.slice(-6).reverse();
   body.querySelector("#cpRecent").innerHTML=rec.length?rec.map(x=>{const pay=payChip(x.s,x.d);
-    return '<div class="list-item" data-id="'+x.s._id+'"><div class="li-main"><div class="li-title">#'+esc(x.s.num)+' '+pay+'</div><div class="li-sub">'+fmtDshort(x.s.date)+' · '+esc(x.s.location||"")+(isLateCancel(x.s)?' · late cancel':'')+'</div></div><div class="li-right">'+gbp(x.d.rate)+'</div></div>';}).join("")
+    return '<div class="list-item" data-id="'+x.s._id+'"><div class="li-main"><div class="li-title">#'+esc(x.s.num)+' '+pay+'</div><div class="li-sub">'+fmtDshort(x.s.date)+' · '+esc(x.s.location||"")+cancelTag(x.s,x.d)+'</div></div><div class="li-right">'+gbp(x.d.rate)+'</div></div>';}).join("")
     :'<p class="muted small">No sessions logged yet.</p>';
   body.querySelectorAll("#cpRecent .list-item").forEach(li=>li.onclick=()=>{closeSheet();sessionForm(S.sessions.find(s=>s._id===li.dataset.id));});
   body.querySelector("#cpNew").onclick=()=>{closeSheet();sessionForm(null);
@@ -4561,7 +4797,10 @@ function receiptRows(c,per){
   else if(per==="taxyear"){const b=tyBounds(curTaxYear());from=b.start;to=b.end;label="Tax year "+curTaxYear();}
   else label="All sessions";
   const rows=S.sessions.filter(s=>(s.client||"").toLowerCase()===lc).map(s=>({s,d:derive(s)}))
-    .filter(x=>{const d=parseD(x.s.date);if(!d)return false;if(from&&(d<from||d>to))return false;return d<=t&&!isLateCancel(x.s);})
+    /* A missed session that carried no fee has nothing to state; one that WAS charged belongs on
+       the statement, or the total would not match what the client was actually asked to pay. */
+    .filter(x=>{const d=parseD(x.s.date);if(!d)return false;if(from&&(d<from||d>to))return false;
+      return d<=t&&(!isCancelled(x.s)||(x.d.rate||0)>0);})
     .sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
   return {rows,label};
 }
@@ -4592,7 +4831,11 @@ function printReceipt(c,rows,label,paidOnly){
   const num=practiceInitials()+"-"+isoD(t).replace(/-/g,"")+"-"+(c.code||"").replace(/[^A-Za-z0-9]/g,"").toUpperCase();
   /* print in the chosen scheme's light colours — the on-screen dark theme would be unreadable on paper */
   const pal=PALETTES.find(p=>p.k===curPalette())||PALETTES[0], PB=pal.p[0], PD=pal.p[1];
-  const trs=rows.map(x=>'<tr><td>'+fmtDMY(x.s.date)+'</td><td>#'+esc(x.s.num)+'</td><td>'+esc(x.s.mode||"")+'</td><td class="r">'+gbp(x.d.rate)+'</td><td>'+(x.d.clientPaid?("Paid "+fmtDMY(x.s.paidDate)):"Due")+'</td></tr>').join("");
+  /* A charged missed session is on the statement (see receiptRows) but must never read as an
+     attended one -- the Mode column says what it actually was. */
+  const trs=rows.map(x=>'<tr><td>'+fmtDMY(x.s.date)+'</td><td>#'+esc(x.s.num)+'</td><td>'+
+    (x.d.cancelKind?(x.d.cancelKind==="dna"?"Did not attend":"Late cancellation")+(x.d.cancelPct<100?" ("+x.d.cancelPct+"% fee)":""):esc(x.s.mode||""))+
+    '</td><td class="r">'+gbp(x.d.rate)+'</td><td>'+(x.d.clientPaid?("Paid "+fmtDMY(x.s.paidDate)):"Due")+'</td></tr>').join("");
   const html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+esc(num)+'</title><style>'+
     'body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1E2A26;margin:40px;font-size:14px}'+
     'h1{font-size:22px;color:'+PD+';margin:0}.sub{color:#6E7E78;font-size:12px}'+
@@ -4647,7 +4890,7 @@ function incomeForecast(){
   const lastM=der.filter(x=>{const d=parseD(x.s.date);return d&&d>=lmStart&&d<=lmEnd;}).reduce((a,x)=>a+(x.d.rate||0),0);
   const delta=lastM>0?Math.round((proj-lastM)/lastM*100):null;
   const dayN=[0,0,0,0,0,0,0];
-  der.forEach(x=>{const d=parseD(x.s.date);if(d&&d<=t&&(t-d)/86400000<=182&&!isLateCancel(x.s))dayN[d.getDay()]++;});
+  der.forEach(x=>{const d=parseD(x.s.date);if(d&&d<=t&&(t-d)/86400000<=182&&!isCancelled(x.s))dayN[d.getDay()]++;});
   const bestI=dayN.indexOf(Math.max(...dayN));
   const busiest=Math.max(...dayN)>0?["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][bestI]:"—";
   return {mtd:Math.round(mtd),proj,lastM:Math.round(lastM),delta,busiest};
@@ -4824,10 +5067,12 @@ function validateImport(st){
     peer:(st.peerSupervision||[]).length,expenses:(st.expenses||[]).length,otherIncome:(st.otherIncome||[]).length}};
 }
 function exportCSV(){
-  const cols=["client","num","date","time","mode","location","room","invoice","paidDate","notes","roomPaid","rate","clientPaid","overdue","roomRate","roomDue","status","taxYear","week"];
+  const cols=["client","num","date","time","mode","location","room","invoice","paidDate","notes","roomPaid","rate","fullRate","attended","cancelCharge","clientPaid","overdue","roomRate","roomDue","status","taxYear","week"];
   const rows=[cols.join(",")];
   S.sessions.slice().sort((a,b)=>parseD(a.date)-parseD(b.date)).forEach(s=>{const d=derive(s);
     const r=cols.map(c=>{let v=(c in s)?s[c]:d[c];if(c==="clientPaid")v=d.clientPaid?"Y":"N";if(c==="overdue")v=d.overdue?"Y":"N";
+      if(c==="attended")v=d.cancelKind==="dna"?"DNA":d.cancelKind==="late"?"Late cancel":"Y";
+      if(c==="cancelCharge")v=d.cancelPct;
       v=v==null?"":String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v});
     rows.push(r.join(","))});
   download("therapy-sessions-"+isoD(today())+".csv",rows.join("\n"),"text/csv");toast("Sessions CSV downloaded")}
@@ -4894,6 +5139,7 @@ const IMP_FIELDS=[
   {k:"roomPaidDate",n:"Room paid on (date)",            t:"date",  syn:["roompaiddate","roomdatepaid","roompaidon"]},
   {k:"roomRate",    n:"Room cost (£)",                  t:"money", syn:["roomrate","roomcost","roomfee","roomcharge","rent"]},
   {k:"lateCancel",  n:"Late cancellation? (Y/N)",       t:"yn",    syn:["latecancel","latecancellation","latecancelled","lc","cancelledlate","dna","noshow"]},
+  {k:"cancelCharge",n:"Charge for a missed session (%)",t:"money", syn:["cancelcharge","chargepct","chargepercent","cancellationcharge","missedcharge","percentcharged"]},
   {k:"status",      n:"Client status",                  t:"text",  syn:["status","clientstatus","state"]}
 ];
 
@@ -4992,6 +5238,19 @@ function impYN(v){
   if(/^(n|no|false|0|unpaid|outstanding|due|✗|✘)$/.test(s))return "N";
   return "";
 }
+/* Which kind of missed session an imported row describes: "" attended | "late" | "dna".
+   A spreadsheet's one "late cancel" column is commonly used for both, so the words are read
+   directly before falling back to impYN's plain Y/N. Notes are honoured for the historical
+   "Y (late cancellation)" convention exactly as isLateCancel does. */
+function impLateCancel(v,notes){
+  const s=String(v==null?"":v).trim().toLowerCase();
+  if(/(^|\b)(dna|no.?show|didn.?t attend|did not attend)(\b|$)/.test(s))return "dna";
+  if(/late.?cancel/.test(s))return "late";
+  if(impYN(v)==="Y")return "late";
+  if(notes&&/\bdna\b|did not attend|no.?show/i.test(String(notes)))return "dna";
+  if(notes&&/late cancellation/i.test(String(notes)))return "late";
+  return "";
+}
 function impTime(v){
   let s=String(v==null?"":v).trim().toLowerCase();
   if(!s)return "";
@@ -5087,7 +5346,15 @@ function impPlan(rows,map,order,opt){
       roomPaid,
       roomPaidDate:roomPaidOn||"",
       /* historical convention put this in the notes text; honour both (see isLateCancel) */
-      lateCancel:impYN(get(r,"lateCancel"))==="Y"||/late cancellation/i.test(notes),
+      lateCancel:impLateCancel(get(r,"lateCancel"),notes)==="late",
+      cancelKind:impLateCancel(get(r,"lateCancel"),notes),
+      /* An imported missed session was charged whatever the sheet says, or -- with no column for
+         it -- the full fee, which is what every such session carried before this field existed.
+         The policy is deliberately NOT consulted: it describes what to charge from now on, not
+         what was actually charged years ago. */
+      cancelCharge:impLateCancel(get(r,"lateCancel"),notes)
+        ? (impMoney(get(r,"cancelCharge"))==null?100:Math.max(0,Math.min(100,impMoney(get(r,"cancelCharge")))))
+        : null,
       _rate:impMoney(get(r,"rate")),
       _roomRate:impMoney(get(r,"roomRate")),
       _update:!!prior,_line:line
@@ -5416,6 +5683,125 @@ const FEATURES=[
   {k:"gamify",       ic:"🔥", n:"Streaks & celebrations", d:"Weekly usage streak, goal rings, personal records and confetti when you clear a backlog."}
 ];
 function featureOn(w,k){return w.features[k]!==false;}
+
+/* ============ Gradual reveal ============
+   Nothing new gates the UI: this only decides which of the EXISTING feature flags start off for
+   a brand-new install, and then offers them back one at a time as the practice grows into them.
+   feat() is still the only thing any view asks.
+
+   REVEAL_CORE is what a therapist needs on day one to log a session and see what they are owed.
+   Everything else is real but not yet earned, and each entry below says what earns it. */
+const REVEAL_CORE=["supervision","money","gamify","attention","receipts"];
+const REVEAL_STEPS=[
+  {k:"tax",      when:st=>st.sessions.length>=10,
+   emoji:"🧾", title:"Ready to think about tax?",
+   sub:"You have logged ten sessions. The Tax tab turns them into a running estimate of what to set aside — including the January payment on account that catches people out."},
+  {k:"finances", when:st=>st.sessions.length>=20&&(st.settings.features||{}).tax!==false,
+   emoji:"🧮", title:"Track what the practice costs you",
+   sub:"Insurance, supervision, room rent, CPD — logged once, they come off your profit and your tax estimate for every year they apply to."},
+  {k:"quickadd", when:st=>st.sessions.length>=25,
+   emoji:"⌨", title:"A faster way to log",
+   sub:"You have logged plenty by hand now. The quick-add bar takes a whole session as one line — “AB tue 14:00 paid”."},
+  {k:"raw",      when:st=>st.sessions.length>=40&&(st.settings.features||{}).money!==false,
+   emoji:"▦", title:"Every session in one table",
+   sub:"Enough history to be worth browsing as a spreadsheet — sortable columns, a column picker and a filtered CSV export."}
+];
+function revealCfg(){const sg=settings();sg.reveal=sg.reveal||{mode:"all",shown:[]};
+  if(!Array.isArray(sg.reveal.shown))sg.reveal.shown=[];return sg.reveal;}
+/* Apply the "start simple" choice to the feature flags. Only ever switches things OFF, and only
+   on a fresh install — see stepDepth's guard. */
+function revealApplySimple(w){
+  FEATURES.forEach(f=>{if(REVEAL_CORE.indexOf(f.k)<0&&f.k!=="accreditation")w.features[f.k]=false;});
+  REVEAL_CORE.forEach(k=>{if(w.features[k]===false)delete w.features[k];});
+}
+let _revealBusy=false;
+/* Called from gameTouch, which commit() already runs on every save. Offers at most one feature
+   per save, and records the key either way, so a decline is as final as an accept. */
+function revealCheck(){
+  try{
+    const cfg=revealCfg();
+    if(cfg.mode!=="simple"||_revealBusy||_flow)return;
+    const sg=settings(); sg.features=sg.features||{};
+    const step=REVEAL_STEPS.find(x=>
+      cfg.shown.indexOf(x.k)<0 && sg.features[x.k]===false && x.when(S));
+    if(!step)return;
+    _revealBusy=true;
+    setTimeout(()=>revealOffer(step),900);   /* let the save's own toast land first */
+  }catch(e){/* a nudge is never worth breaking a save over */}
+}
+function revealOffer(step){
+  const f=FEATURES.find(x=>x.k===step.k)||{n:step.k,d:""};
+  const body=el('<div></div>');
+  body.innerHTML='<div style="text-align:center;font-size:40px;line-height:1">'+step.emoji+'</div>'+
+    '<h3 style="text-align:center;margin:8px 0 4px">'+esc(step.title)+'</h3>'+
+    '<p class="small muted" style="text-align:center">'+step.sub+'</p>'+
+    '<div class="vmsg ok mt">'+esc(f.n)+' — '+f.d+'</div>'+
+    '<button class="btn full mt" id="rvYes">Turn it on</button>'+
+    '<button class="btn ghost full mt" id="rvNo">Not for me</button>'+
+    '<p class="prev" style="text-align:center">Either way you can change your mind in <b>⚙ Settings › Features</b>.</p>';
+  const finish=async(on)=>{
+    const cfg=revealCfg();
+    if(cfg.shown.indexOf(step.k)<0)cfg.shown.push(step.k);
+    if(on)settings().features[step.k]=true;
+    _revealBusy=false;
+    await commit(on?("Revealed feature: "+f.n):("Declined feature: "+f.n));
+    closeSheet();
+    if(on){renderTabs();toast(f.n+" is on");Sfx.pop();}
+    go(curTab());
+  };
+  body.querySelector("#rvYes").onclick=()=>finish(true);
+  body.querySelector("#rvNo").onclick=()=>finish(false);
+  /* dismissing the sheet without answering leaves it to ask again next save */
+  sheetPromise().then(r=>{if(r===null)_revealBusy=false;});
+  openSheet("Something new",body);
+}
+/* Setup step: how much of the app to show on day one. */
+function stepDepth(w){return{emoji:"🪜", h:"How much do you want to see?",
+  sub:"The app does a lot. You do not have to meet all of it today.",
+  /* Applied on the way out, so the very next step (Choose what you need) already shows the
+     result and the therapist can overrule any individual switch there and then. */
+  onLeave(){
+    if(w.depth==="simple")revealApplySimple(w);
+    else FEATURES.forEach(f=>{if(f.k!=="accreditation"&&w.features[f.k]===false)delete w.features[f.k];});
+  },
+  mount(host){
+    host.innerHTML='<div class="palgrid" id="spDepth">'+
+      [["simple","🌱","Start simple","Sessions, clients, money owed and supervision. The tax side, business costs, the table view and the quick-add bar stay out of the way, and the app offers them one at a time as you go."],
+       ["all","🗂","Show me everything","Every feature on from the start. Best if you are moving over from a spreadsheet you already run, or you just want to look around."]]
+      .map(o=>'<button type="button" class="palopt'+(w.depth===o[0]?" on":"")+'" data-d="'+o[0]+'">'+
+        '<span class="pswatch" style="font-size:22px;width:auto">'+o[1]+'</span>'+
+        '<span><span class="pn">'+o[2]+'</span><span class="pd">'+o[3]+'</span></span></button>').join("")+'</div>'+
+      '<div class="ovnote">Nothing is deleted either way — “start simple” only hides things, and <b>⚙ Settings › Features</b> has a switch to show everything whenever you want it.</div>';
+    host.querySelectorAll("#spDepth .palopt").forEach(b=>b.onclick=()=>{
+      w.depth=b.dataset.d;
+      host.querySelectorAll("#spDepth .palopt").forEach(x=>x.classList.toggle("on",x===b));Sfx.tick();});
+  }};}
+/* Settings › Features: one switch back to everything. */
+function wireAdvancedMode(v){
+  const host=v.querySelector("#setAdvanced"); if(!host)return;
+  const cfg=revealCfg();
+  const paint=()=>{
+    const simple=revealCfg().mode==="simple";
+    host.innerHTML=ovToggleRow("adv","🗂","Show everything",
+      simple?"Some features are still hidden and will be offered as you go. Turn this on to switch them all on now."
+            :"Every feature is available. Individual switches below still apply.",!simple,false);
+    host.querySelector('[data-sw="adv"]').onclick=async()=>{
+      const c=revealCfg();
+      if(c.mode!=="simple"){c.mode="simple";await commit("Reveal features gradually");}
+      else{
+        c.mode="all";
+        const sg=settings();sg.features=sg.features||{};
+        /* everything except accreditation, which is a genuine minority need and is asked
+           separately in setup -- switching it on here would put a card in front of someone
+           who explicitly said they are not working toward accreditation */
+        FEATURES.forEach(f=>{if(f.k!=="accreditation")sg.features[f.k]=true;});
+        REVEAL_STEPS.forEach(s=>{if(c.shown.indexOf(s.k)<0)c.shown.push(s.k);});
+        await commit("Show all features");
+      }
+      Sfx.tick();renderTabs();go("settings",{keepScroll:true});};
+  };
+  paint();
+}
 
 /* ---- generic step-flow overlay, shared by setup and the tour ---- */
 let _flow=null;
@@ -5752,6 +6138,9 @@ async function setupSave(w,opts){
   sg.onboarded=true; sg.onboardedAt=isoD(today());
   /* Never cleared here: a re-run of setup does not un-acknowledge something already agreed to. */
   if(w.taxAck&&!sg.taxAck){sg.taxAck=true;sg.taxAckAt=isoD(today());}
+  const rv=sg.reveal=sg.reveal||{mode:"all",shown:[]};
+  rv.mode=(w.depth==="simple")?"simple":"all";
+  if(!Array.isArray(rv.shown))rv.shown=[];
   sg.setupRuns=(sg.setupRuns||0)+1;
   const rt=sg.retention=sg.retention||{};
   if(+w.cpdTarget>=1)sg.cpdTarget=Math.round(+w.cpdTarget);
@@ -5865,12 +6254,20 @@ function startSetup(opts){
   const rerun=!!opts.rerun;
   /* rooms are only offered on a genuinely fresh start — once sessions exist they belong in Clients › Rooms */
   const withRooms=!rerun||S.sessions.length===0;
+  /* "Start simple" is only offered on a genuinely fresh install. Presenting it to someone who
+     already has data would be offering to hide tabs they are already using. */
+  const fresh=!rerun&&S.sessions.length===0&&S.clients.length===0;
   const w={
     name:(sg.practiceName==="Therapy Tracker")?"":(sg.practiceName||""),
     tagline:sg.practiceTagline||"",
     palette:sg.palette||curPalette(),
     theme:themePref(), sound:Sfx.on,
     features:Object.assign({},sg.features||{}),
+    /* A fresh install starts on "simple" — that is the point of the question, and "show me
+       everything" is the opt-in. Not read from settings.reveal: normalize defaults that to "all"
+       to protect EXISTING installs from ever being hidden, which is the opposite default from
+       the one a brand-new user wants. Anyone who is not fresh is never asked. */
+    depth:fresh?"simple":"all",
     rate:defaultRate(), pension:pensionPcm(), taxAck:!!sg.taxAck,
     bkDays:backupDaysThreshold(), bkActs:backupActsThreshold(),
     rtNotes:retentionCfg().notesYears, rtFin:retentionCfg().financeYears,
@@ -5885,7 +6282,9 @@ function startSetup(opts){
       ["✈️","Works with no signal","Install it to your Home Screen and it opens like a normal app, offline."],
       ["🧾","Replaces the spreadsheet","Fees, room costs, unpaid sessions and tax estimates all work themselves out."]
     ])};
-  const steps=[welcome,stepPractice(w),stepLook(w),stepFeatures(w),stepNotes(w)];
+  const steps=[welcome,stepPractice(w),stepLook(w)];
+  if(fresh)steps.push(stepDepth(w));
+  steps.push(stepFeatures(w),stepNotes(w));
   if(featureOn(w,"supervision"))steps.push(stepCPD(w));
   if(withRooms)steps.push(stepRooms(w));
   steps.push(stepMoney(w));

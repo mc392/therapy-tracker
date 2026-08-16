@@ -76,7 +76,8 @@ Key functions:
 - **`exportJSON()` must work with `_db === null`** — the crash screen is the only way out of a broken render and it offers Export.
 
 ### Schema versioning
-`SCHEMA_VERSION` (currently `4`) is stamped on `S.meta.schemaVersion` and on every backup envelope. Unstamped data is treated as v1.
+`SCHEMA_VERSION` (currently `5`) is stamped on `S.meta.schemaVersion` and on every backup envelope. Unstamped data is treated as v1.
+- **v5 (Aug 2026)** stamped a cancellation charge percentage on every missed session and added `settings.cancelRules` + `settings.reveal`. A v5 backup can hold a session charged at 50%; a v4 build has no such field and would bill it in full.
 - **v4 (Aug 2026)** gave every cost and income row a category *key* mapping to an SA103 box, migrated from the old free-text label (which is kept). Added `settings.taxBasis`, `useOfHome`, `taxRegion`, `studentLoan`, `class2Voluntary`.
 - **v3 (Aug 2026)** added expenses, other income, peer supervision and monthly room rent. No in-place migration: every new field's absence means exactly what it meant in v2. The bump exists for the other direction — a v3 backup carries money a v2 build cannot see, so restoring it there would drop those rows and save the loss back.
 - Bump it when a change would be **misread** by an older build, and add the matching step to the ordered migration block in `normalize()`.
@@ -172,6 +173,21 @@ Collapsed `<details class="dz">` → `dzMenu()`. Four routes, all gated by `dzCo
 
 ## Peer supervision (added Aug 2026)
 `S.peerSupervision` is a separate log from `S.supervision`, reached from a third sub-tab on Supervision. Its hours are added to the **total accreditation hours** in `mountAccreditation()` and are deliberately absent from `sup`, the only figure the 1:6 ratio sees. Keeping the two arrays apart is what makes that rule visible — don't merge them with a `type` field. A peer entry's optional `cost` feeds `tyNet()` like clinical supervision does.
+
+## Cancellations & DNAs (added Aug 2026)
+Two kinds of missed session, and the charge is **stamped on the session**, never derived live from the policy.
+- `settings.cancelRules = {window:[{hoursBefore,chargePct}], dnaChargePct}`. `cancelPolicy()` sorts windows **longest notice first** and `cancelPolicyPct(kind,hrs)` returns the first one the notice clears. Notice that clears no rule — and notice that was never recorded (`hrs==null`) — charges the **full fee**. That direction is deliberate: a draft that is too high gets corrected on the spot, one that is too low is a fee quietly written off. A therapist wanting a lower floor adds a rule at 0 hours.
+- The policy is only ever a **starting point**. `cancelPctFor(s)` reads `s.cancelCharge` and nothing else, so editing the policy cannot reach back and rewrite what a client was already billed. Absent = 100, which is what every session was before v5.
+- `derive()` returns `fullRate` (the fee in force), `cancelPct` and `rate` (`fullRate × pct`). Everything downstream — revenue, net, SA103, MTD — reads `rate`, so a reduced charge flows through from that one place. **The MTD quarters must still reconcile to `tyNet` on both bases.**
+- **`isCancelled(s)` is the exclusion predicate**, not `isLateCancel`. A DNA has to be excluded from clinical hours, attendance, session counts and milestones for exactly the same reasons a late cancellation is. `isLateCancel` still reads the historical `"Y (late cancellation)"` notes convention and is what sets the `lateCancel` flag itself — don't merge them.
+- The session form's charge box carries `data-auto` while it holds a policy-derived figure, so adding the cancellation date afterwards re-derives it; typing in the box clears the mark and the number is then left alone.
+- A missed session that **was** charged now appears on receipts (`receiptRows`), labelled in the Mode column, or the statement total would not match what the client was asked to pay.
+
+## Gradual reveal (settings.reveal, added Aug 2026)
+No new gating layer — this only decides which existing `feat()` flags start off for a brand-new install.
+- `settings.reveal = {mode:"simple"|"all", shown:[]}`. `normalize()` defaults `mode` to **"all"**; only `stepDepth` ever sets `"simple"`, and it is only offered when `!rerun && no sessions && no clients`. Hiding tabs from someone already using them is the one outcome this must never produce.
+- `REVEAL_CORE` is what stays on. `REVEAL_STEPS` is the ordered list of what gets offered back and what earns it; `finances` is gated behind `tax` being on, so the dependency order holds.
+- `revealCheck()` runs from `commit()` **after** the write, never before — an accepted nudge commits again and must not interleave with the save that triggered it. One offer per save; the key goes into `shown` whether accepted or declined, so nothing is ever asked twice.
 
 ## Gamification (S.game)
 - **Streak**: any `commit()` call marks the current ISO week as active via `gameTouch()`.
