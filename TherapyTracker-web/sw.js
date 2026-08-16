@@ -1,4 +1,6 @@
-const C="tt-v4";
+/* Bumped for the GroundWork rename: manifest.webmanifest is served cache-first, so without a new
+   cache name an installed device would keep showing "Therapy Tracker" on the Home Screen. */
+const C="tt-v5";
 /* The app shell must be precached at install time. The service worker does not control the
    navigation that registers it, so without this a first-time visitor who goes offline before
    their second visit gets nothing at all. */
@@ -49,7 +51,7 @@ self.addEventListener("fetch",e=>{
       }catch(err){
         const hit=await shellFallback(req);
         if(hit)return hit;
-        return new Response("Therapy Tracker is offline and no cached copy is available on this device yet. Reconnect once to finish installing it.",
+        return new Response("GroundWork is offline and no cached copy is available on this device yet. Reconnect once to finish installing it.",
           {status:503,headers:{"Content-Type":"text/plain;charset=utf-8"}});
       }
     })());

@@ -1,7 +1,18 @@
-# Therapy Tracker — Claude Code Reference
+# GroundWork — Claude Code Reference
 
 ## Project overview
 Single-file offline PWA for Charlotte Bloor Therapy (UK sole-trader therapist). Tracks clients, sessions, rooms, supervision, and payments. Installable on iOS/Android/desktop via PWA.
+
+### Naming (renamed from "Therapy Tracker", Aug 2026)
+The product is **GroundWork**. The rename covered display strings only — these identifiers were deliberately left alone because changing them orphans or breaks real data:
+- **`TherapyTrackerDB`** (`DBN`) and every **`tt_*` localStorage key**. Renaming either abandons the existing database and settings on every installed device.
+- The **folder `TherapyTracker-web/`**, which the GitHub Actions deploy path points at.
+- Two **backward-compat checks still match the old name**: `applyBranding()`'s title logic and `startSetup()`'s "is the practice name still the placeholder" test. An install that never set a practice name holds the literal string `"Therapy Tracker"`, and without these it would read as a real name and be prefilled into setup.
+
+Renamed: the `<title>`, header, `--appname` tab-rail label, `practiceName()` fallback, manifest `name`/`short_name`, service-worker offline message, terms/privacy, export filenames (`groundwork-*`), and the `app:` marker in backup envelopes (informational only — nothing reads it, and older files say `TherapyTracker`).
+
+### Launch screen
+`#splash` in `index.html` — inline SVG of the bars-and-leaf mark plus the wordmark, painted before any script runs so a cold start never flashes white. `splashHide()` is called right after the first `go("home")`, with `SPLASH_MIN` (520ms) so a fast boot doesn't flicker and a **6s failsafe timer** that clears it even if init throws before `go()` ever runs. Brand colours are hard-coded rather than palette tokens — this is the product's identity, not the therapist's chosen scheme — and are sampled from the delivered artwork in `icon-ideas/groundwork/`. Those 2732² PNGs are **not** used by the web app (2.4MB the SW would have to precache); they are the source for the native iOS launch screen — see `docs/groundwork-app-store-roadmap.md`.
 
 ## Canonical files
 ```

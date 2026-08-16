@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="theme-color" id="tcMeta" content="#5C7A6D"/>
-<title>Therapy Tracker</title>
+<title>GroundWork</title>
 <script>(function(){var d=document.documentElement;try{var t=localStorage.getItem('tt_theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';}d.setAttribute('data-theme',t);
 d.setAttribute('data-palette',localStorage.getItem('tt_palette')||'sage');
 var n=localStorage.getItem('tt_practice');if(n)d.style.setProperty('--appname',JSON.stringify('⬡ '+n));
@@ -374,7 +374,7 @@ summary{font-weight:600;cursor:pointer}
   nav.tabs{flex-direction:column;justify-content:flex-start;align-items:stretch;top:0;bottom:0;left:0;right:auto;
     width:236px;max-width:236px;margin:0;background:var(--brand);border-top:0;border-right:1px solid var(--line);
     padding:calc(env(safe-area-inset-top) + 20px) 12px 20px;gap:5px}
-  nav.tabs::before{content:var(--appname,"⬡ Therapy Tracker");display:block;color:#fff;font-weight:700;font-size:16px;padding:6px 14px 16px;opacity:.96;
+  nav.tabs::before{content:var(--appname,"⬡ GroundWork");display:block;color:#fff;font-weight:700;font-size:16px;padding:6px 14px 16px;opacity:.96;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   nav.tabs button{flex-direction:row;justify-content:flex-start;gap:12px;width:100%;color:rgba(255,255,255,.82);
     padding:12px 14px;border-radius:12px;font-size:14.5px}
@@ -524,6 +524,39 @@ summary{font-weight:600;cursor:pointer}
 .allclear{text-align:center;padding:14px 8px;color:var(--good);font-weight:600;font-size:14px}
 .allclear .ace{font-size:30px;display:block;margin-bottom:3px}
 
+/* ===== launch screen =====
+   Brand colours are hard-coded, not palette tokens: this is the product's identity and must look
+   the same whichever colour scheme the therapist has chosen inside the app. Values sampled from
+   the delivered artwork (icon-ideas/groundwork). */
+#splash{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(155deg,#F5F8F5 0%,#EFF3F0 45%,#E4EBE5 100%);
+  transition:opacity .42s ease}
+#splash.out{opacity:0;pointer-events:none}
+#splash .sp-in{display:flex;flex-direction:column;align-items:center;gap:34px;
+  transform:translateY(-3vh);animation:spRise .62s cubic-bezier(.2,.8,.25,1) both}
+#splash .sp-mark{width:min(31vw,132px);height:auto;overflow:visible}
+#splash .sp-bars .b1{fill:#B0BFB8}
+#splash .sp-bars .b2{fill:#8AA197}
+#splash .sp-bars .b3{fill:#5C7A6D}
+#splash .sp-leaf path{fill:#3C4F44}
+#splash .sp-leaf .vein{fill:none;stroke:#F1F5F1;stroke-width:3.4;stroke-linecap:round}
+#splash .sp-word{font-size:min(9.2vw,40px);font-weight:800;letter-spacing:-.012em;line-height:1}
+#splash .sp-word b{color:#3C4F44;font-weight:800}
+#splash .sp-word span{color:#5C7A6D}
+@keyframes spRise{from{opacity:0;transform:translateY(calc(-3vh + 14px))}to{opacity:1;transform:translateY(-3vh)}}
+html[data-theme="dark"] #splash{background:linear-gradient(155deg,#496256 0%,#38493F 48%,#26332B 100%)}
+html[data-theme="dark"] #splash .sp-bars .b1{fill:#8FA396}
+html[data-theme="dark"] #splash .sp-bars .b2{fill:#BFCCC3}
+html[data-theme="dark"] #splash .sp-bars .b3{fill:#FBFDFA}
+html[data-theme="dark"] #splash .sp-leaf path{fill:#FBFDFA}
+html[data-theme="dark"] #splash .sp-leaf .vein{stroke:#42584C}
+html[data-theme="dark"] #splash .sp-word b{color:#FBFDFA}
+html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
+@media (prefers-reduced-motion:reduce){
+  #splash .sp-in{animation:none}
+  #splash{transition:none}
+}
+
 /* ===== Trends: folded historical clients ===== */
 .aged{border:1px solid var(--hair);border-radius:13px;margin-top:10px;
   background:color-mix(in srgb,var(--soft) 55%,transparent)}
@@ -643,8 +676,29 @@ summary{font-weight:600;cursor:pointer}
 </style>
 <link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon-180.png"></head>
 <body>
+<!-- Launch screen. Drawn as inline SVG rather than the 2732² PNGs in icon-ideas/groundwork:
+     it is a couple of hundred bytes instead of 2.4MB the service worker would have to precache
+     for offline, it stays crisp at any size or aspect ratio, and it can follow the theme. Those
+     PNGs are the source assets for the native iOS launch screen (see the App Store roadmap).
+     Painted before any script runs, so there is no white flash on a cold start. -->
+<div id="splash" aria-hidden="true">
+  <div class="sp-in">
+    <svg class="sp-mark" viewBox="0 0 120 112" role="img" aria-label="GroundWork">
+      <g class="sp-bars">
+        <rect class="b1" x="12" y="72" width="24" height="36" rx="12"/>
+        <rect class="b2" x="46" y="54" width="24" height="54" rx="12"/>
+        <rect class="b3" x="80" y="40" width="24" height="68" rx="12"/>
+      </g>
+      <g class="sp-leaf" transform="translate(92 18) rotate(35)">
+        <path d="M0-17C10-9 10 9 0 17-10 9-10-9 0-17Z"/>
+        <path class="vein" d="M-5 7 5-7"/>
+      </g>
+    </svg>
+    <div class="sp-word"><b>Ground</b><span>Work</span></div>
+  </div>
+</div>
 <div class="app">
-  <header class="top"><h1 id="topTitle">Therapy Tracker</h1><span class="ty" id="topTY"></span><button class="themebtn" id="settingsBtn" title="Settings" aria-label="Settings">⚙</button></header>
+  <header class="top"><h1 id="topTitle">GroundWork</h1><span class="ty" id="topTY"></span><button class="themebtn" id="settingsBtn" title="Settings" aria-label="Settings">⚙</button></header>
   <div id="saveBanner" class="bkbar err"><span class="bkmsg">⛔ <b>Your last change was not saved.</b> <span id="svdetail" class="bkdetail"></span></span><button class="btn sm" id="svExport">Export now</button></div>
   <div id="backupBanner" class="bkbar"><span class="bkmsg">⚠️ <b>Time to back up your data.</b> <span id="bkdetail" class="bkdetail"></span></span><button class="btn sm" id="bkNow">Back up now</button></div>
   <main id="main"></main>
@@ -761,7 +815,7 @@ function normalize(st){
   /* practice branding + feature switches, set in first-run setup (travels with backups) */
   st.settings=st.settings||{}; const sg=st.settings;
   const hasData=(st.sessions.length>0||st.clients.length>0);
-  if(sg.practiceName==null)sg.practiceName=hasData?"Charlotte Bloor Therapy":"Therapy Tracker"; // existing installs keep their header
+  if(sg.practiceName==null)sg.practiceName=hasData?"Charlotte Bloor Therapy":"GroundWork"; // existing installs keep their header
   if(sg.practiceTagline==null)sg.practiceTagline="Counselling & psychotherapy";
   if(sg.palette==null)sg.palette="sage";
   sg.features=sg.features||{};
@@ -1104,7 +1158,7 @@ function paletteSwatch(p){return '<span class="pswatch"><i style="background:'+p
 
 /* ---- practice branding + feature switches ---- */
 function settings(){if(!S.settings)S.settings={};return S.settings;}
-function practiceName(){const n=(S&&S.settings&&S.settings.practiceName||"").trim();return n||"Therapy Tracker";}
+function practiceName(){const n=(S&&S.settings&&S.settings.practiceName||"").trim();return n||"GroundWork";}
 function practiceTagline(){return (S&&S.settings&&S.settings.practiceTagline||"").trim();}
 function practiceInitials(){const i=practiceName().split(/\s+/).map(w=>w[0]||"").join("").replace(/[^A-Za-z0-9]/g,"").toUpperCase().slice(0,4);
   return i||"TT";}
@@ -1114,7 +1168,7 @@ function applyBranding(){const n=practiceName();
   try{localStorage.setItem("tt_practice",n);}catch(e){}
   document.documentElement.style.setProperty("--appname",JSON.stringify("⬡ "+n));
   const ty=$("#topTY");if(ty)ty.textContent=n;
-  document.title=(n==="Therapy Tracker")?"Therapy Tracker":(n+" · Therapy Tracker");}
+  document.title=(n==="GroundWork"||n==="Therapy Tracker")?"GroundWork":(n+" · GroundWork");}
 /* re-apply everything that lives in S.settings (after load, restore or rollback) */
 function applySettings(){applyPalette(settings().palette||"sage");applyBranding();paintThemeColor();}
 
@@ -3675,14 +3729,14 @@ function mtdPeriod(q){
   return {q,turnover,other,boxes,expTotal,net:turnover+other-expTotal};
 }
 function mtdExport(ty){
-  const out={app:"TherapyTracker",generated:new Date().toISOString(),taxYear:ty,
+  const out={app:"GroundWork",generated:new Date().toISOString(),taxYear:ty,
     basis:taxBasis(),note:"Quarterly totals for MTD for Income Tax. Not a submission - hand to your accountant or bridging software.",
     periods:[]};
   mtdQuarters(ty).forEach(q=>{const p=mtdPeriod(q);
     out.periods.push({period:q.n,from:isoD(q.from),to:isoD(q.to),
       income:{turnover:Math.round(p.turnover*100)/100,other:Math.round(p.other*100)/100},
       expenses:Object.keys(p.boxes).sort((a,b)=>a-b).map(b=>({sa103Box:+b,name:SA103[b]||"",amount:Math.round(p.boxes[b]*100)/100}))});});
-  download("therapy-mtd-"+ty.replace("/","-")+".json",JSON.stringify(out,null,2),"application/json");
+  download("groundwork-mtd-"+ty.replace("/","-")+".json",JSON.stringify(out,null,2),"application/json");
   toast("MTD figures downloaded");
 }
 
@@ -3981,7 +4035,7 @@ function rawPanel(){
       v.querySelector("#supcount").textContent=rows.length+" rows · "+cols.length+" columns shown · total "+gbp(totCost);
       v.querySelector("#supcsv").onclick=()=>{const head=cols.map(c=>c.t).join(",");
         const lines=rows.map(r=>cols.map(c=>{let val=r[c.k];val=val==null?"":String(val);return /[",\n]/.test(val)?'"'+val.replace(/"/g,'""')+'"':val;}).join(","));
-        download("therapy-supervision-table-"+isoD(today())+".csv",[head,...lines].join("\n"),"text/csv");toast("CSV downloaded");};
+        download("groundwork-supervision-table-"+isoD(today())+".csv",[head,...lines].join("\n"),"text/csv");toast("CSV downloaded");};
     }
     v.querySelector("#supq").oninput=e=>{supF.q=e.target.value;drawSup();};
     drawSup();
@@ -4031,7 +4085,7 @@ function rawPanel(){
     v.querySelector("#rcount").textContent=rows.length+" rows · "+cols.length+" columns shown";
     v.querySelector("#rcsv").onclick=()=>{const head=cols.map(c=>c.t).join(",");
       const lines=rows.map(r=>cols.map(c=>{let val=c.m?r[c.k]:r[c.k];val=val==null?"":String(val);return /[",\n]/.test(val)?'"'+val.replace(/"/g,'""')+'"':val;}).join(","));
-      download("therapy-table-"+isoD(today())+".csv",[head,...lines].join("\n"),"text/csv");toast("CSV downloaded");};
+      download("groundwork-table-"+isoD(today())+".csv",[head,...lines].join("\n"),"text/csv");toast("CSV downloaded");};
   }
   v.querySelector("#rq").oninput=e=>{rawF.q=e.target.value;draw();};
   v.querySelector("#fCl").onchange=e=>{rawF.client=e.target.value;draw();};
@@ -4155,7 +4209,7 @@ VIEWS.settings=function(){
      <div style="padding:0 2px">${taxDisclaimerListHTML()}</div>
      <p class="small muted mt">Also set out in the <a href="terms.html#tax" target="_blank" rel="noopener">Terms of Service</a>.${S.settings&&S.settings.taxAckAt?" Acknowledged on "+fmtD(S.settings.taxAckAt)+".":""}</p>
    </div>
-   <div class="card"><h2>About</h2><p class="small muted">Therapy Tracker · offline · replaces the spreadsheet.
+   <div class="card"><h2>About</h2><p class="small muted">GroundWork · offline · replaces the spreadsheet.
      ${S.sessions.length} sessions, ${S.clients.length} clients${S.settings&&S.settings.onboardedAt?" · set up "+fmtD(S.settings.onboardedAt):""}. Add to your Home Screen for an app-like experience.</p>
      <p class="small muted"><a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a></p></div>
    </div></details>
@@ -5014,7 +5068,7 @@ function printReceipt(c,rows,label,paidOnly){
     '<p><b>Client:</b> '+esc(c.code)+' &nbsp;·&nbsp; <b>Period:</b> '+esc(label)+'</p>'+
     '<table><thead><tr><th>Date</th><th>Session</th><th>Mode</th><th class="r">Fee</th><th>Status</th></tr></thead><tbody>'+trs+'</tbody></table>'+
     '<div class="tot">'+(paidOnly?('Total received: <b>'+gbp(tot)+'</b>'):('Total billed: <b>'+gbp(tot)+'</b>'+(paid<tot?'<br><span class="sub">of which paid '+gbp(paid)+' · outstanding '+gbp(tot-paid)+'</span>':'<br><span class="sub">paid in full</span>')))+'</div>'+
-    '<div class="foot">Generated by Therapy Tracker on '+fmtD(t)+'. Client identified by confidential code. This document confirms therapy sessions provided by '+esc(practiceName())+'.'+
+    '<div class="foot">Generated by GroundWork on '+fmtD(t)+'. Client identified by confidential code. This document confirms therapy sessions provided by '+esc(practiceName())+'.'+
       '<br>It is a record of attendance and fees only. No clinical notes are held in this system or reproduced here.</div>'+
     '</body></html>';
   const fr=document.createElement("iframe");
@@ -5068,8 +5122,8 @@ function download(name,text,type){const b=new Blob([text],{type:type||"applicati
 const NOTES_SCOPE="The 'notes' field on a session records whether clinical notes were completed elsewhere. This file contains no clinical notes.";
 async function exportJSON(){
   const audit=_db?await auditAll():[]; // must still work with no database — the crash screen relies on it
-  const out={app:"TherapyTracker",version:1,schemaVersion:SCHEMA_VERSION,note:NOTES_SCOPE,exportedAt:new Date().toISOString(),state:S,audit:audit.slice(-800)};
-  download("therapy-tracker-backup-"+isoD(today())+".json",JSON.stringify(out));markBackedUp();toast("Backup downloaded")}
+  const out={app:"GroundWork",version:1,schemaVersion:SCHEMA_VERSION,note:NOTES_SCOPE,exportedAt:new Date().toISOString(),state:S,audit:audit.slice(-800)};
+  download("groundwork-backup-"+isoD(today())+".json",JSON.stringify(out));markBackedUp();toast("Backup downloaded")}
 
 /* ===== Encrypted backups (AES-256-GCM via WebCrypto, passphrase-derived key) =====
    The passphrase is never stored. A non-extractable AES key derived from it (PBKDF2, 210k iterations)
@@ -5095,10 +5149,10 @@ async function encPayload(){
   const key=await kvGet("encKey"),saltB=await kvGet("encSalt");
   if(!key||!saltB)throw new Error("no passphrase set");
   const audit=_db?await auditAll():[];
-  const plain=JSON.stringify({app:"TherapyTracker",version:1,schemaVersion:SCHEMA_VERSION,note:NOTES_SCOPE,exportedAt:new Date().toISOString(),state:S,audit:audit.slice(-800)});
+  const plain=JSON.stringify({app:"GroundWork",version:1,schemaVersion:SCHEMA_VERSION,note:NOTES_SCOPE,exportedAt:new Date().toISOString(),state:S,audit:audit.slice(-800)});
   const iv=crypto.getRandomValues(new Uint8Array(12));
   const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv:iv},key,new TextEncoder().encode(plain));
-  return JSON.stringify({app:"TherapyTracker",enc:1,cipher:"AES-256-GCM",kdf:"PBKDF2-SHA256",iter:ENC_ITER,salt:saltB,iv:bufToB64(iv.buffer),data:bufToB64(ct)});
+  return JSON.stringify({app:"GroundWork",enc:1,cipher:"AES-256-GCM",kdf:"PBKDF2-SHA256",iter:ENC_ITER,salt:saltB,iv:bufToB64(iv.buffer),data:bufToB64(ct)});
 }
 async function encWriteToHandle(txt,interactive){
   const h=await kvGet("encHandle");if(!h)return false;
@@ -5112,7 +5166,7 @@ async function encWriteToHandle(txt,interactive){
 async function encBackupNow(){
   try{const txt=await encPayload();
     const wrote=await encWriteToHandle(txt,true);
-    if(!wrote)download("therapy-tracker-backup-"+isoD(today())+".enc.json",txt);
+    if(!wrote)download("groundwork-backup-"+isoD(today())+".enc.json",txt);
     markBackedUp();toast(wrote?"Encrypted backup saved to your file":"Encrypted backup downloaded");
   }catch(e){toast("Backup failed: "+e.message);Sfx.error();}
 }
@@ -5128,7 +5182,7 @@ function autoEncBackup(){
 async function encChooseFile(after){
   if(!window.showSaveFilePicker){toast("Silent auto-save needs Chrome or Edge on desktop — on this device use Encrypt & download");Sfx.error();return;}
   try{
-    const h=await window.showSaveFilePicker({suggestedName:"therapy-tracker-backup.enc.json",
+    const h=await window.showSaveFilePicker({suggestedName:"groundwork-backup.enc.json",
       types:[{description:"Encrypted backup",accept:{"application/json":[".json"]}}]});
     await kvPut("encHandle",h);
     const txt=await encPayload();await encWriteToHandle(txt,true);markBackedUp();
@@ -5211,12 +5265,12 @@ function encPromptSetup(after){
 function validateImport(st){
   const problems=[];
   if(!st||typeof st!=="object")return {ok:false,problems:["Not a recognisable backup file"]};
-  if(!Array.isArray(st.sessions)||!Array.isArray(st.clients))return {ok:false,problems:["Missing sessions or clients — not a Therapy Tracker backup"]};
+  if(!Array.isArray(st.sessions)||!Array.isArray(st.clients))return {ok:false,problems:["Missing sessions or clients — not a GroundWork backup"]};
   /* Refuse anything written by a newer build. Importing it would silently drop the fields this
      version doesn't know about, and then save that loss back over the good data. */
   const sv=stateSchemaVersion(st);
   if(sv>SCHEMA_VERSION)return {ok:false,problems:[
-    "This backup was made by a newer version of Therapy Tracker (data version "+sv+"; this app reads version "+SCHEMA_VERSION+"). "+
+    "This backup was made by a newer version of GroundWork (data version "+sv+"; this app reads version "+SCHEMA_VERSION+"). "+
     "Restoring it here would quietly discard the newer information. Open the app on this device while online to update it first, then try again."]};
   const badDates=st.sessions.filter(s=>!s||!s.date||!/^\d{4}-\d{2}-\d{2}$/.test(String(s.date))).length;
   if(badDates)problems.push(badDates+" session(s) with missing/invalid dates");
@@ -5239,7 +5293,7 @@ function exportCSV(){
       if(c==="cancelCharge")v=d.cancelPct;
       v=v==null?"":String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v});
     rows.push(r.join(","))});
-  download("therapy-sessions-"+isoD(today())+".csv",rows.join("\n"),"text/csv");toast("Sessions CSV downloaded")}
+  download("groundwork-sessions-"+isoD(today())+".csv",rows.join("\n"),"text/csv");toast("Sessions CSV downloaded")}
 function csvCell(v){v=v==null?"":String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
 function exportSupervisionCSV(){
   /* peer rows ride along with a type column — leaving them out would silently lose hours
@@ -5254,7 +5308,7 @@ function exportSupervisionCSV(){
     clientHrsReviewed:"",hours:(+p.hours||0),cost:(+p.cost||0),
     clientsDiscussed:p.notes||"",taxYear:p.date?taxYear(p.date):""}));
   out.sort((a,b)=>parseD(a.date)-parseD(b.date)).forEach(rec=>rows.push(cols.map(c=>csvCell(rec[c])).join(",")));
-  download("therapy-supervision-"+isoD(today())+".csv",rows.join("\n"),"text/csv");toast("Supervision CSV downloaded")}
+  download("groundwork-supervision-"+isoD(today())+".csv",rows.join("\n"),"text/csv");toast("Supervision CSV downloaded")}
 /* Costs and other income, with each recurring row expanded into the months it actually covers
    for the chosen tax year — the shape an accountant asks for. */
 function exportFinanceCSV(){
@@ -5275,7 +5329,7 @@ function exportFinanceCSV(){
   }
   if(!all.length){toast("Nothing to export yet");return;}
   all.sort((a,b)=>parseD(a.date)-parseD(b.date)).forEach(rec=>rows.push(cols.map(c=>csvCell(rec[c])).join(",")));
-  download("therapy-finances-"+isoD(today())+".csv",rows.join("\n"),"text/csv");toast("Finances CSV downloaded")}
+  download("groundwork-finances-"+isoD(today())+".csv",rows.join("\n"),"text/csv");toast("Finances CSV downloaded")}
 /* ============================================================
    Spreadsheet import — paste from Excel, or a .csv file
    ------------------------------------------------------------
@@ -5614,7 +5668,7 @@ function impTemplate(){
   ];
   const q=v=>{v=v==null?"":String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
   const rows=[cols.join(",")].concat(ex.map(e=>cols.map(c=>q(e[c])).join(",")));
-  download("therapy-tracker-import-template.csv",rows.join("\n"),"text/csv");
+  download("groundwork-import-template.csv",rows.join("\n"),"text/csv");
   toast("Template downloaded");
 }
 
@@ -6040,7 +6094,7 @@ function stepPractice(w){return{emoji:"🏷", h:"What should we call your practi
       '<label>Strapline <span class="muted">(optional)</span></label>'+
       '<input id="spTag" maxlength="70" placeholder="e.g. Counselling &amp; psychotherapy" value="'+esc(w.tagline)+'">'+
       '<p class="prev">The strapline only shows on printed receipts and statements.</p>'+
-      '<div class="brandprev"><span class="bpt">⬡ Therapy Tracker</span><span class="bpn" id="spPrev"></span></div>'+
+      '<div class="brandprev"><span class="bpt">⬡ GroundWork</span><span class="bpn" id="spPrev"></span></div>'+
       '<div class="ovnote">🔒 This is <b>your</b> name — never a client’s. Clients are only ever stored as short codes.</div>';
     const n=host.querySelector("#spName"),t=host.querySelector("#spTag"),p=host.querySelector("#spPrev");
     const upd=()=>{w.name=n.value;w.tagline=t.value;p.textContent=n.value.trim()||"Your practice name";};
@@ -6311,7 +6365,7 @@ function setupApplyRooms(w){
 
 async function setupSave(w,opts){
   const sg=settings();
-  sg.practiceName=(w.name||"").trim()||"Therapy Tracker";
+  sg.practiceName=(w.name||"").trim()||"GroundWork";
   sg.practiceTagline=(w.tagline||"").trim();
   sg.palette=w.palette;
   sg.features={};FEATURES.forEach(f=>{sg.features[f.k]=featureOn(w,f.k)&&(!f.dep||featureOn(w,f.dep));});
@@ -6438,7 +6492,9 @@ function startSetup(opts){
      already has data would be offering to hide tabs they are already using. */
   const fresh=!rerun&&S.sessions.length===0&&S.clients.length===0;
   const w={
-    name:(sg.practiceName==="Therapy Tracker")?"":(sg.practiceName||""),
+    /* the app's own name in this field means "no practice name set" — "Therapy Tracker" is the
+       pre-rename placeholder and still has to read as unset for anyone upgrading */
+    name:(sg.practiceName==="GroundWork"||sg.practiceName==="Therapy Tracker")?"":(sg.practiceName||""),
     tagline:sg.practiceTagline||"",
     palette:sg.palette||curPalette(),
     theme:themePref(), sound:Sfx.on,
@@ -6461,7 +6517,7 @@ function startSetup(opts){
     cpdTarget:cpdTarget(),
     rooms:null, tour:!rerun
   };
-  const welcome={emoji:"👋", h:rerun?"Let’s run through setup again":"Welcome to Therapy Tracker",
+  const welcome={emoji:"👋", h:rerun?"Let’s run through setup again":"Welcome to GroundWork",
     sub:rerun?"Your clients, sessions and payments stay exactly as they are — this only touches how the app looks and behaves."
       :"A private, offline record of your practice: sessions, clients, rooms, supervision and money. Takes about two minutes to set up.",
     html:ovPoints([
@@ -6482,7 +6538,7 @@ function startSetup(opts){
   if(!rerun)steps.push(stepImport(w));   /* re-runs promise not to touch client data — leave it to Settings */
   steps.push(stepBackup(w),stepDone(w));
   flowStart({
-    title:rerun?"Setup (re-run)":"Set up Therapy Tracker",
+    title:rerun?"Setup (re-run)":"Set up GroundWork",
     steps, doneLabel:"Finish setup",
     onSkip:async()=>{
       if(!confirm("Skip setup?\n\nSensible defaults will be used and you can run this again any time from ⚙ Settings."))return;
@@ -6989,6 +7045,20 @@ function reportGlobalError(what,err){
 window.addEventListener("error",e=>reportGlobalError("Uncaught error:",e.error||e.message));
 window.addEventListener("unhandledrejection",e=>reportGlobalError("Unhandled promise rejection:",e.reason));
 
+/* ===== launch screen =====
+   Held for a moment so a fast boot doesn't flash it, then faded. The failsafe matters more than
+   the timing: if init throws before go() ever runs, nothing else would take the splash down and
+   the app would look like it had hung, so a timer clears it regardless of what happened. */
+const SPLASH_MIN=520, _splashFrom=Date.now();
+let _splashGone=false;
+function splashHide(){
+  if(_splashGone)return; _splashGone=true;
+  const el=document.getElementById("splash"); if(!el)return;
+  const wait=Math.max(0,SPLASH_MIN-(Date.now()-_splashFrom));
+  setTimeout(()=>{el.classList.add("out");setTimeout(()=>{if(el.parentNode)el.remove();},460);},wait);
+}
+setTimeout(splashHide,6000);   // failsafe — never leave it up, whatever went wrong
+
 (async function(){
   try{await openDB();await loadState();}
   catch(e){ // fallback to localStorage
@@ -7003,6 +7073,7 @@ window.addEventListener("unhandledrejection",e=>reportGlobalError("Unhandled pro
   const sx=document.getElementById("svExport");if(sx)sx.onclick=exportJSON;
   applySettings();
   go("home");
+  splashHide();          // the app is on screen behind it now
   requestPersistence(); // ask the browser not to evict us; the answer is shown in Settings
   /* One overlay, one queue. The beta gate, first-run setup and What's new all drive the same
      #ovRoot, so they're chained rather than fired together — otherwise the last one to start
