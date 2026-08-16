@@ -4,3 +4,7 @@
 # Local data & backups — NEVER commit real client data to this (public) repo
 therapy-tracker-data*.json
 therapy-tracker-backup-*.json
+
+# Local push helper and its output
+push-now.bat
+push-result.txt
