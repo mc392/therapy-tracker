@@ -524,6 +524,20 @@ summary{font-weight:600;cursor:pointer}
 .allclear{text-align:center;padding:14px 8px;color:var(--good);font-weight:600;font-size:14px}
 .allclear .ace{font-size:30px;display:block;margin-bottom:3px}
 
+/* ===== Trends: folded historical clients ===== */
+.aged{border:1px solid var(--hair);border-radius:13px;margin-top:10px;
+  background:color-mix(in srgb,var(--soft) 55%,transparent)}
+.aged>summary{list-style:none;cursor:pointer;padding:11px 13px;display:flex;flex-direction:column;gap:2px;position:relative;user-select:none}
+.aged>summary::-webkit-details-marker{display:none}
+.aged>summary::after{content:"›";position:absolute;right:13px;top:50%;
+  transform:translateY(-50%) rotate(90deg);color:var(--muted);font-size:17px;transition:transform .18s}
+.aged[open]>summary::after{transform:translateY(-50%) rotate(-90deg)}
+.aged>summary:hover{background:color-mix(in srgb,var(--brand) 5%,transparent);border-radius:12px}
+.aged .agl{font-weight:700;font-size:13.5px;color:var(--ink);padding-right:24px}
+.aged .ags{font-size:12px;color:var(--muted);padding-right:24px}
+.aged[open]>summary{border-bottom:1px solid var(--line)}
+.aged .agbody{padding:2px 9px 6px}
+
 /* ===== cancellation policy rows ===== */
 .cxrow{display:flex;align-items:center;gap:7px;margin:0 0 8px}
 .cxrow input{width:76px;margin:0;padding:9px 10px;text-align:right}
@@ -2149,6 +2163,7 @@ VIEWS.practice=function(){
   }
   function renderMetrics(){
     const counts=clientSessionCounts();
+    const lastSeen=lastSessionDates();   /* drives the current/historical split on every list below */
     const withSess=S.clients.map(c=>({c,n:counts[c.code.toLowerCase()]||0}));
     const base=withSess.filter(x=>x.n>=1).length;
     const max=Math.max(1,base);
@@ -2156,6 +2171,10 @@ VIEWS.practice=function(){
     const rows=tiers.map(tr=>{const n=withSess.filter(x=>x.n>=tr.t).length;const pct=base?Math.round(n/base*100):0;const w=Math.round(n/max*100);
       return '<div class="fr"><div class="ftop"><span>'+tr.e+' <b>'+tr.l+'</b> · '+tr.d+'</span><span>'+n+' '+(n===1?'client':'clients')+(tr.t>1&&base?' · '+pct+'%':'')+'</span></div><div class="fbar"><i data-w="'+w+'" style="width:0"></i></div></div>';}).join("");
     const deep=withSess.filter(x=>x.n>=20).sort((a,b)=>b.n-a.n);
+    const deepLi=x=>'<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+'</div><div class="li-sub">'+esc(x.c.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>';
+    const deepCur=deep.filter(x=>trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()]));
+    const deepOld=deep.filter(x=>!trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()]));
+    const deepOldSessions=deepOld.reduce((s,x)=>s+x.n,0);
     const totalSessions=withSess.reduce((a,x)=>a+x.n,0);
     const avg=base?Math.round(totalSessions/base*10)/10:0;
 
@@ -2190,6 +2209,12 @@ VIEWS.practice=function(){
     const trendChip=(r,p)=>r>p?'<span class="chip n">↑ rising</span>':r<p?'<span class="chip y">↓ falling</span>':'<span class="chip na">→ steady</span>';
     const pctOf=e=>e.total?Math.round(e.lc/e.total*1000)/10:0;
     const rateChip=e=>{const p=pctOf(e);return '<span class="chip '+(p>=15?'n':p>=5?'f':'s')+'">'+p+'%</span>';};
+    const lcLi=e=>{const cl=S.clients.find(c=>(c.code||"").toLowerCase()===(e.code||"").toLowerCase());
+      return '<div class="list-item"'+(cl?' data-id="'+cl._id+'"':'')+'><div class="li-main"><div class="li-title">'+esc(e.code)+' '+rateChip(e)+'</div><div class="li-sub">'+e.lc+' of '+e.total+' sessions'+(e.dna?' · '+e.dna+' DNA':'')+(e.lost>0?' · '+gbp(Math.round(e.lost))+' not charged':'')+(e.last?' · last '+fmtDMY(e.last):'')+'</div></div><div class="li-right">'+trendChip(e.recent,e.prev)+'</div></div>';};
+    const lcOf=e=>S.clients.find(c=>(c.code||"").toLowerCase()===(e.code||"").toLowerCase());
+    const lcCur=lcClients.filter(e=>trendsIsCurrent(lcOf(e),lastSeen[(e.code||"").toLowerCase()]));
+    const lcOld=lcClients.filter(e=>!trendsIsCurrent(lcOf(e),lastSeen[(e.code||"").toLowerCase()]));
+    const lcOldMissed=lcOld.reduce((s,e)=>s+e.lc,0), lcOldLost=lcOld.reduce((s,e)=>s+e.lost,0);
     const lcCard='<div class="card"><h2>Missed sessions</h2>'+
       '<div class="kpis mb">'+
         '<div class="kpi"><div class="v">'+totalLC+'</div><div class="l">Missed'+(totalDNA?' · '+totalDNA+' DNA':'')+'</div></div>'+
@@ -2202,8 +2227,9 @@ VIEWS.practice=function(){
       '<p class="small muted" style="margin:0 0 6px">Trend '+trendChip(recent90,prev90)+' — '+recent90+' in the last 90 days vs '+prev90+' in the previous 90.'+
         (projLost>0?' At the last 90 days’ rate that is about <b>'+gbp(projLost)+' a year</b> in fees you don’t charge.':'')+
         ' The per-client % is each client’s share of their own sessions.</p>'+
-      (lcClients.length?lcClients.map(e=>{const cl=S.clients.find(c=>(c.code||"").toLowerCase()===(e.code||"").toLowerCase());
-        return '<div class="list-item"'+(cl?' data-id="'+cl._id+'"':'')+'><div class="li-main"><div class="li-title">'+esc(e.code)+' '+rateChip(e)+'</div><div class="li-sub">'+e.lc+' of '+e.total+' sessions'+(e.dna?' · '+e.dna+' DNA':'')+(e.lost>0?' · '+gbp(Math.round(e.lost))+' not charged':'')+(e.last?' · last '+fmtDMY(e.last):'')+'</div></div><div class="li-right">'+trendChip(e.recent,e.prev)+'</div></div>';}).join("")
+      (lcClients.length?lcCur.map(lcLi).join("")+
+          agedFold("lc","Finished & long inactive",lcOld.length,
+            lcOldMissed+' missed session'+(lcOldMissed===1?'':'s')+(lcOldLost>0?' · '+gbp(Math.round(lcOldLost))+' not charged':''))
         :'<p class="muted small">No missed sessions recorded yet.</p>')+'</div>';
 
     /* ---- attendance ---- */
@@ -2219,18 +2245,24 @@ VIEWS.practice=function(){
     const attLi=x=>{const a=x.a;
       return '<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+' '+attPctChip(a.pct)+'</div><div class="li-sub">'+a.attended+' of '+a.expected+' expected · '+esc(x.c.frequency||"")+'</div>'+pauseNote(a)+'</div><div class="li-right"><span class="small muted">since '+fmtDM(a.first)+'</span></div></div>';};
     const grpAvg=arr=>arr.length?Math.round(arr.reduce((s,x)=>s+x.a.pct,0)/arr.length):0;
-    const attOngoing=attSorted.filter(x=>(x.c.status||"")==="Ongoing");
-    const attOther=attSorted.filter(x=>(x.c.status||"")!=="Ongoing");
+    /* current clients stay listed and keep their Ongoing / other grouping; the rest fold away */
+    const attCur=attSorted.filter(x=>trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()]));
+    const attOld=attSorted.filter(x=>!trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()]));
+    const attOngoing=attCur.filter(x=>(x.c.status||"")==="Ongoing");
+    const attOther=attCur.filter(x=>(x.c.status||"")!=="Ongoing");
     const attSection=(title,arr)=>arr.length?'<div class="grp-h">'+title+' <span class="muted" style="font-weight:600">· '+arr.length+' client'+(arr.length>1?'s':'')+' · avg '+grpAvg(arr)+'%</span></div>'+arr.map(attLi).join(""):"";
-    const attSeries=rollingAttendanceSeries(attRows);
+    const attOldSessions=attOld.reduce((s,x)=>s+x.a.n,0);
+    const attSeries=rollingAttendanceSeries(attRows);   /* the chart keeps everyone — it is history */
     const attCard='<div class="card"><h2>Attendance</h2>'+
-      '<p class="small muted" style="margin:0 0 8px">How regularly each client attends vs their expected frequency, since their first session. Long gaps (3× the interval or more) count as a pause and are excluded from the rate (but noted ⏸). Late cancellations don’t count as attended.</p>'+
+      '<p class="small muted" style="margin:0 0 8px">How regularly each client attends vs their expected frequency, since their first session. Long gaps (3× the interval or more) count as a pause and are excluded from the rate (but noted ⏸). Missed sessions don’t count as attended.</p>'+
       '<div class="kpis mb">'+
         '<div class="kpi"><div class="v">'+attAvg+'%</div><div class="l">Avg attendance</div></div>'+
         '<div class="kpi"><div class="v">'+attRows.length+'</div><div class="l">Clients tracked</div></div>'+
       '</div>'+
       (attRows.length?'<p class="small muted" style="margin:0 0 2px">3-month rolling attendance rate across all tracked clients.</p>'+chartAttendance(attSeries):"")+
-      (attSorted.length?attSection('Ongoing',attOngoing)+attSection('Paused &amp; finished',attOther)
+      (attSorted.length?attSection('Ongoing',attOngoing)+attSection('Paused',attOther)+
+          agedFold("att","Finished & long inactive",attOld.length,
+            'avg '+grpAvg(attOld)+'% attendance · '+attOldSessions+' session'+(attOldSessions===1?'':'s')+' between them')
         :'<p class="muted small">Need at least two sessions per client to measure attendance.</p>')+'</div>';
     /* ---- ongoing clients on a current pause: prompt to review status ---- */
     const review=attRows.filter(x=>x.a.currentPause);
@@ -2238,7 +2270,9 @@ VIEWS.practice=function(){
       '<p class="small muted" style="margin:0 0 6px">These clients are marked <b>Ongoing</b> but haven’t had a session in 3× their usual interval or more. Consider updating them to <b>Paused</b> or <b>Finished</b>.</p>'+
       review.sort((a,b)=>b.a.currentPause.days-a.a.currentPause.days).map(x=>'<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+' <span class="chip f">'+x.a.currentPause.days+'d gap</span></div><div class="li-sub">Last session '+fmtDMY(x.a.last)+' · '+esc(x.c.frequency||"")+'</div></div><div class="li-right"><span class="small muted">tap to update ›</span></div></div>').join("")+'</div>':'';
 
-    body.innerHTML='<div class="card"><h2>Client retention funnel</h2><p class="small muted" style="margin:0 0 10px">How clients progress over time, by number of sessions.</p><div class="funnel">'+rows+'</div></div>'+
+    const foldedTotal=attOld.length+lcOld.length+deepOld.length;
+    body.innerHTML=(foldedTotal?'<p class="small muted" style="margin:-2px 0 10px">Lists below show clients you are currently seeing. Anyone finished, or not seen for over a year, is folded into a ⌄ summary row — they still count in every total and chart, they are just out of the way. Tap one to see them.</p>':'')+
+      '<div class="card"><h2>Client retention funnel</h2><p class="small muted" style="margin:0 0 10px">How clients progress over time, by number of sessions.</p><div class="funnel">'+rows+'</div></div>'+
       '<div class="kpis mb">'+
         '<div class="kpi"><div class="v">'+base+'</div><div class="l">Clients seen</div></div>'+
         '<div class="kpi"><div class="v">'+avg+'</div><div class="l">Avg sessions / client</div></div>'+
@@ -2246,8 +2280,17 @@ VIEWS.practice=function(){
       reviewCard+
       attCard+
       lcCard+
-      (deep.length?'<div class="card"><h2>Long-term clients</h2><p class="small muted" style="margin:0 0 6px">Clients seen for 20+ sessions.</p>'+deep.map(x=>'<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+'</div><div class="li-sub">'+esc(x.c.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>').join("")+'</div>':'');
+      (deep.length?'<div class="card"><h2>Long-term clients</h2><p class="small muted" style="margin:0 0 6px">Clients seen for 20+ sessions.</p>'+
+        deepCur.map(deepLi).join("")+
+        agedFold("deep","Finished & long inactive",deepOld.length,
+          deepOldSessions+' session'+(deepOldSessions===1?'':'s')+' between them')+'</div>':'');
     body.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>clientForm(S.clients.find(c=>c._id===li.dataset.id)));
+    /* folded rows are built the first time each block is opened, not now */
+    wireAgedFolds(body,{
+      att:()=>attOld.map(attLi).join(""),
+      lc:()=>lcOld.map(lcLi).join(""),
+      deep:()=>deepOld.map(deepLi).join("")
+    });
     requestAnimationFrame(()=>body.querySelectorAll(".funnel .fbar>i").forEach(i=>{i.style.width=(+i.dataset.w)+"%";}));
   }
   /* Supervision keeps its own inner Log / Peer / Insights bar - mounted whole rather than
@@ -4219,6 +4262,55 @@ function freqDays(c){const f=(c&&c.frequency||"").toLowerCase();
    Gaps of 3× the expected interval or more are treated as "pauses" and excluded from the denominator
    (but recorded so they can be shown as a footnote). For Ongoing clients a pause running up to today is
    flagged separately so their status can be reviewed. */
+/* ===== Trends: current vs historical =====
+   Every list on Trends grows with each client the practice has ever had, and a therapist five
+   years in does not want to scroll two hundred finished clients to reach the eight they are
+   seeing this month. A client who has finished still counts — in the average, the totals, the
+   funnel — but their individual row has stopped earning its place, so it folds into an aggregate
+   that expands on demand.
+
+   ONE definition, shared by every card, so the same client cannot be listed as current in one and
+   folded as historical in the next. Status leads, because it is the therapist's own word for it;
+   recency is the backstop, because a status nobody remembered to change is exactly what the
+   "Review status" card above exists to catch. */
+const TRENDS_RECENT_DAYS=365;
+function lastSessionDates(){
+  const m={};
+  S.sessions.forEach(s=>{const k=(s.client||"").toLowerCase();if(!k)return;
+    const d=parseD(s.date);if(!d)return;
+    if(!m[k]||d>m[k])m[k]=d;});
+  return m;
+}
+function trendsIsCurrent(c,last){
+  if(!c)return false;
+  if(clientCategory(c.status)==="Finished")return false;
+  if(!last)return true;                       /* nothing logged yet — nothing to age out on */
+  return (today()-last)/86400000<=TRENDS_RECENT_DAYS;
+}
+/* The folded block. Rows are built ON EXPAND rather than up front — the whole point is that a
+   long history should cost nothing to render until someone asks to see it. */
+function agedFold(id,label,n,summary){
+  if(!n)return "";
+  return '<details class="aged" data-aged="'+esc(id)+'">'+
+    '<summary><span class="agl">'+esc(label)+' · '+n+' client'+(n===1?'':'s')+'</span>'+
+    '<span class="ags">'+summary+'</span></summary>'+
+    '<div class="agbody" data-pending="1"></div></details>';
+}
+function wireAgedFolds(host,builders){
+  host.querySelectorAll("details.aged").forEach(d=>{
+    d.addEventListener("toggle",()=>{
+      if(!d.open)return;
+      const box=d.querySelector(".agbody");
+      if(!box||box.dataset.pending!=="1")return;
+      const build=builders[d.dataset.aged];
+      if(!build)return;
+      box.innerHTML=build();
+      delete box.dataset.pending;
+      box.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>{
+        const c=S.clients.find(x=>x._id===li.dataset.id); if(c)clientForm(c);});
+    });
+  });
+}
 function clientAttendance(c){
   const code=(c&&c.code||"").toLowerCase(); if(!code)return null;
   const rs=S.sessions.filter(s=>(s.client||"").toLowerCase()===code)
