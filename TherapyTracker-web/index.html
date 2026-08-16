@@ -536,10 +536,15 @@ summary{font-weight:600;cursor:pointer}
    Brand colours are hard-coded, not palette tokens: this is the product's identity and must look
    the same whichever colour scheme the therapist has chosen inside the app. Values sampled from
    the delivered artwork (icon-ideas/groundwork). */
+/* The node is hidden rather than removed, because it is shown again when the app is resumed
+   after a spell in the background. `visibility` is what actually takes it out of the way once
+   faded — opacity alone leaves a full-screen compositing layer over the app — and it flips at
+   the END of the fade out (0s .42s) but immediately on the way back in (0s). */
 #splash{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
   background:linear-gradient(155deg,#F5F8F5 0%,#EFF3F0 45%,#E4EBE5 100%);
-  transition:opacity .42s ease}
-#splash.out{opacity:0;pointer-events:none}
+  transition:opacity .3s ease,visibility 0s}
+#splash.out{opacity:0;pointer-events:none;visibility:hidden;
+  transition:opacity .42s ease,visibility 0s .42s}
 #splash .sp-in{display:flex;flex-direction:column;align-items:center;gap:34px;
   transform:translateY(-3vh);animation:spRise .62s cubic-bezier(.2,.8,.25,1) both}
 #splash .sp-mark{width:min(31vw,132px);height:auto;overflow:visible}
@@ -7054,18 +7059,48 @@ window.addEventListener("error",e=>reportGlobalError("Uncaught error:",e.error||
 window.addEventListener("unhandledrejection",e=>reportGlobalError("Unhandled promise rejection:",e.reason));
 
 /* ===== launch screen =====
-   Held for a moment so a fast boot doesn't flash it, then faded. The failsafe matters more than
-   the timing: if init throws before go() ever runs, nothing else would take the splash down and
-   the app would look like it had hung, so a timer clears it regardless of what happened. */
-const SPLASH_MIN=1200, _splashFrom=Date.now();
-let _splashGone=false;
-function splashHide(){
-  if(_splashGone)return; _splashGone=true;
-  const el=document.getElementById("splash"); if(!el)return;
-  const wait=Math.max(0,SPLASH_MIN-(Date.now()-_splashFrom));
-  setTimeout(()=>{el.classList.add("out");setTimeout(()=>{if(el.parentNode)el.remove();},460);},wait);
+   Shown on a cold start, and again when the app is resumed after being away long enough to count
+   as reopening it. The failsafe matters more than the timing: if init throws before go() ever
+   runs, nothing else would take the splash down and the app would look like it had hung, so a
+   timer clears it regardless of what happened. */
+const SPLASH_MIN=1200;          /* cold start: floor, since it also covers the real boot */
+const SPLASH_RESUME=800;        /* coming back to an app that never stopped running */
+/* How long away counts as "reopening". Flicking to another app to read a text and coming
+   straight back must NOT re-splash — that would be maddening several times an hour — but
+   returning after a session or over lunch should feel like opening the app again. */
+const SPLASH_RESUME_AFTER=120000;
+let _splashFrom=Date.now(), _splashTimer=null, _hiddenAt=null;
+function splashEl(){return document.getElementById("splash");}
+function splashFade(wait){
+  clearTimeout(_splashTimer);
+  _splashTimer=setTimeout(()=>{const e=splashEl();if(e)e.classList.add("out");},Math.max(0,wait));
+}
+/* cold start — honour the floor measured from page load, so a fast boot doesn't flash it */
+function splashHide(){ if(splashEl())splashFade(SPLASH_MIN-(Date.now()-_splashFrom)); }
+function splashShow(hold){
+  const el=splashEl(); if(!el)return;
+  clearTimeout(_splashTimer);
+  el.classList.remove("out");
+  /* restart the rise animation — without the reflow it has already run and the mark would just
+     sit there, which reads as a stalled screen rather than a deliberate one */
+  const inner=el.querySelector(".sp-in");
+  if(inner){inner.style.animation="none";void inner.offsetWidth;inner.style.animation="";}
+  _splashFrom=Date.now();
+  splashFade(hold);
 }
 setTimeout(splashHide,6000);   // failsafe — never leave it up, whatever went wrong
+
+/* Resume. visibilitychange covers a backgrounded tab or PWA coming back; pageshow/persisted
+   covers Safari's back-forward cache, which restores the page without running any of this again.
+   iOS often kills a backgrounded PWA outright — that comes back as a cold start instead, which
+   is already handled and is why both paths exist. */
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="hidden"){_hiddenAt=Date.now();return;}
+  const away=_hiddenAt?Date.now()-_hiddenAt:0;
+  _hiddenAt=null;
+  if(away>=SPLASH_RESUME_AFTER)splashShow(SPLASH_RESUME);
+});
+window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);});
 
 (async function(){
   try{await openDB();await loadState();}
