@@ -279,13 +279,23 @@ nav.tabs button.on{color:#fff;
 .sheet{position:fixed;inset:0;z-index:50;background:rgba(10,18,16,.42);display:none;align-items:flex-end;justify-content:center;
   -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
 .sheet.open{display:flex}
-.sheet-inner{background:color-mix(in srgb,var(--bg) 88%,transparent);
-  -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+/* The sheet surface is SOLID, and the sticky header is the same solid colour, so the two cannot
+   read as separate panels. They used to be two translucent layers — 88% here and another 82% on
+   the header — which composite to about 98% and drew a pale bar across the top of every form.
+   A sticky header inside a translucent container can never match it: its own tint stacks on the
+   one already painted behind it, whatever value you pick. The frosted look stays where it is
+   actually seen, on `.sheet`'s blurred scrim over the page behind. */
+.sheet-inner{background:var(--bg);
   width:100%;max-width:780px;max-height:94vh;overflow:auto;border-radius:28px 28px 0 0;
   border-top:1px solid var(--hair);box-shadow:var(--shadow-lg);
-  padding:8px 18px calc(22px + env(safe-area-inset-bottom));animation:up .3s cubic-bezier(.2,.9,.25,1)}
+  padding:0 18px calc(22px + env(safe-area-inset-bottom));animation:up .3s cubic-bezier(.2,.9,.25,1)}
 @keyframes up{from{transform:translateY(40px);opacity:.6}to{transform:none;opacity:1}}
-.sheet-head{position:sticky;top:0;background:color-mix(in srgb,var(--bg) 82%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);display:flex;align-items:center;gap:10px;padding:12px 0;z-index:2}
+/* Full-bleed, and the sheet's own top padding lives here instead of on .sheet-inner. A sticky
+   element measures `top` from the padding box, so any padding-top on the container leaves a
+   strip above the header that scrolling content shows through. Side margins are negative so the
+   bar reaches both edges. */
+.sheet-head{position:sticky;top:0;background:var(--bg);display:flex;align-items:center;gap:10px;
+  margin:0 -18px;padding:20px 18px 12px;z-index:2}
 .sheet-head h2{flex:1;margin:0;font-size:17px;text-transform:none;color:var(--ink)}
 .sheet-inner h3{font-size:14px;margin:0 0 4px;color:var(--brand-dark)}
 .taxlink{color:var(--brand);font-weight:700;cursor:pointer;border-bottom:1px dashed var(--brand)}
