@@ -175,11 +175,15 @@ Collapsed `<details class="dz">` → `dzMenu()`. Four routes, all gated by `dzCo
 ## Peer supervision (added Aug 2026)
 `S.peerSupervision` is a separate log from `S.supervision`, reached from a third sub-tab on Supervision. Its hours are added to the **total accreditation hours** in `mountAccreditation()` and are deliberately absent from `sup`, the only figure the 1:6 ratio sees. Keeping the two arrays apart is what makes that rule visible — don't merge them with a `type` field. A peer entry's optional `cost` feeds `tyNet()` like clinical supervision does.
 
-## Trends: current vs historical clients (added Aug 2026)
-Every per-client list on Practice › Trends grows with each client the practice has ever had. Current clients are listed; everyone else folds into one aggregate row that expands on demand.
-- **`trendsIsCurrent(c, lastDate)` is the single definition**, shared by all three lists (attendance, missed sessions, long-term), so a client can't be listed as current in one card and folded in the next. Status leads — category `Finished` is out — with a `TRENDS_RECENT_DAYS` (365) backstop, because a status nobody updated is exactly what the Review status card exists to catch.
-- **Folded rows are built on expand, not up front** (`agedFold` renders an empty `data-pending` body; `wireAgedFolds` fills it on first `toggle` and wires the click handlers, which the render-time `querySelectorAll` pass cannot reach). On a 120-client / 2,460-session practice this is 24 rows and 337 DOM nodes instead of 292 and 2,213.
-- **Aggregates never lose the folded clients**: the KPI row, the funnel, the rolling attendance chart and every total still count everyone. Only the individual rows fold.
+## Long lists: folding history away (added Aug 2026)
+Five lists grow with the practice — Practice › Clients, Practice › Trends (attendance, missed sessions, long-term) and Sessions › All. Each lists what's current and folds the rest into an aggregate row that expands on demand.
+- **`trendsIsCurrent(c, lastDate)` is the single definition** of "still current", shared by every per-client list so a client can't read as current in one and folded in the next. Status leads — category `Finished` is out — with a `TRENDS_RECENT_DAYS` (365) backstop, because a status nobody updated is exactly what the Review status card exists to catch.
+- **Sessions fold by time, not by client**: the newest `SESS_VISIBLE` (60) are listed and older ones group into one block per tax year carrying billed/received totals. This replaced a hard `slice(0,400)` that made session 401 unreachable.
+- **`AGED_MIN` (8) gates the whole mechanism.** Below it nothing folds and the screen looks exactly as it always did — hiding three finished clients behind a tap costs a reader more than the rows ever did.
+- **Folded rows are built on expand, not up front** (`agedFold` renders an empty `data-pending` body; `wireAgedFolds(host, builders, onRow)` fills it on first `toggle` and wires clicks, which the render-time `querySelectorAll` pass cannot reach — `onRow` decides whether a row opens a profile, the client form or a session).
+- **Search never folds.** Someone searching is looking for a specific person or session, very possibly one that finished years ago.
+- **Aggregates never lose the folded records**: KPIs, the funnel, the rolling attendance chart and every total still count everyone. Only the individual rows fold.
+- Sessions › Unpaid and › Incomplete stay whole — they are worklists to clear, not history to browse.
 
 ## Cancellations & DNAs (added Aug 2026)
 Two kinds of missed session, and the charge is **stamped on the session**, never derived live from the policy.

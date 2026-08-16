@@ -1906,17 +1906,40 @@ VIEWS.sessions=function(){
       else rows=rows.sort((a,b)=>parseD(b.s.date)-parseD(a.s.date));
       if(!rows.length){list.innerHTML='<p class="muted small center" style="padding:18px">No sessions match.</p>';return}
       let anySwipe=false;
-      list.innerHTML=rows.slice(0,400).map(x=>{const d=x.d;
+      const rowHTML=x=>{const d=x.d;
         if(sessFilter.seg==="incomplete"){const miss=missingReasons(x.s);
           return '<div class="list-item" data-id="'+x.s._id+'"><div class="li-main"><div class="li-title">'+esc(x.s.client)+' <span class="chip f">incomplete</span></div><div class="li-sub">'+fmtDshort(x.s.date)+' · #'+esc(x.s.num)+' · Missing: '+(miss.join(", ")||"—")+'</div></div><div class="li-right">'+gbp(d.rate)+'</div></div>';}
         const pay=payChip(x.s,d);
-        const inner='<div class="list-item" data-id="'+x.s._id+'"><div class="li-main"><div class="li-title">'+esc(x.s.client)+' '+pay+'</div><div class="li-sub">'+fmtDshort(x.s.date)+' · '+esc(x.s.time||"")+' · '+esc(x.s.location||"")+' · #'+esc(x.s.num)+'</div></div><div class="li-right">'+gbp(d.rate)+'</div></div>';
-        if(d.overdue&&(d.rate||0)>0){anySwipe=true;
+        return '<div class="list-item" data-id="'+x.s._id+'"><div class="li-main"><div class="li-title">'+esc(x.s.client)+' '+pay+cancelTag(x.s,d)+'</div><div class="li-sub">'+fmtDshort(x.s.date)+' · '+esc(x.s.time||"")+' · '+esc(x.s.location||"")+' · #'+esc(x.s.num)+'</div></div><div class="li-right">'+gbp(d.rate)+'</div></div>';};
+      const swipeWrap=x=>{const inner=rowHTML(x);
+        if(x.d.overdue&&(x.d.rate||0)>0){anySwipe=true;
           return '<div class="swrow" data-swipe="'+x.s._id+'"><div class="swunder">✓ Mark paid</div><div class="swover">'+inner+'</div></div>';}
-        return inner;}).join("")
-        +(rows.length>400?'<p class="muted small center">Showing first 400 of '+rows.length+'.</p>':"");
+        return inner;};
+      /* The "All" list is the one that never stops growing. It used to be cut off at 400 rows
+         with no way past — session 401 was simply unreachable. Now the most recent SESS_VISIBLE
+         are listed and everything older folds into one block per tax year, carrying the totals
+         that are what old sessions are usually consulted for anyway. Nothing is unreachable and
+         nothing older is built until it is asked for.
+         The other segments are worklists — upcoming is bounded by the future, unpaid and
+         incomplete are things to clear — so they stay whole. */
+      const foldable=(sessFilter.seg==="all"&&!q&&rows.length>SESS_VISIBLE);
+      const head=foldable?rows.slice(0,SESS_VISIBLE):rows;
+      const tail=foldable?rows.slice(SESS_VISIBLE):[];
+      const years=[];const byYear={};
+      tail.forEach(x=>{const y=x.d.taxYear||"Undated";
+        if(!byYear[y]){byYear[y]={rows:[],billed:0,recvd:0};years.push(y);}
+        const g=byYear[y];g.rows.push(x);g.billed+=(x.d.rate||0);if(x.d.clientPaid)g.recvd+=(x.d.rate||0);});
+      list.innerHTML=head.map(swipeWrap).join("")+
+        years.map(y=>{const g=byYear[y];
+          return agedFold("sy_"+y,y+" · "+plural(g.rows.length,"session"),
+            gbp(Math.round(g.billed))+' billed · '+gbp(Math.round(g.recvd))+' received');}).join("");
       if(anySwipe)list.insertAdjacentHTML("afterbegin",'<p class="small muted" style="margin:8px 2px 2px">💡 Swipe an overdue row left to mark it paid.</p>');
       list.querySelectorAll(".list-item").forEach(li=>li.onclick=()=>sessionForm(S.sessions.find(s=>s._id===li.dataset.id)));
+      /* Folded rows are plain — no swipe-to-pay. An overdue session from three years ago belongs
+         in the Unpaid worklist, not swiped out of a history block. */
+      const builders={};
+      years.forEach(y=>{builders["sy_"+y]=()=>byYear[y].rows.map(rowHTML).join("");});
+      wireAgedFolds(list,builders,id=>sessionForm(S.sessions.find(s=>s._id===id)));
       attachSwipe(list,()=>renderRows());
     };
     body.querySelector("#sq").oninput=e=>{sessFilter.q=e.target.value;renderRows()};
@@ -2139,12 +2162,31 @@ VIEWS.practice=function(){
     const render=()=>{
       const q=(body.querySelector("#cq").value||"").toLowerCase();
       const order={Ongoing:0,"Initial session booked":0,Paused:1,Finished:2};
+      const lastSeen=lastSessionDates(), counts=clientSessionCounts();
       let cs=S.clients.slice().sort((a,b)=>(order[a.status]??9)-(order[b.status]??9)||a.code.localeCompare(b.code));
       if(q)cs=cs.filter(c=>(c.code+" "+(c.notes||"")+" "+(c.status||"")).toLowerCase().includes(q));
-      body.querySelector("#clist").innerHTML='<div class="card" style="padding:4px 12px">'+cs.map(c=>{
+      const li=c=>{
         const r=effRate(c.code,isoD(today()));const ch=c.status==="Ongoing"?'y':c.status==="Paused"?'f':'na';
-        return '<div class="list-item" data-id="'+c._id+'"><div class="li-main"><div class="li-title">'+esc(c.code)+' <span class="chip '+ch+'">'+esc(c.status||"")+'</span></div><div class="li-sub">'+esc(c.frequency||"")+(c.notes?" · "+esc(c.notes):"")+'</div></div><div class="li-right">'+gbp(r)+'</div></div>';}).join("")+'</div>';
-      body.querySelectorAll("#clist .list-item").forEach(li=>li.onclick=()=>clientProfile(S.clients.find(c=>c._id===li.dataset.id)));
+        const seen=lastSeen[(c.code||"").toLowerCase()];
+        return '<div class="list-item" data-id="'+c._id+'"><div class="li-main"><div class="li-title">'+esc(c.code)+' <span class="chip '+ch+'">'+esc(c.status||"")+'</span></div><div class="li-sub">'+esc(c.frequency||"")+(seen?' · last seen '+fmtDMY(seen):'')+(c.notes?" · "+esc(c.notes):"")+'</div></div><div class="li-right">'+gbp(r)+'</div></div>';};
+      /* A search is someone looking for a specific person, very possibly one who finished years
+         ago — so it never folds. Folding only applies to the unfiltered list, and only once
+         there are enough finished clients for it to be worth a tap. */
+      const aged=q?[]:cs.filter(c=>!trendsIsCurrent(c,lastSeen[(c.code||"").toLowerCase()]));
+      const doFold=aged.length>=AGED_MIN;
+      const cur=doFold?cs.filter(c=>trendsIsCurrent(c,lastSeen[(c.code||"").toLowerCase()])):cs;
+      const old=doFold?aged:[];
+      const oldSessions=old.reduce((a,c)=>a+(counts[(c.code||"").toLowerCase()]||0),0);
+      const oldLast=old.map(c=>lastSeen[(c.code||"").toLowerCase()]).filter(Boolean).sort((a,b)=>b-a)[0];
+      body.querySelector("#clist").innerHTML='<div class="card" style="padding:4px 12px">'+
+        (cur.length?cur.map(li).join("")
+          :'<p class="muted small center" style="padding:14px">'+(q?"No clients match.":"No current clients — everyone is in the list below.")+'</p>')+
+        (old.length?agedFold("cl","Finished & long inactive · "+plural(old.length,"client"),
+          plural(oldSessions,"session")+' between them'+(oldLast?' · last seen '+fmtDMY(oldLast):'')):"")+
+        '</div>';
+      body.querySelectorAll("#clist .list-item").forEach(l=>l.onclick=()=>clientProfile(S.clients.find(c=>c._id===l.dataset.id)));
+      wireAgedFolds(body,{cl:()=>old.map(li).join("")},id=>{
+        const c=S.clients.find(x=>x._id===id); if(c)clientProfile(c);});
     };
     body.querySelector("#cq").oninput=render; body.querySelector("#addC").onclick=()=>clientForm(null); render();
   }
@@ -2172,8 +2214,10 @@ VIEWS.practice=function(){
       return '<div class="fr"><div class="ftop"><span>'+tr.e+' <b>'+tr.l+'</b> · '+tr.d+'</span><span>'+n+' '+(n===1?'client':'clients')+(tr.t>1&&base?' · '+pct+'%':'')+'</span></div><div class="fbar"><i data-w="'+w+'" style="width:0"></i></div></div>';}).join("");
     const deep=withSess.filter(x=>x.n>=20).sort((a,b)=>b.n-a.n);
     const deepLi=x=>'<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+'</div><div class="li-sub">'+esc(x.c.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>';
-    const deepCur=deep.filter(x=>trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()]));
-    const deepOld=deep.filter(x=>!trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()]));
+    const deepAged=deep.filter(x=>!trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()]));
+    const deepFold=deepAged.length>=AGED_MIN;
+    const deepCur=deepFold?deep.filter(x=>trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()])):deep;
+    const deepOld=deepFold?deepAged:[];
     const deepOldSessions=deepOld.reduce((s,x)=>s+x.n,0);
     const totalSessions=withSess.reduce((a,x)=>a+x.n,0);
     const avg=base?Math.round(totalSessions/base*10)/10:0;
@@ -2212,8 +2256,10 @@ VIEWS.practice=function(){
     const lcLi=e=>{const cl=S.clients.find(c=>(c.code||"").toLowerCase()===(e.code||"").toLowerCase());
       return '<div class="list-item"'+(cl?' data-id="'+cl._id+'"':'')+'><div class="li-main"><div class="li-title">'+esc(e.code)+' '+rateChip(e)+'</div><div class="li-sub">'+e.lc+' of '+e.total+' sessions'+(e.dna?' · '+e.dna+' DNA':'')+(e.lost>0?' · '+gbp(Math.round(e.lost))+' not charged':'')+(e.last?' · last '+fmtDMY(e.last):'')+'</div></div><div class="li-right">'+trendChip(e.recent,e.prev)+'</div></div>';};
     const lcOf=e=>S.clients.find(c=>(c.code||"").toLowerCase()===(e.code||"").toLowerCase());
-    const lcCur=lcClients.filter(e=>trendsIsCurrent(lcOf(e),lastSeen[(e.code||"").toLowerCase()]));
-    const lcOld=lcClients.filter(e=>!trendsIsCurrent(lcOf(e),lastSeen[(e.code||"").toLowerCase()]));
+    const lcAged=lcClients.filter(e=>!trendsIsCurrent(lcOf(e),lastSeen[(e.code||"").toLowerCase()]));
+    const lcFold=lcAged.length>=AGED_MIN;
+    const lcCur=lcFold?lcClients.filter(e=>trendsIsCurrent(lcOf(e),lastSeen[(e.code||"").toLowerCase()])):lcClients;
+    const lcOld=lcFold?lcAged:[];
     const lcOldMissed=lcOld.reduce((s,e)=>s+e.lc,0), lcOldLost=lcOld.reduce((s,e)=>s+e.lost,0);
     const lcCard='<div class="card"><h2>Missed sessions</h2>'+
       '<div class="kpis mb">'+
@@ -2228,8 +2274,8 @@ VIEWS.practice=function(){
         (projLost>0?' At the last 90 days’ rate that is about <b>'+gbp(projLost)+' a year</b> in fees you don’t charge.':'')+
         ' The per-client % is each client’s share of their own sessions.</p>'+
       (lcClients.length?lcCur.map(lcLi).join("")+
-          agedFold("lc","Finished & long inactive",lcOld.length,
-            lcOldMissed+' missed session'+(lcOldMissed===1?'':'s')+(lcOldLost>0?' · '+gbp(Math.round(lcOldLost))+' not charged':''))
+          (lcOld.length?agedFold("lc","Finished & long inactive · "+plural(lcOld.length,"client"),
+            plural(lcOldMissed,"missed session")+(lcOldLost>0?' · '+gbp(Math.round(lcOldLost))+' not charged':'')):"")
         :'<p class="muted small">No missed sessions recorded yet.</p>')+'</div>';
 
     /* ---- attendance ---- */
@@ -2245,9 +2291,12 @@ VIEWS.practice=function(){
     const attLi=x=>{const a=x.a;
       return '<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+' '+attPctChip(a.pct)+'</div><div class="li-sub">'+a.attended+' of '+a.expected+' expected · '+esc(x.c.frequency||"")+'</div>'+pauseNote(a)+'</div><div class="li-right"><span class="small muted">since '+fmtDM(a.first)+'</span></div></div>';};
     const grpAvg=arr=>arr.length?Math.round(arr.reduce((s,x)=>s+x.a.pct,0)/arr.length):0;
-    /* current clients stay listed and keep their Ongoing / other grouping; the rest fold away */
-    const attCur=attSorted.filter(x=>trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()]));
-    const attOld=attSorted.filter(x=>!trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()]));
+    /* current clients stay listed and keep their Ongoing / other grouping; the rest fold away,
+       but only once there are enough of them to be worth folding (see AGED_MIN) */
+    const attAged=attSorted.filter(x=>!trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()]));
+    const attFold=attAged.length>=AGED_MIN;
+    const attCur=attFold?attSorted.filter(x=>trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()])):attSorted;
+    const attOld=attFold?attAged:[];
     const attOngoing=attCur.filter(x=>(x.c.status||"")==="Ongoing");
     const attOther=attCur.filter(x=>(x.c.status||"")!=="Ongoing");
     const attSection=(title,arr)=>arr.length?'<div class="grp-h">'+title+' <span class="muted" style="font-weight:600">· '+arr.length+' client'+(arr.length>1?'s':'')+' · avg '+grpAvg(arr)+'%</span></div>'+arr.map(attLi).join(""):"";
@@ -2261,8 +2310,8 @@ VIEWS.practice=function(){
       '</div>'+
       (attRows.length?'<p class="small muted" style="margin:0 0 2px">3-month rolling attendance rate across all tracked clients.</p>'+chartAttendance(attSeries):"")+
       (attSorted.length?attSection('Ongoing',attOngoing)+attSection('Paused',attOther)+
-          agedFold("att","Finished & long inactive",attOld.length,
-            'avg '+grpAvg(attOld)+'% attendance · '+attOldSessions+' session'+(attOldSessions===1?'':'s')+' between them')
+          (attOld.length?agedFold("att","Finished & long inactive · "+plural(attOld.length,"client"),
+            'avg '+grpAvg(attOld)+'% attendance · '+plural(attOldSessions,"session")+' between them'):"")
         :'<p class="muted small">Need at least two sessions per client to measure attendance.</p>')+'</div>';
     /* ---- ongoing clients on a current pause: prompt to review status ---- */
     const review=attRows.filter(x=>x.a.currentPause);
@@ -2282,8 +2331,8 @@ VIEWS.practice=function(){
       lcCard+
       (deep.length?'<div class="card"><h2>Long-term clients</h2><p class="small muted" style="margin:0 0 6px">Clients seen for 20+ sessions.</p>'+
         deepCur.map(deepLi).join("")+
-        agedFold("deep","Finished & long inactive",deepOld.length,
-          deepOldSessions+' session'+(deepOldSessions===1?'':'s')+' between them')+'</div>':'');
+        (deepOld.length?agedFold("deep","Finished & long inactive · "+plural(deepOld.length,"client"),
+          plural(deepOldSessions,"session")+' between them'):"")+'</div>':'');
     body.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>clientForm(S.clients.find(c=>c._id===li.dataset.id)));
     /* folded rows are built the first time each block is opened, not now */
     wireAgedFolds(body,{
@@ -4274,6 +4323,11 @@ function freqDays(c){const f=(c&&c.frequency||"").toLowerCase();
    recency is the backstop, because a status nobody remembered to change is exactly what the
    "Review status" card above exists to catch. */
 const TRENDS_RECENT_DAYS=365;
+const SESS_VISIBLE=60;      /* most recent sessions listed in full before the tax-year folds */
+/* Folding only earns its place once there is something to fold. Below this, hiding a handful of
+   finished clients behind a tap costs a reader more than the rows ever did — a three-client
+   practice should look exactly as it always has. */
+const AGED_MIN=8;
 function lastSessionDates(){
   const m={};
   S.sessions.forEach(s=>{const k=(s.client||"").toLowerCase();if(!k)return;
@@ -4288,15 +4342,20 @@ function trendsIsCurrent(c,last){
   return (today()-last)/86400000<=TRENDS_RECENT_DAYS;
 }
 /* The folded block. Rows are built ON EXPAND rather than up front — the whole point is that a
-   long history should cost nothing to render until someone asks to see it. */
-function agedFold(id,label,n,summary){
-  if(!n)return "";
+   long history should cost nothing to render until someone asks to see it. `label` carries its
+   own count so the same helper serves clients, sessions and anything else that piles up. */
+function agedFold(id,label,summary){
   return '<details class="aged" data-aged="'+esc(id)+'">'+
-    '<summary><span class="agl">'+esc(label)+' · '+n+' client'+(n===1?'':'s')+'</span>'+
+    '<summary><span class="agl">'+esc(label)+'</span>'+
     '<span class="ags">'+summary+'</span></summary>'+
     '<div class="agbody" data-pending="1"></div></details>';
 }
-function wireAgedFolds(host,builders){
+function plural(n,w){return n+' '+w+(n===1?'':'s');}
+/* `onRow` receives the row's data-id and decides what opening it means — a client profile, the
+   client form, a session. Lazily-built rows are invisible to the render-time querySelectorAll
+   pass, so they have to be wired here or they would look tappable and do nothing. */
+function wireAgedFolds(host,builders,onRow){
+  const open=onRow||(id=>{const c=S.clients.find(x=>x._id===id); if(c)clientForm(c);});
   host.querySelectorAll("details.aged").forEach(d=>{
     d.addEventListener("toggle",()=>{
       if(!d.open)return;
@@ -4306,8 +4365,7 @@ function wireAgedFolds(host,builders){
       if(!build)return;
       box.innerHTML=build();
       delete box.dataset.pending;
-      box.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>{
-        const c=S.clients.find(x=>x._id===li.dataset.id); if(c)clientForm(c);});
+      box.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>open(li.dataset.id));
     });
   });
 }
