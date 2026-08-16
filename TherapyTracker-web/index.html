@@ -2569,7 +2569,7 @@ function ukTax(profit,ty){profit=Math.max(0,profit||0);const r=taxRates(ty);
   let pa=r.pa;if(profit>100000)pa=Math.max(0,r.pa-(profit-100000)/2);
   /* Personal pension contributions are paid net and extend the basic-rate band by the gross
      amount, so higher-rate relief arrives through the bands rather than as a deduction. */
-  const penGross=Math.round(pensionPcm()*12/0.8);
+  const penGross=Math.round(pensionAmt()*12/0.8);
   const basicTop=r.basicTop+penGross, higherTop=r.higherTop+penGross;
   let b1=0,b2=0,b3=0,scot=null;
   if(taxRegion()==="scotland"){
@@ -2966,14 +2966,19 @@ function taxDetailsSheet(y){const tx=taxForYear(y);const body=el('<div></div>');
       (sched.jul.total?trow('31 Jul '+(parseInt(y)+2)+' \u2014 payment on account',gbpR(sched.jul.total)):'')+
     '</table>'+
     (sched.jan.poa?'<p class="small muted">Payments on account are advance instalments towards the <i>following</i> year, due because this bill passes \u00a3'+POA_THRESHOLD+'. Class 2 and student loan are never part of them.</p>':'');
-  body.innerHTML=html+'<p class="small muted mt">Covers Income Tax, Class 4'+(parseInt(y)<2024?' and Class 2':'')+' National Insurance'+(settings().studentLoan!=="none"?', student loan':'')+' for a sole trader'+(taxRegion()==="scotland"?', at Scottish rates':'')+'. A personal estimate, not tax advice.</p>';
+  body.innerHTML=html+'<p class="small muted mt">Covers Income Tax, Class 4'+(parseInt(y)<2024?' and Class 2':'')+' National Insurance'+(settings().studentLoan!=="none"?', student loan':'')+' for a sole trader'+(taxRegion()==="scotland"?', at Scottish rates':'')+'. <b>An estimate from your own records, not tax advice</b> — it does not know your wider circumstances, and it cannot file for you.</p>';
   openSheet("Tax \u00b7 "+y,body);}
 
-/* ===== Monthly take-home & pension ===== */
-function pensionPcm(){let v=150;try{const s=localStorage.getItem("tt_pension");if(s!==null&&s!==""&&!isNaN(+s))v=+s;}catch(e){}return v;}
-function setPensionPcm(v){try{localStorage.setItem("tt_pension",String(v));}catch(e){}}
-function defaultRate(){let v=90;try{const s=localStorage.getItem("tt_default_rate");if(s!=null&&s!==""&&!isNaN(+s))v=+s;}catch(e){}return v;}
-function setDefaultRate(v){try{localStorage.setItem("tt_default_rate",String(v));}catch(e){}}
+/* ===== Monthly take-home & pension =====
+   Both of these return **null when the therapist has never set one**, which is deliberately not
+   the same as zero. Suggesting a fee or a pension figure puts a number on someone's records that
+   they never chose — so nothing is pre-filled, and every caller has to decide what "unset" looks
+   like on its own screen. Use `pensionAmt()` where a number is needed for arithmetic. */
+function pensionPcm(){try{const s=localStorage.getItem("tt_pension");if(s!==null&&s!==""&&!isNaN(+s))return +s;}catch(e){}return null;}
+function setPensionPcm(v){try{if(v==null||v==="")localStorage.removeItem("tt_pension");else localStorage.setItem("tt_pension",String(v));}catch(e){}}
+function pensionAmt(){return +pensionPcm()||0;}
+function defaultRate(){try{const s=localStorage.getItem("tt_default_rate");if(s!=null&&s!==""&&!isNaN(+s))return +s;}catch(e){}return null;}
+function setDefaultRate(v){try{if(v==null||v==="")localStorage.removeItem("tt_default_rate");else localStorage.setItem("tt_default_rate",String(v));}catch(e){}}
 function clientCategory(status){const c=(S.clientCategories||[]).find(x=>x.status===status);return c?c.category:(status||"");}
 function monthlyTakeHome(){const ty=curTaxYear();const tx=taxForYear(ty);
   let annualNet=0,annualTax=0;
@@ -2982,12 +2987,19 @@ function monthlyTakeHome(){const ty=curTaxYear();const tx=taxForYear(ty);
   const annualHome=annualNet-annualTax;
   return {ty,status:tx.status,annualNet,annualTax,annualHome,monthly:annualHome/12};}
 function editPension(after){const body=el('<div></div>');
+  const cur=pensionPcm();
   body.innerHTML='<p class="muted small">Set your monthly pension contribution. It’s deducted from your after-tax take-home in the “After pension” view (higher-rate relief is modelled by extending your basic-rate band).</p>'+
-    '<label>Monthly pension contribution (£)</label><input type="number" id="penA" value="'+pensionPcm()+'">'+
-    '<button class="btn full mt" id="penS">Save</button>';
-  body.querySelector("#penS").onclick=()=>{const val=+body.querySelector("#penA").value;
+    '<label>Monthly pension contribution (£)</label><input type="number" min="0" id="penA" placeholder="Not set" value="'+(cur==null?"":esc(cur))+'">'+
+    '<p class="small muted">Leave it blank if you don’t pay into a pension — the app won’t assume a figure.</p>'+
+    '<div class="row mt" style="gap:8px"><button class="btn" id="penS">Save</button>'+
+      (cur==null?"":'<button class="btn ghost" id="penClr">Clear</button>')+'</div>';
+  body.querySelector("#penS").onclick=()=>{const raw=body.querySelector("#penA").value.trim();
+    if(raw===""){setPensionPcm(null);closeSheet();toast("Pension cleared");if(after)after();return;}
+    const val=+raw;
     if(isNaN(val)||val<0){toast("Enter an amount");Sfx.error();return;}
     setPensionPcm(val);closeSheet();toast("Pension updated");if(after)after();};
+  const clr=body.querySelector("#penClr");
+  if(clr)clr.onclick=()=>{setPensionPcm(null);closeSheet();toast("Pension cleared");if(after)after();};
   openSheet("Monthly pension",body);}
 
 /* ===== Money — the day-to-day cash picture =====
@@ -3068,6 +3080,18 @@ VIEWS.money=function(){
 /* ===== Tax — the year-end machinery, kept out of the day-to-day ===== */
 VIEWS.tax=function(){
   const v=el('<div class="view active"></div>');
+  /* Nothing is drawn until the disclaimer has been acknowledged. Existing installs never see
+     setup again, so this is where they meet it; a fresh install has already agreed in stepTax
+     and never lands here. Declining goes Home and asks again next time — see showTaxGate. */
+  if(!taxAcked()){
+    v.innerHTML='<div class="card"><h2>About the tax figures</h2>'+
+      '<p class="small muted">One short thing to read before the estimates are shown. It takes a minute and you are only asked once.</p>'+
+      '<button class="btn full mt" id="taxAckOpen">Read it</button></div>';
+    const open=()=>showTaxGate(()=>go("tax"));
+    v.querySelector("#taxAckOpen").onclick=open;
+    setTimeout(()=>{if(!_flow)open();},120);   /* don't stack on top of setup or What's new */
+    return v;
+  }
   const segs=[["estimate","Estimate"],["allowances","Allowances"],["mtd","MTD"]];
   v.innerHTML=segBar("taxseg",segs,taxSeg)+'<div id="taxbody"></div>';
   const body=v.querySelector("#taxbody");
@@ -3141,8 +3165,13 @@ VIEWS.tax=function(){
     '<p class="small muted mt">'+basisNote()+'</p>'+
     (taxBasis()==="cash"?'<p class="small muted">Sessions you have not been paid for yet are not in these totals \u2014 they arrive in the year the money does.</p>':'')+
     '</div>';
-  body.innerHTML=thCard+potCard+basisCard+setupCard+
+  /* Standing reminder, not a one-off gate: the acknowledgement was given once, but the figures
+     are read every month and the caveat has to travel with them. */
+  const disclaimBar='<div class="vmsg warn" style="margin-bottom:12px">⚖️ <b>Estimates, not tax advice.</b> Worked out from what you have entered, using published HMRC rates. '+
+    '<span class="taxlink" id="taxDiscMore">What this means ›</span></div>';
+  body.innerHTML=disclaimBar+thCard+potCard+basisCard+setupCard+
     '<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">By tax year</h2><div class="seg" id="taxmode" style="display:inline-flex"><button data-m="proj" class="'+(taxMode==="proj"?"on":"")+'">Projected</button><button data-m="todate" class="'+(taxMode==="todate"?"on":"")+'">To date</button></div></div><div class="rawscroll"><table><thead><tr><th>Year</th><th class="num">Sess</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Overdue</th><th class="num">Net</th><th class="num">Tax</th></tr></thead><tbody>'+tyTable+'</tbody></table></div><p class="small muted"><b>'+esc(basisLabel())+'.</b> Net = income less room, supervision and business costs, plus any other practice income. Tax = Income Tax + Class 4 NIC (sole trader); tap a figure for the breakdown. <b>*</b> in-progress year shown as '+(taxMode==="proj"?"a pro-rata projection":"tax on income to date")+'.</p></div>';
+  const tdm=body.querySelector("#taxDiscMore");if(tdm)tdm.onclick=()=>taxDisclaimerSheet();
   /* [data-y] only — .taxlink is also the style for the pension link, which is not a year. */
   body.querySelectorAll(".taxlink[data-y]").forEach(elx=>elx.onclick=()=>{
     const y=elx.dataset.y, bn=tyBounds(y);
@@ -3168,14 +3197,19 @@ VIEWS.tax=function(){
     await commit("Tax basis: "+b.dataset.b);
     go("tax",{keepScroll:true});});
   const tmx=body.querySelector("#taxmode");if(tmx)tmx.querySelectorAll("button").forEach(b=>b.onclick=()=>{taxMode=b.dataset.m;go("tax",{keepScroll:true});});
-  function paintTH(){const pen=pensionPcm();
+  /* No pension figure has been set unless the therapist set one — so the "after pension" view
+     subtracts nothing and says so, rather than quietly modelling a guessed contribution. */
+  function paintTH(){const set=pensionPcm()!=null, pen=pensionAmt();
     const mainV=thMode==="pension"?Math.round(th.monthly-pen):Math.round(th.monthly);
     const yrV=thMode==="pension"?Math.round(th.annualHome-pen*12):Math.round(th.annualHome);
     body.querySelector("#thMain").textContent=gbp(mainV);
     body.querySelector("#thMainL").textContent=thMode==="pension"?"per month, after tax & pension":"per month, after tax";
     body.querySelector("#thYr").textContent=gbp(yrV);
     body.querySelector("#thYrL").textContent=thMode==="pension"?"per year, after tax & pension":"per year, after tax";
-    body.querySelector("#thNote").innerHTML=thBasis+(thMode==="pension"?(" Less pension "+gbp(pen)+"/mo."):"")+' <span class="taxlink" id="editPen">'+(thMode==="pension"?"Edit pension ›":("Pension "+gbp(pen)+"/mo ›"))+'</span>';
+    const penTxt=set?(thMode==="pension"?" Less pension "+gbp(pen)+"/mo.":"")
+                    :(thMode==="pension"?" No pension contribution set, so nothing has been taken off.":"");
+    const penLink=set?(thMode==="pension"?"Edit pension ›":("Pension "+gbp(pen)+"/mo ›")):"Set a pension contribution ›";
+    body.querySelector("#thNote").innerHTML=thBasis+penTxt+' <span class="taxlink" id="editPen">'+penLink+'</span>';
     const ep=body.querySelector("#editPen");if(ep)ep.onclick=()=>editPension(()=>go("tax",{keepScroll:true}));}
   body.querySelector("#thMode").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{thMode=bt.dataset.th;
     body.querySelector("#thMode").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));paintTH();});
@@ -3658,7 +3692,7 @@ VIEWS.settings=function(){
    </div></details>
    <details class="sgrp" data-g="data"><summary><span class="sgt">Data &amp; backup</span><span class="sgs">Backups, storage, import, undo and health checks</span></summary><div class="sgb">
    <div class="card"><h2>Backup &amp; restore</h2>
-     <p class="small muted">Your data lives on this device. Export regularly to a file you keep (iCloud/Files/email). The <b>.json backup is the complete copy</b> — it holds every session, supervision entry, client, room and setting. The CSVs are spreadsheet-friendly extracts.</p>
+     <p class="small muted">Your data lives on this device. Export regularly to a file you keep (iCloud/Files/email). The <b>.json backup is the complete copy</b> — it holds every session, supervision entry, client, room and setting. The CSVs are spreadsheet-friendly extracts. No export contains clinical notes — the sessions’ <b>notes</b> column records whether yours were written up, nothing more.</p>
      <div class="row mt" style="flex-wrap:wrap;gap:8px">
        <button class="btn" id="expJ">⤓ Export backup (.json)</button>
        <button class="btn sec" id="expC">⤓ Export sessions (.csv)</button>
@@ -3719,6 +3753,7 @@ VIEWS.settings=function(){
    <details class="sgrp" data-g="help"><summary><span class="sgt">Setup &amp; help</span><span class="sgs">The tour, what’s new, and re-running setup</span></summary><div class="sgb">
    <div class="card"><h2>Setup &amp; help</h2>
      <p class="small muted">The guided tour explains each tab, how to log a session and how your data is saved. It changes nothing.</p>
+     <p class="small muted"><b>A reminder on notes:</b> the Notes field records <i>whether</i> your notes are written up, not the notes themselves. Keep the clinical record wherever you normally do — this app holds none, which is what keeps exports and receipts safe to hand over.</p>
      <button class="btn sec full" id="setTour">🧭 Replay the guided tour</button>
      <button class="btn sec full mt" id="setNew">✨ What’s new in this update</button>
      <p class="small muted mt" style="margin-bottom:6px">Re-running first-time setup walks through practice name, colours, features and defaults again — and <b>overwrites</b> them. Your clients, sessions and payments are untouched.</p>
@@ -3726,6 +3761,11 @@ VIEWS.settings=function(){
    </div>
    </div></details>
    <details class="sgrp" data-g="about"><summary><span class="sgt">About</span><span class="sgs">Version, policies and how to install it</span></summary><div class="sgb">
+   <div class="card"><h2>About the tax figures</h2>
+     <p class="small muted">What the Tax tab is, and what it isn’t. Worth re-reading before you rely on a number.</p>
+     <div style="padding:0 2px">${taxDisclaimerListHTML()}</div>
+     <p class="small muted mt">Also set out in the <a href="terms.html#tax" target="_blank" rel="noopener">Terms of Service</a>.${S.settings&&S.settings.taxAckAt?" Acknowledged on "+fmtD(S.settings.taxAckAt)+".":""}</p>
+   </div>
    <div class="card"><h2>About</h2><p class="small muted">Therapy Tracker · offline · replaces the spreadsheet.
      ${S.sessions.length} sessions, ${S.clients.length} clients${S.settings&&S.settings.onboardedAt?" · set up "+fmtD(S.settings.onboardedAt):""}. Add to your Home Screen for an app-like experience.</p>
      <p class="small muted"><a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a></p></div>
@@ -3998,6 +4038,7 @@ function sessionForm(s,o){
      </div>
      <p class="small muted" id="f_rpNote" style="display:none"></p>
      <label>Notes done?</label><input id="f_notes" value="${esc(m.notes||"")}" placeholder="Y / note">
+     <p class="small muted">A marker that your notes are written up, not the notes themselves — keep the clinical record where you normally do.</p>
      <label class="colchk" style="margin-top:14px"><input type="checkbox" id="f_latecancel"${m.lateCancel?" checked":""}> Late cancellation</label>
      <div class="vbanner" id="vbanner"></div>
      <div class="row mt" style="gap:8px"><button class="btn full" id="save">Save session</button></div>
@@ -4074,11 +4115,12 @@ function clientForm(c){
     <label>Client code</label><input id="c_code" value="${esc(m.code)}" ${isNew?"":"readonly"}>
     <div class="field2"><div><label>Status</label><select id="c_status">${opts(statuses,m.status)}</select></div>
       <div><label>Frequency</label><select id="c_freq">${opts(["Weekly","Every 2 weeks","Every 3 weeks","Monthly"],m.frequency)}</select></div></div>
-    ${isNew?`<label>Starting rate (£)</label><input type="number" id="c_rate" value="${defaultRate()}"><div class="prev" style="margin-top:5px"><span class="taxlink" id="setDefRate">Update default (£${defaultRate()}) ›</span></div>`:
+    ${isNew?`<label>Starting rate (£)</label><input type="number" min="0" id="c_rate" placeholder="What you charge this client" value="${defaultRate()==null?"":esc(defaultRate())}"><div class="prev" style="margin-top:5px"><span class="taxlink" id="setDefRate">${defaultRate()==null?"Set a default for new clients ›":"Update default (£"+esc(defaultRate())+") ›"}</span></div>`:
       `<div class="hint">Current rate: <b>${gbp(rateNow)}</b> <button class="btn sm" id="chRate" style="float:right">Change rate</button></div>
        <div id="histWrap"></div>`}
     <div class="field2"><div><label>Insurance?</label><select id="c_ins">${opts(["N","Y"],m.insurance||"N")}</select></div><div></div></div>
-    <label>Notes</label><textarea id="c_notes" rows="2">${esc(m.notes||"")}</textarea>
+    <label>Notes</label><textarea id="c_notes" rows="2" placeholder="Admin reminders only — e.g. “invoices via employer”">${esc(m.notes||"")}</textarea>
+    <p class="small muted">Practical reminders about working with this client. Not a clinical record — this app doesn’t hold one.</p>
     <button class="btn full mt" id="cSave">Save client</button>
     ${isNew?"":'<button class="btn danger full mt" id="cDel">Delete client</button>'}`;
   if(!isNew){
@@ -4087,7 +4129,8 @@ function clientForm(c){
     body.querySelector("#chRate").onclick=()=>rateChange(m.code);
   }
   const sdr=body.querySelector("#setDefRate");
-  if(sdr)sdr.onclick=()=>{const v=prompt("Default starting rate for new clients (£):",defaultRate());if(v==null)return;
+  if(sdr)sdr.onclick=()=>{const v=prompt("Default starting rate for new clients (£) — leave blank for none:",defaultRate()==null?"":defaultRate());if(v==null)return;
+    if(v.trim()===""){setDefaultRate(null);sdr.textContent="Set a default for new clients ›";toast("Default cleared");return;}
     const n=+v;if(isNaN(n)||n<0){toast("Enter a valid amount");Sfx.error();return;}
     setDefaultRate(n);const inp=body.querySelector("#c_rate");if(inp)inp.value=n;sdr.textContent="Update default (£"+n+") ›";toast("Default set to "+gbp(n));};
   body.querySelector("#cSave").onclick=async()=>{
@@ -4095,7 +4138,13 @@ function clientForm(c){
     m.frequency=body.querySelector("#c_freq").value;m.insurance=body.querySelector("#c_ins").value;m.notes=body.querySelector("#c_notes").value;
     if(!m.code){toast("Enter a code");return}
     const cat=S.clientCategories.find(x=>x.status===m.status);m.category=cat?cat.category:m.status;
-    if(isNew){const rate=+body.querySelector("#c_rate").value||0;
+    if(isNew){
+      /* A blank fee is not £0 — £0 is a real answer (pro bono, a training placement) and has to be
+         typed. Defaulting a blank to zero would stamp a fee on the client's record nobody chose. */
+      const rateRaw=body.querySelector("#c_rate").value.trim();
+      if(rateRaw===""){toast("Enter a starting rate (0 if you don’t charge)");Sfx.error();return}
+      const rate=+rateRaw;
+      if(isNaN(rate)||rate<0){toast("Enter a valid rate");Sfx.error();return}
       if(S.clients.find(x=>x.code.toLowerCase()===m.code.toLowerCase())){toast("Code already exists");return}
       m.rate=rate;S.clients.push(m);
       S.rateHistory.push({_id:uid(),client:m.code,effectiveFrom:isoD(today()),rate:rate});
@@ -4112,7 +4161,7 @@ function rateChange(code){
   const body=el('<div></div>');
   body.innerHTML=`<p class="muted small">Adds a new rate from a date you choose. <b>Past sessions keep their old rate.</b></p>
     <label>Effective from</label><input type="date" id="rDate" value="${isoD(today())}">
-    <label>New rate (£)</label><input type="number" id="rAmt" value="${effRate(code,isoD(today()))||defaultRate()}">
+    <label>New rate (£)</label><input type="number" min="0" id="rAmt" placeholder="New fee" value="${esc(effRate(code,isoD(today()))||defaultRate()||"")}">
     <button class="btn full mt" id="rSave">Apply new rate</button>`;
   body.querySelector("#rSave").onclick=async()=>{const dt=body.querySelector("#rDate").value;const amt=+body.querySelector("#rAmt").value;
     if(!dt||isNaN(amt)){toast("Enter date and amount");return}
@@ -4455,7 +4504,8 @@ function printReceipt(c,rows,label,paidOnly){
     '<p><b>Client:</b> '+esc(c.code)+' &nbsp;·&nbsp; <b>Period:</b> '+esc(label)+'</p>'+
     '<table><thead><tr><th>Date</th><th>Session</th><th>Mode</th><th class="r">Fee</th><th>Status</th></tr></thead><tbody>'+trs+'</tbody></table>'+
     '<div class="tot">'+(paidOnly?('Total received: <b>'+gbp(tot)+'</b>'):('Total billed: <b>'+gbp(tot)+'</b>'+(paid<tot?'<br><span class="sub">of which paid '+gbp(paid)+' · outstanding '+gbp(tot-paid)+'</span>':'<br><span class="sub">paid in full</span>')))+'</div>'+
-    '<div class="foot">Generated by Therapy Tracker on '+fmtD(t)+'. Client identified by confidential code. This document confirms therapy sessions provided by '+esc(practiceName())+'.</div>'+
+    '<div class="foot">Generated by Therapy Tracker on '+fmtD(t)+'. Client identified by confidential code. This document confirms therapy sessions provided by '+esc(practiceName())+'.'+
+      '<br>It is a record of attendance and fees only. No clinical notes are held in this system or reproduced here.</div>'+
     '</body></html>';
   const fr=document.createElement("iframe");
   fr.style.cssText="position:absolute;width:0;height:0;border:0;visibility:hidden";
@@ -4503,9 +4553,12 @@ function incomeForecast(){
 /* ============ Export / import ============ */
 function download(name,text,type){const b=new Blob([text],{type:type||"application/json"});const u=URL.createObjectURL(b);
   const a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500)}
+/* Stated on the file itself, because a backup outlives the app that made it and whoever opens it
+   next needs to know that a "notes" field here means "notes were done", not the notes. */
+const NOTES_SCOPE="The 'notes' field on a session records whether clinical notes were completed elsewhere. This file contains no clinical notes.";
 async function exportJSON(){
   const audit=_db?await auditAll():[]; // must still work with no database — the crash screen relies on it
-  const out={app:"TherapyTracker",version:1,schemaVersion:SCHEMA_VERSION,exportedAt:new Date().toISOString(),state:S,audit:audit.slice(-800)};
+  const out={app:"TherapyTracker",version:1,schemaVersion:SCHEMA_VERSION,note:NOTES_SCOPE,exportedAt:new Date().toISOString(),state:S,audit:audit.slice(-800)};
   download("therapy-tracker-backup-"+isoD(today())+".json",JSON.stringify(out));markBackedUp();toast("Backup downloaded")}
 
 /* ===== Encrypted backups (AES-256-GCM via WebCrypto, passphrase-derived key) =====
@@ -4532,7 +4585,7 @@ async function encPayload(){
   const key=await kvGet("encKey"),saltB=await kvGet("encSalt");
   if(!key||!saltB)throw new Error("no passphrase set");
   const audit=_db?await auditAll():[];
-  const plain=JSON.stringify({app:"TherapyTracker",version:1,schemaVersion:SCHEMA_VERSION,exportedAt:new Date().toISOString(),state:S,audit:audit.slice(-800)});
+  const plain=JSON.stringify({app:"TherapyTracker",version:1,schemaVersion:SCHEMA_VERSION,note:NOTES_SCOPE,exportedAt:new Date().toISOString(),state:S,audit:audit.slice(-800)});
   const iv=crypto.getRandomValues(new Uint8Array(12));
   const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv:iv},key,new TextEncoder().encode(plain));
   return JSON.stringify({app:"TherapyTracker",enc:1,cipher:"AES-256-GCM",kdf:"PBKDF2-SHA256",iter:ENC_ITER,salt:saltB,iv:bufToB64(iv.buffer),data:bufToB64(ct)});
@@ -5370,6 +5423,20 @@ function stepFeatures(w){
       sw.onclick=()=>{if(sw.disabled)return;w.features[f.k]=!featureOn(w,f.k);Sfx.tick();paint();};});
     paint();
   }};}
+/* The single most common misreading of this app: that "Notes" is where the notes go. It isn't —
+   it is a done/not-done marker, and the app has no clinical record in it at all. Said once here,
+   plainly, before anyone starts typing into a field expecting it to be a case note. */
+function stepNotes(w){return{emoji:"🗒", h:"This isn’t where your notes live",
+  sub:"An important distinction, and the reason the app can stay as simple as it is.",
+  mount(host){
+    host.innerHTML=ovPoints([
+      ["✅","It tracks <i>whether</i> notes are done","The Notes field on a session is a tick — “written up” or “still outstanding”. The app chases the ones you haven’t done and counts a session as incomplete until you have."],
+      ["🔐","Your actual notes stay where they are","Keep writing them wherever you already do — your notebook, encrypted files, or your case-management system. Nothing about that changes."],
+      ["🧾","So exports and receipts hold no clinical content","A statement for a client’s insurer shows dates, fees and attendance. There is nothing confidential in it beyond the client’s code."],
+      ["🤝","Which keeps this app low-risk","No clinical record here means a lost phone or a shared backup file is a much smaller problem than it would otherwise be."]
+    ])+
+    '<div class="ovnote">If you <i>do</i> want a short reminder on a session — “brought partner”, “moved to fortnightly” — the field takes free text. Keep it administrative.</div>';
+  }};}
 /* CPD is everybody; accreditation is the minority working toward it. Ask plainly, default off. */
 function stepCPD(w){return{emoji:"📚", h:"CPD and accreditation",
   sub:"Supervision hours count toward your yearly CPD. The app totals them for you.",
@@ -5425,17 +5492,23 @@ function stepRooms(w){return{emoji:"🚪", h:"Where do you see clients?",
     };
     draw();
   }};}
-function stepMoney(w){return{emoji:"💷", h:"Your usual numbers",
-  sub:"Starting points only — every client keeps their own dated fee history, so a rate change never rewrites past sessions.",
+/* Nothing here is pre-filled and nothing here is required. A suggested fee or pension figure is a
+   business decision the app is not entitled to make on the therapist's behalf, and a number the
+   user merely failed to clear reads exactly like one they chose. Blank means blank. */
+function stepMoney(w){
+  const val=v=>(v==null||v==="")?"":esc(v);
+  return{emoji:"💷", h:"Your usual numbers",
+  sub:"Both optional — leave either blank if it doesn’t apply. Every client keeps their own dated fee history, so a rate change never rewrites past sessions.",
   mount(host){
-    host.innerHTML='<label>Usual session fee for a new client (£)</label>'+
-      '<input id="spRate" type="number" min="0" step="1" value="'+(+w.rate||0)+'">'+
-      '<p class="prev">Pre-filled when you add a client. You can change it per client, and change it again from any date.</p>'+
-      '<label style="margin-top:14px">Monthly pension contribution (£)</label>'+
-      '<input id="spPen" type="number" min="0" step="5" value="'+(+w.pension||0)+'">'+
-      '<p class="prev">Used only by the “after pension” take-home figure on the Revenue tab. Set 0 if you’d rather not track it.</p>';
-    host.querySelector("#spRate").oninput=e=>w.rate=+e.target.value||0;
-    host.querySelector("#spPen").oninput=e=>w.pension=+e.target.value||0;
+    host.innerHTML='<label>Usual session fee for a new client (£) <span class="muted">(optional)</span></label>'+
+      '<input id="spRate" type="number" min="0" step="1" placeholder="Leave blank for none" value="'+val(w.rate)+'">'+
+      '<p class="prev">If you set one, it pre-fills when you add a client — you can still change it per client, and change it again from any date. Leave it blank and the app won’t suggest a fee.</p>'+
+      '<label style="margin-top:14px">Monthly pension contribution (£) <span class="muted">(optional)</span></label>'+
+      '<input id="spPen" type="number" min="0" step="5" placeholder="Leave blank for none" value="'+val(w.pension)+'">'+
+      '<p class="prev">Used only by the “after pension” take-home figure on the Tax tab. Leave it blank if you don’t pay into a pension.</p>';
+    const read=e=>{const raw=e.target.value.trim();return raw===""?null:(+raw||0);};
+    host.querySelector("#spRate").oninput=e=>w.rate=read(e);
+    host.querySelector("#spPen").oninput=e=>w.pension=read(e);
   }};}
 /* Offered during setup so the "starting from nothing" hump is dealt with on day one,
    rather than being discovered in Settings six months later. Entirely optional. */
@@ -5508,7 +5581,7 @@ function stepDone(w){return{emoji:"🎉", h:"That’s you set up",
       '<div><span>Practice</span><b>'+esc(w.name||"—")+'</b></div>'+
       '<div><span>Colour scheme</span><b>'+pal.n+' · '+(w.theme==="auto"?"match device":w.theme)+'</b></div>'+
       '<div><span>Locations</span><b>'+esc((w.rooms||[]).map(r=>r.loc).filter(Boolean).join(", ")||"—")+'</b></div>'+
-      '<div><span>Default fee</span><b>'+gbp(w.rate)+'</b></div>'+
+      '<div><span>Default fee</span><b>'+(w.rate==null||w.rate===""?"not set":gbp(w.rate))+'</b></div>'+
       '<div><span>Backup reminder</span><b>'+w.bkDays+' days / '+w.bkActs+' changes</b></div>'+
       '<div><span>Keep records</span><b>notes '+w.rtNotes+' yrs · financial '+w.rtFin+' yrs</b></div>'+
       (featureOn(w,"supervision")?'<div><span>CPD target</span><b>'+w.cpdTarget+' hrs/yr'+(featureOn(w,"accreditation")?' · accreditation tracking on':'')+'</b></div>':'')+
@@ -5574,6 +5647,8 @@ async function setupSave(w,opts){
   sg.palette=w.palette;
   sg.features={};FEATURES.forEach(f=>{sg.features[f.k]=featureOn(w,f.k)&&(!f.dep||featureOn(w,f.dep));});
   sg.onboarded=true; sg.onboardedAt=isoD(today());
+  /* Never cleared here: a re-run of setup does not un-acknowledge something already agreed to. */
+  if(w.taxAck&&!sg.taxAck){sg.taxAck=true;sg.taxAckAt=isoD(today());}
   sg.setupRuns=(sg.setupRuns||0)+1;
   const rt=sg.retention=sg.retention||{};
   if(+w.cpdTarget>=1)sg.cpdTarget=Math.round(+w.cpdTarget);
@@ -5582,7 +5657,9 @@ async function setupSave(w,opts){
   if(!Array.isArray(rt.endedStatuses)||!rt.endedStatuses.length)rt.endedStatuses=defaultEndedStatuses(S);
   if(!opts||!opts.skipRooms)setupApplyRooms(w);
   applyPalette(w.palette);setTheme(w.theme);Sfx.set(w.sound);
-  setDefaultRate(+w.rate||0);setPensionPcm(+w.pension||0);
+  /* null clears the key, so "I left it blank" survives a re-run rather than becoming £0 */
+  setDefaultRate(w.rate==null||w.rate===""?null:+w.rate);
+  setPensionPcm(w.pension==null||w.pension===""?null:+w.pension);
   try{localStorage.setItem("tt_backup_days",String(w.bkDays));localStorage.setItem("tt_backup_acts",String(w.bkActs));}catch(e){}
   await commit("Setup: practice “"+sg.practiceName+"”");
   applySettings();go("home");updateBackupBanner();
@@ -5614,6 +5691,71 @@ function showBetaGate(after){
       if(after)after();
     }});
 }
+
+/* ============ Tax disclaimer ============
+   The tax side reads real data and produces a real number, which is exactly why it has to say
+   out loud what that number is and is not. One acknowledgement, recorded on `settings.taxAck`:
+   asked in setup for anyone new, and on first opening the Tax tab for the existing installs that
+   will never see setup again — the same reasoning showBetaGate already uses.
+   TAX_DISCLAIMER is the single source: the setup step, the gate and the Settings card all
+   render this array, so the three can never end up saying different things. */
+const TAX_DISCLAIMER=[
+  ["🧮","Estimates, worked from your own figures","The app applies published HMRC rates and thresholds to the sessions, costs and settings you have entered. Anything missing or mistyped is missing or mistyped in the estimate too."],
+  ["⚖️","Not tax advice","It does not know your full circumstances — other employment, a partner’s position, capital allowances, reliefs you may be entitled to, or anything HMRC has agreed with you. For a decision that matters, ask an accountant."],
+  ["📤","It cannot file for you","Submitting a return needs software HMRC has recognised. The app keeps the records and produces the figures; the filing is still yours or your accountant’s."],
+  ["✅","The return is your responsibility","Whatever you submit to HMRC is your declaration. Check these figures before you rely on them."]
+];
+function taxAcked(){return !!settings().taxAck;}
+/* Same four points outside the overlay, where `ovPoints`' styling doesn't belong. */
+function taxDisclaimerListHTML(){return TAX_DISCLAIMER.map(p=>
+  '<div class="list-item"><div class="li-main"><div class="li-title">'+p[0]+' '+esc(p[1])+'</div>'+
+  '<div class="li-sub">'+p[2]+'</div></div></div>').join("");}
+function taxDisclaimerSheet(){
+  const body=el('<div></div>');
+  const sg=settings();
+  body.innerHTML='<div class="card" style="padding:4px 12px">'+taxDisclaimerListHTML()+'</div>'+
+    '<p class="small muted mt">Also set out in the <a href="terms.html#tax" target="_blank" rel="noopener">Terms of Service</a>.'+
+    (sg.taxAckAt?' Acknowledged on '+fmtD(sg.taxAckAt)+'.':'')+'</p>';
+  openSheet("About the tax figures",body);
+}
+/* Skippable on purpose: declining returns you Home rather than trapping you on a tab you never
+   agreed to use. It will ask again next time, because nothing was acknowledged. */
+function showTaxGate(after){
+  const w={ack:false};
+  const step={emoji:"🧾", h:"About the tax figures",
+    sub:"Worth a minute before you use them — it explains what they are.",
+    validate(){if(!w.ack){toast("Tick the box to continue");Sfx.error();return false;}},
+    mount(host){
+      host.innerHTML=ovPoints(TAX_DISCLAIMER)+
+      '<p class="prev">Also set out in the <a href="terms.html#tax" target="_blank" rel="noopener">Terms of Service</a>, and repeated in <b>⚙ Settings › About</b>.</p>'+
+      '<label class="row" style="align-items:flex-start;gap:10px;margin-top:16px;cursor:pointer">'+
+        '<input type="checkbox" id="taxAckBox" style="margin-top:3px">'+
+        '<span>I understand these figures are estimates for my own planning, not tax advice</span>'+
+      '</label>';
+      host.querySelector("#taxAckBox").onchange=e=>{w.ack=e.target.checked;};
+    }};
+  flowStart({title:"Tax figures", steps:[step], doneLabel:"I understand",
+    onSkip:()=>{flowClose();go("home");toast("Tax tab needs that acknowledgement");},
+    onDone:async()=>{
+      const sg=settings(); sg.taxAck=true; sg.taxAckAt=isoD(today());
+      await commit("Acknowledged tax disclaimer");
+      if(after)after();
+    }});
+}
+/* The same words as a setup step, so a new install has already agreed before the tab exists. */
+function stepTax(w){return{emoji:"🧾", h:"About the tax figures",
+  sub:"The app estimates your tax from your own records. Here is what that is worth — and what it isn’t.",
+  validate(){if(!w.taxAck){toast("Tick the box to continue");Sfx.error();return false;}},
+  mount(host){
+    host.innerHTML=ovPoints(TAX_DISCLAIMER)+
+      '<label class="row" style="align-items:flex-start;gap:10px;margin-top:16px;cursor:pointer">'+
+        '<input type="checkbox" id="spTaxAck"'+(w.taxAck?" checked":"")+' style="margin-top:3px">'+
+        '<span>I understand these figures are estimates for my own planning, not tax advice</span>'+
+      '</label>'+
+      '<div class="ovnote">You can read this again any time in <b>⚙ Settings › About</b>.</div>';
+    host.querySelector("#spTaxAck").onchange=e=>{w.taxAck=e.target.checked;};
+  }};}
+
 function startSetup(opts){
   opts=opts||{};
   const sg=settings();
@@ -5626,7 +5768,7 @@ function startSetup(opts){
     palette:sg.palette||curPalette(),
     theme:themePref(), sound:Sfx.on,
     features:Object.assign({},sg.features||{}),
-    rate:defaultRate(), pension:pensionPcm(),
+    rate:defaultRate(), pension:pensionPcm(), taxAck:!!sg.taxAck,
     bkDays:backupDaysThreshold(), bkActs:backupActsThreshold(),
     rtNotes:retentionCfg().notesYears, rtFin:retentionCfg().financeYears,
     cpdTarget:cpdTarget(),
@@ -5640,10 +5782,14 @@ function startSetup(opts){
       ["✈️","Works with no signal","Install it to your Home Screen and it opens like a normal app, offline."],
       ["🧾","Replaces the spreadsheet","Fees, room costs, unpaid sessions and tax estimates all work themselves out."]
     ])};
-  const steps=[welcome,stepPractice(w),stepLook(w),stepFeatures(w)];
+  const steps=[welcome,stepPractice(w),stepLook(w),stepFeatures(w),stepNotes(w)];
   if(featureOn(w,"supervision"))steps.push(stepCPD(w));
   if(withRooms)steps.push(stepRooms(w));
-  steps.push(stepMoney(w),stepRetention(w));
+  steps.push(stepMoney(w));
+  /* Only when the tax side is actually switched on. Anyone who enables it later meets the same
+     words on the Tax tab's own gate, so the acknowledgement is never skipped. */
+  if(featureOn(w,"tax"))steps.push(stepTax(w));
+  steps.push(stepRetention(w));
   if(!rerun)steps.push(stepImport(w));   /* re-runs promise not to touch client data — leave it to Settings */
   steps.push(stepBackup(w),stepDone(w));
   flowStart({
@@ -5744,7 +5890,12 @@ function tourSteps(){
       ["📆","Date & time","Log ahead as well as behind — future sessions show under Coming up and count towards nothing until the date passes."],
       ["🚪","Room & mode","In person or online, and which location. The room cost is picked up automatically from that room’s dated cost."],
       ["💰","Paid date","Leave it empty until the money actually arrives. That’s what drives “outstanding”, so it’s worth being honest with it."],
-      ["📝","Notes","Free text. Tick <b>late cancellation</b> rather than deleting the session — it keeps your attendance figures accurate and is excluded from clinical hours."]])});
+      ["📝","Notes done?","A <b>marker</b>, not the notes — see the next screen. Tick <b>late cancellation</b> rather than deleting the session; it keeps your attendance figures accurate and is excluded from clinical hours."]])});
+  st.push({emoji:"🗒", h:"This isn’t where your notes live", sub:"Worth being clear about, because the field is called Notes.",
+    html:ovPoints([
+      ["✅","It tracks <i>whether</i> notes are done","A session counts as incomplete until you mark it, and the app chases the ones outstanding."],
+      ["🔐","Your actual notes stay where they are","Notebook, encrypted files, case-management system — wherever you already keep them. This app holds no clinical record."],
+      ["🧾","So nothing confidential leaves in an export","Statements and CSVs carry dates, fees and attendance against a client code, and nothing else."]])});
   st.push({emoji:"🔒", h:"Client codes, not names", sub:"The single most important habit.",
     html:ovPoints([
       ["🆔","Use a short code","Initials, or anything only you can decode — <b>AB</b>, <b>JM2</b>. Never a full name."],
