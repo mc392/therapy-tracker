@@ -2102,9 +2102,12 @@ function supervisionPanel(){
    supervision and CPD behind it. Merged from the old Clients and Supervision tabs. */
 VIEWS.practice=function(){
   const v=el('<div class="view active"></div>');
-  const segs=[["clients","Clients"],["trends","Trends"],["rooms","Rooms"]];
+  const segs=[["clients","Clients"]];
+  if(feat("trends"))segs.push(["trends","Trends"]);
+  segs.push(["rooms","Rooms"]);
   if(feat("supervision"))segs.push(["supervision","Supervision"]);
   if(pracTab==="supervision"&&!feat("supervision"))pracTab="clients";
+  if(pracTab==="trends"&&!feat("trends"))pracTab="clients";
   v.innerHTML=segBar("crtab",segs,pracTab)+'<div id="crbody"></div>';
   const body=v.querySelector("#crbody");
   function renderClients(){
@@ -5674,6 +5677,7 @@ const FEATURES=[
   {k:"supervision",  ic:"🗣", n:"Supervision",            d:"A tab for logging supervision sessions, costs and which clients you discussed."},
   {k:"accreditation",ic:"📜", n:"Accreditation hours",    d:"Clinical vs supervision hours and the 1:6 ratio, for BACP Form 3A. Lives inside Supervision › Insights.",dep:"supervision"},
   {k:"peer",         ic:"👥", n:"Peer supervision",       d:"A separate log for peer supervision hours — added to your total accreditation hours, kept out of the 1:6 ratio.",dep:"supervision"},
+  {k:"trends",       ic:"📈", n:"Trends",                 d:"Retention funnel, attendance against expected frequency, missed sessions and how long clients stay. Lives inside Practice."},
   {k:"finances",     ic:"🧮", n:"Costs & other income",   d:"Business costs (insurance, wifi, monthly room rent) and income that isn’t a client session. Both feed your net income and tax figures.",dep:"money"},
   {k:"money",        ic:"💷", n:"Money",                  d:"Revenue charts, what is outstanding, and the month-by-month picture of what came in."},
   {k:"tax",          ic:"🧾", n:"Tax",                    d:"Tax-year totals, UK sole-trader tax estimates and monthly take-home."},
@@ -5693,17 +5697,21 @@ function featureOn(w,k){return w.features[k]!==false;}
    REVEAL_CORE is what a therapist needs on day one to log a session and see what they are owed.
    Everything else is real but not yet earned, and each entry below says what earns it. */
 const REVEAL_CORE=["supervision","money","gamify","attention","receipts"];
+/* `keys` may hold more than one flag: some features are only worth meeting together. Tax and
+   business costs are the case in point — an estimate that ignores what the practice costs you is
+   not an estimate worth setting money aside against, so revealing one without the other would
+   put a knowingly overstated figure in front of someone. */
 const REVEAL_STEPS=[
-  {k:"tax",      when:st=>st.sessions.length>=10,
+  {keys:["tax","finances"], when:st=>st.sessions.length>=10,
    emoji:"🧾", title:"Ready to think about tax?",
-   sub:"You have logged ten sessions. The Tax tab turns them into a running estimate of what to set aside — including the January payment on account that catches people out."},
-  {k:"finances", when:st=>st.sessions.length>=20&&(st.settings.features||{}).tax!==false,
-   emoji:"🧮", title:"Track what the practice costs you",
-   sub:"Insurance, supervision, room rent, CPD — logged once, they come off your profit and your tax estimate for every year they apply to."},
-  {k:"quickadd", when:st=>st.sessions.length>=25,
+   sub:"Ten sessions in. <b>Tax</b> turns them into a running estimate of what to set aside — including the January payment on account that catches people out — and <b>Costs &amp; other income</b> takes insurance, supervision, room rent and CPD off the profit it is worked out from. They arrive together because the estimate is wrong without the costs."},
+  {keys:["trends"],   when:st=>st.sessions.length>=20,
+   emoji:"📈", title:"Enough history to see a pattern",
+   sub:"Twenty sessions is about where <b>Practice › Trends</b> starts telling you something true: who stays, who drifts, how attendance holds up against the frequency you agreed, and what missed sessions are costing."},
+  {keys:["quickadd"], when:st=>st.sessions.length>=25,
    emoji:"⌨", title:"A faster way to log",
    sub:"You have logged plenty by hand now. The quick-add bar takes a whole session as one line — “AB tue 14:00 paid”."},
-  {k:"raw",      when:st=>st.sessions.length>=40&&(st.settings.features||{}).money!==false,
+  {keys:["raw"],      when:st=>st.sessions.length>=40&&(st.settings.features||{}).money!==false,
    emoji:"▦", title:"Every session in one table",
    sub:"Enough history to be worth browsing as a spreadsheet — sortable columns, a column picker and a filtered CSV export."}
 ];
@@ -5712,7 +5720,9 @@ function revealCfg(){const sg=settings();sg.reveal=sg.reveal||{mode:"all",shown:
 /* Apply the "start simple" choice to the feature flags. Only ever switches things OFF, and only
    on a fresh install — see stepDepth's guard. */
 function revealApplySimple(w){
-  FEATURES.forEach(f=>{if(REVEAL_CORE.indexOf(f.k)<0&&f.k!=="accreditation")w.features[f.k]=false;});
+  /* accreditation and peer are left alone: stepCPD asks about both directly a couple of screens
+     later, and a question the therapist answers beats a default either way. */
+  FEATURES.forEach(f=>{if(REVEAL_CORE.indexOf(f.k)<0&&f.k!=="accreditation"&&f.k!=="peer")w.features[f.k]=false;});
   REVEAL_CORE.forEach(k=>{if(w.features[k]===false)delete w.features[k];});
 }
 let _revealBusy=false;
@@ -5723,31 +5733,33 @@ function revealCheck(){
     const cfg=revealCfg();
     if(cfg.mode!=="simple"||_revealBusy||_flow)return;
     const sg=settings(); sg.features=sg.features||{};
+    /* a step is due while ANY of its keys is still hidden and it has not been answered before */
     const step=REVEAL_STEPS.find(x=>
-      cfg.shown.indexOf(x.k)<0 && sg.features[x.k]===false && x.when(S));
+      cfg.shown.indexOf(x.keys[0])<0 && x.keys.some(k=>sg.features[k]===false) && x.when(S));
     if(!step)return;
     _revealBusy=true;
     setTimeout(()=>revealOffer(step),900);   /* let the save's own toast land first */
   }catch(e){/* a nudge is never worth breaking a save over */}
 }
 function revealOffer(step){
-  const f=FEATURES.find(x=>x.k===step.k)||{n:step.k,d:""};
+  const fs=step.keys.map(k=>FEATURES.find(x=>x.k===k)||{k,n:k,d:""});
+  const names=fs.map(f=>f.n).join(" and ");
   const body=el('<div></div>');
   body.innerHTML='<div style="text-align:center;font-size:40px;line-height:1">'+step.emoji+'</div>'+
     '<h3 style="text-align:center;margin:8px 0 4px">'+esc(step.title)+'</h3>'+
     '<p class="small muted" style="text-align:center">'+step.sub+'</p>'+
-    '<div class="vmsg ok mt">'+esc(f.n)+' — '+f.d+'</div>'+
-    '<button class="btn full mt" id="rvYes">Turn it on</button>'+
+    fs.map(f=>'<div class="vmsg ok mt">'+esc(f.n)+' — '+f.d+'</div>').join("")+
+    '<button class="btn full mt" id="rvYes">'+(fs.length>1?"Turn them on":"Turn it on")+'</button>'+
     '<button class="btn ghost full mt" id="rvNo">Not for me</button>'+
     '<p class="prev" style="text-align:center">Either way you can change your mind in <b>⚙ Settings › Features</b>.</p>';
   const finish=async(on)=>{
     const cfg=revealCfg();
-    if(cfg.shown.indexOf(step.k)<0)cfg.shown.push(step.k);
-    if(on)settings().features[step.k]=true;
+    if(cfg.shown.indexOf(step.keys[0])<0)cfg.shown.push(step.keys[0]);
+    if(on)step.keys.forEach(k=>{settings().features[k]=true;});
     _revealBusy=false;
-    await commit(on?("Revealed feature: "+f.n):("Declined feature: "+f.n));
+    await commit((on?"Revealed feature: ":"Declined feature: ")+names);
     closeSheet();
-    if(on){renderTabs();toast(f.n+" is on");Sfx.pop();}
+    if(on){renderTabs();toast(names+(fs.length>1?" are on":" is on"));Sfx.pop();}
     go(curTab());
   };
   body.querySelector("#rvYes").onclick=()=>finish(true);
@@ -5796,7 +5808,7 @@ function wireAdvancedMode(v){
            separately in setup -- switching it on here would put a card in front of someone
            who explicitly said they are not working toward accreditation */
         FEATURES.forEach(f=>{if(f.k!=="accreditation")sg.features[f.k]=true;});
-        REVEAL_STEPS.forEach(s=>{if(c.shown.indexOf(s.k)<0)c.shown.push(s.k);});
+        REVEAL_STEPS.forEach(s=>{if(c.shown.indexOf(s.keys[0])<0)c.shown.push(s.keys[0]);});
         await commit("Show all features");
       }
       Sfx.tick();renderTabs();go("settings",{keepScroll:true});};
@@ -5896,8 +5908,8 @@ function stepLook(w){return{emoji:"🎨", h:"Pick a look",
       sw.closest(".ftrow").classList.toggle("off",!w.sound);if(w.sound){Sfx.prime();Sfx.pop();}};
   }};}
 function stepFeatures(w){
-  /* accreditation gets its own question in stepCPD — asking twice would be noise */
-  const list=FEATURES.filter(f=>f.k!=="accreditation");
+  /* accreditation and peer supervision both get their own question in stepCPD — asking twice would be noise */
+  const list=FEATURES.filter(f=>f.k!=="accreditation"&&f.k!=="peer");
   return{emoji:"🧩", h:"Choose what you need",
   sub:"Switch off anything that isn’t useful — it disappears from the app. Nothing is deleted, and you can turn it back on later.",
   mount(host){
@@ -5927,23 +5939,30 @@ function stepNotes(w){return{emoji:"🗒", h:"This isn’t where your notes live
     ])+
     '<div class="ovnote">If you <i>do</i> want a short reminder on a session — “brought partner”, “moved to fortnightly” — the field takes free text. Keep it administrative.</div>';
   }};}
-/* CPD is everybody; accreditation is the minority working toward it. Ask plainly, default off. */
-function stepCPD(w){return{emoji:"📚", h:"CPD and accreditation",
+/* CPD is everybody; accreditation and peer supervision are both minority needs, so both are
+   asked here rather than left to be found. Peer in particular is never offered by a milestone —
+   whether you attend peer supervision is a fact about your practice, not something the app can
+   infer from session counts — so this question is the only place it comes up on its own. */
+function stepCPD(w){return{emoji:"📚", h:"CPD, supervision and accreditation",
   sub:"Supervision hours count toward your yearly CPD. The app totals them for you.",
   validate(){const v=+w.cpdTarget;if(!(v>=1&&v<=200)){toast("Enter a target between 1 and 200 hours");Sfx.error();return false;}},
   mount(host){
     host.innerHTML='<label>Your annual CPD target (hours)</label>'+
       '<input id="spCpd" type="number" min="1" max="200" step="1" value="'+esc(w.cpdTarget)+'">'+
       '<p class="prev">BACP asks accredited members for 30 hours a year. Other bodies differ — set yours.</p>'+
-      '<div style="margin-top:16px">'+ovToggleRow("acc","📜","I’m working toward accreditation",
+      '<div style="margin-top:16px">'+ovToggleRow("peer","👥","I also attend peer supervision",
+        "Logged on its own tab, separately from clinical supervision. Those hours add to your CPD and accreditation totals but are deliberately kept out of the 1:6 ratio, which only clinical supervision counts toward.",
+        featureOn(w,"peer"))+'</div>'+
+      '<div style="margin-top:10px">'+ovToggleRow("acc","📜","I’m working toward accreditation",
         "Adds the BACP Form 3A card: clinical vs supervision hours and the 1:6 ratio. Most therapists don’t need this — leave it off unless you’re actively accruing hours toward accreditation.",
         featureOn(w,"accreditation"))+'</div>'+
-      '<div class="ovnote">Either way you can change this later in <b>⚙ Settings › Features</b>.</div>';
+      '<div class="ovnote">Any of this can be changed later in <b>⚙ Settings › Features</b>.</div>';
     host.querySelector("#spCpd").oninput=e=>w.cpdTarget=+e.target.value||0;
-    const sw=host.querySelector('[data-sw="acc"]');
-    sw.onclick=()=>{w.features.accreditation=!featureOn(w,"accreditation");
-      const on=featureOn(w,"accreditation");
-      sw.classList.toggle("on",on);sw.closest(".ftrow").classList.toggle("off",!on);Sfx.tick();};
+    [["acc","accreditation"],["peer","peer"]].forEach(pair=>{
+      const sw=host.querySelector('[data-sw="'+pair[0]+'"]'); if(!sw)return;
+      sw.onclick=()=>{w.features[pair[1]]=!featureOn(w,pair[1]);
+        const on=featureOn(w,pair[1]);
+        sw.classList.toggle("on",on);sw.closest(".ftrow").classList.toggle("off",!on);Sfx.tick();};});
   }};}
 function stepRooms(w){return{emoji:"🚪", h:"Where do you see clients?",
   sub:"Add each room or location you use and what it costs you per session. Sessions at home usually cost <b>£0</b>.",
@@ -6263,7 +6282,14 @@ function startSetup(opts){
     tagline:sg.practiceTagline||"",
     palette:sg.palette||curPalette(),
     theme:themePref(), sound:Sfx.on,
-    features:Object.assign({},sg.features||{}),
+    features:(function(){
+      const f=Object.assign({},sg.features||{});
+      /* Peer supervision is asked as "I also attend peer supervision", so it has to arrive
+         unticked or the question answers itself. Only for a fresh install: normalize leaves the
+         flag absent (= on) and anyone who already has it must keep it. */
+      if(fresh&&f.peer==null)f.peer=false;
+      return f;
+    })(),
     /* A fresh install starts on "simple" — that is the point of the question, and "show me
        everything" is the opt-in. Not read from settings.reveal: normalize defaults that to "all"
        to protect EXISTING installs from ever being hidden, which is the opposite default from

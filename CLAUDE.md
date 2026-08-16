@@ -187,7 +187,10 @@ Two kinds of missed session, and the charge is **stamped on the session**, never
 ## Gradual reveal (settings.reveal, added Aug 2026)
 No new gating layer — this only decides which existing `feat()` flags start off for a brand-new install.
 - `settings.reveal = {mode:"simple"|"all", shown:[]}`. `normalize()` defaults `mode` to **"all"**; only `stepDepth` ever sets `"simple"`, and it is only offered when `!rerun && no sessions && no clients`. Hiding tabs from someone already using them is the one outcome this must never produce.
-- `REVEAL_CORE` is what stays on. `REVEAL_STEPS` is the ordered list of what gets offered back and what earns it; `finances` is gated behind `tax` being on, so the dependency order holds.
+- `REVEAL_CORE` is what stays on. `REVEAL_STEPS` is the ordered list of what gets offered back and what earns it. A step's `keys` may hold **more than one flag**: `tax` and `finances` are revealed together at 10 sessions, because an estimate that ignores what the practice costs you is one nobody should set money aside against. `shown` is keyed on `keys[0]`.
+- Schedule: **10** sessions → Tax + Costs & other income · **20** → Trends · **25** → Quick-add · **40** → Table view.
+- `trends` is a feature flag (a segment inside Practice, not a tab). Absent = on, so existing installs and "show everything" keep it; only the simple preset switches it off.
+- **`accreditation` and `peer` are excluded from the simple preset** — `stepCPD` asks about both directly, and an answered question beats a default. Peer is never offered by a milestone: whether someone attends peer supervision is a fact about their practice, not something a session count can infer. `startSetup` unticks `peer` for a fresh install only (normalize leaves it absent = on, so existing installs keep it).
 - `revealCheck()` runs from `commit()` **after** the write, never before — an accepted nudge commits again and must not interleave with the save that triggered it. One offer per save; the key goes into `shown` whether accepted or declined, so nothing is ever asked twice.
 
 ## Gamification (S.game)
