@@ -240,6 +240,29 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 .seg button{border:0;background:transparent;padding:8px 13px;border-radius:9px;font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap;cursor:pointer}
 .seg button.on{background:var(--card);color:var(--brand-dark);box-shadow:0 1px 2px var(--ring),0 2px 8px -4px var(--ring)}
+/* ===== use-of-home year strip =====
+   Full-bleed inside its card and sticky under the header (JS sets `top` from the header's real
+   height), so the year being edited stays on screen while the cost fields scroll past. */
+.uohbar{position:sticky;z-index:3;display:flex;align-items:center;gap:6px;
+  margin:0 -18px 6px;padding:8px 18px;
+  background:color-mix(in srgb,var(--card) 94%,transparent);
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--hair)}
+.uohbar .uohnav{flex:none;border:1px solid var(--hair);background:var(--card);color:var(--brand-dark);
+  width:32px;height:32px;border-radius:10px;font-size:17px;line-height:1;cursor:pointer;font-weight:700;font-family:inherit}
+.uohbar .uohnav:disabled{opacity:.32;cursor:default}
+.uohyrs{display:flex;gap:6px;overflow-x:auto;flex:1;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.uohyrs::-webkit-scrollbar{display:none}
+.uohyr{flex:none;display:flex;flex-direction:column;align-items:flex-start;gap:1px;
+  border:1px solid var(--hair);background:transparent;border-radius:11px;padding:6px 11px;cursor:pointer;font-family:inherit}
+.uohyr b{font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap}
+.uohyr .st{font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+.uohyr.on{background:var(--card);border-color:var(--brand);box-shadow:0 0 0 2px color-mix(in srgb,var(--brand) 20%,transparent)}
+.uohyr.on b{color:var(--brand-dark)}
+.uohyr .st.set{color:var(--good)}
+.uohyr .st.carried{color:var(--warn)}
+.uohyr .st.none,.uohyr .st.empty{color:var(--muted)}
+.uohyr .st.filed{color:var(--muted)}
 nav.tabs{position:fixed;bottom:0;left:0;right:0;z-index:35;
   background:color-mix(in srgb,var(--card) 62%,transparent);
   -webkit-backdrop-filter:blur(26px) saturate(1.9);backdrop-filter:blur(26px) saturate(1.9);
@@ -2757,6 +2780,43 @@ function uohForYear(ty){
 }
 /* The draft a year is being edited with -- saved inputs, but not necessarily the applied method. */
 function uohDraft(ty){const ys=uohYears();return Object.assign(uohBlank(),ys[ty]||uohForYear(ty).cfg);}
+/* "I have filed this year" is a note to self, kept OUTSIDE the per-year config on purpose:
+   writing it into the config would give an inheriting year a record of its own, silently turning
+   it from "carried" into "set" as a side effect of ticking a checkbox. Nothing reads it but the UI. */
+function uohFiled(){const u=settings().useOfHome||{};return (u.filed=u.filed||{});}
+/* What a year is, in one word, for the year strip. Reads uohForYear so the strip and the card
+   below it can never tell different stories about the same year. */
+function uohYearStatus(y){
+  const filed=!!uohFiled()[y], own=uohYears()[y];
+  if(own){const claiming=own.method&&own.method!=="none";
+    return {k:claiming?"set":"none",label:claiming?"set":"no claim",filed};}
+  const inf=uohForYear(y);
+  if(inf.inherited)return {k:"carried",label:"carried",from:inf.from,filed};
+  return {k:"empty",label:"not set",filed};
+}
+/* The most recent EARLIER year that has a record of its own -- the one worth copying from. */
+function uohPrevSource(ty){return Object.keys(uohYears()).filter(k=>k<ty).sort().pop()||null;}
+/* Bills usually move by a percentage, not wholesale, so last year's figures are the right
+   starting point for editing. Copies the INPUTS and carries across whatever method is already
+   in force for this year -- the year was inheriting that method anyway, so nothing about what is
+   claimed changes here; it just stops this year drifting when the earlier year is next edited. */
+function uohCopyFrom(src,ty){
+  const ys=uohYears(), from=ys[src]; if(!from)return false;
+  const own=ys[ty], inForce=uohForYear(ty).cfg;
+  const cur=Object.assign(uohBlank(),own||inForce);
+  cur.hours=+from.hours||0; cur.rooms=+from.rooms||0; cur.workRooms=+from.workRooms||0;
+  cur.businessPct=(from.businessPct==null?100:+from.businessPct);
+  cur.costs=Object.assign({},from.costs||{});
+  cur.method=inForce.method||"none";
+  /* appliedAt is this year's own, never the source's -- `cur` was seeded from the inherited
+     config, which carries the earlier year's date with it. uohOccurrences starts from the
+     EARLIEST appliedAt across all years, so this changes no figure; it stops the record
+     claiming it was applied in a year it wasn't. */
+  if(cur.method==="none")delete cur.appliedAt;
+  else cur.appliedAt=(own&&own.appliedAt)||isoD(tyBounds(ty).start);
+  ys[ty]=cur;
+  return true;
+}
 function uohConfig(ty){return uohForYear(ty||curTaxYear()).cfg;}
 function uohMonthlyFor(cfg){
   if(!cfg)return 0;
@@ -3463,6 +3523,16 @@ function drawAllowances(host){
   /* which tax years to offer: any with sessions, any already set up, plus this one */
   const years=[...new Set(S.sessions.map(x=>x.date).filter(Boolean).map(d=>taxYear(d))
     .concat(Object.keys(uohYears())).concat([curTaxYear()]))].sort().reverse();
+  /* Newest first, so "‹" (back in time) moves DOWN the strip and "›" moves up it. */
+  const yIdx=Math.max(0,years.indexOf(ty));
+  const status=uohYearStatus(ty), prevSrc=uohPrevSource(ty);
+  const yearStrip='<div class="uohbar" id="uohBar">'+
+    '<button class="uohnav" id="uohPrev" title="Earlier year" aria-label="Earlier tax year"'+(yIdx>=years.length-1?" disabled":"")+'>‹</button>'+
+    '<div class="uohyrs" id="uohYrs">'+years.map(y=>{const st=uohYearStatus(y);
+      return '<button type="button" class="uohyr'+(y===ty?" on":"")+'" data-yr="'+esc(y)+'">'+
+        '<b>'+esc(y)+'</b><span class="st '+st.k+'">'+(st.filed?"filed · ":"")+esc(st.label)+'</span></button>';}).join("")+'</div>'+
+    '<button class="uohnav" id="uohNext" title="Later year" aria-label="Later tax year"'+(yIdx<=0?" disabled":"")+'>›</button>'+
+    '</div>';
   const methodRow=m=>{
     const isApplied=(applied.method===m)&&!inForce.inherited;
     const label=m==="simplified"?"Simplified":m==="actual"?"Actual costs":"Not claiming";
@@ -3474,21 +3544,28 @@ function drawAllowances(host){
   };
   host.innerHTML='<div class="card"><h2>Use of home</h2>'+
     '<p class="small muted">If you see clients or do your admin at home, part of running that home is a business cost. HMRC lets you work it out two ways, and you can pick a different one each tax year.</p>'+
-    '<label>Tax year</label><select id="uohYr">'+opts(years,ty)+'</select>'+
+    yearStrip+
+    (status.filed?'<div class="vmsg warn">\ud83d\uddc4 You have marked <b>'+esc(ty)+'</b> as filed. Changing anything below changes figures you have already submitted \u2014 if this is a correction, keep a note of what you changed and why.</div>':'')+
     (applied.method&&applied.method!=="none"
-      ? '<div class="vmsg ok" style="margin-top:12px">\ud83d\udd12 <b>'+esc(applied.method==="simplified"?"Simplified":"Actual costs")+'</b> is what '+esc(ty)+' uses \u2014 '+money(uohMonthlyFor(applied))+' a month, '+money(yearAmt)+' for the year. It is already in your costs and tax estimate.'+
-        (inForce.inherited?' <b>Carried forward from '+esc(inForce.from)+'</b> \u2014 apply one below to fix it for '+esc(ty)+'.':'')+'</div>'
-      : '<div class="vmsg warn" style="margin-top:12px">Nothing is being claimed for use of home in '+esc(ty)+'. Compare the two methods below and apply whichever suits.</div>')+
-    '<div class="grp-h" style="margin-top:16px">Compare and choose</div>'+
+      ? '<div class="vmsg ok">\ud83d\udd12 <b>'+esc(applied.method==="simplified"?"Simplified":"Actual costs")+'</b> is what '+esc(ty)+' uses \u2014 '+money(uohMonthlyFor(applied))+' a month, '+money(yearAmt)+' for the year. It is already in your costs and tax estimate.'+
+        (inForce.inherited?' <b>Carried forward from '+esc(inForce.from)+'</b> \u2014 it has no figures of its own yet, so editing '+esc(inForce.from)+' would move '+esc(ty)+' too.':'')+'</div>'
+      : '<div class="vmsg warn">Nothing is being claimed for use of home in '+esc(ty)+'. Compare the two methods below and apply whichever suits.</div>')+
+    (prevSrc&&!uohYears()[ty]
+      ? '<button class="btn sec full mt" id="uohCopy">\u2398 Copy '+esc(prevSrc)+'\u2019s figures into '+esc(ty)+'</button>'+
+        '<p class="prev">Gives '+esc(ty)+' its own copy of those hours, rooms and bills to edit \u2014 bills usually move by a percentage rather than wholesale. What is being claimed does not change.</p>'
+      : '')+
+    '<div class="grp-h" style="margin-top:16px">Compare and choose for '+esc(ty)+'</div>'+
     '<p class="small muted" style="margin:0 0 6px">Switching between these only changes what you are looking at. Your figures do not move until you tap <b>Use this</b>.</p>'+
     '<div style="padding:0 2px">'+methodRow("simplified")+methodRow("actual")+methodRow("none")+'</div>'+
-    '<div class="grp-h" style="margin-top:18px">Work out the numbers</div>'+
+    '<div class="grp-h" style="margin-top:18px">Work out the numbers for '+esc(ty)+'</div>'+
     '<div class="seg" id="uohM" style="display:inline-flex">'+
       '<button data-m="simplified" class="'+(uohEdit==="simplified"?"on":"")+'">Simplified</button>'+
       '<button data-m="actual" class="'+(uohEdit==="actual"?"on":"")+'">Actual costs</button>'+
     '</div>'+
     '<div id="uohBody" class="mt"></div>'+
     '<p class="small muted mt">Goes in box 21 of your tax return. Mortgage <b>capital</b> repayments are never allowable \u2014 only the interest.</p>'+
+    '<label class="colchk" style="margin-top:14px"><input type="checkbox" id="uohFiled"'+(status.filed?" checked":"")+'> I have filed my '+esc(ty)+' return</label>'+
+    '<p class="prev">Only a reminder to yourself \u2014 it never locks anything or changes a figure.</p>'+
     '</div>';
   const bodyEl=host.querySelector("#uohBody");
   const suggested=uohSessionHours();
@@ -3501,7 +3578,7 @@ function drawAllowances(host){
   }
   function drawMethod(){
     if(uohEdit==="simplified"){
-      bodyEl.innerHTML='<label>Hours a month you work at home</label>'+
+      bodyEl.innerHTML='<label>Hours a month you worked at home in '+esc(ty)+'</label>'+
         '<input type="number" min="0" max="744" step="1" id="uohH" value="'+esc(draft.hours)+'">'+
         '<p class="small muted">Count everything, not just sessions: notes, admin, CPD, supervision you attend from home.'+
         (suggested?' You logged about <b>'+suggested+' sessions a month</b> at home recently \u2014 your real hours will be higher than that.':'')+'</p>'+
@@ -3514,11 +3591,12 @@ function drawAllowances(host){
       const t=draft.costs||{};
       const row=(k,lab,hint)=>'<div><label>'+lab+(hint?' <span class="muted small">('+hint+')</span>':'')+'</label>'+
         '<input type="number" min="0" step="1" data-uc="'+k+'" value="'+(+t[k]||0)+'"></div>';
-      bodyEl.innerHTML='<div class="field2">'+
+      bodyEl.innerHTML='<div class="grp-h" style="margin-top:0">Your home in '+esc(ty)+'</div>'+
+        '<div class="field2">'+
           '<div><label>Rooms in your home <span class="muted small">(excl. kitchen/bathroom)</span></label><input type="number" min="1" step="1" id="uohR" value="'+esc(draft.rooms)+'"></div>'+
           '<div><label>Rooms used for work</label><input type="number" min="0" step="1" id="uohW" value="'+esc(draft.workRooms)+'"></div>'+
         '</div>'+
-        '<label>Share of the time those rooms are used for work (%)</label>'+
+        '<label>Share of the time those rooms were used for work (%)</label>'+
         '<input type="number" min="1" max="100" step="1" id="uohP" value="'+esc(draft.businessPct)+'">'+
         '<p class="small muted">A room used for work in the day and family in the evening is not 100%.</p>'+
         '<div class="grp-h" style="margin-top:14px">Household costs for '+esc(ty)+'</div>'+
@@ -3554,8 +3632,33 @@ function drawAllowances(host){
     await commit("Use of home for "+ty+": "+m);
     toast(m==="none"?"No claim for "+ty:"Applied to "+ty);
     go("tax",{keepScroll:true});});
-  const ysel=host.querySelector("#uohYr");
-  if(ysel)ysel.onchange=()=>{uohYearSel=ysel.value;uohEdit=null;go("tax",{keepScroll:true});};
+  /* ---- year strip ---- */
+  const goYear=y=>{if(!y||y===ty)return;uohYearSel=y;uohEdit=null;go("tax",{keepScroll:true});};
+  host.querySelectorAll("[data-yr]").forEach(b=>b.onclick=()=>goYear(b.dataset.yr));
+  const pv=host.querySelector("#uohPrev"), nx=host.querySelector("#uohNext");
+  if(pv)pv.onclick=()=>goYear(years[yIdx+1]);   /* newest-first, so +1 is earlier */
+  if(nx)nx.onclick=()=>goYear(years[yIdx-1]);
+  const bar=host.querySelector("#uohBar");
+  if(bar){
+    /* stick below the real header rather than a guessed offset */
+    const hd=document.querySelector("header.top");
+    bar.style.top=((hd&&hd.offsetHeight)||0)+"px";
+    /* keep the selected year in view when the strip is wider than the screen */
+    const on=bar.querySelector(".uohyr.on");
+    if(on&&on.scrollIntoView)on.scrollIntoView({block:"nearest",inline:"center"});
+  }
+  const cp=host.querySelector("#uohCopy");
+  if(cp)cp.onclick=async()=>{
+    if(!uohCopyFrom(prevSrc,ty)){toast("Nothing to copy");Sfx.error();return;}
+    await commit("Copied use of home figures "+prevSrc+" → "+ty);
+    toast("Copied into "+ty);Sfx.tick();
+    go("tax",{keepScroll:true});};
+  const fl=host.querySelector("#uohFiled");
+  if(fl)fl.onchange=async()=>{
+    const f=uohFiled();
+    if(fl.checked)f[ty]=true; else delete f[ty];
+    await commit((fl.checked?"Marked ":"Unmarked ")+ty+" as filed");
+    go("tax",{keepScroll:true});};
   drawMethod();
 }
 
