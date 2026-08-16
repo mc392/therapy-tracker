@@ -2547,7 +2547,11 @@ function taxRates(ty){const sy=parseInt(ty.slice(0,4));
   return r;}
 /* Scotland sets its own income tax bands on non-savings income. Anything else -- the personal
    allowance, both classes of NI -- stays UK-wide. */
-const SCOT_BANDS=[[2827,0.19],[14921,0.20],[31092,0.21],[62430,0.42],[125140,0.45],[Infinity,0.48]];
+/* Absolute income thresholds, not widths. These were previously the widths ABOVE the personal
+   allowance for the first four bands and absolute for the last two, while the loop below
+   treats every entry as absolute -- which pushed income into the higher bands far too early
+   and overstated Scottish tax by up to ~3,300 a year. */
+const SCOT_BANDS=[[15397,0.19],[27491,0.20],[43662,0.21],[75000,0.42],[125140,0.45],[Infinity,0.48]];
 function taxRegion(){return settings().taxRegion==="scotland"?"scotland":"rUK";}
 const SL_PLANS={
   none:null,
@@ -2909,8 +2913,8 @@ function taxSchedule(ty){
   const balancing=calc.total-poaPrev*2;
   const poaThis=poaBase(calc)>=POA_THRESHOLD?poaBase(calc)/2:0;
   return {ty,calc,prev,prevCalc,poaPrev,
-    jan:{date:new Date(sy+1,0,31),balancing,poa:poaThis,total:balancing+poaThis},
-    jul:{date:new Date(sy+1,6,31),poa:poaThis,total:poaThis},
+    jan:{date:new Date(sy+2,0,31),balancing,poa:poaThis,total:balancing+poaThis},
+    jul:{date:new Date(sy+2,6,31),poa:poaThis,total:poaThis},
     firstYear:poaPrev===0&&poaThis>0};
 }
 function nextTaxPayment(){
@@ -2956,10 +2960,10 @@ function taxDetailsSheet(y){const tx=taxForYear(y);const body=el('<div></div>');
     '<div class="grp-h" style="margin-top:18px">The tax on it</div>'+html+
     '<div class="grp-h" style="margin-top:18px">When HMRC wants it</div>'+
     '<table>'+
-      trow('31 Jan '+(parseInt(y)+1)+' \u2014 balancing payment',gbpR(sched.jan.balancing))+
-      (sched.jan.poa?trow('31 Jan '+(parseInt(y)+1)+' \u2014 payment on account',gbpR(sched.jan.poa)):'')+
+      trow('31 Jan '+(parseInt(y)+2)+' \u2014 balancing payment',gbpR(sched.jan.balancing))+
+      (sched.jan.poa?trow('31 Jan '+(parseInt(y)+2)+' \u2014 payment on account',gbpR(sched.jan.poa)):'')+
       trow('<b>Total due 31 Jan</b>','<b>'+gbpR(sched.jan.total)+'</b>',true)+
-      (sched.jul.total?trow('31 Jul '+(parseInt(y)+1)+' \u2014 payment on account',gbpR(sched.jul.total)):'')+
+      (sched.jul.total?trow('31 Jul '+(parseInt(y)+2)+' \u2014 payment on account',gbpR(sched.jul.total)):'')+
     '</table>'+
     (sched.jan.poa?'<p class="small muted">Payments on account are advance instalments towards the <i>following</i> year, due because this bill passes \u00a3'+POA_THRESHOLD+'. Class 2 and student loan are never part of them.</p>':'');
   body.innerHTML=html+'<p class="small muted mt">Covers Income Tax, Class 4'+(parseInt(y)<2024?' and Class 2':'')+' National Insurance'+(settings().studentLoan!=="none"?', student loan':'')+' for a sole trader'+(taxRegion()==="scotland"?', at Scottish rates':'')+'. A personal estimate, not tax advice.</p>';
@@ -3110,8 +3114,8 @@ VIEWS.tax=function(){
       '<b>'+fmtD(nxt.when)+'</b> \u2014 '+esc(nxt.what)+': <b>'+gbp(Math.round(nxt.amount))+'</b></div>':'')+
     (sched.firstYear?'<div class="vmsg warn" style="margin-top:10px">\u26a0\ufe0f <b>First big January.</b> Because your bill passes \u00a3'+POA_THRESHOLD+', HMRC asks for the year\u2019s tax <i>plus</i> half of it again on account \u2014 then another half in July. Budget for about <b>one and a half times</b> the tax, not once.</div>':'')+
     '<div class="acc-work" style="margin-top:10px">'+
-      '<div><b>31 Jan '+(parseInt(curTaxYear())+1)+'</b> = balancing '+gbpR(sched.jan.balancing)+(sched.jan.poa?' + payment on account '+gbpR(sched.jan.poa):'')+' = <b>'+gbpR(sched.jan.total)+'</b></div>'+
-      (sched.jul.total?'<div><b>31 Jul '+(parseInt(curTaxYear())+1)+'</b> = payment on account <b>'+gbpR(sched.jul.total)+'</b></div>':'')+
+      '<div><b>31 Jan '+(parseInt(curTaxYear())+2)+'</b> = balancing '+gbpR(sched.jan.balancing)+(sched.jan.poa?' + payment on account '+gbpR(sched.jan.poa):'')+' = <b>'+gbpR(sched.jan.total)+'</b></div>'+
+      (sched.jul.total?'<div><b>31 Jul '+(parseInt(curTaxYear())+2)+'</b> = payment on account <b>'+gbpR(sched.jul.total)+'</b></div>':'')+
       (sched.poaPrev?'<div class="small muted">Already paid on account for this year: '+gbpR(sched.poaPrev*2)+'</div>':'')+
       '<div class="small muted" style="margin-top:5px">Payments on account are due once your bill passes \u00a3'+POA_THRESHOLD+'. Class 2 and student loan are never included in them.</div>'+
     '</div></div>';

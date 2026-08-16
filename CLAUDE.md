@@ -125,6 +125,17 @@ Five collapsible `<details class="sgrp">` groups (practice / data / records / he
 - **Region, student loan, pension.** Scottish bands via `settings.taxRegion`; `SL_PLANS` for plans 1/2/4/5/PG; pension contributions extend the basic-rate band (`penGross`) rather than being deducted after tax.
 - **MTD.** `mtdQuarters()`/`mtdPeriod()`/`mtdExport()`. **The quarters must reconcile to `tyNet` on both bases** — a regression here means a cost was added to the ledger but not to an SA103 box (per-session room fees were exactly that bug). Submission is deliberately out of scope: it needs an OAuth secret, fraud-prevention headers and HMRC recognition, none of which fit an offline PWA.
 
+### Tax engine tests
+`tests/tax-tests.js` — 84 tests. Serve the app, open it, paste the file into the console. It lives **outside** `TherapyTracker-web/` so it never deploys, never calls `commit()`, and restores the live state when it finishes.
+
+**Expected values are derived from the HMRC rule, never copied from the app.** That is not pedantry: the payment-date bug below initially *passed* a test written by pasting in what the code returned, and only surfaced when a second test approached the same figure from the rule. If a test needs updating after a change, re-derive the number.
+
+Two real bugs it has already caught:
+- `SCOT_BANDS` mixed band *widths above the personal allowance* with *absolute* thresholds while the loop treated all of them as absolute — overstating Scottish tax by up to ~£3,300/yr (£2,025 at £40k).
+- `taxSchedule()` dated every payment a year early. Self Assessment is due 31 January **following the end** of the tax year, so 2026-27 is 31 Jan 2028, not 2027.
+
+The reconciliation block is the highest-value part: across six practice profiles, `profitBreakdown` = the four MTD quarters summed = `tyNet`. A mismatch means a cost reached one path but not another — exactly how the missing per-session room fee in the SA103 boxes was found.
+
 ### Editing this file with scripts
 It is 438KB of single-file app, so bulk edits are scripted. **Always build the whole string, assert every anchor matched, write to `index.html.tmp`, then `os.replace()`.** Opening the real file for writing first truncated it to 0 bytes once when the script raised mid-run.
 
