@@ -1331,11 +1331,14 @@ function crashScreen(err,tab){
 /* opts.keepScroll — re-render in place without throwing the reader back to the top. Anything
    that redraws the screen the user is already looking at (a Weekly/Monthly toggle, saving a
    row from a sheet) should pass it; only genuine navigation between tabs should scroll to top. */
+let _setGrpOpen={};   /* which Settings sections are open, this visit only — see VIEWS.settings */
 function go(tab,opts){
   opts=opts||{};
   const rz=resolveTab(tab,opts.seg); tab=rz.tab;
   if(rz.seg)setSeg(tab,rz.seg);                    /* land on a segment, not just the tab */
   if(!VIEWS[tab]||!tabEnabled(tab))tab="home";
+  /* arriving at Settings afresh (not a keepScroll redraw) folds every section away again */
+  if(tab==="settings"&&!opts.keepScroll)_setGrpOpen={};
   const keep=opts.keepScroll?(window.scrollY||window.pageYOffset||0):null;
   cur=tab;
   try{renderTabs();applyBranding();}catch(e){console.error("Chrome render failed",e);}
@@ -3799,7 +3802,7 @@ function wireCancelRules(v){
         '<button class="rmx" data-x="'+i+'" title="Remove">✕</button>'+
       '</div>').join("")
       :'<p class="small muted">No notice periods set — a late cancellation will be charged in full.</p>';
-    host.innerHTML+='<p class="small muted mt">Each line reads “at least this much notice → charge this much”. They are tried longest-notice first, and the first one a cancellation qualifies for applies. Less notice than every line — or no cancellation date recorded — charges the <b>full fee</b>; add a line at 0 hours if you want a lower floor than that.</p>';
+    host.innerHTML+='<p class="small muted mt">Lines are ordered from most notice to least. A cancellation is charged by the first line it qualifies for. If it doesn’t reach any of them — or you didn’t record a cancellation date — you charge the <b>full fee</b>.</p>';
     host.querySelectorAll(".cxrow").forEach(row=>{
       const i=+row.dataset.i;
       row.querySelectorAll("[data-f]").forEach(inp=>inp.onchange=async()=>{
@@ -3937,7 +3940,7 @@ function rawPanel(){
 VIEWS.settings=function(){
   const v=el('<div class="view active"></div>');
   v.innerHTML=`
-   <details class="sgrp" data-g="practice" open><summary><span class="sgt">Your practice</span><span class="sgs">Name, look, and which features you use</span></summary><div class="sgb">
+   <details class="sgrp" data-g="practice"><summary><span class="sgt">Your practice</span><span class="sgs">Name, look, and which features you use</span></summary><div class="sgb">
    <div class="card"><h2>Your practice</h2>
      <p class="small muted">Shown in the app header and at the top of printed receipts and statements.</p>
      <label>Practice name</label><input id="setName" maxlength="60" value="${esc(practiceName())}">
@@ -4104,18 +4107,16 @@ VIEWS.settings=function(){
   v.querySelector("#setRerun").onclick=()=>confirmRerunSetup();
   v.querySelector("#setDanger").onclick=()=>dzMenu();
   wireRetention(v);
-  /* Remember which sections were left open — per device, not part of the practice data. */
-  (function(){
-    let open={};try{open=JSON.parse(localStorage.getItem("tt_setgrp")||"{}")||{};}catch(e){}
-    v.querySelectorAll(".sgrp").forEach(d=>{
-      const k=d.dataset.g;
-      if(open[k]!=null)d.open=!!open[k];
-      d.addEventListener("toggle",()=>{
-        open[k]=d.open;
-        try{localStorage.setItem("tt_setgrp",JSON.stringify(open));}catch(e){}
-      });
-    });
-  })();
+  /* Every section starts collapsed each time Settings is opened, so the tab presents as a short
+     list of headings rather than a wall. Open state is held in memory only and cleared by go()
+     on a fresh entry — a section left open last week is not one you want reopened today. It has
+     to survive a keepScroll re-render though, or saving a setting would fold the section you are
+     working in shut underneath you. */
+  v.querySelectorAll(".sgrp").forEach(d=>{
+    const k=d.dataset.g;
+    d.open=!!_setGrpOpen[k];
+    d.addEventListener("toggle",()=>{_setGrpOpen[k]=d.open;});
+  });
   (async function paintStorage(){
     const stEl=v.querySelector("#stStatus"),hintEl=v.querySelector("#stHint"),askB=v.querySelector("#stAsk");
     if(!stEl)return;

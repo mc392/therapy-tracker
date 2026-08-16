@@ -108,7 +108,8 @@ A room on monthly rent has no per-session room fee to settle, so `derive()` retu
 - `scrollChart(wrap,keep)` positions a horizontally-scrolling chart. Charts are built **before their view is attached**, so it has no width at draw time — hence the rAF *and* the `setTimeout(...,0)`. Redraws pass the old `scrollLeft`, so tapping a bar no longer flings the chart back to the oldest period.
 
 ### Settings layout
-Five collapsible `<details class="sgrp">` groups (practice / data / records / help / about). Open state is per-device in `localStorage('tt_setgrp')`. Every card lives inside a group — don't add loose cards to the settings view.
+Five collapsible `<details class="sgrp">` groups (practice / data / records / help / about). Every card lives inside a group — don't add loose cards to the settings view.
+- **Everything starts collapsed on each fresh entry.** `_setGrpOpen` holds open state in memory only and `go()` clears it whenever Settings is entered without `keepScroll`. It must survive a `keepScroll` redraw — saving a setting re-renders the view, and without this the section being worked in folds shut underneath the user. Not persisted to localStorage: a section left open last week is not one you want reopened today.
 
 ## Tabs (restructured Aug 2026)
 **Home · Sessions · Practice · Money · Tax.** `TAB_ALIAS` maps the old names (`clients`, `supervision`, `income`, `raw`) onto the new tab **and a segment**, so old deep links land somewhere meaningful; `go(tab,{seg})` sets it. A plain tab tap stays on whatever segment the reader last used.
