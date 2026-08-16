@@ -76,7 +76,8 @@ Key functions:
 - **`exportJSON()` must work with `_db === null`** — the crash screen is the only way out of a broken render and it offers Export.
 
 ### Schema versioning
-`SCHEMA_VERSION` (currently `3`) is stamped on `S.meta.schemaVersion` and on every backup envelope. Unstamped data is treated as v1.
+`SCHEMA_VERSION` (currently `4`) is stamped on `S.meta.schemaVersion` and on every backup envelope. Unstamped data is treated as v1.
+- **v4 (Aug 2026)** gave every cost and income row a category *key* mapping to an SA103 box, migrated from the old free-text label (which is kept). Added `settings.taxBasis`, `useOfHome`, `taxRegion`, `studentLoan`, `class2Voluntary`.
 - **v3 (Aug 2026)** added expenses, other income, peer supervision and monthly room rent. No in-place migration: every new field's absence means exactly what it meant in v2. The bump exists for the other direction — a v3 backup carries money a v2 build cannot see, so restoring it there would drop those rows and save the loss back.
 - Bump it when a change would be **misread** by an older build, and add the matching step to the ordered migration block in `normalize()`.
 - `validateImport()` **refuses** a backup whose version is newer than the running app — importing would silently drop unknown fields and then save that loss back over good data.
@@ -107,6 +108,25 @@ A room on monthly rent has no per-session room fee to settle, so `derive()` retu
 
 ### Settings layout
 Five collapsible `<details class="sgrp">` groups (practice / data / records / help / about). Open state is per-device in `localStorage('tt_setgrp')`. Every card lives inside a group — don't add loose cards to the settings view.
+
+## Tabs (restructured Aug 2026)
+**Home · Sessions · Practice · Money · Tax.** `TAB_ALIAS` maps the old names (`clients`, `supervision`, `income`, `raw`) onto the new tab **and a segment**, so old deep links land somewhere meaningful; `go(tab,{seg})` sets it. A plain tab tap stays on whatever segment the reader last used.
+- **Practice** — Clients / Trends / Rooms / Supervision. `supervisionPanel()` and `rawPanel()` are panels, not views: they are mounted whole so their inner sub-tabs keep working.
+- **Money** — Overview / Costs & income / Table.
+- **Tax** — Estimate / Allowances / MTD.
+- The old `income` feature flag became `money` + `tax`; `normalize()` carries `income:false` across to both rather than switching a hidden tab back on.
+
+## UK tax engine (Aug 2026)
+- **Basis.** `settings.taxBasis` defaults to **cash** — HMRC's default for sole traders since 2024/25. `tyNet()` counts a session in the year its `paidDate` falls; `ledgerBetween()` counts a cost when `paidCharges` says it was settled. **Where no payment date is recorded, cash falls back to the due date** — strict cash would let an untidied tick-list wipe every cost off the return, which is a far worse failure than being slightly early.
+- **Categories.** `EXP_CATS`/`INC_CATS` are keyed objects carrying an `SA103` box. A `risk` field marks deductions HMRC commonly challenges (personal therapy, CPD that trains new skills); those render an amber warning rather than being hidden or silently claimed.
+- **Use of home.** `uohMonthly()` — simplified bands (£10/£18/£26 by monthly hours) or actual apportionment. Generated at read time into `ledgerBetween`, never written into the ledger.
+- **Payments on account.** `taxSchedule(ty)` — once the liability passes £1,000, January is the balancing payment *plus* 50%, with another 50% in July. `poaBase()` excludes Class 2 and student loan, which never form part of a payment on account.
+- **Class 2** is no longer mandatory (2024/25+) but can be paid voluntarily below the Small Profits Threshold; the app offers it rather than omitting it.
+- **Region, student loan, pension.** Scottish bands via `settings.taxRegion`; `SL_PLANS` for plans 1/2/4/5/PG; pension contributions extend the basic-rate band (`penGross`) rather than being deducted after tax.
+- **MTD.** `mtdQuarters()`/`mtdPeriod()`/`mtdExport()`. **The quarters must reconcile to `tyNet` on both bases** — a regression here means a cost was added to the ledger but not to an SA103 box (per-session room fees were exactly that bug). Submission is deliberately out of scope: it needs an OAuth secret, fraud-prevention headers and HMRC recognition, none of which fit an offline PWA.
+
+### Editing this file with scripts
+It is 438KB of single-file app, so bulk edits are scripted. **Always build the whole string, assert every anchor matched, write to `index.html.tmp`, then `os.replace()`.** Opening the real file for writing first truncated it to 0 bytes once when the script raised mid-run.
 
 ### Error boundary
 `go(tab)` wraps the view render; a throw shows `crashScreen(err, tab)` — which always offers **Export a backup**, Home and Reload — instead of leaving `<main>` empty. `window.onerror` / `unhandledrejection` route to `reportGlobalError()` (console always, one toast per session).

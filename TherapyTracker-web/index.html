@@ -604,7 +604,7 @@ const MAX_SNAP=120;
 /* Data schema version, stamped on state and on every backup. Bump when a change would be
    misread by an older build, and add the matching step to migrate(). Data with no stamp is v1
    (everything written before versioning existed). */
-const SCHEMA_VERSION=3;
+const SCHEMA_VERSION=4;
 function stateSchemaVersion(st){const v=st&&st.meta&&+st.meta.schemaVersion;return v>0?v:1;}
 
 function clone(o){return JSON.parse(JSON.stringify(o))}
@@ -636,11 +636,41 @@ function normalize(st){
   if(sg.practiceTagline==null)sg.practiceTagline="Counselling & psychotherapy";
   if(sg.palette==null)sg.palette="sage";
   sg.features=sg.features||{};
+  /* The Revenue tab became Money + Tax (Aug 2026). Anyone who had switched Revenue off meant
+     "hide the money side", so carry that across to both rather than silently switching it
+     back on. The old key is left in place; nothing reads it now. */
+  if(sg.features.income===false){
+    if(sg.features.money==null)sg.features.money=false;
+    if(sg.features.tax==null)sg.features.tax=false;
+  }
   /* Accreditation is a minority need — only therapists working toward it. It's opt-in for anyone
      new, but anyone already running with it keeps it: pulling a feature out from under someone
      mid-accreditation would lose them the one screen they're keeping records for. */
   if(sg.features.accreditation==null)sg.features.accreditation=hasData?true:false;
   if(sg.cpdTarget==null)sg.cpdTarget=30;
+  /* HMRC's default for sole traders since 2024/25 is the CASH basis: income counted when it is
+     received and costs when they are paid. Accruals is now the opt-out election, not the norm. */
+  if(sg.taxBasis==null)sg.taxBasis="cash";
+  /* Use of home: off until the therapist sets it up, because guessing a claim on their behalf
+     would put a number on their tax return that they never agreed to. */
+  /* Use of home is chosen PER TAX YEAR -- HMRC lets you use the simplified rate one year and
+     actual costs the next, and household bills change anyway. `years` holds the explicit choices;
+     a year with no entry carries forward the last one, so a claim never silently lapses. */
+  sg.useOfHome=sg.useOfHome||{};
+  if(!sg.useOfHome.years){
+    const legacy=sg.useOfHome;
+    sg.useOfHome={years:{}};
+    if(legacy&&legacy.method&&legacy.method!=="none"){
+      const y=legacy.since?taxYear(legacy.since):curTaxYear();
+      sg.useOfHome.years[y]={method:legacy.method,hours:+legacy.hours||0,rooms:+legacy.rooms||0,
+        workRooms:+legacy.workRooms||0,businessPct:(legacy.businessPct==null?100:+legacy.businessPct),
+        costs:legacy.costs||{},appliedAt:legacy.since||isoD(today())};
+    }
+  }
+  /* Scottish income tax bands differ enough that the estimate is simply wrong without knowing. */
+  if(sg.taxRegion==null)sg.taxRegion="rUK";
+  if(sg.studentLoan==null)sg.studentLoan="none";
+  if(sg.class2Voluntary==null)sg.class2Voluntary=false;
   if(sg.onboarded==null)sg.onboarded=hasData; // anyone with data already knows the app — don't ambush them with setup
   st.game=st.game||{}; st.game.activeWeeks=st.game.activeWeeks||[]; st.game.records=st.game.records||{};
   const rr=st.game.records; rr.longestStreak=rr.longestStreak||0; rr.mostClearedAtOnce=rr.mostClearedAtOnce||0;
@@ -662,7 +692,11 @@ function normalize(st){
      every period it applies to and there is nothing to keep in sync. */
   st.roomRentHistory=st.roomRentHistory||[];
   st.expenses=st.expenses||[]; st.otherIncome=st.otherIncome||[];
-  st.paidCharges=st.paidCharges||{};   /* key "kind:ref|dueDate" → date settled; reminders only, never the tax figures */
+  st.paidCharges=st.paidCharges||{};   /* key "kind:ref|dueDate" -> date settled; reminders only, never the tax figures */
+  /* v4: costs and other income carry a category KEY that maps to an SA103 box. The original
+     free-text label is left on the record untouched, so nothing is lost in translation. */
+  st.expenses.forEach(x=>{if(x&&x.cat==null)x.cat=migrateCat("exp",x.category);});
+  st.otherIncome.forEach(x=>{if(x&&x.cat==null)x.cat=migrateCat("inc",x.category);});
   /* peer supervision: counts toward total accreditation hours, excluded from the 1:6 ratio */
   st.peerSupervision=st.peerSupervision||[];
   ["roomRentHistory","expenses","otherIncome","peerSupervision"].forEach(k=>st[k].forEach(x=>{if(x&&!x._id)x._id=uid()}));
@@ -686,6 +720,9 @@ function normalize(st){
      Data stamped newer than this build is left completely untouched — never downgrade it in
      place. Import refuses it outright (see validateImport); this path only guards the unlikely
      case of a newer build having written to this device's own database.
+
+     v3 → v4 adds a category key per cost and income row, migrated from the old free-text
+     label; the label itself is left alone.
 
      v2 → v3 needs no in-place rewrite: every field added above is absent in v2 data and its
      absence means exactly what it meant then (no expenses, no other income, no peer supervision,
@@ -1107,13 +1144,21 @@ function celebrateNewClient(c){
 const TABS=[
  {id:"home",ic:'<svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7"/><path d="M5 9.8V20h14V9.8"/></svg>',label:"Home"},
  {id:"sessions",ic:'<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2.5"/><path d="M4 9.5h16M8.5 3v3.5M15.5 3v3.5"/></svg>',label:"Sessions"},
- {id:"clients",ic:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.2 20c0-3.3 2.6-5.2 5.8-5.2S14.8 16.7 14.8 20"/><path d="M16.5 5.6a3 3 0 0 1 0 5.8M17 14.9c2.2.5 3.8 2 3.8 4.6"/></svg>',label:"Clients"},
- {id:"supervision",ft:"supervision",ic:'<svg viewBox="0 0 24 24"><path d="M20 11a7 7 0 0 1-10.4 6.1L4.5 19l1.4-4.3A7 7 0 1 1 20 11z"/><path d="M9 10.5h6M9 13h4"/></svg>',label:"Supervision"},
- {id:"income",ft:"income",ic:'<svg viewBox="0 0 24 24"><path d="M4 20h16"/><rect x="6" y="12" width="3.2" height="7" rx="1"/><rect x="10.4" y="7" width="3.2" height="12" rx="1"/><rect x="14.8" y="14" width="3.2" height="5" rx="1"/></svg>',label:"Revenue"},
- {id:"raw",ft:"raw",ic:'<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16M10 10v9"/></svg>',label:"Table"},
+ {id:"practice",ic:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.2 20c0-3.3 2.6-5.2 5.8-5.2S14.8 16.7 14.8 20"/><path d="M16.5 5.6a3 3 0 0 1 0 5.8M17 14.9c2.2.5 3.8 2 3.8 4.6"/></svg>',label:"Practice"},
+ {id:"money",ft:"money",ic:'<svg viewBox="0 0 24 24"><path d="M4 20h16"/><rect x="6" y="12" width="3.2" height="7" rx="1"/><rect x="10.4" y="7" width="3.2" height="12" rx="1"/><rect x="14.8" y="14" width="3.2" height="5" rx="1"/></svg>',label:"Money"},
+ {id:"tax",ft:"tax",ic:'<svg viewBox="0 0 24 24"><path d="M7 4h10a1 1 0 0 1 1 1v15l-3-2-3 2-3-2-3 2V5a1 1 0 0 1 1-1z"/><path d="M9.5 9h5M9.5 13h5"/></svg>',label:"Tax"},
 ];
 function visibleTabs(){return TABS.filter(t=>!t.ft||feat(t.ft));}
 function tabEnabled(id){const t=TABS.find(x=>x.id===id);return !t||!t.ft||feat(t.ft);}
+/* Tabs merged Aug 2026: clients+supervision -> practice, revenue -> money+tax, table -> a
+   segment inside money. Old names still arrive from older code paths and saved links. */
+const TAB_ALIAS={clients:["practice","clients"],supervision:["practice","supervision"],
+                 income:["money","overview"],raw:["money","table"]};
+function resolveTab(tab,seg){
+  const a=TAB_ALIAS[tab];
+  if(a)return Array.isArray(a)?{tab:a[0],seg:seg||a[1]}:{tab:a,seg:seg};
+  return {tab:tab,seg:seg};
+}
 let cur="home";
 function renderTabs(){const overdue=S.sessions.filter(s=>derive(s).overdue).length;
   $("#tabs").innerHTML=visibleTabs().map(t=>`<button data-tab="${t.id}" class="${t.id===cur?"on":""}">
@@ -1142,8 +1187,12 @@ function crashScreen(err,tab){
 /* opts.keepScroll — re-render in place without throwing the reader back to the top. Anything
    that redraws the screen the user is already looking at (a Weekly/Monthly toggle, saving a
    row from a sheet) should pass it; only genuine navigation between tabs should scroll to top. */
-function go(tab,opts){if(!VIEWS[tab]||!tabEnabled(tab))tab="home";
-  const keep=(opts&&opts.keepScroll)?(window.scrollY||window.pageYOffset||0):null;
+function go(tab,opts){
+  opts=opts||{};
+  const rz=resolveTab(tab,opts.seg); tab=rz.tab;
+  if(rz.seg)setSeg(tab,rz.seg);                    /* land on a segment, not just the tab */
+  if(!VIEWS[tab]||!tabEnabled(tab))tab="home";
+  const keep=opts.keepScroll?(window.scrollY||window.pageYOffset||0):null;
   cur=tab;
   try{renderTabs();applyBranding();}catch(e){console.error("Chrome render failed",e);}
   const m=main();
@@ -1253,6 +1302,27 @@ VIEWS.home=function(){
 
 let sessFilter={q:"",seg:"upcoming",view:"list"};
 let calY=null,calM=null,statGran="month",taxMode="proj",thMode="net",supTab="log";
+/* Which segment each merged tab is showing. Module-level like the others, so a redraw
+   (go(tab,{keepScroll:true})) lands the reader back where they were. */
+let pracTab="clients", moneySeg="overview", taxSeg="estimate";
+function setSeg(tab,seg){
+  if(tab==="practice"&&["clients","trends","rooms","supervision"].indexOf(seg)>=0)pracTab=seg;
+  else if(tab==="money"&&["overview","costs","table"].indexOf(seg)>=0)moneySeg=seg;
+  else if(tab==="tax"&&["estimate","allowances","mtd"].indexOf(seg)>=0)taxSeg=seg;
+}
+/* A segment bar from [value,label] pairs. Renders nothing when there is only one segment. */
+function segBar(id,segs,active){
+  if(segs.length<2)return "";
+  return '<div class="seg mb" id="'+id+'" style="display:inline-flex">'+
+    segs.map(x=>'<button data-seg="'+esc(x[0])+'" class="'+(x[0]===active?"on":"")+'">'+esc(x[1])+'</button>').join("")+'</div>';
+}
+function wireSegBar(v,id,tab,route){
+  const bar=v.querySelector("#"+id); if(!bar)return;
+  bar.querySelectorAll("button").forEach(b=>b.onclick=()=>{
+    setSeg(tab,b.dataset.seg);
+    bar.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+    route();});
+}
 
 /* ===== analytics helpers (inline SVG charts) ===== */
 function monthKey(s){const d=parseD(s);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")}
@@ -1754,7 +1824,8 @@ VIEWS.sessions=function(){
   route();return v;
 };
 
-VIEWS.supervision=function(){
+/* A panel now, not a tab - it lives inside Practice > Supervision (see VIEWS.practice). */
+function supervisionPanel(){
   const v=el('<div class="view active"></div>');
   v.innerHTML='<div class="seg mb" id="suptab" style="display:inline-flex"><button data-st="log" class="'+(supTab==="log"?"on":"")+'">Log</button>'+
     (feat("peer")?'<button data-st="peer" class="'+(supTab==="peer"?"on":"")+'">Peer</button>':'')+
@@ -1826,12 +1897,16 @@ VIEWS.supervision=function(){
     route();
   }
   return v;
-};
+}
 
-let cliTab="clients";
-VIEWS.clients=function(){
+/* Practice - the clinical side in one place: who you see, where you see them, and the
+   supervision and CPD behind it. Merged from the old Clients and Supervision tabs. */
+VIEWS.practice=function(){
   const v=el('<div class="view active"></div>');
-  v.innerHTML='<div class="seg mb" id="crtab" style="display:inline-flex"><button data-t="clients" class="'+(cliTab==="clients"?"on":"")+'">Clients</button><button data-t="metrics" class="'+(cliTab==="metrics"?"on":"")+'">Trends</button><button data-t="rooms" class="'+(cliTab==="rooms"?"on":"")+'">Rooms</button></div><div id="crbody"></div>';
+  const segs=[["clients","Clients"],["trends","Trends"],["rooms","Rooms"]];
+  if(feat("supervision"))segs.push(["supervision","Supervision"]);
+  if(pracTab==="supervision"&&!feat("supervision"))pracTab="clients";
+  v.innerHTML=segBar("crtab",segs,pracTab)+'<div id="crbody"></div>';
   const body=v.querySelector("#crbody");
   function renderClients(){
     body.innerHTML='<div class="toolbar"><button class="btn sm" id="addC">＋ New client</button></div><div class="search"><input id="cq" placeholder="Search clients…"></div><div id="clist"></div>';
@@ -1945,9 +2020,12 @@ VIEWS.clients=function(){
     body.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>clientForm(S.clients.find(c=>c._id===li.dataset.id)));
     requestAnimationFrame(()=>body.querySelectorAll(".funnel .fbar>i").forEach(i=>{i.style.width=(+i.dataset.w)+"%";}));
   }
-  const route=()=>cliTab==="rooms"?renderRooms():cliTab==="metrics"?renderMetrics():renderClients();
-  v.querySelector("#crtab").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{cliTab=bt.dataset.t;
-    v.querySelector("#crtab").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));route();});
+  /* Supervision keeps its own inner Log / Peer / Insights bar - mounted whole rather than
+     rebuilt, so peer supervision, CPD and accreditation all come across unchanged. */
+  function renderSupervision(){body.innerHTML="";body.appendChild(supervisionPanel());}
+  const route=()=>pracTab==="rooms"?renderRooms():pracTab==="trends"?renderMetrics()
+    :pracTab==="supervision"?renderSupervision():renderClients();
+  wireSegBar(v,"crtab","practice",route);
   route();return v;
 };
 /* Rooms bill one of two ways. Per-session is the original: a dated roomRateHistory step that
@@ -2053,9 +2131,9 @@ function roomForm(rm){
       await commit("Added room: "+loc+" @ "+gbp(amt)+(monthly?"/month":"/session"));}
     else{const ex=S.rooms.find(x=>x._id===m._id);ex.location=loc;ex.due=dueV;ex.pay={freq:sched.freq,day:sched.day};
       await commit("Edited room: "+loc);}
-    closeSheet();toast("Saved");go("clients",{keepScroll:true});};
+    closeSheet();toast("Saved");go("practice",{seg:"rooms",keepScroll:true});};
   if(!isNew)body.querySelector("#rDel").onclick=async()=>{if(!confirm("Delete room "+m.location+"? (sessions are kept)"))return;
-    S.rooms=S.rooms.filter(x=>x._id!==m._id);await commit("Deleted room: "+m.location);closeSheet();toast("Deleted");go("clients",{keepScroll:true});};
+    S.rooms=S.rooms.filter(x=>x._id!==m._id);await commit("Deleted room: "+m.location);closeSheet();toast("Deleted");go("practice",{seg:"rooms",keepScroll:true});};
   openSheet(isNew?"New room / location":"Room: "+m.location,body);
 }
 function roomRateChange(loc){
@@ -2068,7 +2146,7 @@ function roomRateChange(loc){
     if(!dt||isNaN(amt)){toast("Enter date and amount");return}
     S.roomRateHistory.push({_id:uid(),location:loc,effectiveFrom:dt,rate:amt});
     const rm=S.rooms.find(r=>r.location.toLowerCase()===loc.toLowerCase());if(rm&&parseD(dt)<=today())rm.rate=amt;
-    await commit("Room cost change: "+loc+" → "+gbp(amt)+" from "+dt);closeSheet();toast("Cost updated");go("clients",{keepScroll:true});};
+    await commit("Room cost change: "+loc+" → "+gbp(amt)+" from "+dt);closeSheet();toast("Cost updated");go("practice",{seg:"rooms",keepScroll:true});};
   openSheet("Change cost · "+loc,body);
 }
 function roomRentChange(loc){
@@ -2081,7 +2159,7 @@ function roomRentChange(loc){
   body.querySelector("#rnS").onclick=async()=>{const dt=body.querySelector("#rnD").value;const amt=+body.querySelector("#rnA").value;
     if(!dt||isNaN(amt)){toast("Enter date and amount");return}
     S.roomRentHistory.push({_id:uid(),location:loc,effectiveFrom:dt,amount:amt});
-    await commit("Room rent change: "+loc+" → "+gbp(amt)+"/month from "+dt);closeSheet();toast("Rent updated");go("clients",{keepScroll:true});};
+    await commit("Room rent change: "+loc+" → "+gbp(amt)+"/month from "+dt);closeSheet();toast("Rent updated");go("practice",{seg:"rooms",keepScroll:true});};
   openSheet("Change rent · "+loc,body);
 }
 /* Switch a room between billing modes from a date. Both histories get a step, so the room is
@@ -2113,30 +2191,97 @@ function roomBillingSwitch(rm){
       ex.billing="session"; if(parseD(dt)<=today())ex.rate=amt;
     }
     await commit("Room billing: "+loc+" → "+(to==="monthly"?gbp(amt)+"/month":gbp(amt)+"/session")+" from "+dt);
-    closeSheet();toast("Billing updated");go("clients",{keepScroll:true});};
+    closeSheet();toast("Billing updated");go("practice",{seg:"rooms",keepScroll:true});};
   openSheet("Switch billing · "+loc,body);
 }
 
 /* ===== Business costs & other income =====
    Two ledgers with the same shape, so one form serves both. A monthly row is stored once and
    expanded at read time by ledgerBetween — editing the amount corrects every month it covers. */
-const FIN_CATS={
-  /* "Room rent" is deliberately not first: a room set to monthly billing already charges its own
-     rent, and a therapist accepting the default category would silently count it twice. */
-  exp:["Insurance","Utilities","Professional fees","Training & CPD","Travel","Equipment","Software","Marketing","Bank & card fees","Room hire","Other"],
-  inc:["Room sublet","Workshops & training","Supervision provided","Writing & consultancy","Other"]
+/* ===== HMRC self-employment categories =====
+   Each cost maps to a box on the SA103 self-employment pages. That mapping is what makes the
+   quarterly MTD totals possible later, and it is why categories are keyed objects rather than
+   free text: the label can be reworded without silently re-pointing anyone's figures.
+
+   `risk` marks a deduction HMRC frequently challenges. The app does not hide these -- it is not
+   the app's job to make that call -- but it will not present a contested position as settled
+   either. Anything with a `risk` shows an amber note wherever it is chosen. */
+const SA103={
+  20:"Car, van and travel expenses",
+  21:"Rent, rates, power and insurance costs",
+  23:"Phone, fax, stationery and other office costs",
+  24:"Advertising and business entertainment costs",
+  26:"Bank, credit card and other financial charges",
+  28:"Accountancy, legal and other professional fees",
+  30:"Other business expenses",
+  16:"Any other business income"
 };
+const EXP_CATS=[
+  {k:"supervision", n:"Clinical supervision",            box:28, hint:"Required to practise, so squarely allowable."},
+  {k:"memberships", n:"Professional memberships",        box:28, hint:"BACP, UKCP, BABCP and other bodies on HMRC's approved list."},
+  {k:"insurance",   n:"Professional indemnity insurance",box:21},
+  {k:"roomhire",    n:"Room hire",                       box:21, hint:"Rooms you rent monthly are counted from Practice \u203a Rooms \u2014 only add one-off hire here."},
+  {k:"useofhome",   n:"Use of home",                     box:21, auto:true},
+  {k:"utilities",   n:"Utilities at a practice premises",box:21},
+  {k:"cpd",         n:"CPD & training",                  box:30,
+    risk:"Training that keeps your existing skills current is allowable. A course that qualifies you to do something new reads as capital, or as starting a new trade, and generally is not."},
+  {k:"therapy",     n:"Personal therapy",                box:30,
+    risk:"HMRC often disallows this. There is normally a personal benefit alongside the professional one, so it can fail the \u2018wholly and exclusively\u2019 test. Some accountants do claim it where a training body requires it \u2014 worth agreeing with yours before you rely on it."},
+  {k:"dbs",         n:"DBS checks & registrations",      box:30},
+  {k:"ico",         n:"ICO data protection fee",         box:30},
+  {k:"website",     n:"Website & hosting",               box:24},
+  {k:"marketing",   n:"Advertising & directories",       box:24},
+  {k:"phone",       n:"Phone & internet",                box:23, hint:"Business proportion only if the line is also personal."},
+  {k:"office",      n:"Stationery, postage & printing",  box:23},
+  {k:"software",    n:"Software & subscriptions",        box:23},
+  {k:"travel",      n:"Travel between work locations",   box:20,
+    hint:"Travel between places you work is allowable. Ordinary commuting to a regular workplace is not."},
+  {k:"bank",        n:"Bank & card charges",             box:26},
+  {k:"accountancy", n:"Accountancy & legal",             box:28},
+  {k:"equipment",   n:"Equipment & furniture",           box:30, hint:"On the cash basis most equipment is deductible when bought. Cars are the exception."},
+  {k:"other",       n:"Other business costs",            box:30}
+];
+const INC_CATS=[
+  {k:"sublet",      n:"Room sublet",            box:16},
+  {k:"workshops",   n:"Workshops & training",   box:16},
+  {k:"supervising", n:"Supervision provided",   box:16},
+  {k:"writing",     n:"Writing & consultancy",  box:16},
+  {k:"other",       n:"Other income",           box:16}
+];
+function catList(kind){return kind==="inc"?INC_CATS:EXP_CATS;}
+function catOf(kind,key){const l=catList(kind);return l.find(c=>c.k===key)||l[l.length-1];}
+/* Old free-text categories -> new keys. Anything unrecognised keeps its original text on the
+   record and lands in "other", so a migration can never quietly bin someone's labelling. */
+const CAT_MIGRATE={
+  "insurance":"insurance","utilities":"utilities","professional fees":"memberships",
+  "training & cpd":"cpd","travel":"travel","equipment":"equipment","software":"software",
+  "marketing":"marketing","bank & card fees":"bank","room hire":"roomhire","room rent":"roomhire",
+  "other":"other","room sublet":"sublet","workshops & training":"workshops",
+  "supervision provided":"supervising","writing & consultancy":"writing"
+};
+function migrateCat(kind,txt){
+  const k=CAT_MIGRATE[String(txt||"").trim().toLowerCase()];
+  if(k&&catList(kind).some(c=>c.k===k))return k;
+  return "other";
+}
+/* Kept for the few places that still want a plain label. */
+const FIN_CATS={exp:EXP_CATS.map(c=>c.n),inc:INC_CATS.map(c=>c.n)};
 function finArr(kind){return kind==="exp"?(S.expenses=S.expenses||[]):(S.otherIncome=S.otherIncome||[]);}
 function finRecurring(x){return String(x&&x.recurrence||"once")!=="once";}
 function finPersonal(x){return String(x&&x.scope||"practice")==="personal";}
 function financeForm(kind,rec){
   const isNew=!rec, isInc=(kind==="inc");
-  const m=rec?clone(rec):{_id:uid(),desc:"",amount:0,date:isoD(today()),recurrence:"once",endDate:"",category:FIN_CATS[kind][0]};
+  const cats=catList(kind);
+  const m=rec?clone(rec):{_id:uid(),desc:"",amount:0,date:isoD(today()),recurrence:"once",endDate:"",cat:cats[0].k};
+  if(m.cat==null)m.cat=migrateCat(kind,m.category);
   if(isInc&&m.scope==null)m.scope="practice";
   const body=el('<div></div>');
   body.innerHTML='<label>Description</label><input id="f_desc" maxlength="60" value="'+esc(m.desc||"")+'" placeholder="'+(isInc?"Room sublet to a colleague":"Electricity")+'">'+
     '<div class="field2"><div><label>Amount (£)</label><input type="number" min="0" step="0.01" id="f_amt" value="'+(+m.amount||0)+'"></div>'+
-      '<div><label>Category</label><select id="f_cat">'+opts(FIN_CATS[kind],m.category||FIN_CATS[kind][0])+'</select></div></div>'+
+      '<div><label>Category</label><select id="f_cat">'+
+        opts2(cats.filter(c=>!c.auto).map(c=>[c.k,c.n]),m.cat)+'</select></div></div>'+
+      '<p class="small muted" id="f_catNote"></p>'+
+      '<div class="vmsg warn" id="f_catRisk" style="display:none"></div>'+
     '<label>How often?</label><select id="f_rec">'+opts2(FREQS,String(m.recurrence||"once"))+'</select>'+
     '<label id="f_dateL" style="margin-top:12px"></label><input type="date" id="f_date" value="'+esc(m.date||"")+'">'+
     '<p class="small muted" id="f_next"></p>'+
@@ -2162,10 +2307,16 @@ function financeForm(kind,rec){
       const dates=[];for(let n=0;n<3;n++){const d=freqStep(anchor,m.recurrence,n);if(d)dates.push(fmtD(d));}
       nx.innerHTML=dates.length?("Repeats "+esc(freqShort(m.recurrence))+": <b>"+dates.join("</b>, <b>")+"</b>, …"):"";
     }
+    /* what HMRC calls this, and whether they are likely to argue about it */
+    const cat=catOf(kind,g("#f_cat").value);
+    const note=g("#f_catNote"), risk=g("#f_catRisk");
+    note.innerHTML="Goes in <b>box "+cat.box+"</b> on your tax return \u2014 "+esc(SA103[cat.box]||"")+"."+(cat.hint?" "+cat.hint:"");
+    risk.style.display=cat.risk?"":"none";
+    if(cat.risk)risk.innerHTML="\u26a0\ufe0f <b>Check this one.</b> "+cat.risk;
     if(!isInc){
       /* rooms already on monthly billing charge their own rent — warn before it's counted twice */
       const w=g("#f_rentWarn"), monthlyRooms=S.rooms.filter(r=>roomBilling(r)==="monthly").map(r=>r.location);
-      const looksLikeRent=/rent/i.test(g("#f_cat").value)||/rent/i.test(g("#f_desc").value);
+      const looksLikeRent=(g("#f_cat").value==="roomhire")||/rent/i.test(g("#f_desc").value);
       if(w){w.style.display=(looksLikeRent&&monthlyRooms.length)?"":"none";
         w.innerHTML="⚠️ "+esc(monthlyRooms.join(", "))+(monthlyRooms.length===1?" is":" are")+
           " already billed as monthly rent from <b>Clients › Rooms</b>, and counted in your costs automatically. Only add rent here for a room the app doesn’t know about.";}
@@ -2181,7 +2332,7 @@ function financeForm(kind,rec){
   paint();
   g("#f_save").onclick=async()=>{
     m.desc=g("#f_desc").value.trim(); m.amount=+g("#f_amt").value||0;
-    m.category=g("#f_cat").value; m.date=g("#f_date").value;
+    m.cat=g("#f_cat").value; m.category=catOf(kind,m.cat).n; m.date=g("#f_date").value;
     m.endDate=finRecurring(m)?g("#f_end").value:"";
     if(!m.desc){toast("Add a description");Sfx.error();return;}
     if(!(m.amount>0)){toast("Enter an amount");Sfx.error();return;}
@@ -2191,12 +2342,12 @@ function financeForm(kind,rec){
     if(ex)Object.assign(ex,m); else arr.push(m);
     const what=(isInc?"income":"cost")+": "+m.desc+" "+gbp(m.amount)+(finRecurring(m)?"/month":"");
     await commit((ex?"Edited ":"Added ")+what);
-    closeSheet();toast("Saved");go("income",{keepScroll:true});};
+    closeSheet();toast("Saved");go("money",{seg:"costs",keepScroll:true});};
   if(!isNew)g("#f_del").onclick=async()=>{
     if(!confirm("Delete “"+m.desc+"”?\n\nIt stops counting in every tax year it covered."))return;
     const arr=finArr(kind); const i=arr.findIndex(x=>x._id===m._id); if(i>=0)arr.splice(i,1);
     await commit("Deleted "+(isInc?"income":"cost")+": "+m.desc);
-    closeSheet();toast("Deleted");go("income",{keepScroll:true});};
+    closeSheet();toast("Deleted");go("money",{seg:"costs",keepScroll:true});};
   openSheet((isNew?"New ":"Edit ")+(isInc?"other income":"business cost"),body);
 }
 /* ===== Payments due =====
@@ -2250,7 +2401,7 @@ function wirePaymentsDue(v){
     b.disabled=true;
     const ok=await setChargePaid(b.dataset.pay,on?null:isoD(today()),b.dataset.lbl);
     if(ok){toast(on?"Marked unpaid":"Marked paid");if(!on)Sfx.pop();}
-    go("income",{keepScroll:true});});
+    go("money",{seg:"costs",keepScroll:true});});
 }
 /* The two ledger cards on the Revenue tab, plus the monthly rents that come from Rooms. */
 function financeCards(){
@@ -2262,7 +2413,7 @@ function financeCards(){
     '<div class="li-main"><div class="li-title">'+esc(x.desc||"(no description)")+
       (finRecurring(x)?' <span class="chip f">'+esc(freqShort(x.recurrence))+'</span>':'')+
       (kind==="inc"&&finPersonal(x)?' <span class="chip na">separate</span>':'')+'</div>'+
-    '<div class="li-sub">'+esc(x.category||"")+' · '+(finRecurring(x)
+    '<div class="li-sub">'+esc(catOf(kind,x.cat||migrateCat(kind,x.category)).n)+' · '+(finRecurring(x)
         ? ('from '+fmtDshort(x.date)+(x.endDate?' to '+fmtDshort(x.endDate):''))
         : fmtDshort(x.date))+'</div></div>'+
     '<div class="li-right">'+gbp(x.amount)+(finRecurring(x)?'<span class="small muted">'+(per[x.recurrence]||"")+'</span>':'')+'</div></div>';
@@ -2276,13 +2427,16 @@ function financeCards(){
       '<div class="li-right">'+gbp(amt)+'<span class="small muted"> /mo</span></div></div>';}).join("");
   const exps=sortFin(S.expenses||[]), incs=sortFin(S.otherIncome||[]);
   const costTotal=led.expenses+led.roomRent;
+  const uohRow=led.useOfHome?('<div class="list-item"><div class="li-main"><div class="li-title">Use of home <span class="chip f">allowance</span></div>'+
+    '<div class="li-sub">Set in Tax \u203a Allowances \u00b7 '+gbp(Math.round(led.useOfHome))+' this tax year</div></div>'+
+    '<div class="li-right">'+gbp(Math.round(uohMonthly(curTaxYear())))+'<span class="small muted"> /mo</span></div></div>'):"";
   const expCard='<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
       '<h2 style="margin:0">Business costs</h2><button class="btn sm" id="addExp">＋ Add a cost</button></div>'+
     '<p class="small muted">Everything you pay to run the practice that isn’t a room charge on a session — insurance, wifi, CPD. Monthly costs repeat on their own.</p>'+
     '<div class="kpis mt" style="grid-template-columns:1fr 1fr">'+
       '<div class="kpi"><div class="v">'+gbp(Math.round(costTotal))+'</div><div class="l">'+ty+' costs</div></div>'+
       '<div class="kpi"><div class="v">'+gbp(Math.round(led.roomRent))+'</div><div class="l">of that, room rent</div></div></div>'+
-    (rentRows||exps.length?'<div style="padding:0 2px;margin-top:8px">'+rentRows+exps.map(x=>line(x,"exp")).join("")+'</div>'
+    (rentRows||uohRow||exps.length?'<div style="padding:0 2px;margin-top:8px">'+rentRows+uohRow+exps.map(x=>line(x,"exp")).join("")+'</div>'
       :'<p class="muted small mt">No costs logged yet.</p>')+
     '<p class="small muted" style="margin-top:8px">These come off your net income and tax estimate. Room rent is shown here but edited on the room itself.</p></div>';
   const incCard='<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
@@ -2309,19 +2463,57 @@ function wireFinance(v){
 function taxRates(ty){const sy=parseInt(ty.slice(0,4));
   const r={pa:12570,basicTop:50270,higherTop:125140,c4lpl:12570,c4upl:50270,c4upper:0.02};
   r.c4main=(sy>=2024)?0.06:0.09;
-  if(sy<2024){r.class2week=3.45;r.spt=6725;}
+  /* Class 2 stopped being compulsory from 2024/25 -- but it can still be paid VOLUNTARILY below
+     the Small Profits Threshold to keep a State Pension qualifying year, which matters a lot to a
+     part-time practice. Mandatory before that, optional after. */
+  r.spt=6725; r.class2week=(sy>=2025)?3.50:3.45;
+  r.class2Mandatory=(sy<2024);
   return r;}
+/* Scotland sets its own income tax bands on non-savings income. Anything else -- the personal
+   allowance, both classes of NI -- stays UK-wide. */
+const SCOT_BANDS=[[2827,0.19],[14921,0.20],[31092,0.21],[62430,0.42],[125140,0.45],[Infinity,0.48]];
+function taxRegion(){return settings().taxRegion==="scotland"?"scotland":"rUK";}
+const SL_PLANS={
+  none:null,
+  plan1:{n:"Plan 1",thr:26065,rate:0.09},
+  plan2:{n:"Plan 2",thr:28470,rate:0.09},
+  plan4:{n:"Plan 4",thr:32745,rate:0.09},
+  plan5:{n:"Plan 5",thr:25000,rate:0.09},
+  pg:{n:"Postgraduate",thr:21000,rate:0.06}
+};
+function studentLoanDue(profit){
+  const p=SL_PLANS[settings().studentLoan]; if(!p)return 0;
+  return Math.max(0,profit-p.thr)*p.rate;
+}
 function ukTax(profit,ty){profit=Math.max(0,profit||0);const r=taxRates(ty);
   let pa=r.pa;if(profit>100000)pa=Math.max(0,r.pa-(profit-100000)/2);
-  const b1=Math.max(0,Math.min(profit,r.basicTop)-pa)*0.20;
-  const b2=Math.max(0,Math.min(profit,r.higherTop)-r.basicTop)*0.40;
-  const b3=Math.max(0,profit-r.higherTop)*0.45;
+  /* Personal pension contributions are paid net and extend the basic-rate band by the gross
+     amount, so higher-rate relief arrives through the bands rather than as a deduction. */
+  const penGross=Math.round(pensionPcm()*12/0.8);
+  const basicTop=r.basicTop+penGross, higherTop=r.higherTop+penGross;
+  let b1=0,b2=0,b3=0,scot=null;
+  if(taxRegion()==="scotland"){
+    scot=[];let lower=pa;
+    SCOT_BANDS.forEach(bd=>{const top=(bd[0]===Infinity)?Infinity:bd[0]+penGross;
+      const amt=Math.max(0,Math.min(profit,top)-lower);
+      if(amt>0)scot.push({top:bd[0],rate:bd[1],amt,tax:amt*bd[1]});
+      lower=Math.max(lower,top);});
+    b1=scot.reduce((a,x)=>a+x.tax,0);
+  }else{
+    b1=Math.max(0,Math.min(profit,basicTop)-pa)*0.20;
+    b2=Math.max(0,Math.min(profit,higherTop)-basicTop)*0.40;
+    b3=Math.max(0,profit-higherTop)*0.45;
+  }
   const incomeTax=b1+b2+b3;
   const n1=Math.max(0,Math.min(profit,r.c4upl)-r.c4lpl)*r.c4main;
   const n2=Math.max(0,profit-r.c4upl)*r.c4upper;
-  let class2=0;if(r.class2week)class2=profit>=r.spt?r.class2week*52:0;
-  const total=incomeTax+n1+n2+class2;
-  return {profit,pa,b1,b2,b3,incomeTax,n1,n2,class2,total,effective:profit>0?total/profit:0,r};}
+  let class2=0;
+  if(r.class2Mandatory)class2=profit>=r.spt?r.class2week*52:0;
+  else if(settings().class2Voluntary&&profit<r.spt)class2=r.class2week*52;
+  const sl=studentLoanDue(profit);
+  const total=incomeTax+n1+n2+class2+sl;
+  return {profit,pa,penGross,scot,b1,b2,b3,incomeTax,n1,n2,class2,sl,total,
+    effective:profit>0?total/profit:0,r};}
 function tyBounds(ty){const sy=parseInt(ty.slice(0,4));return {start:new Date(sy,3,6),end:new Date(sy+1,3,5)};}
 
 /* ===== Business finances ledger: expenses, other income and monthly room rent =====
@@ -2449,6 +2641,91 @@ function roomRentOccurrences(from,to){
   });
   return out;
 }
+/* ===== Which basis the tax figures are computed on =====
+   Cash: counted when money actually moved. Accruals: counted when the work was done or the cost
+   fell due. Where a payment date has not been recorded, cash falls back to the accrual date --
+   otherwise an untidied tick-list would silently wipe every cost out of the return. */
+function taxBasis(){const b=settings().taxBasis;return b==="accruals"?"accruals":"cash";}
+function basisLabel(){return taxBasis()==="cash"?"Cash basis":"Accruals basis";}
+function basisNote(){return taxBasis()==="cash"
+  ? "Counted when the money moved \u2014 HMRC's default for sole traders. Sessions count when paid; costs count when you tick them off (or on their due date if you have not)."
+  : "Counted when the work was done and costs fell due, whether or not they have been settled. This is an election you make on your tax return.";}
+
+/* ===== Use of home =====
+   Two ways HMRC lets a sole trader claim for working at home.
+
+   Simplified: a flat monthly amount by hours worked at home. No records to keep, no
+   apportionment to defend, and for most part-time practices it is within a few pounds of the
+   actual figure anyway.
+   Actual: apportion real household bills by rooms used and the share of time they are used for
+   work. Mortgage capital repayments are never allowable -- interest only.
+
+   Either way this generates a monthly cost at read time; nothing is written into the ledger. */
+const UOH_BANDS=[[25,10],[51,18],[101,26]];   /* [hours from, GBP per month] */
+function uohRate(hours){let r=0;UOH_BANDS.forEach(b=>{if(hours>=b[0])r=b[1];});return r;}
+function uohYears(){const u=settings().useOfHome||{};return (u.years=u.years||{});}
+function uohBlank(){return {method:"none",hours:0,rooms:0,workRooms:0,businessPct:100,costs:{}};}
+/* The record actually in force for a year: its own if it has one, otherwise the most recent
+   earlier year's, carried forward. `inherited` tells the UI to say so. */
+function uohForYear(ty){
+  const ys=uohYears();
+  if(ys[ty])return {cfg:Object.assign(uohBlank(),ys[ty]),inherited:false,from:ty};
+  const earlier=Object.keys(ys).filter(k=>k<ty).sort();
+  if(earlier.length){const k=earlier[earlier.length-1];
+    return {cfg:Object.assign(uohBlank(),ys[k]),inherited:true,from:k};}
+  return {cfg:uohBlank(),inherited:false,from:null};
+}
+/* The draft a year is being edited with -- saved inputs, but not necessarily the applied method. */
+function uohDraft(ty){const ys=uohYears();return Object.assign(uohBlank(),ys[ty]||uohForYear(ty).cfg);}
+function uohConfig(ty){return uohForYear(ty||curTaxYear()).cfg;}
+function uohMonthlyFor(cfg){
+  if(!cfg)return 0;
+  if(cfg.method==="simplified")return uohRate(+cfg.hours||0);
+  if(cfg.method==="actual")return uohActualAnnual(cfg)/12;
+  return 0;
+}
+function uohActualAnnual(c){
+  const t=c.costs||{};
+  const total=(+t.rent||0)+(+t.councilTax||0)+(+t.gas||0)+(+t.electric||0)+(+t.water||0)+(+t.broadband||0)+(+t.other||0);
+  if(!c.rooms||!c.workRooms)return 0;
+  return total*(Math.min(c.workRooms,c.rooms)/c.rooms)*(Math.max(0,Math.min(100,c.businessPct))/100);
+}
+function uohMonthly(ty){return uohMonthlyFor(uohConfig(ty));}
+/* Sessions logged at home, per month, over the last three months -- a starting point for the
+   hours question. Deliberately an underestimate: it counts client contact only. */
+function uohSessionHours(){
+  const t=today(), from=new Date(t.getFullYear(),t.getMonth()-3,1);
+  const homeish=r=>/home/i.test(r.location||"");
+  const homes=S.rooms.filter(homeish).map(r=>(r.location||"").toLowerCase());
+  let n=0;
+  S.sessions.forEach(sx=>{const d=parseD(sx.date);if(!d||d<from||d>t)return;
+    const loc=(sx.location||"").toLowerCase();
+    if(homes.indexOf(loc)>=0||/home/i.test(loc))n++;});
+  return Math.round(n/3);
+}
+/* One charge a month, each month valued by whatever method that month's TAX YEAR is using --
+   so a year on the simplified rate and the next on actual costs both come out right. */
+function uohOccurrences(from,to){
+  const ys=uohYears();
+  if(!Object.keys(ys).length)return [];
+  const first=Object.keys(ys).sort()[0];
+  const startISO=Object.values(ys).map(y=>y.appliedAt).filter(Boolean).sort()[0]
+    ||isoD(tyBounds(first).start);
+  const start=parseD(startISO); if(!start)return [];
+  const out=[];
+  let cur=new Date(start.getFullYear(),start.getMonth(),1);
+  for(let i=0;i<1200;i++){
+    const d=new Date(cur.getFullYear(),cur.getMonth(),1);
+    if(d>to)break;
+    if(d>=from&&d>=new Date(start.getFullYear(),start.getMonth(),1)){
+      const amt=uohMonthlyFor(uohConfig(taxYear(d)));
+      if(amt>0)out.push({date:d,amount:amt});
+    }
+    cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);
+  }
+  return out;
+}
+
 /* Totals for a date range. `total` is the effect on taxable profit: practice income less costs.
    Income marked personal (a second job, tutoring — a different trade) is counted separately and
    deliberately kept out of `total`, so it never inflates the practice's Self Assessment figure. */
@@ -2469,9 +2746,9 @@ async function setChargePaid(key,paidOn,label){
 function chargesBetween(from,to){
   const out=[];
   (S.expenses||[]).forEach(x=>moneyOccurrences(x,from,to).forEach(o=>out.push(
-    {kind:"exp",ref:x._id,label:x.desc||"Cost",cat:x.category||"",date:o.date,amount:o.amount,freq:x.recurrence})));
+    {kind:"exp",ref:x._id,label:x.desc||"Cost",cat:catOf("exp",x.cat).n,box:catOf("exp",x.cat).box,date:o.date,amount:o.amount,freq:x.recurrence})));
   (S.otherIncome||[]).forEach(x=>moneyOccurrences(x,from,to).forEach(o=>out.push(
-    {kind:"inc",ref:x._id,label:x.desc||"Income",cat:x.category||"",date:o.date,amount:o.amount,freq:x.recurrence,personal:finPersonal(x)})));
+    {kind:"inc",ref:x._id,label:x.desc||"Income",cat:catOf("inc",x.cat).n,box:16,date:o.date,amount:o.amount,freq:x.recurrence,personal:finPersonal(x)})));
   roomRentOccurrences(from,to).forEach(o=>out.push(
     {kind:"rent",ref:(o.location||"").toLowerCase(),label:(o.location||"Room")+" rent",cat:"Room rent",
      date:o.date,due:o.due,amount:o.amount,freq:"monthly"}));
@@ -2485,18 +2762,42 @@ function ledgerBetween(from,to,opts){
   if(typeof from==="string")from=parseD(from);
   if(typeof to==="string")to=parseD(to);
   if(opts.toDate){const t=today();if(to&&to>t)to=t;}
-  const zero={expenses:0,otherIncome:0,personalIncome:0,roomRent:0,total:0};
+  const zero={expenses:0,otherIncome:0,personalIncome:0,roomRent:0,useOfHome:0,total:0};
   if(!from||!to||from>to)return zero;
   let expenses=0,otherIncome=0,personalIncome=0,roomRent=0;
-  (S.expenses||[]).forEach(x=>moneyOccurrences(x,from,to).forEach(o=>{expenses+=o.amount;}));
+  const cash=(opts.basis||taxBasis())==="cash";
+  /* Under cash, an occurrence counts in the period its payment landed in. A wide window is
+     scanned so a charge incurred before `from` but paid inside it is still picked up. */
+  const wide=cash?addYears(from,-2):from, wideTo=cash?addYears(to,2):to;
+  const hit=(kind,ref,occ)=>{
+    if(!cash)return (occ.date>=from&&occ.date<=to);
+    const paid=chargePaidOn(chargeKey(kind,ref,occ.date));
+    const when=paid?parseD(paid):occ.date;                  /* not ticked: fall back to due date */
+    return when>=from&&when<=to;
+  };
+  (S.expenses||[]).forEach(x=>moneyOccurrences(x,wide,wideTo).forEach(o=>{if(hit("exp",x._id,o))expenses+=o.amount;}));
   (S.otherIncome||[]).forEach(x=>{const personal=String(x.scope||"practice")==="personal";
-    moneyOccurrences(x,from,to).forEach(o=>{if(personal)personalIncome+=o.amount;else otherIncome+=o.amount;});});
-  roomRentOccurrences(from,to).forEach(o=>{roomRent+=o.amount;});
-  return {expenses,otherIncome,personalIncome,roomRent,total:otherIncome-expenses-roomRent};
+    moneyOccurrences(x,wide,wideTo).forEach(o=>{if(!hit("inc",x._id,o))return;
+      if(personal)personalIncome+=o.amount;else otherIncome+=o.amount;});});
+  roomRentOccurrences(wide,wideTo).forEach(o=>{if(hit("rent",(o.location||"").toLowerCase(),o))roomRent+=o.amount;});
+  /* Use of home is a computed allowance, not a bill anyone sends -- it is never "unpaid", so it
+     counts on its own date under both bases. */
+  let useOfHome=0;
+  uohOccurrences(from,to).forEach(o=>{useOfHome+=o.amount;});
+  expenses+=useOfHome;
+  return {expenses,otherIncome,personalIncome,roomRent,useOfHome,total:otherIncome-expenses-roomRent};
 }
 
 function tyNet(y,toDateOnly){const t=today();let net=0;
-  S.sessions.forEach(s=>{const d=derive(s);if(d.taxYear!==y)return;if(toDateOnly){const dd=parseD(s.date);if(!dd||dd>t)return;}net+=(d.rate||0)-(d.roomRate||0);});
+  const cash=taxBasis()==="cash";
+  S.sessions.forEach(s=>{const d=derive(s);
+    /* Cash: the fee counts in the year it was received, and an unpaid session counts nowhere yet.
+       The room charge follows the session either way -- it is incurred by seeing the client. */
+    const when=cash?(s.paidDate||null):s.date;
+    if(cash&&!when)return;
+    if(taxYear(when)!==y)return;
+    if(toDateOnly){const dd=parseD(when);if(!dd||dd>t)return;}
+    net+=(d.rate||0)-(d.roomRate||0);});
   (S.supervision||[]).forEach(sv=>{if(!sv.date||taxYear(sv.date)!==y)return;if(toDateOnly){const dd=parseD(sv.date);if(!dd||dd>t)return;}net-=(+sv.cost||0);});
   (S.peerSupervision||[]).forEach(pv=>{if(!pv.date||taxYear(pv.date)!==y)return;if(toDateOnly){const dd=parseD(pv.date);if(!dd||dd>t)return;}net-=(+pv.cost||0);});
   const b=tyBounds(y);
@@ -2516,6 +2817,36 @@ function taxForYear(y){const b=tyBounds(y),t=today();
   const calcProj=ukTax(projAnnual,y);
   const proRata=calcProj.total*frac;
   return {status,netAll,netTD,yearDays,elapsed,frac,calcI,calcProj,proRata,projAnnual,display:{proj:proRata,todate:calcI.total}};}
+/* ===== What HMRC actually asks for, and when =====
+   The bill is not just last year's tax. Once the liability passes GBP 1,000, HMRC also takes two
+   payments on account towards NEXT year -- so the first January after a good year can be 150% of
+   the tax due. That is the single thing that catches sole traders out, so the pot plans for it.
+   Class 2 and student loan are never included in payments on account. */
+const POA_THRESHOLD=1000;
+function poaBase(calc){return Math.max(0,(calc.total||0)-(calc.class2||0)-(calc.sl||0));}
+function taxSchedule(ty){
+  const sy=parseInt(ty.slice(0,4));
+  const calc=ukTax(Math.max(0,tyNet(ty,false)),ty);
+  const prev=String(sy-1)+"-"+String(sy).slice(2);
+  const prevCalc=ukTax(Math.max(0,tyNet(prev,false)),prev);
+  const poaPrev=poaBase(prevCalc)>=POA_THRESHOLD?poaBase(prevCalc)/2:0;   /* each of last year's two */
+  const balancing=calc.total-poaPrev*2;
+  const poaThis=poaBase(calc)>=POA_THRESHOLD?poaBase(calc)/2:0;
+  return {ty,calc,prev,prevCalc,poaPrev,
+    jan:{date:new Date(sy+1,0,31),balancing,poa:poaThis,total:balancing+poaThis},
+    jul:{date:new Date(sy+1,6,31),poa:poaThis,total:poaThis},
+    firstYear:poaPrev===0&&poaThis>0};
+}
+function nextTaxPayment(){
+  const t=today();
+  const cands=[];
+  [curTaxYear(),prevTaxYear()].forEach(y=>{const sc=taxSchedule(y);
+    if(sc.jan.total>0)cands.push({when:sc.jan.date,amount:sc.jan.total,what:"Balancing payment for "+y+(sc.jan.poa>0?" + first payment on account":""),ty:y});
+    if(sc.jul.total>0)cands.push({when:sc.jul.date,amount:sc.jul.total,what:"Second payment on account for "+y,ty:y});});
+  cands.sort((a,b)=>a.when-b.when);
+  return cands.find(c=>c.when>=t)||null;
+}
+function prevTaxYear(){const sy=parseInt(curTaxYear().slice(0,4))-1;return String(sy)+"-"+String(sy+1).slice(2);}
 function trow(l,v,b){return '<tr><td>'+(b?'<b>'+l+'</b>':l)+'</td><td class="num">'+(b?'<b>'+v+'</b>':v)+'</td></tr>';}
 function gbpR(n){return gbp(Math.round(n||0));}
 function taxBreakdown(c){return '<table>'+
@@ -2526,10 +2857,14 @@ function taxBreakdown(c){return '<table>'+
   (c.b3?trow('Income tax @ 45%',gbpR(c.b3)):'')+
   trow('Class 4 NIC @ '+Math.round(c.r.c4main*100)+'%',gbpR(c.n1))+
   (c.n2?trow('Class 4 NIC @ 2%',gbpR(c.n2)):'')+
-  (c.class2?trow('Class 2 NIC',gbpR(c.class2)):'')+
+  (c.class2?trow('Class 2 NIC'+(c.r.class2Mandatory?'':' (voluntary)'),gbpR(c.class2)):'')+
+  (c.sl?trow('Student loan'+(SL_PLANS[settings().studentLoan]?' ('+SL_PLANS[settings().studentLoan].n+')':''),gbpR(c.sl)):'')+
+  (c.penGross?trow('Basic-rate band extended by pension',gbpR(c.penGross)):'')+
   trow('Total tax',gbpR(c.total),true)+
   trow('Effective rate',(c.effective*100).toFixed(1)+'%')+'</table>';}
 function taxDetailsSheet(y){const tx=taxForYear(y);const body=el('<div></div>');let html='';
+  const bnd=tyBounds(y), bd=profitBreakdown(bnd.start,bnd.end);
+  const sched=taxSchedule(y);
   if(tx.status==="complete"){html='<div class="hint">Completed tax year.</div>'+taxBreakdown(tx.calc);}
   else if(tx.status==="inprogress"){const pc=Math.round(tx.frac*100);
     html='<div class="hint">In progress — '+tx.elapsed+' of '+tx.yearDays+' days ('+pc+'%) elapsed.</div>'+
@@ -2540,8 +2875,19 @@ function taxDetailsSheet(y){const tx=taxForYear(y);const body=el('<div></div>');
       '<p class="small muted">Tax on net to date '+gbpR(tx.netTD)+' = <b>'+gbpR(tx.calcI.total)+'</b>.</p>'+
       taxBreakdown(tx.calcI);}
   else {html='<p class="muted">This tax year hasn’t started yet.</p>';}
-  body.innerHTML=html+'<p class="small muted mt">Covers Income Tax and Class 4'+(parseInt(y)<2024?' &amp; Class 2':'')+' National Insurance for a sole trader. A personal estimate, not tax advice.</p>';
-  openSheet("Tax · "+y,body);}
+  /* How the profit was arrived at comes FIRST -- the bands mean nothing without it. */
+  html='<div class="grp-h">How the profit was worked out</div>'+breakdownHTML(bd,{clients:true})+
+    '<div class="grp-h" style="margin-top:18px">The tax on it</div>'+html+
+    '<div class="grp-h" style="margin-top:18px">When HMRC wants it</div>'+
+    '<table>'+
+      trow('31 Jan '+(parseInt(y)+1)+' \u2014 balancing payment',gbpR(sched.jan.balancing))+
+      (sched.jan.poa?trow('31 Jan '+(parseInt(y)+1)+' \u2014 payment on account',gbpR(sched.jan.poa)):'')+
+      trow('<b>Total due 31 Jan</b>','<b>'+gbpR(sched.jan.total)+'</b>',true)+
+      (sched.jul.total?trow('31 Jul '+(parseInt(y)+1)+' \u2014 payment on account',gbpR(sched.jul.total)):'')+
+    '</table>'+
+    (sched.jan.poa?'<p class="small muted">Payments on account are advance instalments towards the <i>following</i> year, due because this bill passes \u00a3'+POA_THRESHOLD+'. Class 2 and student loan are never part of them.</p>':'');
+  body.innerHTML=html+'<p class="small muted mt">Covers Income Tax, Class 4'+(parseInt(y)<2024?' and Class 2':'')+' National Insurance'+(settings().studentLoan!=="none"?', student loan':'')+' for a sole trader'+(taxRegion()==="scotland"?', at Scottish rates':'')+'. A personal estimate, not tax advice.</p>';
+  openSheet("Tax \u00b7 "+y,body);}
 
 /* ===== Monthly take-home & pension ===== */
 function pensionPcm(){let v=150;try{const s=localStorage.getItem("tt_pension");if(s!==null&&s!==""&&!isNaN(+s))v=+s;}catch(e){}return v;}
@@ -2556,7 +2902,7 @@ function monthlyTakeHome(){const ty=curTaxYear();const tx=taxForYear(ty);
   const annualHome=annualNet-annualTax;
   return {ty,status:tx.status,annualNet,annualTax,annualHome,monthly:annualHome/12};}
 function editPension(after){const body=el('<div></div>');
-  body.innerHTML='<p class="muted small">Set your monthly pension contribution. It’s deducted from your after-tax take-home in the “After pension” view (a simple deduction — tax relief isn’t modelled).</p>'+
+  body.innerHTML='<p class="muted small">Set your monthly pension contribution. It’s deducted from your after-tax take-home in the “After pension” view (higher-rate relief is modelled by extending your basic-rate band).</p>'+
     '<label>Monthly pension contribution (£)</label><input type="number" id="penA" value="'+pensionPcm()+'">'+
     '<button class="btn full mt" id="penS">Save</button>';
   body.querySelector("#penS").onclick=()=>{const val=+body.querySelector("#penA").value;
@@ -2564,8 +2910,92 @@ function editPension(after){const body=el('<div></div>');
     setPensionPcm(val);closeSheet();toast("Pension updated");if(after)after();};
   openSheet("Monthly pension",body);}
 
-VIEWS.income=function(){
+/* ===== Money — the day-to-day cash picture =====
+   Overview (what came in), Costs & income (what goes out, what else comes in), and the
+   spreadsheet-style Table. The tax-year machinery lives on its own tab; see VIEWS.tax. */
+VIEWS.money=function(){
   const v=el('<div class="view active"></div>');
+  const segs=[["overview","Overview"],["costs","Costs & income"]];
+  if(feat("raw"))segs.push(["table","Table"]);
+  if(moneySeg==="table"&&!feat("raw"))moneySeg="overview";
+  v.innerHTML=segBar("moneyseg",segs,moneySeg)+'<div id="moneybody"></div>';
+  const body=v.querySelector("#moneybody");
+
+  function drawOverview(){
+    const der=S.sessions.map(s=>({s,d:derive(s)}));
+    const sum=(rows,f)=>rows.reduce((a,x)=>a+(f(x)||0),0);
+    const t=today();const months=[];for(let i=0;i<12;i++)months.push(new Date(t.getFullYear(),t.getMonth()-i,1));
+    const mTable=months.map(m=>{const end=new Date(m.getFullYear(),m.getMonth()+1,1);
+      const rs=der.filter(x=>{const d=parseD(x.s.date);return d&&d>=m&&d<end});
+      const billed=sum(rs,x=>x.d.rate),rec=sum(rs.filter(x=>x.d.clientPaid),x=>x.d.rate);
+      return '<tr><td>'+m.toLocaleDateString("en-GB",{month:"short",year:"2-digit"})+'</td><td class="num">'+rs.length+'</td><td class="num">'+gbp(billed)+'</td><td class="num">'+gbp(rec)+'</td><td class="num">'+(billed-rec?gbp(billed-rec):"–")+'</td></tr>';}).join("");
+    const byClient=S.clients.map(c=>{const rs=der.filter(x=>(x.s.client||"").toLowerCase()===c.code.toLowerCase()&&x.d.overdue);
+      return{code:c.code,n:rs.length,amt:sum(rs,x=>x.d.rate)}}).filter(x=>x.amt>0).sort((a,b)=>b.amt-a.amt);
+    const due=der.filter(x=>x.d.roomDue==="Y");
+    const roomGrp={}; due.forEach(x=>{const k=x.s.location||"?";const g=roomGrp[k]||(roomGrp[k]={n:0,amt:0,min:null,max:null});
+      g.n++;g.amt+=x.d.roomRate||0;const d=parseD(x.s.date);if(!g.min||d<g.min)g.min=d;if(!g.max||d>g.max)g.max=d;});
+    const roomRows=Object.keys(roomGrp).map(k=>{const g=roomGrp[k];
+      const rng=g.min?(fmtDM(g.min)+(g.max&&+g.max!==+g.min?" – "+fmtDM(g.max):"")):"";
+      return '<tr><td>'+esc(k)+'</td><td class="num">'+g.n+'</td><td>'+rng+'</td><td class="num">'+gbp(g.amt)+'</td></tr>';}).join("");
+    const fc=incomeForecast();
+    const fcCard='<div class="card"><h2>This month &amp; year at a glance</h2>'+
+      '<div class="kpis mt">'+
+        '<div class="kpi"><div class="v">'+gbp(fc.mtd)+'</div><div class="l">Billed so far this month</div></div>'+
+        '<div class="kpi good"><div class="v">'+gbp(fc.proj)+'</div><div class="l">Projected month total</div></div>'+
+        '<div class="kpi'+(fc.delta==null?'':(fc.delta>=0?' good':' bad'))+'"><div class="v">'+(fc.delta==null?'—':(fc.delta>=0?'+':'')+fc.delta+'%')+'</div><div class="l">vs last month ('+gbp(fc.lastM)+')</div></div>'+
+        '<div class="kpi"><div class="v">'+esc(fc.busiest)+'</div><div class="l">Busiest day (6 mo)</div></div>'+
+      '</div>'+
+      '<p class="small muted" style="margin:12px 0 4px">Sessions per day, last 12 months — each column is a week.</p>'+
+      yearHeatmapHTML()+
+      '<p class="small muted" style="margin:8px 0 0">Projection = billed to date + the larger of (sessions already booked this month) and (your 8-week average daily revenue × days left).</p></div>';
+    const series=periodSeries(statGran);
+    body.innerHTML=fcCard+
+      '<div class="card"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Revenue &amp; net income</h2>'+
+      '<div class="seg" id="gran"><button data-g="week" class="'+(statGran==="week"?"on":"")+'">Weekly</button><button data-g="month" class="'+(statGran==="month"?"on":"")+'">Monthly</button></div></div>'+
+      comboLegend(series)+'<div id="chCombo"></div><p class="small muted center" id="comboHint">Tap a bar to break the period down.</p>'+
+      '<div class="small muted mt" style="font-weight:600">Clients seen per '+statGran+'</div><div id="chCli"></div></div>'+
+      '<div class="card"><h2>Last 12 months</h2><table><thead><tr><th>Month</th><th class="num">Sess</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Open</th></tr></thead><tbody>'+mTable+'</tbody></table></div>'+
+      '<div class="card"><h2>Outstanding by client</h2>'+(byClient.length?'<table><thead><tr><th>Client</th><th class="num">Sessions</th><th class="num">Amount</th></tr></thead><tbody>'+byClient.map(x=>'<tr><td>'+esc(x.code)+'</td><td class="num">'+x.n+'</td><td class="num">'+gbp(x.amt)+'</td></tr>').join("")+'</tbody></table>':'<p class="muted small">Nothing outstanding 🎉</p>')+'</div>'+
+      '<div class="card"><h2>Room payments due</h2>'+(roomRows?'<table><thead><tr><th>Room</th><th class="num">Sessions</th><th>Dates</th><th class="num">Total</th></tr></thead><tbody>'+roomRows+'</tbody></table>':'<p class="muted small">No room payments outstanding.</p>')+
+        (S.rooms.some(r=>roomBilling(r)==="monthly")?'<p class="small muted" style="margin-top:8px">Rooms on a monthly rent aren’t listed here — their rent is counted in <b>Costs &amp; income</b>, not per session.</p>':'')+'</div>';
+    let sel=null;
+    /* Redrawing replaces the .svgwrap, which resets its horizontal scroll — so tapping a bar used
+       to fling the chart back to the oldest period, hiding the very breakdown it just opened.
+       Carry the scroll across the redraw, and start both charts at the most recent period. */
+    const drawCombo=()=>{
+      const host=body.querySelector("#chCombo"), prev=host.querySelector(".svgwrap");
+      const keep=prev?prev.scrollLeft:null;
+      host.innerHTML=chartCombo(series,sel);
+      scrollChart(host.querySelector(".svgwrap"),keep);
+      body.querySelectorAll("#chCombo .hot").forEach(r=>{const set=()=>{sel=+r.dataset.i;drawCombo();};
+        r.addEventListener("click",set);r.addEventListener("mouseenter",set);});};
+    drawCombo();
+    body.querySelector("#chCli").innerHTML=chartLine(series.map(d=>({l:d.l,v:d.clients,avg:d.cliAvg})));
+    scrollChart(body.querySelector("#chCli .svgwrap"),null);
+    body.querySelector("#gran").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{statGran=bt.dataset.g;go("money",{keepScroll:true});});
+  }
+  function drawCosts(){
+    body.innerHTML=feat("finances")?financeCards()
+      :'<div class="card"><h2>Costs &amp; other income</h2><p class="small muted">Switched off in ⚙ Settings › Features. Turn it back on there and your costs reappear — nothing was deleted.</p></div>';
+    wireFinance(body); wirePaymentsDue(body);
+  }
+  function drawTable(){body.innerHTML="";body.appendChild(rawPanel());}
+  const route=()=>moneySeg==="costs"?drawCosts():moneySeg==="table"?drawTable():drawOverview();
+  wireSegBar(v,"moneyseg","money",route);
+  route();return v;
+};
+
+/* ===== Tax — the year-end machinery, kept out of the day-to-day ===== */
+VIEWS.tax=function(){
+  const v=el('<div class="view active"></div>');
+  const segs=[["estimate","Estimate"],["allowances","Allowances"],["mtd","MTD"]];
+  v.innerHTML=segBar("taxseg",segs,taxSeg)+'<div id="taxbody"></div>';
+  const body=v.querySelector("#taxbody");
+  if(taxSeg==="allowances"||taxSeg==="mtd"){
+    (taxSeg==="mtd"?drawMTD:drawAllowances)(body);
+    wireSegBar(v,"taxseg","tax",()=>go("tax",{keepScroll:true}));
+    return v;
+  }
   const der=S.sessions.map(s=>({s,d:derive(s)}));
   const sum=(rows,f)=>rows.reduce((a,x)=>a+(f(x)||0),0);
   const years=[...new Set(der.map(x=>x.d.taxYear).filter(Boolean))].sort().reverse();
@@ -2576,21 +3006,7 @@ VIEWS.income=function(){
     if(tx.status==="future"){taxCell='<td class="num">–</td>';}
     else{const val=tx.status==="complete"?tx.display:tx.display[taxMode];
       taxCell='<td class="num"><span class="taxlink" data-y="'+y+'">'+gbp(Math.round(val))+(tx.status==="inprogress"?'*':'')+'</span></td>';}
-    return '<tr><td><b>'+y+'</b></td><td class="num">'+rs.length+'</td><td class="num">'+gbp(billed)+'</td><td class="num">'+gbp(rec)+'</td><td class="num">'+(over?gbp(over):"–")+'</td><td class="num">'+gbp(tx.netAll)+'</td>'+taxCell+'</tr>';}).join("");
-  const t=today();const months=[];for(let i=0;i<12;i++)months.push(new Date(t.getFullYear(),t.getMonth()-i,1));
-  const mTable=months.map(m=>{const end=new Date(m.getFullYear(),m.getMonth()+1,1);
-    const rs=der.filter(x=>{const d=parseD(x.s.date);return d&&d>=m&&d<end});
-    const billed=sum(rs,x=>x.d.rate),rec=sum(rs.filter(x=>x.d.clientPaid),x=>x.d.rate);
-    return '<tr><td>'+m.toLocaleDateString("en-GB",{month:"short",year:"2-digit"})+'</td><td class="num">'+rs.length+'</td><td class="num">'+gbp(billed)+'</td><td class="num">'+gbp(rec)+'</td><td class="num">'+(billed-rec?gbp(billed-rec):"–")+'</td></tr>';}).join("");
-  const byClient=S.clients.map(c=>{const rs=der.filter(x=>(x.s.client||"").toLowerCase()===c.code.toLowerCase()&&x.d.overdue);
-    return{code:c.code,n:rs.length,amt:sum(rs,x=>x.d.rate)}}).filter(x=>x.amt>0).sort((a,b)=>b.amt-a.amt);
-  // room payments due grouped by room with date-range
-  const due=der.filter(x=>x.d.roomDue==="Y");
-  const roomGrp={}; due.forEach(x=>{const k=x.s.location||"?";const g=roomGrp[k]||(roomGrp[k]={n:0,amt:0,min:null,max:null});
-    g.n++;g.amt+=x.d.roomRate||0;const d=parseD(x.s.date);if(!g.min||d<g.min)g.min=d;if(!g.max||d>g.max)g.max=d;});
-  const roomRows=Object.keys(roomGrp).map(k=>{const g=roomGrp[k];
-    const rng=g.min?(fmtDM(g.min)+(g.max&&+g.max!==+g.min?" – "+fmtDM(g.max):"")):"";
-    return '<tr><td>'+esc(k)+'</td><td class="num">'+g.n+'</td><td>'+rng+'</td><td class="num">'+gbp(g.amt)+'</td></tr>';}).join("");
+    return '<tr><td><b>'+y+'</b></td><td class="num">'+rs.length+'</td><td class="num">'+gbp(billed)+'</td><td class="num">'+gbp(rec)+'</td><td class="num">'+(over?gbp(over):"–")+'</td><td class="num"><span class="taxlink netlink" data-y="'+y+'">'+gbp(tx.netAll)+'</span></td>'+taxCell+'</tr>';}).join("");
   const th=monthlyTakeHome();
   const thBasis = th.status==="inprogress"
     ? "Based on "+th.ty+"’s projected net of "+gbp(Math.round(th.annualNet))+" less "+gbp(Math.round(th.annualTax))+" tax."
@@ -2602,61 +3018,432 @@ VIEWS.income=function(){
     '<div class="kpis mt" style="grid-template-columns:1fr 1fr"><div class="kpi good"><div class="v" id="thMain"></div><div class="l" id="thMainL"></div></div>'+
     '<div class="kpi"><div class="v" id="thYr"></div><div class="l" id="thYrL"></div></div></div>'+
     '<p class="small muted mt" id="thNote"></p></div>';
-  const fc=incomeForecast();
-  const fcCard='<div class="card"><h2>This month &amp; year at a glance</h2>'+
+  const sched=taxSchedule(curTaxYear());
+  const nxt=nextTaxPayment();
+  const potNet=Math.max(0,tyNet(curTaxYear(),true));
+  const potRate=potNet>0?(sched.calc.total/Math.max(1,tyNet(curTaxYear(),false))):0;
+  const setAside=Math.max(0,Math.min(0.6,potRate));
+  const potCard='<div class="card"><h2>Your tax pot</h2>'+
+    '<p class="small muted">What to keep back so the bill is already covered when it lands.</p>'+
     '<div class="kpis mt">'+
-      '<div class="kpi"><div class="v">'+gbp(fc.mtd)+'</div><div class="l">Billed so far this month</div></div>'+
-      '<div class="kpi good"><div class="v">'+gbp(fc.proj)+'</div><div class="l">Projected month total</div></div>'+
-      '<div class="kpi'+(fc.delta==null?'':(fc.delta>=0?' good':' bad'))+'"><div class="v">'+(fc.delta==null?'—':(fc.delta>=0?'+':'')+fc.delta+'%')+'</div><div class="l">vs last month ('+gbp(fc.lastM)+')</div></div>'+
-      '<div class="kpi"><div class="v">'+esc(fc.busiest)+'</div><div class="l">Busiest day (6 mo)</div></div>'+
+      '<div class="kpi good"><div class="v">'+Math.round(setAside*100)+'%</div><div class="l">of each payment to set aside</div></div>'+
+      '<div class="kpi" id="potTax" style="cursor:pointer"><div class="v">'+gbp(Math.round(sched.calc.total))+'</div><div class="l">'+curTaxYear()+' tax, projected \u203a</div></div>'+
+      (nxt?'<div class="kpi'+((nxt.when-today())/86400000<60?' bad':'')+'"><div class="v">'+gbp(Math.round(nxt.amount))+'</div><div class="l">due '+fmtD(nxt.when)+'</div></div>':'')+
     '</div>'+
-    '<p class="small muted" style="margin:12px 0 4px">Sessions per day, last 12 months — each column is a week.</p>'+
-    yearHeatmapHTML()+
-    '<p class="small muted" style="margin:8px 0 0">Projection = billed to date + the larger of (sessions already booked this month) and (your 8-week average daily revenue × days left).</p></div>';
-  const series=periodSeries(statGran);
-  v.innerHTML=thCard+fcCard+'<div class="card"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Revenue &amp; net income</h2>'+
-    '<div class="seg" id="gran"><button data-g="week" class="'+(statGran==="week"?"on":"")+'">Weekly</button><button data-g="month" class="'+(statGran==="month"?"on":"")+'">Monthly</button></div></div>'+
-    comboLegend(series)+'<div id="chCombo"></div><p class="small muted center" id="comboHint">Tap a bar to break the period down.</p>'+
-    '<div class="small muted mt" style="font-weight:600">Clients seen per '+statGran+'</div><div id="chCli"></div></div>'+
-    '<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">By tax year</h2><div class="seg" id="taxmode" style="display:inline-flex"><button data-m="proj" class="'+(taxMode==="proj"?"on":"")+'">Projected</button><button data-m="todate" class="'+(taxMode==="todate"?"on":"")+'">To date</button></div></div><div class="rawscroll"><table><thead><tr><th>Year</th><th class="num">Sess</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Overdue</th><th class="num">Net</th><th class="num">Tax</th></tr></thead><tbody>'+tyTable+'</tbody></table></div><p class="small muted">Net = billed less room, supervision and business costs, plus any other practice income. Tax = Income Tax + Class 4 NIC (sole trader); tap a figure for the breakdown. <b>*</b> in-progress year shown as '+(taxMode==="proj"?"a pro-rata projection":"tax on income to date")+'.</p></div>'+
-    '<div class="card"><h2>Last 12 months</h2><table><thead><tr><th>Month</th><th class="num">Sess</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Open</th></tr></thead><tbody>'+mTable+'</tbody></table></div>'+
-    '<div class="card"><h2>Outstanding by client</h2>'+(byClient.length?'<table><thead><tr><th>Client</th><th class="num">Sessions</th><th class="num">Amount</th></tr></thead><tbody>'+byClient.map(x=>'<tr><td>'+esc(x.code)+'</td><td class="num">'+x.n+'</td><td class="num">'+gbp(x.amt)+'</td></tr>').join("")+'</tbody></table>':'<p class="muted small">Nothing outstanding 🎉</p>')+'</div>'+
-    '<div class="card"><h2>Room payments due</h2>'+(roomRows?'<table><thead><tr><th>Room</th><th class="num">Sessions</th><th>Dates</th><th class="num">Total</th></tr></thead><tbody>'+roomRows+'</tbody></table>':'<p class="muted small">No room payments outstanding.</p>')+
-      (S.rooms.some(r=>roomBilling(r)==="monthly")?'<p class="small muted" style="margin-top:8px">Rooms on a monthly rent aren’t listed here — their rent is counted in <b>Business costs</b> below, not per session.</p>':'')+'</div>'+
-    financeCards();
-  let sel=null;
-  /* Redrawing replaces the .svgwrap, which resets its horizontal scroll — so tapping a bar used
-     to fling the chart back to the oldest period, hiding the very breakdown it just opened.
-     Carry the scroll across the redraw, and start both charts at the most recent period. */
-  const drawCombo=()=>{
-    const host=v.querySelector("#chCombo"), prev=host.querySelector(".svgwrap");
-    const keep=prev?prev.scrollLeft:null;
-    host.innerHTML=chartCombo(series,sel);
-    scrollChart(host.querySelector(".svgwrap"),keep);
-    v.querySelectorAll("#chCombo .hot").forEach(r=>{const set=()=>{sel=+r.dataset.i;drawCombo();};
-      r.addEventListener("click",set);r.addEventListener("mouseenter",set);});};
-  drawCombo();
-  v.querySelector("#chCli").innerHTML=chartLine(series.map(d=>({l:d.l,v:d.clients,avg:d.cliAvg})));
-  scrollChart(v.querySelector("#chCli .svgwrap"),null);
-  v.querySelector("#gran").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{statGran=bt.dataset.g;go("income",{keepScroll:true});});
-  v.querySelectorAll(".taxlink").forEach(elx=>elx.onclick=()=>taxDetailsSheet(elx.dataset.y));
-  wireFinance(v);
-  wirePaymentsDue(v);
-  var tmx=v.querySelector("#taxmode");if(tmx)tmx.querySelectorAll("button").forEach(b=>b.onclick=()=>{taxMode=b.dataset.m;go("income",{keepScroll:true});});
+    (nxt?'<div class="vmsg '+(((nxt.when-today())/86400000)<60?'warn':'ok')+'" style="margin-top:12px">'+
+      '<b>'+fmtD(nxt.when)+'</b> \u2014 '+esc(nxt.what)+': <b>'+gbp(Math.round(nxt.amount))+'</b></div>':'')+
+    (sched.firstYear?'<div class="vmsg warn" style="margin-top:10px">\u26a0\ufe0f <b>First big January.</b> Because your bill passes \u00a3'+POA_THRESHOLD+', HMRC asks for the year\u2019s tax <i>plus</i> half of it again on account \u2014 then another half in July. Budget for about <b>one and a half times</b> the tax, not once.</div>':'')+
+    '<div class="acc-work" style="margin-top:10px">'+
+      '<div><b>31 Jan '+(parseInt(curTaxYear())+1)+'</b> = balancing '+gbpR(sched.jan.balancing)+(sched.jan.poa?' + payment on account '+gbpR(sched.jan.poa):'')+' = <b>'+gbpR(sched.jan.total)+'</b></div>'+
+      (sched.jul.total?'<div><b>31 Jul '+(parseInt(curTaxYear())+1)+'</b> = payment on account <b>'+gbpR(sched.jul.total)+'</b></div>':'')+
+      (sched.poaPrev?'<div class="small muted">Already paid on account for this year: '+gbpR(sched.poaPrev*2)+'</div>':'')+
+      '<div class="small muted" style="margin-top:5px">Payments on account are due once your bill passes \u00a3'+POA_THRESHOLD+'. Class 2 and student loan are never included in them.</div>'+
+    '</div></div>';
+  const region=taxRegion(), sl=settings().studentLoan;
+  const setupCard='<div class="card"><h2>Your tax situation</h2>'+
+    '<p class="small muted">Three questions that change the numbers. Get them right once.</p>'+
+    '<label>Where you pay income tax</label>'+
+    '<div class="seg" id="regSeg" style="display:inline-flex"><button data-r="rUK" class="'+(region==="rUK"?"on":"")+'">England, Wales or NI</button>'+
+      '<button data-r="scotland" class="'+(region==="scotland"?"on":"")+'">Scotland</button></div>'+
+    '<p class="small muted">Scotland sets its own income tax bands. National Insurance is the same everywhere.</p>'+
+    '<label style="margin-top:14px">Student loan</label>'+
+    '<select id="slSel">'+opts2([["none","No student loan"]].concat(Object.keys(SL_PLANS).filter(k=>k!=="none").map(k=>[k,SL_PLANS[k].n])),sl)+'</select>'+
+    '<p class="small muted">Repayments come out of the same January bill, so they belong in the pot.</p>'+
+    (tyNet(curTaxYear(),false)<taxRates(curTaxYear()).spt
+      ? '<label class="colchk" style="margin-top:14px"><input type="checkbox" id="c2v"'+(settings().class2Voluntary?" checked":"")+'> Pay Class 2 NI voluntarily</label>'+
+        '<p class="small muted">Your profit is under \u00a3'+taxRates(curTaxYear()).spt+', so Class 2 is not due \u2014 but paying it (about \u00a3'+taxRates(curTaxYear()).class2week+' a week) keeps the year counting towards your State Pension. Often worth it.</p>'
+      : '')+
+    '</div>';
+  const basisCard='<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
+      '<h2 style="margin:0">How your figures are counted</h2>'+
+      '<div class="seg" id="basisSeg" style="display:inline-flex"><button data-b="cash" class="'+(taxBasis()==="cash"?"on":"")+'">Cash</button>'+
+        '<button data-b="accruals" class="'+(taxBasis()==="accruals"?"on":"")+'">Accruals</button></div></div>'+
+    '<p class="small muted mt">'+basisNote()+'</p>'+
+    (taxBasis()==="cash"?'<p class="small muted">Sessions you have not been paid for yet are not in these totals \u2014 they arrive in the year the money does.</p>':'')+
+    '</div>';
+  body.innerHTML=thCard+potCard+basisCard+setupCard+
+    '<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">By tax year</h2><div class="seg" id="taxmode" style="display:inline-flex"><button data-m="proj" class="'+(taxMode==="proj"?"on":"")+'">Projected</button><button data-m="todate" class="'+(taxMode==="todate"?"on":"")+'">To date</button></div></div><div class="rawscroll"><table><thead><tr><th>Year</th><th class="num">Sess</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Overdue</th><th class="num">Net</th><th class="num">Tax</th></tr></thead><tbody>'+tyTable+'</tbody></table></div><p class="small muted"><b>'+esc(basisLabel())+'.</b> Net = income less room, supervision and business costs, plus any other practice income. Tax = Income Tax + Class 4 NIC (sole trader); tap a figure for the breakdown. <b>*</b> in-progress year shown as '+(taxMode==="proj"?"a pro-rata projection":"tax on income to date")+'.</p></div>';
+  /* [data-y] only — .taxlink is also the style for the pension link, which is not a year. */
+  body.querySelectorAll(".taxlink[data-y]").forEach(elx=>elx.onclick=()=>{
+    const y=elx.dataset.y, bn=tyBounds(y);
+    if(elx.classList.contains("netlink"))periodBreakdownSheet("Net \u00b7 "+y,bn.start,bn.end,
+      '<p class="small muted">Every figure behind the Net column for '+esc(y)+'.</p>');
+    else taxDetailsSheet(y);});
+  const rsg=body.querySelector("#regSeg");
+  if(rsg)rsg.querySelectorAll("button").forEach(b=>b.onclick=async()=>{
+    if(b.dataset.r===taxRegion())return;
+    settings().taxRegion=b.dataset.r;await commit("Tax region: "+b.dataset.r);go("tax",{keepScroll:true});});
+  const slx=body.querySelector("#slSel");
+  if(slx)slx.onchange=async()=>{settings().studentLoan=slx.value;
+    await commit("Student loan: "+slx.value);go("tax",{keepScroll:true});};
+  const c2v=body.querySelector("#c2v");
+  if(c2v)c2v.onchange=async()=>{settings().class2Voluntary=c2v.checked;
+    await commit("Voluntary Class 2: "+(c2v.checked?"on":"off"));go("tax",{keepScroll:true});};
+  const pt=body.querySelector("#potTax");
+  if(pt)pt.onclick=()=>taxDetailsSheet(curTaxYear());
+  const bsg=body.querySelector("#basisSeg");
+  if(bsg)bsg.querySelectorAll("button").forEach(b=>b.onclick=async()=>{
+    if(b.dataset.b===taxBasis())return;
+    settings().taxBasis=b.dataset.b;
+    await commit("Tax basis: "+b.dataset.b);
+    go("tax",{keepScroll:true});});
+  const tmx=body.querySelector("#taxmode");if(tmx)tmx.querySelectorAll("button").forEach(b=>b.onclick=()=>{taxMode=b.dataset.m;go("tax",{keepScroll:true});});
   function paintTH(){const pen=pensionPcm();
     const mainV=thMode==="pension"?Math.round(th.monthly-pen):Math.round(th.monthly);
     const yrV=thMode==="pension"?Math.round(th.annualHome-pen*12):Math.round(th.annualHome);
-    v.querySelector("#thMain").textContent=gbp(mainV);
-    v.querySelector("#thMainL").textContent=thMode==="pension"?"per month, after tax & pension":"per month, after tax";
-    v.querySelector("#thYr").textContent=gbp(yrV);
-    v.querySelector("#thYrL").textContent=thMode==="pension"?"per year, after tax & pension":"per year, after tax";
-    v.querySelector("#thNote").innerHTML=thBasis+(thMode==="pension"?(" Less pension "+gbp(pen)+"/mo."):"")+' <span class="taxlink" id="editPen">'+(thMode==="pension"?"Edit pension ›":("Pension "+gbp(pen)+"/mo ›"))+'</span>';
-    const ep=v.querySelector("#editPen");if(ep)ep.onclick=()=>editPension(()=>go("income"));}
-  v.querySelector("#thMode").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{thMode=bt.dataset.th;
-    v.querySelector("#thMode").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));paintTH();});
+    body.querySelector("#thMain").textContent=gbp(mainV);
+    body.querySelector("#thMainL").textContent=thMode==="pension"?"per month, after tax & pension":"per month, after tax";
+    body.querySelector("#thYr").textContent=gbp(yrV);
+    body.querySelector("#thYrL").textContent=thMode==="pension"?"per year, after tax & pension":"per year, after tax";
+    body.querySelector("#thNote").innerHTML=thBasis+(thMode==="pension"?(" Less pension "+gbp(pen)+"/mo."):"")+' <span class="taxlink" id="editPen">'+(thMode==="pension"?"Edit pension ›":("Pension "+gbp(pen)+"/mo ›"))+'</span>';
+    const ep=body.querySelector("#editPen");if(ep)ep.onclick=()=>editPension(()=>go("tax",{keepScroll:true}));}
+  body.querySelector("#thMode").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{thMode=bt.dataset.th;
+    body.querySelector("#thMode").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));paintTH();});
   paintTH();
+  wireSegBar(v,"taxseg","tax",()=>go("tax",{keepScroll:true}));
   return v;
 };
+
+/* ===== Where a figure came from =====
+   One breakdown for any date range, used by the tax-year sheet and by each MTD quarter, so the
+   two can never tell different stories about the same period. It reports what went IN and, just
+   as importantly, what was left OUT and why -- an unpaid session and a second job are excluded
+   for completely different reasons, and a therapist checking a number needs to see both. */
+function profitBreakdown(from,to){
+  const cash=taxBasis()==="cash";
+  const group=(arr)=>{const m={};arr.forEach(x=>{const k=x.label;
+    const g=m[k]||(m[k]={label:k,amt:0,n:0});g.amt+=x.amt;g.n++;});
+    return Object.keys(m).map(k=>m[k]).sort((a,b)=>b.amt-a.amt);};
+  const inSpan=d=>d&&d>=from&&d<=to;
+  const sessions=[],unpaid=[],roomCosts=[];
+  S.sessions.forEach(x=>{
+    const dv=derive(x), when=cash?(x.paidDate||null):x.date, sd=parseD(x.date);
+    if(cash&&!when){                                   /* billed but not yet received */
+      if(inSpan(sd))unpaid.push({label:(x.client||"?"),amt:dv.rate||0});
+      return;}
+    const w=parseD(when); if(!inSpan(w))return;
+    sessions.push({label:(x.client||"?"),amt:dv.rate||0});
+    if(dv.roomRate>0)roomCosts.push({label:"Room \u2014 "+(x.location||"?"),amt:dv.roomRate});
+  });
+  const wide=cash?addYears(from,-2):from, wideTo=cash?addYears(to,2):to;
+  const hit=(kind,ref,occ)=>{
+    if(!cash)return inSpan(occ.date);
+    const paid=chargePaidOn(chargeKey(kind,ref,occ.date));
+    return inSpan(paid?parseD(paid):occ.date);};
+  const other=[],personal=[];
+  (S.otherIncome||[]).forEach(x=>{const mine=!finPersonal(x);
+    moneyOccurrences(x,wide,wideTo).forEach(o=>{if(!hit("inc",x._id,o))return;
+      (mine?other:personal).push({label:x.desc||"Other income",amt:o.amount});});});
+  const boxes={};
+  const addCost=(box,label,amt)=>{const b=boxes[box]||(boxes[box]={box:+box,name:SA103[box]||"",total:0,items:[]});
+    b.total+=amt;b.items.push({label,amt});};
+  roomCosts.forEach(rc=>addCost(21,rc.label,rc.amt));
+  (S.expenses||[]).forEach(x=>{const c=catOf("exp",x.cat);
+    moneyOccurrences(x,wide,wideTo).forEach(o=>{if(hit("exp",x._id,o))addCost(c.box,x.desc||c.n,o.amount);});});
+  roomRentOccurrences(wide,wideTo).forEach(o=>{if(hit("rent",(o.location||"").toLowerCase(),o))
+    addCost(21,"Rent \u2014 "+(o.location||"?"),o.amount);});
+  uohOccurrences(from,to).forEach(o=>addCost(21,"Use of home",o.amount));
+  (S.supervision||[]).forEach(v=>{if(inSpan(v.date?parseD(v.date):null)&&+v.cost)addCost(28,"Supervision"+(v.supervisor?" \u2014 "+v.supervisor:""),+v.cost);});
+  (S.peerSupervision||[]).forEach(v=>{if(inSpan(v.date?parseD(v.date):null)&&+v.cost)addCost(28,"Peer supervision",+v.cost);});
+  const boxList=Object.keys(boxes).map(k=>boxes[k]).sort((a,b)=>a.box-b.box);
+  boxList.forEach(b=>{b.items=group(b.items);});
+  const sTot=sessions.reduce((a,x)=>a+x.amt,0), oTot=other.reduce((a,x)=>a+x.amt,0);
+  const cTot=boxList.reduce((a,b)=>a+b.total,0);
+  return {from,to,cash,
+    sessions:{n:sessions.length,total:sTot,byClient:group(sessions)},
+    other:{total:oTot,items:group(other)},
+    excluded:{unpaid:{n:unpaid.length,total:unpaid.reduce((a,x)=>a+x.amt,0),byClient:group(unpaid)},
+              personal:{total:personal.reduce((a,x)=>a+x.amt,0),items:group(personal)}},
+    costs:{boxes:boxList,total:cTot},
+    income:sTot+oTot, net:sTot+oTot-cTot};
+}
+/* The shared body of every "where did this come from" sheet. */
+function breakdownHTML(bd,opts){
+  opts=opts||{};
+  const money=x=>gbp(Math.round(x));
+  const row=(l,v,cls)=>'<tr><td'+(cls?' class="'+cls+'"':'')+'>'+l+'</td><td class="num">'+v+'</td></tr>';
+  let h='<p class="small muted">'+esc(fmtD(bd.from))+' \u2013 '+esc(fmtD(bd.to))+' \u00b7 <b>'+esc(basisLabel())+'</b>. '+
+    (bd.cash?"Counted when the money moved.":"Counted when the work was done and costs fell due.")+'</p>';
+  h+='<div class="grp-h" style="margin-top:14px">Money in</div><table>'+
+    row('Client sessions <span class="muted small">('+bd.sessions.n+')</span>',money(bd.sessions.total))+
+    (bd.other.items.length?bd.other.items.map(i=>row('<span class="muted">'+esc(i.label)+(i.n>1?' \u00d7'+i.n:'')+'</span>',money(i.amt))).join(""):"")+
+    row('<b>Total income</b>','<b>'+money(bd.income)+'</b>')+'</table>';
+  if(bd.sessions.byClient.length&&opts.clients!==false){
+    h+='<details class="dz" style="margin-top:6px"><summary>Sessions by client</summary><table>'+
+      bd.sessions.byClient.map(c=>row(esc(c.label)+' <span class="muted small">\u00d7'+c.n+'</span>',money(c.amt))).join("")+'</table></details>';
+  }
+  h+='<div class="grp-h" style="margin-top:16px">Costs</div>';
+  if(bd.costs.boxes.length){
+    h+='<table>'+bd.costs.boxes.map(b=>
+      row('<b>Box '+b.box+'</b> <span class="muted small">'+esc(b.name)+'</span>',money(b.total))).join("")+
+      row('<b>Total costs</b>','<b>'+money(bd.costs.total)+'</b>')+'</table>'+
+      '<details class="dz" style="margin-top:6px"><summary>Every cost, itemised</summary>'+
+      bd.costs.boxes.map(b=>'<div class="grp-h" style="margin-top:8px">Box '+b.box+'</div><table>'+
+        b.items.map(i=>row(esc(i.label)+(i.n>1?' <span class="muted small">\u00d7'+i.n+'</span>':''),money(i.amt))).join("")+'</table>').join("")+
+      '</details>';
+  }else h+='<p class="muted small">No costs in this period.</p>';
+  h+='<div class="grp-h" style="margin-top:16px">Net</div><table>'+
+    row('<b>Income less costs</b>','<b>'+money(bd.net)+'</b>')+'</table>';
+  /* The part people actually need: what was deliberately left out. */
+  const ex=[];
+  if(bd.excluded.unpaid.n)ex.push(['\u23f3','Sessions not yet paid for',
+    bd.excluded.unpaid.n+' session'+(bd.excluded.unpaid.n===1?'':'s')+' worth '+money(bd.excluded.unpaid.total)+
+    ' \u2014 on the cash basis these count in the year the money arrives, not the year you saw the client.']);
+  if(bd.excluded.personal.total)ex.push(['\u2702\ufe0f','Income marked as separate work',
+    money(bd.excluded.personal.total)+' \u2014 a second job or tutoring is a different trade, taxed on its own, so it never touches your practice figures.']);
+  ex.push(['\ud83c\udfe0','Anything you have not recorded',
+    'The app can only count what is in it. Costs you paid but never logged are not here.']);
+  h+='<div class="grp-h" style="margin-top:18px">Not included</div><div class="ovpts">'+
+    ex.map(e=>'<div class="ovpt"><span class="pe">'+e[0]+'</span><span class="pt"><b>'+e[1]+'</b><span class="sub">'+e[2]+'</span></span></div>').join("")+'</div>';
+  return h;
+}
+function periodBreakdownSheet(title,from,to,extra){
+  const body=el('<div></div>');
+  body.innerHTML=(extra||"")+breakdownHTML(profitBreakdown(from,to));
+  openSheet(title,body);
+}
+
+/* ===== Making Tax Digital =====
+   MTD for Income Tax wants a digital record of every transaction, quarterly totals by SA103
+   category, and a final declaration. The records and the totals are what this builds.
+
+   It stops short of submitting, and that is a hard limit rather than a gap in the work: sending
+   a quarterly update needs an OAuth client secret (which cannot live in a page anyone can view
+   source on), HMRC's fraud-prevention headers, and HMRC recognition of the software itself. All
+   three need a server. So the app produces the figures and hands them over -- to an accountant,
+   or to bridging software -- and says so plainly rather than implying a filing it cannot do. */
+function mtdQuarters(ty){
+  const sy=parseInt(ty.slice(0,4));
+  return [
+    {n:1,from:new Date(sy,3,6),   to:new Date(sy,6,5),   label:"6 Apr – 5 Jul"},
+    {n:2,from:new Date(sy,6,6),   to:new Date(sy,9,5),   label:"6 Jul – 5 Oct"},
+    {n:3,from:new Date(sy,9,6),   to:new Date(sy+1,0,5), label:"6 Oct – 5 Jan"},
+    {n:4,from:new Date(sy+1,0,6), to:new Date(sy+1,3,5), label:"6 Jan – 5 Apr"}
+  ];
+}
+/* Session fees for a period, on whichever basis is in force. */
+function mtdTurnover(from,to){
+  const cash=taxBasis()==="cash";
+  let t=0;
+  S.sessions.forEach(x=>{
+    const when=cash?(x.paidDate||null):x.date;
+    if(!when)return;
+    const d=parseD(when); if(!d||d<from||d>to)return;
+    t+=derive(x).rate||0;});
+  return t;
+}
+/* Costs for a period, totalled by the SA103 box each category maps to. */
+function mtdExpenseBoxes(from,to){
+  const cash=taxBasis()==="cash";
+  const wide=cash?addYears(from,-2):from, wideTo=cash?addYears(to,2):to;
+  const box={};
+  const add=(b,amt)=>{box[b]=(box[b]||0)+amt;};
+  const hit=(kind,ref,occ)=>{
+    if(!cash)return (occ.date>=from&&occ.date<=to);
+    const paid=chargePaidOn(chargeKey(kind,ref,occ.date));
+    const when=paid?parseD(paid):occ.date;
+    return when>=from&&when<=to;};
+  (S.expenses||[]).forEach(x=>{const c=catOf("exp",x.cat);
+    moneyOccurrences(x,wide,wideTo).forEach(o=>{if(hit("exp",x._id,o))add(c.box,o.amount);});});
+  /* Per-session room fees are a cost too, and they follow their session exactly as tyNet has
+     them — without this the quarters would not add up to the year. */
+  S.sessions.forEach(x=>{const dv=derive(x); if(!(dv.roomRate>0))return;
+    const when=cash?(x.paidDate||null):x.date; if(!when)return;
+    const d=parseD(when); if(!d||d<from||d>to)return;
+    add(21,dv.roomRate);});
+  roomRentOccurrences(wide,wideTo).forEach(o=>{if(hit("rent",(o.location||"").toLowerCase(),o))add(21,o.amount);});
+  uohOccurrences(from,to).forEach(o=>add(21,o.amount));
+  /* supervision and peer supervision are professional fees */
+  (S.supervision||[]).forEach(v=>{const d=v.date?parseD(v.date):null;
+    if(d&&d>=from&&d<=to&&+v.cost)add(28,+v.cost);});
+  (S.peerSupervision||[]).forEach(v=>{const d=v.date?parseD(v.date):null;
+    if(d&&d>=from&&d<=to&&+v.cost)add(28,+v.cost);});
+  return box;
+}
+function mtdOtherIncome(from,to){
+  const cash=taxBasis()==="cash";
+  const wide=cash?addYears(from,-2):from, wideTo=cash?addYears(to,2):to;
+  let t=0;
+  (S.otherIncome||[]).forEach(x=>{if(finPersonal(x))return;      /* a separate trade, not this one */
+    moneyOccurrences(x,wide,wideTo).forEach(o=>{
+      const paid=chargePaidOn(chargeKey("inc",x._id,o.date));
+      const when=cash?(paid?parseD(paid):o.date):o.date;
+      if(when>=from&&when<=to)t+=o.amount;});});
+  return t;
+}
+function mtdPeriod(q){
+  const turnover=mtdTurnover(q.from,q.to), other=mtdOtherIncome(q.from,q.to);
+  const boxes=mtdExpenseBoxes(q.from,q.to);
+  const expTotal=Object.keys(boxes).reduce((a,k)=>a+boxes[k],0);
+  return {q,turnover,other,boxes,expTotal,net:turnover+other-expTotal};
+}
+function mtdExport(ty){
+  const out={app:"TherapyTracker",generated:new Date().toISOString(),taxYear:ty,
+    basis:taxBasis(),note:"Quarterly totals for MTD for Income Tax. Not a submission - hand to your accountant or bridging software.",
+    periods:[]};
+  mtdQuarters(ty).forEach(q=>{const p=mtdPeriod(q);
+    out.periods.push({period:q.n,from:isoD(q.from),to:isoD(q.to),
+      income:{turnover:Math.round(p.turnover*100)/100,other:Math.round(p.other*100)/100},
+      expenses:Object.keys(p.boxes).sort((a,b)=>a-b).map(b=>({sa103Box:+b,name:SA103[b]||"",amount:Math.round(p.boxes[b]*100)/100}))});});
+  download("therapy-mtd-"+ty.replace("/","-")+".json",JSON.stringify(out,null,2),"application/json");
+  toast("MTD figures downloaded");
+}
+
+/* ---- Tax > MTD ---- */
+function drawMTD(host){
+  const ty=curTaxYear(), t=today();
+  const rows=mtdQuarters(ty).map(q=>{
+    const p=mtdPeriod(q);
+    const state=q.to<t?"done":(q.from<=t?"open":"ahead");
+    return '<tr class="qrow" data-q="'+q.n+'" style="cursor:pointer"><td><b>Q'+q.n+'</b><div class="small muted">'+q.label+'</div></td>'+
+      '<td class="num">'+gbp(Math.round(p.turnover+p.other))+'</td>'+
+      '<td class="num">'+gbp(Math.round(p.expTotal))+'</td>'+
+      '<td class="num"><b>'+gbp(Math.round(p.net))+'</b></td>'+
+      '<td>'+(state==="done"?'<span class="chip y">complete</span>':state==="open"?'<span class="chip f">in progress</span>':'<span class="chip na">ahead</span>')+'</td></tr>';}).join("");
+  const boxes=mtdExpenseBoxes(tyBounds(ty).start,tyBounds(ty).end);
+  const boxRows=Object.keys(boxes).sort((a,b)=>a-b).map(b=>
+    '<tr class="boxrow" data-box="'+b+'" style="cursor:pointer"><td><b>Box '+b+'</b></td><td>'+esc(SA103[b]||"")+'</td><td class="num">'+gbp(Math.round(boxes[b]))+'</td></tr>').join("");
+  host.innerHTML='<div class="card"><h2>Quarterly figures</h2>'+
+    '<p class="small muted">Making Tax Digital asks for a summary four times a year instead of one return at the end. These are your quarters for '+ty+', on the <b>'+esc(basisLabel().toLowerCase())+'</b>.</p>'+
+    '<div class="rawscroll"><table><thead><tr><th>Quarter</th><th class="num">Income</th><th class="num">Costs</th><th class="num">Net</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<p class="small muted center" style="margin-top:6px">Tap a quarter to see exactly what is in it.</p>'+
+    '<button class="btn sec full mt" id="mtdExp">⤓ Export these figures (.json)</button>'+
+    '<p class="small muted mt"><b>This app cannot file for you</b>, and would not be honest to imply otherwise. Sending a quarterly update needs software HMRC has recognised, a secure connection to them, and a server to hold the credentials \u2014 none of which belong in an app that runs entirely on your own device. What it does do is keep the digital records and produce the figures, so your accountant or bridging software can file in minutes.</p>'+
+    '</div>'+
+    '<div class="card"><h2>'+ty+' by tax-return box</h2>'+
+    '<p class="small muted">Where each cost lands on the self-employment pages (SA103).</p>'+
+    (boxRows?'<div class="rawscroll"><table><thead><tr><th>Box</th><th>What HMRC calls it</th><th class="num">'+ty+'</th></tr></thead><tbody>'+boxRows+'</tbody></table></div>'
+            :'<p class="muted small">No costs recorded for '+ty+' yet.</p>')+
+    '<p class="small muted mt">When MTD applies to you depends on turnover: over \u00a350,000 from April 2026, over \u00a330,000 from April 2027, over \u00a320,000 from April 2028.</p></div>';
+  const b=host.querySelector("#mtdExp"); if(b)b.onclick=()=>mtdExport(ty);
+  host.querySelectorAll(".qrow").forEach(tr=>tr.onclick=()=>{
+    const q=mtdQuarters(ty).find(x=>x.n===+tr.dataset.q);
+    periodBreakdownSheet("Quarter "+q.n+" \u00b7 "+q.label,q.from,q.to,
+      '<p class="small muted">This is what would go on your quarterly update for '+esc(ty)+'.</p>');});
+  host.querySelectorAll(".boxrow").forEach(tr=>tr.onclick=()=>{
+    const bd=profitBreakdown(tyBounds(ty).start,tyBounds(ty).end);
+    const bx=bd.costs.boxes.find(x=>x.box===+tr.dataset.box);
+    const bodyEl=el('<div></div>');
+    bodyEl.innerHTML='<p class="small muted">Everything in <b>box '+tr.dataset.box+'</b> for '+esc(ty)+' \u2014 '+esc(SA103[tr.dataset.box]||"")+'.</p>'+
+      (bx?'<table>'+bx.items.map(i=>'<tr><td>'+esc(i.label)+(i.n>1?' <span class="muted small">\u00d7'+i.n+'</span>':'')+'</td><td class="num">'+gbp(Math.round(i.amt))+'</td></tr>').join("")+
+        '<tr><td><b>Total</b></td><td class="num"><b>'+gbp(Math.round(bx.total))+'</b></td></tr></table>':'<p class="muted small">Nothing in this box.</p>');
+    openSheet("Box "+tr.dataset.box,bodyEl);});
+}
+
+/* ---- Tax > Allowances ----
+   Two different jobs, kept apart: the segment bar EDITS a method, and a separate deliberate
+   action APPLIES one. Comparing simplified against actual is the normal thing to want to do, and
+   it must not quietly change what the tax figures use. Whatever is applied is stated at the top
+   and marked on the method it belongs to. */
+let uohYearSel=null, uohEdit=null;
+function drawAllowances(host){
+  const ty=uohYearSel||curTaxYear();
+  const inForce=uohForYear(ty), applied=inForce.cfg;
+  const draft=uohDraft(ty);
+  if(!uohEdit)uohEdit=(applied.method&&applied.method!=="none")?applied.method:"simplified";
+  const b=tyBounds(ty);
+  const yearAmt=uohOccurrences(b.start,b.end).reduce((a,o)=>a+o.amount,0);
+  const money=x=>gbp(Math.round(x));
+  const simpAmt=uohRate(+draft.hours||0), actAmt=uohActualAnnual(draft)/12;
+  const amtFor=m=>m==="simplified"?simpAmt:m==="actual"?actAmt:0;
+  /* which tax years to offer: any with sessions, any already set up, plus this one */
+  const years=[...new Set(S.sessions.map(x=>x.date).filter(Boolean).map(d=>taxYear(d))
+    .concat(Object.keys(uohYears())).concat([curTaxYear()]))].sort().reverse();
+  const methodRow=m=>{
+    const isApplied=(applied.method===m)&&!inForce.inherited;
+    const label=m==="simplified"?"Simplified":m==="actual"?"Actual costs":"Not claiming";
+    return '<div class="list-item"><div class="li-main">'+
+      '<div class="li-title">'+label+(isApplied?' <span class="chip y">\ud83d\udd12 in use</span>':'')+'</div>'+
+      '<div class="li-sub">'+(m==="none"?"No claim for this year":money(amtFor(m))+" a month \u00b7 "+money(amtFor(m)*12)+" a year")+'</div></div>'+
+      '<div class="li-right">'+(isApplied?'<span class="small muted">applied</span>'
+        :'<button class="btn sm sec" data-use="'+m+'">Use this</button>')+'</div></div>';
+  };
+  host.innerHTML='<div class="card"><h2>Use of home</h2>'+
+    '<p class="small muted">If you see clients or do your admin at home, part of running that home is a business cost. HMRC lets you work it out two ways, and you can pick a different one each tax year.</p>'+
+    '<label>Tax year</label><select id="uohYr">'+opts(years,ty)+'</select>'+
+    (applied.method&&applied.method!=="none"
+      ? '<div class="vmsg ok" style="margin-top:12px">\ud83d\udd12 <b>'+esc(applied.method==="simplified"?"Simplified":"Actual costs")+'</b> is what '+esc(ty)+' uses \u2014 '+money(uohMonthlyFor(applied))+' a month, '+money(yearAmt)+' for the year. It is already in your costs and tax estimate.'+
+        (inForce.inherited?' <b>Carried forward from '+esc(inForce.from)+'</b> \u2014 apply one below to fix it for '+esc(ty)+'.':'')+'</div>'
+      : '<div class="vmsg warn" style="margin-top:12px">Nothing is being claimed for use of home in '+esc(ty)+'. Compare the two methods below and apply whichever suits.</div>')+
+    '<div class="grp-h" style="margin-top:16px">Compare and choose</div>'+
+    '<p class="small muted" style="margin:0 0 6px">Switching between these only changes what you are looking at. Your figures do not move until you tap <b>Use this</b>.</p>'+
+    '<div style="padding:0 2px">'+methodRow("simplified")+methodRow("actual")+methodRow("none")+'</div>'+
+    '<div class="grp-h" style="margin-top:18px">Work out the numbers</div>'+
+    '<div class="seg" id="uohM" style="display:inline-flex">'+
+      '<button data-m="simplified" class="'+(uohEdit==="simplified"?"on":"")+'">Simplified</button>'+
+      '<button data-m="actual" class="'+(uohEdit==="actual"?"on":"")+'">Actual costs</button>'+
+    '</div>'+
+    '<div id="uohBody" class="mt"></div>'+
+    '<p class="small muted mt">Goes in box 21 of your tax return. Mortgage <b>capital</b> repayments are never allowable \u2014 only the interest.</p>'+
+    '</div>';
+  const bodyEl=host.querySelector("#uohBody");
+  const suggested=uohSessionHours();
+  function saveDraft(patch,label){
+    const ys=uohYears();
+    const cur=Object.assign(uohBlank(),ys[ty]||uohForYear(ty).cfg);
+    ys[ty]=Object.assign(cur,patch);
+    if(!ys[ty].method)ys[ty].method=applied.method||"none";
+    return commit(label);
+  }
+  function drawMethod(){
+    if(uohEdit==="simplified"){
+      bodyEl.innerHTML='<label>Hours a month you work at home</label>'+
+        '<input type="number" min="0" max="744" step="1" id="uohH" value="'+esc(draft.hours)+'">'+
+        '<p class="small muted">Count everything, not just sessions: notes, admin, CPD, supervision you attend from home.'+
+        (suggested?' You logged about <b>'+suggested+' sessions a month</b> at home recently \u2014 your real hours will be higher than that.':'')+'</p>'+
+        '<div class="acc-work"><div>25\u201350 hrs = \u00a310/mo</div><div>51\u2013100 hrs = \u00a318/mo</div><div>101+ hrs = \u00a326/mo</div>'+
+        '<div class="small muted" style="margin-top:5px">Under 25 hours a month there is no flat-rate claim. At '+esc(draft.hours||0)+' hrs this is <b>'+money(simpAmt)+'/mo</b>.</div></div>';
+      bodyEl.querySelector("#uohH").onchange=async e=>{
+        await saveDraft({hours:Math.max(0,Math.min(744,Math.round(+e.target.value||0)))},"Use of home hours ("+ty+")");
+        go("tax",{keepScroll:true});};
+    }else{
+      const t=draft.costs||{};
+      const row=(k,lab,hint)=>'<div><label>'+lab+(hint?' <span class="muted small">('+hint+')</span>':'')+'</label>'+
+        '<input type="number" min="0" step="1" data-uc="'+k+'" value="'+(+t[k]||0)+'"></div>';
+      bodyEl.innerHTML='<div class="field2">'+
+          '<div><label>Rooms in your home <span class="muted small">(excl. kitchen/bathroom)</span></label><input type="number" min="1" step="1" id="uohR" value="'+esc(draft.rooms)+'"></div>'+
+          '<div><label>Rooms used for work</label><input type="number" min="0" step="1" id="uohW" value="'+esc(draft.workRooms)+'"></div>'+
+        '</div>'+
+        '<label>Share of the time those rooms are used for work (%)</label>'+
+        '<input type="number" min="1" max="100" step="1" id="uohP" value="'+esc(draft.businessPct)+'">'+
+        '<p class="small muted">A room used for work in the day and family in the evening is not 100%.</p>'+
+        '<div class="grp-h" style="margin-top:14px">Household costs for '+esc(ty)+'</div>'+
+        '<div class="field2">'+row("rent","Rent or mortgage interest","interest only")+row("councilTax","Council tax")+'</div>'+
+        '<div class="field2">'+row("gas","Gas")+row("electric","Electricity")+'</div>'+
+        '<div class="field2">'+row("water","Water")+row("broadband","Broadband")+'</div>'+
+        '<div class="acc-work"><div>'+money(uohActualAnnual(draft))+' a year \u00f7 12 = <b>'+money(actAmt)+'/mo</b></div>'+
+        '<div class="small muted" style="margin-top:5px">Costs are held per tax year, so last year\u2019s bills stay as they were.</div></div>';
+      const save=async()=>{
+        const costs=Object.assign({},draft.costs||{});
+        bodyEl.querySelectorAll("[data-uc]").forEach(i=>{costs[i.dataset.uc]=+i.value||0;});
+        await saveDraft({rooms:Math.max(0,Math.round(+bodyEl.querySelector("#uohR").value||0)),
+          workRooms:Math.max(0,Math.round(+bodyEl.querySelector("#uohW").value||0)),
+          businessPct:Math.max(0,Math.min(100,Math.round(+bodyEl.querySelector("#uohP").value||0))),
+          costs},"Use of home costs ("+ty+")");
+        go("tax",{keepScroll:true});};
+      bodyEl.querySelectorAll("input").forEach(i=>i.onchange=save);
+    }
+  }
+  host.querySelector("#uohM").querySelectorAll("button").forEach(btn=>btn.onclick=()=>{
+    uohEdit=btn.dataset.m;
+    host.querySelector("#uohM").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===btn));
+    drawMethod();});                                   /* view only -- nothing is committed here */
+  host.querySelectorAll("[data-use]").forEach(btn=>btn.onclick=async()=>{
+    const m=btn.dataset.use;
+    if(m!=="none"&&!amtFor(m)){
+      toast(m==="simplified"?"Enter your hours first":"Fill in your rooms and costs first");Sfx.error();
+      uohEdit=m;drawMethod();return;}
+    const ys=uohYears();
+    const cur=Object.assign(uohBlank(),ys[ty]||uohForYear(ty).cfg);
+    cur.method=m; cur.appliedAt=cur.appliedAt||isoD(tyBounds(ty).start);
+    ys[ty]=cur;
+    await commit("Use of home for "+ty+": "+m);
+    toast(m==="none"?"No claim for "+ty:"Applied to "+ty);
+    go("tax",{keepScroll:true});});
+  const ysel=host.querySelector("#uohYr");
+  if(ysel)ysel.onchange=()=>{uohYearSel=ysel.value;uohEdit=null;go("tax",{keepScroll:true});};
+  drawMethod();
+}
 
 const RAWCOLS=[
  {k:"client",t:"Client"},{k:"num",t:"#",n:1},{k:"date",t:"Date",d:1},{k:"time",t:"Time"},{k:"mode",t:"Mode"},
@@ -2670,7 +3457,8 @@ function recOf(s,d){return {client:s.client,num:s.num,date:s.date,time:s.time||"
 let rawF={q:"",client:"",ty:"",paid:"",loc:"",sk:"date",sd:-1,cols:null};
 let supF={q:"",sk:"date",sd:-1,cols:null};
 let rawSeg="sessions";
-VIEWS.raw=function(){
+/* A panel now, not a tab - it lives inside Money > Table (see VIEWS.money). */
+function rawPanel(){
   const v=el('<div class="view active"></div>');
   const segHtml='<div class="seg mb" style="display:inline-flex"><button data-rs="sessions" class="'+(rawSeg==="sessions"?"on":"")+'">Sessions</button><button data-rs="supervision" class="'+(rawSeg==="supervision"?"on":"")+'">Supervision</button></div>';
   if(rawSeg==="supervision"){
@@ -2706,7 +3494,7 @@ VIEWS.raw=function(){
     }
     v.querySelector("#supq").oninput=e=>{supF.q=e.target.value;drawSup();};
     drawSup();
-    v.querySelectorAll("[data-rs]").forEach(bt=>bt.onclick=()=>{rawSeg=bt.dataset.rs;go("raw");});
+    v.querySelectorAll("[data-rs]").forEach(bt=>bt.onclick=()=>{rawSeg=bt.dataset.rs;go("money",{seg:"table",keepScroll:true});});
     return v;
   }
   if(!rawF.cols){try{rawF.cols=JSON.parse(localStorage.getItem("tt_cols"))}catch(e){} if(!rawF.cols||!rawF.cols.length)rawF.cols=["client","num","date","time","location","rate","paidYN","paidDate","roomPaidDate","overdueYN","status"];}
@@ -2759,9 +3547,9 @@ VIEWS.raw=function(){
   v.querySelector("#fTy").onchange=e=>{rawF.ty=e.target.value;draw();};
   v.querySelector("#fPaid").onchange=e=>{rawF.paid=e.target.value;draw();};
   v.querySelector("#fLoc").onchange=e=>{rawF.loc=e.target.value;draw();};
-  v.querySelectorAll("[data-rs]").forEach(bt=>bt.onclick=()=>{rawSeg=bt.dataset.rs;go("raw");});
+  v.querySelectorAll("[data-rs]").forEach(bt=>bt.onclick=()=>{rawSeg=bt.dataset.rs;go("money",{seg:"table",keepScroll:true});});
   draw();return v;
-};
+}
 
 VIEWS.settings=function(){
   const v=el('<div class="view active"></div>');
@@ -3422,7 +4210,7 @@ function attentionItems(){
   const rd=der.filter(x=>x.d.roomDue==="Y");
   if(rd.length){const amt=rd.reduce((a,x)=>a+(x.d.roomRate||0),0);
     items.push({cls:"warn",e:"🏠",msg:"<b>Room fees due</b> · "+gbp(amt)+" across "+rd.length+" session"+(rd.length===1?"":"s"),
-      sub:"",btn:"Review",act:()=>go("income")});}
+      sub:"",btn:"Review",act:()=>go("money")});}
   const sups=(S.supervision||[]).filter(s=>s.date&&parseD(s.date)<=t).sort((a,b)=>parseD(b.date)-parseD(a.date));
   if(sups.length){const days=Math.floor((t-parseD(sups[0].date))/86400000);
     if(days>35)items.push({cls:"acc",e:"🧭",msg:"<b>Supervision due</b> · last was "+days+" days ago",
@@ -3825,7 +4613,7 @@ function exportSupervisionCSV(){
 /* Costs and other income, with each recurring row expanded into the months it actually covers
    for the chosen tax year — the shape an accountant asks for. */
 function exportFinanceCSV(){
-  const cols=["type","date","description","category","amount","recurrence","scope","taxYear"];
+  const cols=["type","date","description","category","sa103box","amount","recurrence","scope","taxYear"];
   const rows=[cols.join(",")];
   const all=[];
   const span=[];
@@ -3834,11 +4622,11 @@ function exportFinanceCSV(){
   if(span.length){
     const from=new Date(Math.min.apply(null,span)), to=new Date(Math.max.apply(null,span.concat([+today()])));
     (S.expenses||[]).forEach(x=>moneyOccurrences(x,from,to).forEach(o=>all.push({type:"cost",date:isoD(o.date),
-      description:x.desc||"",category:x.category||"",amount:o.amount,recurrence:x.recurrence||"once",scope:"practice",taxYear:taxYear(o.date)})));
+      description:x.desc||"",category:catOf("exp",x.cat).n,sa103box:catOf("exp",x.cat).box,amount:o.amount,recurrence:x.recurrence||"once",scope:"practice",taxYear:taxYear(o.date)})));
     (S.otherIncome||[]).forEach(x=>moneyOccurrences(x,from,to).forEach(o=>all.push({type:"income",date:isoD(o.date),
-      description:x.desc||"",category:x.category||"",amount:o.amount,recurrence:x.recurrence||"once",scope:finPersonal(x)?"personal":"practice",taxYear:taxYear(o.date)})));
-    roomRentOccurrences(from,to).forEach(o=>all.push({type:"cost",date:isoD(o.date),description:"Room rent — "+o.location,
-      category:"Room rent",amount:o.amount,recurrence:"monthly",scope:"practice",taxYear:taxYear(o.date)}));
+      description:x.desc||"",category:catOf("inc",x.cat).n,sa103box:16,amount:o.amount,recurrence:x.recurrence||"once",scope:finPersonal(x)?"personal":"practice",taxYear:taxYear(o.date)})));
+    roomRentOccurrences(from,to).forEach(o=>all.push({type:"cost",date:isoD(o.date),description:"Room rent \u2014 "+o.location,
+      category:"Room hire",sa103box:21,amount:o.amount,recurrence:"monthly",scope:"practice",taxYear:taxYear(o.date)}));
   }
   if(!all.length){toast("Nothing to export yet");return;}
   all.sort((a,b)=>parseD(a.date)-parseD(b.date)).forEach(rec=>rows.push(cols.map(c=>csvCell(rec[c])).join(",")));
@@ -4382,9 +5170,10 @@ const FEATURES=[
   {k:"supervision",  ic:"🗣", n:"Supervision",            d:"A tab for logging supervision sessions, costs and which clients you discussed."},
   {k:"accreditation",ic:"📜", n:"Accreditation hours",    d:"Clinical vs supervision hours and the 1:6 ratio, for BACP Form 3A. Lives inside Supervision › Insights.",dep:"supervision"},
   {k:"peer",         ic:"👥", n:"Peer supervision",       d:"A separate log for peer supervision hours — added to your total accreditation hours, kept out of the 1:6 ratio.",dep:"supervision"},
-  {k:"finances",     ic:"🧮", n:"Costs & other income",   d:"Business costs (insurance, wifi, monthly room rent) and income that isn’t a client session. Both feed your net income and tax figures.",dep:"income"},
-  {k:"income",       ic:"💷", n:"Revenue & tax",          d:"Tax-year totals, UK sole-trader tax estimates, monthly take-home and a year-end forecast."},
-  {k:"raw",          ic:"▦", n:"Table view",             d:"A spreadsheet-style browser of every session, with sortable columns and a column picker."},
+  {k:"finances",     ic:"🧮", n:"Costs & other income",   d:"Business costs (insurance, wifi, monthly room rent) and income that isn’t a client session. Both feed your net income and tax figures.",dep:"money"},
+  {k:"money",        ic:"💷", n:"Money",                  d:"Revenue charts, what is outstanding, and the month-by-month picture of what came in."},
+  {k:"tax",          ic:"🧾", n:"Tax",                    d:"Tax-year totals, UK sole-trader tax estimates and monthly take-home."},
+  {k:"raw",          ic:"▦", n:"Table view",             d:"A spreadsheet-style browser of every session, inside Money. Sortable columns and a column picker.",dep:"money"},
   {k:"receipts",     ic:"🧾", n:"Receipts & statements",  d:"Printable statements for a client’s insurer, employer or their own records."},
   {k:"quickadd",     ic:"⌨", n:"Quick add bar",          d:"Log a session by typing one line on Home — “AB tue 14:00 paid”."},
   {k:"attention",    ic:"🔔", n:"Needs attention feed",   d:"A Home list of overdue payments, missing notes and clients you haven’t seen in a while."},
@@ -4798,50 +5587,56 @@ function startSetup(opts){
    button when a flow supplies one, and nothing else dismisses the overlay (no backdrop click, no
    Escape), so the Continue/Got it button is the only way past it.
    Bump WHATS_NEW and rewrite whatsNewSteps() for the next release. */
-const WHATS_NEW=1;
+const WHATS_NEW=2;
 function whatsNewSeen(){try{return +localStorage.getItem("tt_whatsnew")||0;}catch(e){return 0;}}
 function markWhatsNewSeen(){try{localStorage.setItem("tt_whatsnew",String(WHATS_NEW));}catch(e){}}
 function whatsNewDue(){return whatsNewSeen()<WHATS_NEW;}
 function whatsNewSteps(){
   const st=[];
-  st.push({emoji:"✨", h:"A few new things", sub:"This update adds the things you and your colleague asked for. One screen each — then you’re back to normal.",
+  st.push({emoji:"\u2728", h:"The app has been reorganised", sub:"Two tabs became four sections, and the tax side got a lot more capable. Two minutes and you\u2019ll know where everything went.",
     html:ovPoints([
-      ["📥","Bring your spreadsheet in","Paste or upload your old records and they become real sessions, with fees and room costs dated properly."],
-      ["🏠","Rooms you rent monthly","A room can now cost a flat monthly rent instead of a fee per session."],
-      ["🧮","Costs and other income","Insurance, wifi, CPD, subletting a room — all feeding your net income and tax figures."],
-      ["👥","Peer supervision","Logged separately, counted toward your total hours."],
-      ["🗄","A retention reminder","The app tells you when a finished client’s records are past the age you chose to keep them."]
+      ["\ud83e\udded","New tabs","<b>Practice</b> holds clients, rooms and supervision. <b>Money</b> is the day-to-day. <b>Tax</b> is new."],
+      ["\ud83c\udfe0","Working from home counts","The app now works out what you can claim for it, both ways HMRC allows."],
+      ["\ud83d\udcb0","A tax pot that includes January","Including the payments on account that catch people out."],
+      ["\ud83e\uddfe","Categories HMRC recognises","Every cost maps to a box on your tax return."]
     ])});
-  st.push({emoji:"📥", h:"Your old spreadsheet, imported", sub:"In <b>⚙ Settings › Import from a spreadsheet</b>.",
+  st.push({emoji:"\ud83e\udded", h:"Where things moved", sub:"Nothing was deleted \u2014 it is all still here, just grouped more sensibly.",
     html:ovPoints([
-      ["📋","Paste it straight in","Select the rows in Excel, Numbers or Sheets — header row included — copy, paste. Or upload a .csv."],
-      ["🔤","Your column names are fine","You match them up on screen; most are guessed from the headings."],
-      ["👀","Nothing lands unseen","A preview shows exactly what will be added, what’s skipped and why. One <b>Undo</b> reverses the whole import."]
+      ["\ud83d\udc65","Practice","Clients, Trends, Rooms and Supervision in one place. Peer supervision, CPD hours and the accreditation card are all still inside Supervision, exactly as they were."],
+      ["\ud83d\udcb7","Money","Your revenue charts, what is outstanding, and your costs and other income. The old <b>Table</b> is a section in here now."],
+      ["\ud83e\uddfe","Tax","Take-home, the tax-year table, and everything new below."]
     ])});
-  st.push({emoji:"💷", h:"Money: costs, rent and other income", sub:"All on the <b>Revenue</b> tab, under the charts.",
+  st.push({emoji:"\u2696\ufe0f", h:"Your figures are counted differently", sub:"This one changes your numbers, so it is worth a read.",
     html:ovPoints([
-      ["🏠","Monthly room rent","In <b>Clients › Rooms</b>, a room can be switched to a flat monthly rent from a date you choose. Sessions in that room then carry no separate room cost — and every past session keeps exactly what it cost at the time."],
-      ["🧾","Business costs","One-off or every month. Monthly ones repeat by themselves, so you enter the wifi bill once."],
-      ["💰","Other income","Subletting a room, a workshop. Income from separate work — tutoring, a second job — can be marked as such: it’s totalled for you but kept out of the practice’s tax figures, because it’s a different trade."],
-      ["📊","It all reaches your tax estimate","Net income, the tax-year table and the charts all include these now."]
+      ["\ud83d\udcb8","Cash basis is now the default","Since 2024/25 HMRC counts sole traders on the <b>cash basis</b>: income when you are actually paid, costs when you actually pay them. The app used to count everything when it was billed."],
+      ["\ud83d\udcc9","So some totals will move","A session you have not been paid for is no longer in this year\u2019s income \u2014 it arrives in the year the money does."],
+      ["\ud83d\udd01","You can switch back","If you have elected the accruals basis with HMRC, change it on the <b>Tax</b> tab and everything reverts. The tab always says which one is in use."]
     ])});
-  st.push({emoji:"👥", h:"Peer supervision", sub:"A new <b>Peer</b> tab inside Supervision.",
+  st.push({emoji:"\ud83c\udfe0", h:"Use of home", sub:"In <b>Tax \u203a Allowances</b>.",
     html:ovPoints([
-      ["🕑","Hours you can count","Logged apart from clinical supervision, with who it was with and any cost."],
-      ["📜","Added to your total hours","It shows on the accreditation card as its own line, inside your total accreditation hours."],
-      ["⚖️","Still out of the 1:6 ratio","Peer supervision doesn’t count toward the clinical-to-supervision ratio — that hasn’t changed, and keeping the two logs apart is what keeps it honest."]
+      ["\ud83d\udcd0","Both HMRC methods","The <b>simplified</b> flat rate by hours worked at home (\u00a310, \u00a318 or \u00a326 a month), or <b>actual costs</b> apportioned by rooms and how much of the time they are used for work."],
+      ["\ud83d\udd0e","Shown side by side","So you can see which is worth more before choosing. It counts your logged home sessions as a starting point for the hours \u2014 your real total will be higher, because notes and admin count too."],
+      ["\u2705","It flows straight through","Into your costs, your net income and the tax estimate. No separate sum to remember."]
     ])});
-  st.push({emoji:"🗄", h:"Records retention", sub:"In <b>⚙ Settings › Records retention</b>.",
+  st.push({emoji:"\ud83d\udcb0", h:"The tax pot, and January", sub:"In <b>Tax \u203a Estimate</b>.",
     html:ovPoints([
-      ["📅","Two periods, both yours to set","How long to keep clinical notes, and how long to keep financial records. Six years each to start with — the BACP complaint window is around three years and insurers often ask for six. Change them to whatever you and your insurer agree."],
-      ["🔔","A flag, never a deletion","When a finished client passes one of those dates they appear in that section. <b>The app will never delete anything on its own.</b>"],
-      ["🧹","The tools are one tap away","Anonymise clears their notes and identity but keeps every date and fee, so your tax figures don’t move. Erase removes them completely. Both still ask you to confirm properly."]
+      ["\ud83c\udfaf","A percentage to set aside","Worked out from your own figures, not a rule of thumb."],
+      ["\u26a0\ufe0f","Payments on account","Once your bill passes \u00a31,000, HMRC wants that year\u2019s tax <i>plus half again</i> in January, and another half in July. Your first January can be about 150% of the tax. The app now says so in advance."],
+      ["\ud83c\udff4","Scotland, student loans, pension","All three change the number. Set them once under <b>Your tax situation</b> and the estimate follows. Pension contributions now get higher-rate relief properly."],
+      ["\ud83e\udd1d","Class 2 when profits are low","Under the Small Profits Threshold it is not due \u2014 but paying it voluntarily keeps the year counting towards your State Pension. The app offers it rather than quietly leaving it out."]
     ])});
-  st.push({emoji:"📄", h:"Terms and privacy", sub:"Worth thirty seconds.",
+  st.push({emoji:"\ud83e\uddfe", h:"Ready for Making Tax Digital", sub:"In <b>Tax \u203a MTD</b>.",
     html:ovPoints([
-      ["🔒","Nothing has changed about your data","It still lives only on this device. No account, no cloud, no analytics, nothing sent anywhere."],
-      ["📃","Now written down","There’s a <a href=\"terms.html\" target=\"_blank\" rel=\"noopener\">Terms of Service</a> and a <a href=\"privacy.html\" target=\"_blank\" rel=\"noopener\">Privacy Policy</a> so it’s on the record rather than just implied."],
-      ["💾","The one thing to keep doing","Export a backup regularly. It’s still the only copy that survives losing this device."]
+      ["\ud83d\udcc5","Your four quarters","6 Apr\u20135 Jul, 6 Jul\u20135 Oct, 6 Oct\u20135 Jan, 6 Jan\u20135 Apr, each totalled and reconciled to your year."],
+      ["\ud83d\udce6","Totals by tax-return box","Every cost mapped to its SA103 box, exportable as a file."],
+      ["\ud83d\udeab","It cannot file for you","And will not pretend to. Filing needs software HMRC has recognised and a server to hold the credentials \u2014 neither belongs in an app that runs only on your device. It keeps the records and hands your accountant the figures."]
+    ])});
+  st.push({emoji:"\ud83d\udcc5", h:"Also since you last looked", sub:"A few things from the previous update.",
+    html:ovPoints([
+      ["\ud83c\udfe0","Rooms you rent monthly","A room can cost a flat monthly rent instead of a fee per session \u2014 and those sessions stop asking whether the room was paid for, because it is settled once a month instead."],
+      ["\ud83d\udd14","Payments due","Rent and repeating costs show up in <b>Money \u203a Costs</b> before they are due, with one tap to tick them off. Weekly, fortnightly, monthly, quarterly or yearly, on a day you choose."],
+      ["\ud83d\udcda","CPD hours","<b>Practice \u203a Supervision</b> leads with CPD hours over a rolling year against your target. The BACP accreditation card is now optional \u2014 on only if you are working toward it."],
+      ["\u2699\ufe0f","Settings tidied","Sixteen cards grouped into five sections that fold away."]
     ])});
   return st;
 }
@@ -4875,19 +5670,19 @@ function tourSteps(){
       ["🆔","Use a short code","Initials, or anything only you can decode — <b>AB</b>, <b>JM2</b>. Never a full name."],
       ["🗝","Keep the key elsewhere","Your record of who each code belongs to belongs in your normal confidential notes, not in this app."],
       ["🧾","Receipts stay coded","A printed statement identifies the client by code only, so it can be handed over safely."]])});
-  st.push({emoji:"👥", h:"Clients & rooms", sub:"The <b>Clients</b> tab has three sub-tabs.",
+  st.push({emoji:"👥", h:"Practice", sub:"Everything clinical in one tab: who you see, where, and the supervision behind it.",
     html:ovPoints([
       ["📇","Clients","Add someone with their code, status and starting fee. Tap a client for their profile — attendance, income, session history, receipts."],
       ["💷","Fees change from a date","Use <b>Change rate</b> rather than editing the number. Past sessions keep the fee you actually charged."],
       ["📈","Trends","Retention funnel, attendance against expected frequency, and how long people stay."],
       ["🚪","Rooms","Add or rename locations and set what each costs — per session, or a flat monthly rent if that’s how you pay. Also dated, same as fees."]])});
-  if(feat("supervision"))st.push({emoji:"🗣", h:"Supervision", sub:"Log each supervision session with its cost and who you discussed.",
+  if(feat("supervision"))st.push({emoji:"🗣", h:"Supervision & CPD", sub:"Inside <b>Practice > Supervision</b>. Log each session with its cost and who you discussed.",
     html:ovPoints([
       ["🧾","Costs come off your profit","Supervision is a business expense, so it’s deducted before the tax estimate."],
       ["👀","Discussion recency","Insights shows how long since each active client was last taken to supervision — useful for spotting who’s been quietly missed."]].concat(
       feat("peer")?[["👥","Peer supervision","Logged separately on its own sub-tab. Those hours add to your total accreditation hours but never to the 1:6 ratio — that’s the rule, and keeping the logs apart is what makes it visible."]]:[],
       feat("accreditation")?[["📜","Accreditation hours","Clinical vs supervision hours and the 1:6 ratio for BACP Form 3A. Logged sessions count as clinical hours; training and placement totals you type in yourself."]]:[]))});
-  if(feat("income"))st.push({emoji:"💷", h:"Revenue & tax", sub:"Everything money, by tax year (6 April – 5 April).",
+  if(feat("money"))st.push({emoji:"💷", h:"Money & tax", sub:"Everything money. Day-to-day on <b>Money</b>, the tax year on <b>Tax</b>.",
     html:ovPoints([
       ["📊","Per tax year","Billed, received, outstanding and net after room costs, supervision and your business costs."]].concat(
       feat("finances")?[["🧮","Costs & other income","Log insurance, wifi, CPD — one-off or monthly — and income that isn’t a session, like subletting a room. Both feed the net and tax figures. Income from separate work (tutoring, a second job) can be marked as such and is kept out of the practice’s figures."]]:[],[
