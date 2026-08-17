@@ -617,6 +617,39 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 .wkdots i{width:15px;height:15px;border-radius:4px;background:var(--soft);flex:none}
 .wkdots i.att{background:var(--brand)} .wkdots i.lc{background:color-mix(in srgb,var(--bad) 45%,var(--soft))} .wkdots i.up{border:1.5px dashed var(--brand);background:transparent;box-sizing:border-box}
 
+/* ===== on-page coaching =====
+   A spotlight over the real control rather than a card in front of it. The whole point is that
+   the thing being described stays visible while it is described, so sits ABOVE the tab bar (35)
+   and the FAB (40) -- both of which it needs to be able to point at -- and below sheets (50) and
+   the full-screen setup flow (45), neither of which it may ever cover. */
+#coach{position:fixed;inset:0;z-index:44;display:none}
+#coach.show{display:block}
+#coach .cmask{position:absolute;border-radius:14px;box-shadow:0 0 0 9999px rgba(12,22,18,.62);
+  outline:2px solid var(--brand);outline-offset:3px;pointer-events:none;
+  transition:top .3s cubic-bezier(.4,0,.2,1),left .3s cubic-bezier(.4,0,.2,1),width .3s,height .3s}
+#coach.center .cmask{outline:none}
+#coach .ccatch{position:absolute;inset:0}          /* swallows taps on the page behind */
+#coach .cbub{position:absolute;width:min(360px,calc(100vw - 24px));background:var(--card);
+  border:1px solid var(--line);border-radius:16px;padding:14px 15px 12px;
+  box-shadow:0 16px 44px rgba(0,0,0,.3);transition:top .3s cubic-bezier(.4,0,.2,1),left .3s cubic-bezier(.4,0,.2,1)}
+#coach .cbh{display:flex;gap:9px;align-items:baseline;margin-bottom:5px}
+#coach .cbh .ce{font-size:18px;line-height:1;flex:none}
+#coach .cbh b{font-size:15.5px;font-weight:750;color:var(--brand-dark);line-height:1.25}
+#coach .cbb{font-size:13.5px;line-height:1.5;color:var(--ink)}
+#coach .cbb b{color:var(--brand-dark)}
+#coach .cbb p{margin:6px 0 0}
+#coach .cbf{display:flex;align-items:center;gap:7px;margin-top:12px}
+#coach .cdots{flex:1;display:flex;gap:4px;align-items:center;min-width:0}
+#coach .cdots i{width:5px;height:5px;border-radius:50%;background:var(--line);flex:none;transition:width .25s,background .25s}
+#coach .cdots i.on{background:var(--brand);width:14px;border-radius:3px}
+#coach .cdots i.done{background:color-mix(in srgb,var(--brand) 50%,var(--line))}
+#coach .cbtn{border:0;font:inherit;font-size:13px;font-weight:650;padding:8px 14px;border-radius:20px;
+  background:var(--soft);color:var(--ink);cursor:pointer}
+#coach .cbtn.on{background:var(--brand);color:#fff}
+#coach .cbtn.ghost{background:none;color:var(--muted);padding:8px 6px}
+#coach .cbtn:active{transform:scale(.96)}
+#coach.noanim .cmask,#coach.noanim .cbub{transition:none}
+@media (prefers-reduced-motion:reduce){#coach .cmask,#coach .cbub{transition:none}}
 /* ===== full-screen step flow: first-run setup + guided tour ===== */
 /* sits above the tab bar (35) and FAB (40) but below sheets (50), so setup can open a sheet on top */
 .ov{position:fixed;inset:0;z-index:45;background:var(--bg);display:none;flex-direction:column}
@@ -719,6 +752,7 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 </div>
 <button class="fab" id="fab" title="Log session" aria-label="Log session"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
 <div class="sheet" id="sheet"><div class="sheet-inner"><div class="sheet-head"><h2 id="sheetTitle"></h2><button class="x" id="sheetClose">✕</button></div><div id="sheetBody"></div></div></div>
+<div id="coach"><div class="ccatch"></div><div class="cmask"></div><div class="cbub"></div></div>
 <div class="toast" id="toast"></div>
 <canvas id="confetti"></canvas>
 <div class="celebr" id="celebr"><div class="cb"><span class="cemoji" id="celEmoji">🎉</span><div class="ctitle" id="celTitle"></div><div class="csub" id="celSub"></div><div class="cribbon" id="celRibbon" style="display:none"></div></div></div>
@@ -800,7 +834,7 @@ const MAX_SNAP=120;
 /* Data schema version, stamped on state and on every backup. Bump when a change would be
    misread by an older build, and add the matching step to migrate(). Data with no stamp is v1
    (everything written before versioning existed). */
-const SCHEMA_VERSION=5;
+const SCHEMA_VERSION=6;
 function stateSchemaVersion(st){const v=st&&st.meta&&+st.meta.schemaVersion;return v>0?v:1;}
 
 function clone(o){return JSON.parse(JSON.stringify(o))}
@@ -818,6 +852,7 @@ function defaultEndedStatuses(st){
 }
 
 function normalize(st){
+  try{tyMemoClear();}catch(e){}
   st.clients=st.clients||[];st.rooms=st.rooms||[];st.sessions=st.sessions||[];
   st.supervision=st.supervision||[];st.rateHistory=st.rateHistory||[];st.clientCategories=st.clientCategories||[];
   ["sessions","clients","supervision","rateHistory","rooms"].forEach(k=>st[k].forEach(x=>{if(x&&!x._id)x._id=uid()}));
@@ -866,7 +901,26 @@ function normalize(st){
   /* Scottish income tax bands differ enough that the estimate is simply wrong without knowing. */
   if(sg.taxRegion==null)sg.taxRegion="rUK";
   if(sg.studentLoan==null)sg.studentLoan="none";
+  /* v6: both of those are now held PER TAX YEAR (see yearValue). One value applied to every year
+     meant the day a loan finished being repaid, or the year someone moved to Scotland, every
+     earlier estimate moved with it — including years already filed. Pin the old scalar to the
+     EARLIEST year the practice has any record in, so carry-forward reproduces exactly the
+     figures this install was already showing, and only later changes are dated. */
+  sg.taxRegionYears=sg.taxRegionYears||{};
+  sg.studentLoanYears=sg.studentLoanYears||{};
+  if(!Object.keys(sg.taxRegionYears).length||!Object.keys(sg.studentLoanYears).length){
+    const firstTY=earliestTaxYearIn(st);
+    if(!Object.keys(sg.taxRegionYears).length)sg.taxRegionYears[firstTY]=sg.taxRegion;
+    if(!Object.keys(sg.studentLoanYears).length)sg.studentLoanYears[firstTY]=sg.studentLoan;
+  }
   if(sg.class2Voluntary==null)sg.class2Voluntary=false;
+  /* What HMRC actually asked for, once a return has been filed, and what has actually been paid.
+     Estimates are only ever a stand-in for these — see taxYearRec. */
+  sg.taxYears=sg.taxYears||{};
+  /* The tax pot's own settings: how much extra to hold over the bare liability, and the balance
+     the therapist last told us is in the account. Both absent means "not set", which is not zero. */
+  sg.taxPot=sg.taxPot||{};
+  if(sg.taxPot.bufferPct==null)sg.taxPot.bufferPct=10;
   if(sg.onboarded==null)sg.onboarded=hasData; // anyone with data already knows the app — don't ambush them with setup
   /* Gradual reveal. `mode` defaults to "all" for anyone who already has data, for the same
      reason accreditation does above: hiding tabs from someone who is already using them is the
@@ -943,6 +997,13 @@ function normalize(st){
      place. Import refuses it outright (see validateImport); this path only guards the unlikely
      case of a newer build having written to this device's own database.
 
+     v5 → v6 dates the whole-practice tax settings (region, student loan) to a tax year and adds
+     the record of what HMRC actually asked for and what has been paid. A v6 backup can say
+     "Plan 2 until 2025-26, none after" and "HMRC assessed 2025-26 at £4,310, two payments on
+     account of £1,900 already made"; a v5 build has neither field, so it would apply one loan
+     plan to every year and show its own estimate in place of the real assessment — a wrong
+     figure presented as the true one. Hence the bump.
+
      v4 → v5 stamps a charge percentage on every cancelled session. A v5 backup can hold a
      session charged at 50%; a v4 build has no such field and would bill it in full, so the
      bump exists to stop that backup being restored there.
@@ -1015,6 +1076,7 @@ function updateSaveBanner(){
   if(d&&_saveFail)d.textContent="This device refused to store the change ("+_saveFail.msg+"). Export a backup now, then reload the app.";
 }
 async function commit(summary){
+  try{tyMemoClear();}catch(e){}    // the year totals are about to change
   try{gameTouch();}catch(e){}      // record weekly activity (streak)
   try{bumpBackupActs();updateBackupBanner();}catch(e){} // count change toward the backup nudge
   try{autoEncBackup();}catch(e){}  // silent encrypted auto-save, when configured
@@ -1432,6 +1494,7 @@ function go(tab,opts){
   if(tab==="settings"&&!opts.keepScroll)_setGrpOpen={};
   const keep=opts.keepScroll?(window.scrollY||window.pageYOffset||0):null;
   cur=tab;
+  try{tyMemoClear();}catch(e){}
   try{renderTabs();applyBranding();}catch(e){console.error("Chrome render failed",e);}
   const m=main();
   try{
@@ -1444,6 +1507,7 @@ function go(tab,opts){
   else window.scrollTo(0,0);
   $("#fab").style.display=(tab==="sessions"||tab==="home")?"flex":"none";
   try{updateBackupBanner();updateSaveBanner();}catch(e){}
+  try{coachMaybeTip(tab);}catch(e){}
 }
 $("#fab").onclick=()=>sessionForm(null);
 /* ============ VIEWS ============ */
@@ -1491,7 +1555,7 @@ VIEWS.home=function(){
   const sparkCard=S.sessions.length?'<div class="card"><div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Revenue trend</h2><span class="small muted">last 24 weeks</span></div>'+sparkline(sparkVals)+'<div class="row small muted" style="justify-content:space-between;margin-top:4px"><span>'+(weekSeries[0]?"w/c "+esc(weekSeries[0].l):"")+'</span><span><b style="color:var(--brand-dark)">'+gbp(lastW?lastW.revenue:0)+'</b> this week</span></div></div>':'';
   v.innerHTML=(S.sessions.length?"":'<div class="hint" style="font-size:14px">👋 <b>Nothing logged yet.</b> Tap <b>＋ New session</b> below to start, or open <b>⚙ Settings → Restore from backup</b> to load a <b>.json</b> backup from another device. Need a refresher? <span class="taxlink" id="hTour">Take the guided tour ›</span></div>')+
    (S.sessions.length&&feat("attention")?'<div class="card"><h2>Needs attention</h2><div class="attn" id="attn"></div></div>':'')+`
-   <div class="kpis mb">
+   <div class="kpis mb" data-coach="home-kpis">
      <div class="kpi"><div class="v" data-to="${billed}" data-fmt="m">${gbp(billed)}</div><div class="l">Billed this tax year</div></div>
      <div class="kpi good"><div class="v" data-to="${received}" data-fmt="m">${gbp(received)}</div><div class="l">Received</div></div>
      <div class="kpi clk ${outstanding?'bad':''}" id="kOut"><div class="v" data-to="${outstanding}" data-fmt="m">${gbp(outstanding)}</div><div class="l">Outstanding now ›</div></div>
@@ -1546,7 +1610,7 @@ let pracTab="clients", moneySeg="overview", taxSeg="estimate";
 function setSeg(tab,seg){
   if(tab==="practice"&&["clients","trends","rooms","supervision"].indexOf(seg)>=0)pracTab=seg;
   else if(tab==="money"&&["overview","costs","table"].indexOf(seg)>=0)moneySeg=seg;
-  else if(tab==="tax"&&["estimate","allowances","mtd"].indexOf(seg)>=0)taxSeg=seg;
+  else if(tab==="tax"&&["estimate","payments","allowances","mtd"].indexOf(seg)>=0)taxSeg=seg;
 }
 /* A segment bar from [value,label] pairs. Renders nothing when there is only one segment. */
 function segBar(id,segs,active){
@@ -2849,6 +2913,32 @@ function wireFinance(v){
 
 
 /* ===== UK sole-trader tax (Income Tax + Class 4/2 NIC) ===== */
+/* Where you pay income tax is a fact about you that you answer once, so it belongs in Settings
+   and in first-run setup, not on a screen full of figures you come back to every month. It is
+   still DATED: moving to or from Scotland takes effect from the tax year you move in, and earlier
+   years keep the bands they were actually assessed under. */
+function taxRegionCardHTML(){
+  const ty=curTaxYear(), m=yearMap("taxRegionYears");
+  const r=taxRegionFor(ty), hist=Object.keys(m).sort();
+  const changed=hist.length>1||(hist.length===1&&m[hist[0]]==="scotland");
+  return '<div class="card"><h2>Where you pay income tax</h2>'+
+    '<p class="small muted">Scotland sets its own income tax bands, so the estimate is simply wrong without this. National Insurance, Class 4 and student loan repayments are the same everywhere in the UK.</p>'+
+    '<div class="seg" id="setRegSeg" style="display:inline-flex">'+
+      '<button data-r="rUK" class="'+(r==="rUK"?"on":"")+'">England, Wales or NI</button>'+
+      '<button data-r="scotland" class="'+(r==="scotland"?"on":"")+'">Scotland</button></div>'+
+    '<p class="prev">Applies to <b>'+esc(ty)+'</b> and every later year. Earlier tax years keep the bands they were assessed under, so moving never rewrites a return you have already filed.</p>'+
+    (changed?'<div class="acc-work">'+hist.map(y=>'<div>'+esc(y)+' onwards \u2014 <b>'+(m[y]==="scotland"?"Scotland":"England, Wales or NI")+'</b></div>').join("")+'</div>':'')+
+    '</div>';
+}
+function wireTaxRegion(host){
+  const rs=host.querySelector("#setRegSeg"); if(!rs)return;
+  rs.querySelectorAll("button").forEach(b=>b.onclick=async()=>{
+    if(b.dataset.r===taxRegionFor(curTaxYear()))return;
+    setYearValue("taxRegionYears",curTaxYear(),b.dataset.r,"taxRegion");
+    await commit("Income tax region from "+curTaxYear()+": "+b.dataset.r);
+    toast(b.dataset.r==="scotland"?"Scottish rates from "+curTaxYear():"UK rates from "+curTaxYear());
+    go("settings",{keepScroll:true});});
+}
 function taxRates(ty){const sy=parseInt(ty.slice(0,4));
   const r={pa:12570,basicTop:50270,higherTop:125140,c4lpl:12570,c4upl:50270,c4upper:0.02};
   r.c4main=(sy>=2024)?0.06:0.09;
@@ -2865,7 +2955,31 @@ function taxRates(ty){const sy=parseInt(ty.slice(0,4));
    treats every entry as absolute -- which pushed income into the higher bands far too early
    and overstated Scottish tax by up to ~3,300 a year. */
 const SCOT_BANDS=[[15397,0.19],[27491,0.20],[43662,0.21],[75000,0.42],[125140,0.45],[Infinity,0.48]];
-function taxRegion(){return settings().taxRegion==="scotland"?"scotland":"rUK";}
+
+/* ===== Settings that belong to a tax YEAR, not to the practice for ever =====
+   Where you pay income tax and which student loan you are repaying both change, and both change
+   on a date. Holding one value and applying it to every year means the day someone finishes
+   repaying their loan, last year's estimate silently drops too — a figure they may already have
+   filed and paid on. So these are stored per tax year with carry-forward, exactly like use of
+   home: a year with no entry of its own inherits the most recent EARLIER one, so a choice never
+   lapses, and setting a new value only ever moves that year and the ones after it. */
+function yearMap(key){const sg=settings();return (sg[key]=sg[key]||{});}
+function yearValue(key,ty,fallback){
+  const m=yearMap(key), y=ty||curTaxYear();
+  if(m[y]!=null)return {v:m[y],inherited:false,from:y};
+  const earlier=Object.keys(m).filter(k=>k<y).sort();
+  if(earlier.length){const k=earlier[earlier.length-1];return {v:m[k],inherited:true,from:k};}
+  return {v:fallback,inherited:false,from:null};
+}
+/* Writing a year's own value. The legacy scalar is kept in step with the LATEST year on record
+   purely so an older build reading this device's database still shows something sensible; the
+   scalar is never read by this build. */
+function setYearValue(key,ty,v,legacyKey){
+  const m=yearMap(key); m[ty||curTaxYear()]=v;
+  if(legacyKey){const last=Object.keys(m).sort().pop();settings()[legacyKey]=m[last];}
+}
+function taxRegionFor(ty){return yearValue("taxRegionYears",ty,"rUK").v==="scotland"?"scotland":"rUK";}
+function taxRegion(ty){return taxRegionFor(ty);}
 const SL_PLANS={
   none:null,
   plan1:{n:"Plan 1",thr:26065,rate:0.09},
@@ -2874,9 +2988,21 @@ const SL_PLANS={
   plan5:{n:"Plan 5",thr:25000,rate:0.09},
   pg:{n:"Postgraduate",thr:21000,rate:0.06}
 };
-function studentLoanDue(profit){
-  const p=SL_PLANS[settings().studentLoan]; if(!p)return 0;
+function studentLoanPlanKey(ty){const k=yearValue("studentLoanYears",ty,"none").v;return SL_PLANS[k]?k:"none";}
+function studentLoanPlan(ty){return SL_PLANS[studentLoanPlanKey(ty)];}
+function studentLoanDue(profit,ty){
+  const p=studentLoanPlan(ty); if(!p)return 0;
   return Math.max(0,profit-p.thr)*p.rate;
+}
+/* The earliest tax year the practice has any record in — the year a legacy whole-practice
+   setting has to be pinned to so that carry-forward reproduces every figure it used to give. */
+function earliestTaxYearIn(st){
+  st=st||S; const ds=[];
+  const push=(arr,f)=>{(arr||[]).forEach(x=>{const d=f?f(x):(x&&x.date);if(d)ds.push(d);});};
+  push(st.sessions);push(st.supervision);push(st.peerSupervision);push(st.expenses);push(st.otherIncome);
+  push(st.roomRentHistory,x=>x&&x.effectiveFrom);
+  const yrs=ds.map(d=>taxYear(d)).filter(Boolean).sort();
+  return yrs.length?yrs[0]:curTaxYear();
 }
 function ukTax(profit,ty){profit=Math.max(0,profit||0);const r=taxRates(ty);
   let pa=r.pa;if(profit>100000)pa=Math.max(0,r.pa-(profit-100000)/2);
@@ -2885,7 +3011,7 @@ function ukTax(profit,ty){profit=Math.max(0,profit||0);const r=taxRates(ty);
   const penGross=Math.round(pensionAmt()*12/0.8);
   const basicTop=r.basicTop+penGross, higherTop=r.higherTop+penGross;
   let b1=0,b2=0,b3=0,scot=null;
-  if(taxRegion()==="scotland"){
+  if(taxRegionFor(ty)==="scotland"){
     scot=[];let lower=pa;
     SCOT_BANDS.forEach(bd=>{const top=(bd[0]===Infinity)?Infinity:bd[0]+penGross;
       const amt=Math.max(0,Math.min(profit,top)-lower);
@@ -2903,9 +3029,12 @@ function ukTax(profit,ty){profit=Math.max(0,profit||0);const r=taxRates(ty);
   let class2=0;
   if(r.class2Mandatory)class2=profit>=r.spt?r.class2week*52:0;
   else if(settings().class2Voluntary&&profit<r.spt)class2=r.class2week*52;
-  const sl=studentLoanDue(profit);
+  const sl=studentLoanDue(profit,ty);
   const total=incomeTax+n1+n2+class2+sl;
-  return {profit,pa,penGross,scot,b1,b2,b3,incomeTax,n1,n2,class2,sl,total,
+  /* ty, region and slPlan travel with the result so a breakdown can name what it actually used
+     rather than re-reading today's settings, which may belong to a different year entirely. */
+  return {profit,pa,penGross,scot,b1,b2,b3,incomeTax,n1,n2,class2,sl,total,ty,
+    region:taxRegionFor(ty),slPlan:studentLoanPlanKey(ty),
     effective:profit>0?total/profit:0,r};}
 function tyBounds(ty){const sy=parseInt(ty.slice(0,4));return {start:new Date(sy,3,6),end:new Date(sy+1,3,5)};}
 
@@ -3074,14 +3203,19 @@ function uohDraft(ty){const ys=uohYears();return Object.assign(uohBlank(),ys[ty]
    writing it into the config would give an inheriting year a record of its own, silently turning
    it from "carried" into "set" as a side effect of ticking a checkbox. Nothing reads it but the UI. */
 function uohFiled(){const u=settings().useOfHome||{};return (u.filed=u.filed||{});}
-/* What a year is, in one word, for the year strip. Reads uohForYear so the strip and the card
-   below it can never tell different stories about the same year. */
-function uohYearStatus(y){
-  const filed=!!uohFiled()[y], own=uohYears()[y];
-  if(own){const claiming=own.method&&own.method!=="none";
-    return {k:claiming?"set":"none",label:claiming?"set":"no claim",filed};}
-  const inf=uohForYear(y);
-  if(inf.inherited)return {k:"carried",label:"carried",from:inf.from,filed};
+/* What a year is, in one word, for the strip that governs EVERY per-year card on the Allowances
+   screen. It used to answer only for use of home, which made every year read "not set" while a
+   student loan plan was quietly in force on all of them. */
+function taxYearStripStatus(y){
+  const filed=!!uohFiled()[y];
+  const own=[];
+  if(uohYears()[y])own.push("use of home");
+  if(yearMap("studentLoanYears")[y]!=null)own.push("student loan");
+  if(yearMap("taxRegionYears")[y]!=null)own.push("where you pay");
+  if(own.length)return {k:"set",label:own.length===1?"own "+own[0]:own.length+" set here",filed};
+  const carried=uohForYear(y).inherited||yearValue("studentLoanYears",y,null).inherited
+    ||yearValue("taxRegionYears",y,null).inherited;
+  if(carried)return {k:"carried",label:"carried",filed};
   return {k:"empty",label:"not set",filed};
 }
 /* The most recent EARLIER year that has a record of its own -- the one worth copying from. */
@@ -3218,7 +3352,17 @@ function ledgerBetween(from,to,opts){
   return {expenses,otherIncome,personalIncome,roomRent,useOfHome,total:otherIncome-expenses-roomRent};
 }
 
-function tyNet(y,toDateOnly){const t=today();let net=0;
+/* ===== Memo for the two whole-year scans =====
+   tyNet and tyIncome each walk every session and run ledgerBetween twice. The Payments screen
+   asks for several years at once, and each year's schedule reaches into the year either side of
+   it, so an uncached call count grows quadratically with history -- the same shape of problem as
+   the snapshot prune that cost a second per save. Cleared on every navigation, every save and
+   every normalize(), which is every point at which the answer can have changed. */
+let _tyMemo={};
+function tyMemoClear(){_tyMemo={};}
+function tyMemo(k,f){if(Object.prototype.hasOwnProperty.call(_tyMemo,k))return _tyMemo[k];return (_tyMemo[k]=f());}
+function tyNet(y,toDateOnly){return tyMemo("n|"+y+"|"+(toDateOnly?1:0),()=>tyNetCalc(y,toDateOnly));}
+function tyNetCalc(y,toDateOnly){const t=today();let net=0;
   const cash=taxBasis()==="cash";
   S.sessions.forEach(s=>{const d=derive(s);
     /* Cash: the fee counts in the year it was received, and an unpaid session counts nowhere yet.
@@ -3247,6 +3391,23 @@ function taxForYear(y){const b=tyBounds(y),t=today();
   const calcProj=ukTax(projAnnual,y);
   const proRata=calcProj.total*frac;
   return {status,netAll,netTD,yearDays,elapsed,frac,calcI,calcProj,proRata,projAnnual,display:{proj:proRata,todate:calcI.total}};}
+/* ===== Practice income, before any costs come off =====
+   tyNet is profit; the tax pot needs the figure BEFORE costs too, because "set aside x% of every
+   payment you receive" is a rule applied to money arriving in the account. Counted on exactly the
+   same basis as tyNet so the two can never disagree about which year a payment fell in. */
+function tyIncome(y,toDateOnly){return tyMemo("i|"+y+"|"+(toDateOnly?1:0),()=>tyIncomeCalc(y,toDateOnly));}
+function tyIncomeCalc(y,toDateOnly){const t=today();let inc=0;
+  const cash=taxBasis()==="cash";
+  S.sessions.forEach(s=>{const d=derive(s);
+    const when=cash?(s.paidDate||null):s.date;
+    if(cash&&!when)return;
+    if(taxYear(when)!==y)return;
+    if(toDateOnly){const dd=parseD(when);if(!dd||dd>t)return;}
+    inc+=(d.rate||0);});
+  const b=tyBounds(y);
+  inc+=ledgerBetween(b.start,b.end,{toDate:toDateOnly}).otherIncome;
+  return Math.round(inc);}
+
 /* ===== What HMRC actually asks for, and when =====
    The bill is not just last year's tax. Once the liability passes GBP 1,000, HMRC also takes two
    payments on account towards NEXT year -- so the first January after a good year can be 150% of
@@ -3254,29 +3415,192 @@ function taxForYear(y){const b=tyBounds(y),t=today();
    Class 2 and student loan are never included in payments on account. */
 const POA_THRESHOLD=1000;
 function poaBase(calc){return Math.max(0,(calc.total||0)-(calc.class2||0)-(calc.sl||0));}
+function nextTY(ty){const sy=parseInt(ty.slice(0,4))+1;return String(sy)+"-"+String(sy+1).slice(2);}
+function prevTY(ty){const sy=parseInt(ty.slice(0,4))-1;return String(sy)+"-"+String(sy+1).slice(2);}
+function prevTaxYear(){return prevTY(curTaxYear());}
+
+/* ===== Estimate versus assessment =====
+   Everything above this line is the app's own estimate, worked out from what has been logged.
+   Once a return has actually been filed there is a real number, and the estimate stops being the
+   best thing available -- HMRC's figure is the one the bank account has to meet. So a year can
+   carry an ACTUAL, and where it does, the actual wins everywhere: the schedule, the timeline and
+   the pot. The estimate is kept alongside it, because the gap between the two is worth seeing.
+
+   settings.taxYears[ty] = {
+     liability, liabilityAt,          what HMRC assessed for `ty` (the SA302 / tax calculation)
+     poaSet, poaSetAt,                each instalment HMRC actually set towards `ty`
+     poaClaim, poaClaimAt, poaClaimWhy,   a claim to reduce those instalments (SA303)
+     filed, note
+   }
+   Payments actually made are keyed by DUE DATE in settings.taxPaid, not by year -- one bank
+   payment settles one HMRC due date, and a single 31 January can be two different years' money. */
+function taxYearRec(ty){const m=settings().taxYears||{};return m[ty]||null;}
+function taxYearRecW(ty){const sg=settings();sg.taxYears=sg.taxYears||{};return (sg.taxYears[ty]=sg.taxYears[ty]||{});}
+function taxPaidMap(){const sg=settings();return (sg.taxPaid=sg.taxPaid||{});}
+function numOrNull(v){return (v==null||v==="")?null:(isNaN(+v)?null:+v);}
+
+/* The liability for a year and where the number came from:
+     actual     -- entered from a filed return; nothing left to estimate
+     estimate   -- the year has ended but no return figure has been entered yet
+     projected  -- the year is still running, so it is run-rated to a full year. This is what the
+                   pot has to cover; tax on income to date is what has been EARNED so far and is
+                   reported separately as `todate`.
+   poa is the part of it that payments on account are worked out from -- never Class 2 or student
+   loan. Where HMRC's own total is in use, its Class 2 and student loan are taken from the
+   estimate, which is the only split available; the therapist can override the instalments
+   outright by entering what HMRC actually set. */
+function taxLiability(ty){
+  const rec=taxYearRec(ty)||{};
+  const tx=taxForYear(ty);
+  const est=(tx.status==="future")?ukTax(0,ty)
+    :(tx.status==="complete")?tx.calc:tx.calcProj;
+  const actual=numOrNull(rec.liability);
+  const out={ty,calc:est,estimate:est.total,todate:tx.status==="inprogress"?tx.calcI.total:est.total,
+    status:tx.status,filed:!!rec.filed};
+  if(actual!=null){out.total=actual;out.src="actual";out.at=rec.liabilityAt||null;
+    out.poa=Math.max(0,actual-(est.class2||0)-(est.sl||0));}
+  else{out.total=est.total;out.src=(tx.status==="inprogress")?"projected":(tx.status==="future")?"none":"estimate";
+    out.poa=poaBase(est);}
+  return out;
+}
+/* The two instalments due TOWARDS `ty`, which last year's liability sets. A claim to reduce
+   (form SA303) overrides HMRC's figure; HMRC's own figure overrides the estimate. */
+function poaTowards(ty){
+  const prev=prevTY(ty), rec=taxYearRec(ty)||{};
+  const claim=numOrNull(rec.poaClaim), set=numOrNull(rec.poaSet);
+  if(claim!=null)return {each:Math.max(0,claim),src:"claim",prev,why:rec.poaClaimWhy||"",at:rec.poaClaimAt||null};
+  if(set!=null)return {each:Math.max(0,set),src:"hmrc",prev,at:rec.poaSetAt||null};
+  const pl=taxLiability(prev);
+  return {each:pl.poa>=POA_THRESHOLD?pl.poa/2:0,src:pl.src,prev,base:pl.poa};
+}
 function taxSchedule(ty){
   const sy=parseInt(ty.slice(0,4));
-  const calc=ukTax(Math.max(0,tyNet(ty,false)),ty);
-  const prev=String(sy-1)+"-"+String(sy).slice(2);
-  const prevCalc=ukTax(Math.max(0,tyNet(prev,false)),prev);
-  const poaPrev=poaBase(prevCalc)>=POA_THRESHOLD?poaBase(prevCalc)/2:0;   /* each of last year's two */
-  const balancing=calc.total-poaPrev*2;
-  const poaThis=poaBase(calc)>=POA_THRESHOLD?poaBase(calc)/2:0;
-  return {ty,calc,prev,prevCalc,poaPrev,
-    jan:{date:new Date(sy+2,0,31),balancing,poa:poaThis,total:balancing+poaThis},
-    jul:{date:new Date(sy+2,6,31),poa:poaThis,total:poaThis},
-    firstYear:poaPrev===0&&poaThis>0};
+  const L=taxLiability(ty);
+  const calc=L.calc;
+  const prev=prevTY(ty);
+  const prevCalc=taxLiability(prev).calc;
+  const poaIn=poaTowards(ty);          /* already paid, or due, towards THIS year */
+  const poaOut=poaTowards(nextTY(ty)); /* what THIS year's liability sets going forward */
+  const poaPrev=poaIn.each;
+  const balancing=L.total-poaPrev*2;
+  return {ty,calc,liability:L,prev,prevCalc,poaPrev,poaIn,poaOut,
+    jan:{date:new Date(sy+2,0,31),balancing,poa:poaOut.each,total:balancing+poaOut.each},
+    jul:{date:new Date(sy+2,6,31),poa:poaOut.each,total:poaOut.each},
+    firstYear:poaPrev===0&&poaOut.each>0};
 }
+/* Tax years worth planning for: everything the practice has records in, plus last year and this
+   one. Future years are left out -- their balancing payment is two years away and rests entirely
+   on income nobody has earned yet. */
+function taxPlanYears(){
+  const set=new Set([curTaxYear(),prevTaxYear()]);
+  const first=earliestTaxYearIn(S);
+  let y=first, guard=0;
+  while(y<=curTaxYear()&&guard++<60){set.add(y);y=nextTY(y);}
+  return Array.from(set).sort();
+}
+/* ===== One list of every payment, by DATE =====
+   The confusion this exists to end: a single 31 January is usually TWO different years' money --
+   the balancing payment that finishes one tax year, and the first instalment towards the next.
+   Assembling by due date rather than by tax year is what makes that legible, and it is the only
+   place the dates and amounts are put together, so the pot, the reminder and the Payments screen
+   cannot drift apart. */
+const PAY_GRACE_DAYS=60;
+function taxTimeline(){
+  const rows={};
+  const add=(d,part)=>{const k=isoD(d);(rows[k]=rows[k]||{due:d,iso:k,parts:[]}).parts.push(part);};
+  taxPlanYears().forEach(ty=>{
+    const sc=taxSchedule(ty);
+    if(Math.round(sc.jan.balancing)!==0)
+      add(sc.jan.date,{kind:"balancing",ty,amount:sc.jan.balancing,src:sc.liability.src});
+    if(sc.poaOut.each>0){
+      add(sc.jan.date,{kind:"poa1",ty:nextTY(ty),from:ty,amount:sc.poaOut.each,src:sc.poaOut.src});
+      add(sc.jul.date,{kind:"poa2",ty:nextTY(ty),from:ty,amount:sc.poaOut.each,src:sc.poaOut.src});}
+  });
+  const paid=taxPaidMap(), t=today();
+  return Object.keys(rows).sort().map(k=>{const r=rows[k];
+    r.total=r.parts.reduce((a,p)=>a+p.amount,0);
+    const rec=paid[k]||null;
+    r.rec=rec;
+    r.paid=(rec&&!rec.unpaid)?rec:null;
+    /* A due date the app has no record of is UNKNOWN, not overdue. Somebody arriving with three
+       years of history has almost certainly paid those bills; shouting "£9,138 overdue" at them
+       for a payment made two years ago is both wrong and frightening, and it would poison every
+       figure the pot produces. Recent dates are the exception -- inside the grace window,
+       "not ticked" much more likely means "not yet paid", so those still count. */
+    const age=(t-r.due)/86400000;
+    r.state=r.paid?"paid":(rec&&rec.unpaid)?"owed"
+      :(age<=0)?"upcoming":(age<=PAY_GRACE_DAYS)?"owed":"unknown";
+    r.outstanding=(r.state==="paid"||r.state==="unknown")?0:r.total;
+    return r;});
+}
+/* The next money out: the earliest date still outstanding, which may be one already past. */
 function nextTaxPayment(){
-  const t=today();
-  const cands=[];
-  [curTaxYear(),prevTaxYear()].forEach(y=>{const sc=taxSchedule(y);
-    if(sc.jan.total>0)cands.push({when:sc.jan.date,amount:sc.jan.total,what:"Balancing payment for "+y+(sc.jan.poa>0?" + first payment on account":""),ty:y});
-    if(sc.jul.total>0)cands.push({when:sc.jul.date,amount:sc.jul.total,what:"Second payment on account for "+y,ty:y});});
-  cands.sort((a,b)=>a.when-b.when);
-  return cands.find(c=>c.when>=t)||null;
+  const row=taxTimeline().find(r=>r.outstanding>0);
+  if(!row)return null;
+  return {when:row.due,amount:row.total,ty:row.parts[0].ty,row,what:taxRowLabel(row)};
 }
-function prevTaxYear(){const sy=parseInt(curTaxYear().slice(0,4))-1;return String(sy)+"-"+String(sy+1).slice(2);}
+function taxPartLabel(p){
+  if(p.kind==="balancing")return (p.amount<0?"Overpaid on "+p.ty:"Balancing payment for "+p.ty);
+  return (p.kind==="poa1"?"First":"Second")+" payment on account for "+p.ty;
+}
+function taxRowLabel(row){
+  const b=row.parts.find(p=>p.kind==="balancing");
+  const poa=row.parts.filter(p=>p.kind!=="balancing");
+  if(b&&poa.length)return "Balancing payment for "+b.ty+" + "+(poa[0].kind==="poa1"?"first":"second")+" payment on account for "+poa[0].ty;
+  return taxPartLabel(row.parts[0]);
+}
+
+/* ===== The tax pot =====
+   Two different questions, and running them together is what makes a tax pot either useless or
+   frightening:
+     what have I already earned that I will owe tax on?  -> what should be in the pot today
+     what will HMRC ask for, and when?                   -> what has to be there by a date
+   Both are answered, plus a buffer the therapist sets themselves. The buffer is the point of the
+   whole thing: it is the difference between "probably enough" and "definitely enough", and being
+   able to see it as a separate number is what stops someone hoarding half their income against a
+   bill they cannot picture. */
+function taxPotCfg(){const p=settings().taxPot||{};
+  return {bufferPct:(p.bufferPct==null?10:Math.max(0,Math.min(100,+p.bufferPct||0))),
+          balance:numOrNull(p.balance), balanceAt:p.balanceAt||null};}
+function taxPot(){
+  const ty=curTaxYear(), tx=taxForYear(ty), cfg=taxPotCfg(), t=today();
+  /* Earned so far: tax on income actually taken this year. Nobody owes tax on money they have
+     not made yet, so this and not a share of the projection is the honest floor. */
+  const earned=(tx.status==="inprogress")?tx.calcI.total:(tx.status==="complete"?tx.calc.total:0);
+  const projected=(tx.status==="inprogress")?tx.calcProj.total:(tx.status==="complete"?tx.calc.total:0);
+  const projNet=(tx.status==="inprogress")?tx.projAnnual:(tx.status==="complete"?tx.netAll:0);
+  /* Set-aside rate, expressed against money RECEIVED rather than profit, because that is what a
+     standing order out of the current account is a share of. Working it out from tax-to-date over
+     net-to-date is what used to show 0%: early in the year the personal allowance has swallowed
+     everything earned so far, so the tax on it really is nil -- while the full year is not. */
+  const incTD=tyIncome(ty,true), incAll=tyIncome(ty,false);
+  const projInc=(tx.status==="inprogress")?(tx.frac>0?incTD/tx.frac:incTD):incAll;
+  const rate=projInc>0?Math.max(0,Math.min(0.6,projected/projInc)):0;
+  /* Bills already crystallised and not yet paid: anything on the timeline that belongs to a tax
+     year which has already ENDED. Instalments towards the year now running are counted through
+     `earned` instead, so nothing is asked for twice. */
+  const line=taxTimeline();
+  let committed=0; const committedRows=[];
+  line.forEach(r=>{if(r.outstanding<=0)return;
+    r.parts.forEach(p=>{if(p.ty<ty&&p.amount>0){committed+=p.amount;if(committedRows.indexOf(r)<0)committedRows.push(r);}});});
+  const floor=Math.max(0,earned+committed);
+  const buffer=floor*cfg.bufferPct/100;
+  const target=floor+buffer;
+  const next=line.find(r=>r.outstanding>0)||null;
+  /* What has to be in the account by the next due date -- every instalment still outstanding up
+     to and including it, whichever tax year each of them belongs to. */
+  const byNext=next?line.filter(r=>r.outstanding>0&&r.due<=next.due).reduce((a,r)=>a+r.outstanding,0):0;
+  const bal=cfg.balance;
+  return {ty,status:tx.status,earned,projected,projNet,projInc,rate,cfg,
+    committed,committedRows,floor,buffer,target,next,byNext,
+    balance:bal,
+    over:bal==null?null:bal-target,          /* + comfortably covered, - short of the target */
+    vsFloor:bal==null?null:bal-floor,        /* + prudent, - actually short */
+    vsNext:bal==null?null:bal-byNext,
+    /* This year's own tax, buffered -- deliberately NOT plus the arrears above. Those will have
+       been paid long before 5 April, and folding them in makes a number nobody can check. */
+    yearEnd:Math.max(0,projected)*(1+cfg.bufferPct/100)};
+}
 function trow(l,v,b){return '<tr><td>'+(b?'<b>'+l+'</b>':l)+'</td><td class="num">'+(b?'<b>'+v+'</b>':v)+'</td></tr>';}
 function gbpR(n){return gbp(Math.round(n||0));}
 function taxBreakdown(c){return '<table>'+
@@ -3306,18 +3630,64 @@ function taxDetailsSheet(y){const tx=taxForYear(y);const body=el('<div></div>');
       taxBreakdown(tx.calcI);}
   else {html='<p class="muted">This tax year hasn’t started yet.</p>';}
   /* How the profit was arrived at comes FIRST -- the bands mean nothing without it. */
+  const L=taxLiability(y);
   html='<div class="grp-h">How the profit was worked out</div>'+breakdownHTML(bd,{clients:true})+
     '<div class="grp-h" style="margin-top:18px">The tax on it</div>'+html+
-    '<div class="grp-h" style="margin-top:18px">When HMRC wants it</div>'+
+    (L.src==="actual"?'<div class="vmsg ok" style="margin-top:12px">\ud83d\uddc4 HMRC assessed '+esc(y)+' at <b>'+gbpR(L.total)+'</b>, so that is the figure used everywhere. The app\u2019s own estimate came to '+gbpR(L.estimate)+'.</div>':'')+
+    '<div class="grp-h" style="margin-top:18px">Paying it</div>'+
     '<table>'+
-      trow('31 Jan '+(parseInt(y)+2)+' \u2014 balancing payment',gbpR(sched.jan.balancing))+
-      (sched.jan.poa?trow('31 Jan '+(parseInt(y)+2)+' \u2014 payment on account',gbpR(sched.jan.poa)):'')+
-      trow('<b>Total due 31 Jan</b>','<b>'+gbpR(sched.jan.total)+'</b>',true)+
-      (sched.jul.total?trow('31 Jul '+(parseInt(y)+2)+' \u2014 payment on account',gbpR(sched.jul.total)):'')+
+      trow((L.src==="actual"?'Assessed':'Estimated')+' tax for '+esc(y),gbpR(L.total),true)+
+      (sched.poaPrev?trow('Less the two instalments already due towards it','\u2212'+gbpR(sched.poaPrev*2)):'')+
+      trow('<b>'+(sched.jan.balancing<0?'Overpaid \u2014 HMRC repays you':'Balancing payment, 31 Jan '+(parseInt(y)+2))+'</b>','<b>'+gbpR(Math.abs(sched.jan.balancing))+'</b>',true)+
     '</table>'+
-    (sched.jan.poa?'<p class="small muted">Payments on account are advance instalments towards the <i>following</i> year, due because this bill passes \u00a3'+POA_THRESHOLD+'. Class 2 and student loan are never part of them.</p>':'');
-  body.innerHTML=html+'<p class="small muted mt">Covers Income Tax, Class 4'+(parseInt(y)<2024?' and Class 2':'')+' National Insurance'+(settings().studentLoan!=="none"?', student loan':'')+' for a sole trader'+(taxRegion()==="scotland"?', at Scottish rates':'')+'. <b>An estimate from your own records, not tax advice</b> — it does not know your wider circumstances, and it cannot file for you.</p>';
+    (sched.poaOut.each?'<p class="small muted">Separately, this bill sets two instalments of <b>'+gbpR(sched.poaOut.each)+'</b> towards <b>'+esc(nextTY(y))+'</b> \u2014 one on that same January date, one on 31 Jul '+(parseInt(y)+2)+'. '+infoLink("poa","Why")+'</p>':'')+
+    '<p class="small muted mt"><span class="taxlink" data-gotopay="1">See every payment date on one list \u203a</span></p>';
+  body.innerHTML=html+'<p class="small muted mt">Covers Income Tax, Class 4'+(parseInt(y)<2024?' and Class 2':'')+' National Insurance'+(studentLoanPlan(y)?', student loan ('+studentLoanPlan(y).n+')':'')+' for a sole trader'+(taxRegionFor(y)==="scotland"?', at Scottish rates':'')+'. <b>An estimate from your own records, not tax advice</b> \u2014 it does not know your wider circumstances, and it cannot file for you.</p>';
+  wireInfo(body);
+  const gp=body.querySelector("[data-gotopay]");
+  if(gp)gp.onclick=()=>{closeSheet();go("tax",{seg:"payments"});};
   openSheet("Tax \u00b7 "+y,body);}
+
+/* ===== "Find out more" =====
+   Long explanations are the enemy of a screen someone checks every month: read once, then read
+   past for ever after. Anything that is genuinely background goes behind one of these instead, so
+   the screen itself carries the figure and a sentence, and the reasoning is one tap away. */
+const INFO={};
+function infoDef(k,title,html){INFO[k]={title,html};}
+function infoLink(k,label){return '<span class="taxlink info" data-info="'+k+'">'+(label||"Find out more")+' \u203a</span>';}
+function wireInfo(host){(host||document).querySelectorAll("[data-info]").forEach(n=>n.onclick=ev=>{
+  ev.stopPropagation();const i=INFO[n.dataset.info];if(!i)return;
+  const b=el('<div></div>');b.innerHTML=i.html;wireInfo(b);openSheet(i.title,b);});}
+infoDef("poa","Payments on account",
+  '<p class="small">Once a year\u2019s tax bill passes \u00a3'+POA_THRESHOLD+', HMRC stops waiting for the next one. It asks you to pay <b>half of it again in advance</b> on 31 January, and the other half on 31 July, as instalments towards the year you are currently in.</p>'+
+  '<p class="small">So your first big January is roughly <b>one and a half times</b> the tax on that year: the year\u2019s own bill, plus the first instalment towards the next one. The January after that is usually smaller, because two instalments have already gone in.</p>'+
+  '<p class="small"><b>Class 2 National Insurance and student loan repayments are never part of an instalment.</b> They are only ever collected in the balancing payment.</p>'+
+  '<p class="small muted">The instalments are set from <i>last</i> year\u2019s bill, not this year\u2019s. If this year turns out very different, see '+infoLink("sa303","reducing them")+'.</p>');
+infoDef("balancing","Balancing payments",
+  '<p class="small">A balancing payment is what is left of a tax year once the instalments you already paid towards it are taken off:</p>'+
+  '<div class="acc-work"><div>the year\u2019s tax bill</div><div>\u2212 the two payments on account you made towards it</div><div><b>= the balancing payment</b>, due the 31 January after the year ends</div></div>'+
+  '<p class="small mt">A tax year ending 5 April 2027 is balanced on <b>31 January 2028</b> \u2014 not 2027. That is why the dates on this screen look a year further out than you might expect.</p>'+
+  '<p class="small">If your instalments came to more than the final bill, the balancing payment is negative: HMRC repays the difference, or sets it against what you owe next.</p>');
+infoDef("sa303","Reducing your payments on account",
+  '<p class="small">Your instalments are worked out from last year\u2019s bill. If you expect this year to be <b>lower</b> \u2014 fewer clients, a career break, higher costs \u2014 you can ask HMRC to reduce them. It is a <b>claim to reduce payments on account</b>, form SA303, and you can do it in your online account or on the return itself.</p>'+
+  '<p class="small"><b>The catch.</b> If you reduce them too far, HMRC charges <b>interest</b> on the shortfall from each instalment\u2019s original due date \u2014 not from when you finally pay. Reduce to a figure you can defend, not to the lowest number you can hope for.</p>'+
+  '<p class="small">If this year turns out <b>higher</b> instead, you do nothing: the extra is simply collected in the balancing payment in January. HMRC does not ask for more mid-year, and there is no penalty for having underestimated.</p>'+
+  '<p class="small muted">Recording a claim here only changes what this app expects. You still have to make the claim to HMRC.</p>');
+infoDef("actuals","Your estimate versus HMRC\u2019s figure",
+  '<p class="small">Everything on the Tax tab is worked out from what you have logged here. It is a good estimate and a bad substitute for the real thing.</p>'+
+  '<p class="small">Once you have filed, HMRC produces a <b>tax calculation</b> (the SA302) with the actual liability on it, and your online account shows the instalments it has set. Entering those figures here <b>replaces the estimate everywhere</b> \u2014 the timeline, the pot and the balancing payment all switch to the real numbers, and the estimate is kept alongside so you can see how close it was.</p>'+
+  '<p class="small">Enter it whenever the two differ for a reason the app cannot know about: employment income, dividends, a jointly owned property, marriage allowance, an adjustment HMRC made itself.</p>');
+infoDef("potbuffer","How big a buffer?",
+  '<p class="small">The pot target is built from tax you have <b>already</b> earned \u2014 not a share of a forecast. That is the honest floor, and on its own it is enough only if nothing surprises you.</p>'+
+  '<p class="small">The buffer is what turns \u201cprobably enough\u201d into \u201cdefinitely enough\u201d. It covers the things a projection cannot see: a strong March, a client paying three months at once, a cost you expected and did not incur.</p>'+
+  '<div class="acc-work"><div><b>5%</b> \u2014 steady practice, same clients week to week</div><div><b>10%</b> \u2014 the usual choice, and the default here</div><div><b>20%</b> \u2014 income that moves a lot, or a first year</div><div><b>25%+</b> \u2014 you would rather over-save than check</div></div>'+
+  '<p class="small mt">Above about 25% you are holding money back for its own sake. The point of a buffer you chose is being able to spend everything outside it without wondering.</p>');
+infoDef("potfloor","What should be in the pot today",
+  '<p class="small">Two different amounts, and running them together is what makes a tax pot either useless or frightening:</p>'+
+  '<div class="acc-work"><div><b>Already earned</b> \u2014 tax on the money you have actually taken this year. You owe this now, whatever happens next.</div>'+
+  '<div><b>Bills already fixed</b> \u2014 anything on the timeline for a tax year that has already ended and has not been paid.</div>'+
+  '<div><b>+ your buffer</b></div><div><b>= the target</b></div></div>'+
+  '<p class="small mt">Tax on income you have <i>not yet earned</i> is deliberately left out. Instalments towards the year you are in are covered by the \u201calready earned\u201d line instead, so nothing is counted twice.</p>');
 
 /* ===== Monthly take-home & pension =====
    Both of these return **null when the therapist has never set one**, which is deliberately not
@@ -3445,11 +3815,11 @@ VIEWS.tax=function(){
     setTimeout(()=>{if(!_flow)open();},120);   /* don't stack on top of setup or What's new */
     return v;
   }
-  const segs=[["estimate","Estimate"],["allowances","Allowances"],["mtd","MTD"]];
+  const segs=[["estimate","Estimate"],["payments","Pot & payments"],["allowances","Allowances"],["mtd","MTD"]];
   v.innerHTML=segBar("taxseg",segs,taxSeg)+'<div id="taxbody"></div>';
   const body=v.querySelector("#taxbody");
-  if(taxSeg==="allowances"||taxSeg==="mtd"){
-    (taxSeg==="mtd"?drawMTD:drawAllowances)(body);
+  if(taxSeg!=="estimate"){
+    (taxSeg==="mtd"?drawMTD:taxSeg==="payments"?drawPayments:drawAllowances)(body);
     wireSegBar(v,"taxseg","tax",()=>go("tax",{keepScroll:true}));
     return v;
   }
@@ -3475,42 +3845,30 @@ VIEWS.tax=function(){
     '<div class="kpis mt" style="grid-template-columns:1fr 1fr"><div class="kpi good"><div class="v" id="thMain"></div><div class="l" id="thMainL"></div></div>'+
     '<div class="kpi"><div class="v" id="thYr"></div><div class="l" id="thYrL"></div></div></div>'+
     '<p class="small muted mt" id="thNote"></p></div>';
-  const sched=taxSchedule(curTaxYear());
-  const nxt=nextTaxPayment();
-  const potNet=Math.max(0,tyNet(curTaxYear(),true));
-  const potRate=potNet>0?(sched.calc.total/Math.max(1,tyNet(curTaxYear(),false))):0;
-  const setAside=Math.max(0,Math.min(0.6,potRate));
-  const potCard='<div class="card"><h2>Your tax pot</h2>'+
-    '<p class="small muted">What to keep back so the bill is already covered when it lands.</p>'+
+  const pot=taxPot(), nxt=pot.next;
+  /* A summary only. Everything about paying \u2014 the buffer, the balance, every due date and
+     what HMRC actually assessed \u2014 lives on Pot & payments, so there is exactly one place to
+     look and no figure appears twice with two different explanations behind it. */
+  const potCard='<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
+      '<h2 style="margin:0">Your tax pot</h2><button class="btn sec sm" id="potOpen">Open \u203a</button></div>'+
     '<div class="kpis mt">'+
-      '<div class="kpi good"><div class="v">'+Math.round(setAside*100)+'%</div><div class="l">of each payment to set aside</div></div>'+
-      '<div class="kpi" id="potTax" style="cursor:pointer"><div class="v">'+gbp(Math.round(sched.calc.total))+'</div><div class="l">'+curTaxYear()+' tax, projected \u203a</div></div>'+
-      (nxt?'<div class="kpi'+((nxt.when-today())/86400000<60?' bad':'')+'"><div class="v">'+gbp(Math.round(nxt.amount))+'</div><div class="l">due '+fmtD(nxt.when)+'</div></div>':'')+
+      '<div class="kpi good"><div class="v">'+Math.round(pot.rate*100)+'%</div><div class="l">of everything you\u2019re paid, set aside</div></div>'+
+      '<div class="kpi"><div class="v">'+gbp(Math.round(pot.target))+'</div><div class="l">should be put by today</div></div>'+
+      (nxt?'<div class="kpi'+((nxt.due-today())/86400000<60?' bad':'')+'"><div class="v">'+gbp(Math.round(nxt.total))+'</div><div class="l">due '+fmtD(nxt.due)+'</div></div>':'')+
     '</div>'+
-    (nxt?'<div class="vmsg '+(((nxt.when-today())/86400000)<60?'warn':'ok')+'" style="margin-top:12px">'+
-      '<b>'+fmtD(nxt.when)+'</b> \u2014 '+esc(nxt.what)+': <b>'+gbp(Math.round(nxt.amount))+'</b></div>':'')+
-    (sched.firstYear?'<div class="vmsg warn" style="margin-top:10px">\u26a0\ufe0f <b>First big January.</b> Because your bill passes \u00a3'+POA_THRESHOLD+', HMRC asks for the year\u2019s tax <i>plus</i> half of it again on account \u2014 then another half in July. Budget for about <b>one and a half times</b> the tax, not once.</div>':'')+
-    '<div class="acc-work" style="margin-top:10px">'+
-      '<div><b>31 Jan '+(parseInt(curTaxYear())+2)+'</b> = balancing '+gbpR(sched.jan.balancing)+(sched.jan.poa?' + payment on account '+gbpR(sched.jan.poa):'')+' = <b>'+gbpR(sched.jan.total)+'</b></div>'+
-      (sched.jul.total?'<div><b>31 Jul '+(parseInt(curTaxYear())+2)+'</b> = payment on account <b>'+gbpR(sched.jul.total)+'</b></div>':'')+
-      (sched.poaPrev?'<div class="small muted">Already paid on account for this year: '+gbpR(sched.poaPrev*2)+'</div>':'')+
-      '<div class="small muted" style="margin-top:5px">Payments on account are due once your bill passes \u00a3'+POA_THRESHOLD+'. Class 2 and student loan are never included in them.</div>'+
-    '</div></div>';
-  const region=taxRegion(), sl=settings().studentLoan;
-  const setupCard='<div class="card"><h2>Your tax situation</h2>'+
-    '<p class="small muted">Three questions that change the numbers. Get them right once.</p>'+
-    '<label>Where you pay income tax</label>'+
-    '<div class="seg" id="regSeg" style="display:inline-flex"><button data-r="rUK" class="'+(region==="rUK"?"on":"")+'">England, Wales or NI</button>'+
-      '<button data-r="scotland" class="'+(region==="scotland"?"on":"")+'">Scotland</button></div>'+
-    '<p class="small muted">Scotland sets its own income tax bands. National Insurance is the same everywhere.</p>'+
-    '<label style="margin-top:14px">Student loan</label>'+
-    '<select id="slSel">'+opts2([["none","No student loan"]].concat(Object.keys(SL_PLANS).filter(k=>k!=="none").map(k=>[k,SL_PLANS[k].n])),sl)+'</select>'+
-    '<p class="small muted">Repayments come out of the same January bill, so they belong in the pot.</p>'+
-    (tyNet(curTaxYear(),false)<taxRates(curTaxYear()).spt
-      ? '<label class="colchk" style="margin-top:14px"><input type="checkbox" id="c2v"'+(settings().class2Voluntary?" checked":"")+'> Pay Class 2 NI voluntarily</label>'+
-        '<p class="small muted">Your profit is under \u00a3'+taxRates(curTaxYear()).spt+', so Class 2 is not due \u2014 but paying it (about \u00a3'+taxRates(curTaxYear()).class2week+' a week) keeps the year counting towards your State Pension. Often worth it.</p>'
+    (pot.balance!=null
+      ? '<div class="vmsg '+(pot.vsFloor<0?'err':pot.over<0?'warn':'ok')+'" style="margin-top:12px">'+
+        (pot.vsFloor<0?'You have '+gbp(Math.round(pot.balance))+' put by, '+gbp(Math.round(-pot.vsFloor))+' short of the tax you have already earned.'
+         :pot.over<0?'You have '+gbp(Math.round(pot.balance))+' put by \u2014 enough for the tax so far, '+gbp(Math.round(-pot.over))+' short of your buffer.'
+         :'You have '+gbp(Math.round(pot.balance))+' put by \u2014 '+gbp(Math.round(pot.over))+' more than you need. That is yours to spend.')+'</div>'
       : '')+
-    '</div>';
+    '<p class="small muted mt">Based on '+gbp(Math.round(pot.earned))+' of tax earned so far this year'+(pot.committed>0?' plus '+gbp(Math.round(pot.committed))+' still owed on earlier years':'')+', with a '+pot.cfg.bufferPct+'% buffer. '+infoLink("potfloor","How this is worked out")+'</p></div>';
+  /* Only ever shown when it is actually a live choice \u2014 below the Small Profits Threshold. */
+  const c2Card=(tyNet(curTaxYear(),false)<taxRates(curTaxYear()).spt)
+    ? '<div class="card"><h2>Class 2 National Insurance</h2>'+
+      '<label class="colchk"><input type="checkbox" id="c2v"'+(settings().class2Voluntary?" checked":"")+'> Pay Class 2 voluntarily</label>'+
+      '<p class="small muted mt">Your profit is under \u00a3'+taxRates(curTaxYear()).spt+', so Class 2 is not due \u2014 but paying it (about \u00a3'+taxRates(curTaxYear()).class2week+' a week) keeps the year counting towards your State Pension. For a part-time practice that is usually worth it.</p></div>'
+    : '';
   const basisCard='<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
       '<h2 style="margin:0">How your figures are counted</h2>'+
       '<div class="seg" id="basisSeg" style="display:inline-flex"><button data-b="cash" class="'+(taxBasis()==="cash"?"on":"")+'">Cash</button>'+
@@ -3522,7 +3880,7 @@ VIEWS.tax=function(){
      are read every month and the caveat has to travel with them. */
   const disclaimBar='<div class="vmsg warn" style="margin-bottom:12px">⚖️ <b>Estimates, not tax advice.</b> Worked out from what you have entered, using published HMRC rates. '+
     '<span class="taxlink" id="taxDiscMore">What this means ›</span></div>';
-  body.innerHTML=disclaimBar+thCard+potCard+basisCard+setupCard+
+  body.innerHTML=disclaimBar+thCard+potCard+basisCard+c2Card+
     '<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">By tax year</h2><div class="seg" id="taxmode" style="display:inline-flex"><button data-m="proj" class="'+(taxMode==="proj"?"on":"")+'">Projected</button><button data-m="todate" class="'+(taxMode==="todate"?"on":"")+'">To date</button></div></div><div class="rawscroll"><table><thead><tr><th>Year</th><th class="num">Sess</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Overdue</th><th class="num">Net</th><th class="num">Tax</th></tr></thead><tbody>'+tyTable+'</tbody></table></div><p class="small muted"><b>'+esc(basisLabel())+'.</b> Net = income less room, supervision and business costs, plus any other practice income. Tax = Income Tax + Class 4 NIC (sole trader); tap a figure for the breakdown. <b>*</b> in-progress year shown as '+(taxMode==="proj"?"a pro-rata projection":"tax on income to date")+'.</p></div>';
   const tdm=body.querySelector("#taxDiscMore");if(tdm)tdm.onclick=()=>taxDisclaimerSheet();
   /* [data-y] only — .taxlink is also the style for the pension link, which is not a year. */
@@ -3531,18 +3889,12 @@ VIEWS.tax=function(){
     if(elx.classList.contains("netlink"))periodBreakdownSheet("Net \u00b7 "+y,bn.start,bn.end,
       '<p class="small muted">Every figure behind the Net column for '+esc(y)+'.</p>');
     else taxDetailsSheet(y);});
-  const rsg=body.querySelector("#regSeg");
-  if(rsg)rsg.querySelectorAll("button").forEach(b=>b.onclick=async()=>{
-    if(b.dataset.r===taxRegion())return;
-    settings().taxRegion=b.dataset.r;await commit("Tax region: "+b.dataset.r);go("tax",{keepScroll:true});});
-  const slx=body.querySelector("#slSel");
-  if(slx)slx.onchange=async()=>{settings().studentLoan=slx.value;
-    await commit("Student loan: "+slx.value);go("tax",{keepScroll:true});};
   const c2v=body.querySelector("#c2v");
   if(c2v)c2v.onchange=async()=>{settings().class2Voluntary=c2v.checked;
     await commit("Voluntary Class 2: "+(c2v.checked?"on":"off"));go("tax",{keepScroll:true});};
-  const pt=body.querySelector("#potTax");
-  if(pt)pt.onclick=()=>taxDetailsSheet(curTaxYear());
+  const po=body.querySelector("#potOpen");
+  if(po)po.onclick=()=>go("tax",{seg:"payments"});
+  wireInfo(body);
   const bsg=body.querySelector("#basisSeg");
   if(bsg)bsg.querySelectorAll("button").forEach(b=>b.onclick=async()=>{
     if(b.dataset.b===taxBasis())return;
@@ -3757,6 +4109,302 @@ function mtdExport(ty){
 }
 
 /* ---- Tax > MTD ---- */
+
+/* ============================================================================
+   Pot & payments
+   ----------------------------------------------------------------------------
+   One screen for "what do I owe, when, and is there enough put by". Two rules
+   shape it:
+
+   1. The list is assembled by DUE DATE, never by tax year. That is the thing
+      that confuses everyone: a single 31 January is usually two different
+      years' money -- the balancing payment finishing one year, and the first
+      instalment towards the next. Listed by year, those two amounts appear on
+      different cards and nobody can see what will actually leave the account.
+
+   2. HMRC's own figures beat the app's estimates wherever they exist. Until a
+      return is filed there is nothing but an estimate; afterwards there is a
+      real assessment, and continuing to show a guess next to it would be worse
+      than useless.
+   ============================================================================ */
+function drawPayments(host){
+  const t=today(), pot=taxPot(), line=taxTimeline(), cfg=pot.cfg;
+  const money=x=>gbp(Math.round(x));
+  const real=line.filter(r=>Math.round(r.total)!==0);
+  const due=real.filter(r=>r.state==="owed"||r.state==="upcoming");
+  const unknown=real.filter(r=>r.state==="unknown").reverse();
+  const settled=real.filter(r=>r.state==="paid").reverse();
+
+  const rowHTML=r=>{
+    const days=Math.round((r.due-t)/86400000);
+    const chip=r.state==="paid"?'<span class="chip y">paid</span>'
+      :r.state==="unknown"?'<span class="chip na">not recorded</span>'
+      :days<0?'<span class="chip n">'+(-days)+' day'+(days===-1?'':'s')+' late</span>'
+      :days<=60?'<span class="chip f">in '+days+' day'+(days===1?'':'s')+'</span>'
+      :'<span class="chip na">in '+Math.round(days/30)+' months</span>';
+    const neg=r.total<0;
+    return '<div class="list-item" data-due="'+esc(r.iso)+'"><div class="li-main">'+
+      '<div class="li-title">'+fmtD(r.due)+' '+chip+'</div>'+
+      '<div class="li-sub">'+r.parts.map(p=>esc(taxPartLabel(p))+' · '+money(Math.abs(p.amount))).join('<br>')+'</div></div>'+
+      '<div class="li-right"><b style="color:var(--'+(neg?'good':'brand-dark')+')">'+(neg?'+':'')+money(Math.abs(r.total))+'</b></div></div>';
+  };
+
+  /* The estimate that sets your instalments is last year's, and last year is not this year.
+     HMRC never adjusts them on its own -- either you claim to reduce them, or the difference
+     turns up in January. Worth saying, but only when the gap is big enough to act on. */
+  const drift=poaDriftNote(curTaxYear());
+  const driftMsg=!drift?'':
+    '<div class="vmsg '+(drift.over?'warn':'ok')+'" style="margin-top:12px">'+
+    (drift.over
+      ? '📉 <b>Your instalments look too high.</b> They were set from '+esc(prevTY(curTaxYear()))+
+        ', but '+esc(curTaxYear())+' is running at about '+money(drift.exp)+' of the liability instalments are worked out from — against '+money(drift.set)+
+        ' across the two you are being asked for. You can ask HMRC to reduce them — carefully. '+infoLink("sa303","How, and the catch")
+      : '📈 <b>This year is running ahead of your instalments.</b> They were set from '+esc(prevTY(curTaxYear()))+
+        ' at '+money(drift.set)+' across the two, and '+esc(curTaxYear())+' looks more like '+money(drift.exp)+
+        '. Nothing to do — HMRC collects the difference in January’s balancing payment — but that January will be bigger than the instalments suggest.')+
+    (drift.claimable?'<div style="margin-top:8px"><button class="btn sec sm" id="pyClaim">Record a claim to reduce…</button></div>':'')+
+    '</div>';
+
+  const bufOpts=[0,5,10,15,20,25];
+  const potCard='<div class="card" data-coach="pot"><h2>Your tax pot</h2>'+
+    '<p class="small muted">What to keep back so the bill is already covered when it lands — and, just as importantly, what is <i>not</i> tax money and is yours to spend.</p>'+
+    '<div class="kpis mt">'+
+      '<div class="kpi good"><div class="v">'+Math.round(pot.rate*100)+'%</div><div class="l">of everything you’re paid, set aside</div></div>'+
+      '<div class="kpi"><div class="v">'+money(pot.target)+'</div><div class="l">should be put by today</div></div>'+
+    '</div>'+
+    '<div class="acc-work" style="margin-top:12px">'+
+      '<div>Tax on what you’ve earned so far in '+esc(pot.ty)+' — <b>'+money(pot.earned)+'</b></div>'+
+      (pot.committed>0?'<div>Still owed on earlier tax years — <b>'+money(pot.committed)+'</b></div>':'')+
+      '<div>Your buffer at '+cfg.bufferPct+'% — <b>'+money(pot.buffer)+'</b></div>'+
+      '<div style="border-top:1px solid var(--line);margin-top:5px;padding-top:5px"><b>Target today — '+money(pot.target)+'</b></div>'+
+      '<div class="small muted" style="margin-top:5px">Tax on money you have not earned yet is deliberately not in this. '+infoLink("potfloor","Why")+'</div>'+
+    '</div>'+
+    '<label style="margin-top:16px">Your buffer</label>'+
+    '<div class="seg" id="bufSeg" style="display:inline-flex;flex-wrap:wrap">'+
+      bufOpts.map(p=>'<button data-b="'+p+'" class="'+(cfg.bufferPct===p?"on":"")+'">'+p+'%</button>').join("")+'</div>'+
+    '<div class="row mt" style="gap:8px;align-items:center"><span class="small muted">or set your own</span>'+
+      '<input type="number" min="0" max="100" step="1" id="bufIn" value="'+esc(cfg.bufferPct)+'" style="max-width:110px;margin:0"></div>'+
+    '<p class="prev">A buffer is what makes the rest of your income genuinely yours. '+infoLink("potbuffer","How much is enough")+'</p>'+
+    '<label style="margin-top:16px">What’s actually in your tax account?</label>'+
+    '<div class="row" style="gap:8px;align-items:center">'+
+      '<input type="number" min="0" step="1" id="potBal" placeholder="Not recorded" value="'+(cfg.balance==null?"":esc(cfg.balance))+'" style="margin:0">'+
+      '<button class="btn sec sm" id="potBalSave">Save</button></div>'+
+    '<p class="prev">'+(cfg.balanceAt?'Last updated '+fmtD(cfg.balanceAt)+'. ':'')+'Optional — it only ever tells you where you stand. Nothing here moves any money.</p>'+
+    (pot.balance!=null
+      ? '<div class="vmsg '+(pot.vsFloor<0?'err':pot.over<0?'warn':'ok')+'" style="margin-top:12px">'+
+        (pot.vsFloor<0
+          ? '⚠️ <b>'+money(-pot.vsFloor)+' short.</b> You have '+money(pot.balance)+' put by against '+money(pot.floor)+' of tax you have already earned — before any buffer.'
+          : pot.over<0
+          ? '<b>Covered, but no buffer left.</b> '+money(pot.balance)+' put by covers the '+money(pot.floor)+' you owe on what you have earned; you are '+money(-pot.over)+' below your own '+cfg.bufferPct+'% cushion.'
+          : '✓ <b>'+money(pot.over)+' more than you need.</b> '+money(pot.balance)+' put by against a target of '+money(pot.target)+', buffer included. That surplus is not tax money.')+
+        (pot.next&&pot.vsNext!=null?'<div class="small" style="margin-top:6px;font-weight:600">By '+fmtD(pot.next.due)+' you need '+money(pot.byNext)+' — '+(pot.vsNext>=0?'you are '+money(pot.vsNext)+' ahead of that already.':money(-pot.vsNext)+' still to put aside.')+'</div>':'')+
+        '</div>'
+      : (pot.next?'<div class="vmsg ok" style="margin-top:12px">Next out: <b>'+money(pot.byNext)+'</b> by <b>'+fmtD(pot.next.due)+'</b>.</div>':''))+
+    '<div class="acc-work" style="margin-top:10px"><div>At this rate '+esc(pot.ty)+'’s own tax comes to about <b>'+money(pot.projected)+'</b>, so the pot needs roughly <b>'+money(pot.yearEnd)+'</b> put by for it by 5 April '+(parseInt(pot.ty)+1)+'.</div>'+
+      '<div class="small muted" style="margin-top:5px">Setting aside '+Math.round(pot.rate*100)+'% of every payment as it arrives gets you there without ever having to think about it again.</div></div>'+
+    '</div>';
+
+  const dueCard='<div class="card" data-coach="due"><h2>What HMRC will ask for</h2>'+
+    '<p class="small muted">One line per date the money actually leaves your account. A single 31 January is usually <b>two things at once</b>: the balancing payment that finishes one tax year, and the first instalment towards the next. '+infoLink("balancing","What these are")+'</p>'+
+    (due.length?'<div style="padding:0 2px">'+due.map(rowHTML).join("")+'</div>'
+      :'<p class="muted small">Nothing due — no tax year has produced a bill yet.</p>')+
+    driftMsg+
+    (unknown.length?'<details class="dz" style="margin-top:12px"><summary>'+unknown.length+' older date'+(unknown.length===1?'':'s')+' the app has no record of</summary>'+
+      '<p class="small muted" style="margin-top:6px">These fell due before you started keeping track here, so the app assumes they were paid and leaves them out of the pot. Tick them off if you want the record to be complete — or open one and say it is still owed, and it will be counted.</p>'+
+      '<div style="padding:0 2px">'+unknown.map(rowHTML).join("")+'</div></details>':'')+
+    (settled.length?'<details class="dz" style="margin-top:12px"><summary>'+settled.length+' payment'+(settled.length===1?'':'s')+' already made</summary>'+
+      '<div style="padding:0 2px">'+settled.map(rowHTML).join("")+'</div></details>':'')+
+    '<p class="prev">Tap a date for the working, or to tick it off once you have paid.</p></div>';
+
+  /* Years that have ended: the estimate against what HMRC actually assessed. */
+  const done=taxPlanYears().filter(y=>tyBounds(y).end<t).reverse();
+  const actRow=y=>{const L=taxLiability(y), rec=taxYearRec(y)||{};
+    const gap=(L.src==="actual")?(L.total-L.estimate):0;
+    return '<div class="list-item" data-act="'+esc(y)+'"><div class="li-main">'+
+      '<div class="li-title">'+esc(y)+(rec.filed?' <span class="chip s">filed</span>':'')+(L.src==="actual"?' <span class="chip y">🗄 from HMRC</span>':'')+'</div>'+
+      '<div class="li-sub">'+(L.src==="actual"
+        ? 'Assessed '+money(L.total)+' · the app estimated '+money(L.estimate)+(Math.abs(gap)>=1?' ('+(gap>0?'+':'−')+money(Math.abs(gap))+')':' — spot on')
+        : 'Estimated '+money(L.estimate)+' · nothing entered from HMRC yet')+'</div></div>'+
+      '<div class="li-right"><span class="small muted">'+(L.src==="actual"?'edit':'enter')+' ›</span></div></div>';};
+  const actCard='<div class="card"><h2>What HMRC actually said</h2>'+
+    '<p class="small muted">Until a return is filed everything here is the app’s own estimate. Once you have your tax calculation, put the real figure in and every number above switches to it. '+infoLink("actuals","When to do this")+'</p>'+
+    (done.length?'<div style="padding:0 2px">'+done.map(actRow).join("")+'</div>'
+      :'<p class="muted small">No tax year has finished yet.</p>')+
+    '</div>';
+
+  host.innerHTML=potCard+dueCard+actCard;
+  wireInfo(host);
+  host.querySelectorAll("[data-due]").forEach(n=>n.onclick=()=>taxDueSheet(n.dataset.due));
+  host.querySelectorAll("[data-act]").forEach(n=>n.onclick=()=>taxActualSheet(n.dataset.act));
+  const pc=host.querySelector("#pyClaim");
+  if(pc)pc.onclick=e2=>{e2.stopPropagation();poaClaimSheet(curTaxYear());};
+  const saveBuf=async v=>{const n=Math.max(0,Math.min(100,Math.round(+v||0)));
+    settings().taxPot=settings().taxPot||{};settings().taxPot.bufferPct=n;
+    await commit("Tax pot buffer: "+n+"%");go("tax",{keepScroll:true});};
+  host.querySelectorAll("#bufSeg button").forEach(b=>b.onclick=()=>saveBuf(b.dataset.b));
+  const bi=host.querySelector("#bufIn"); if(bi)bi.onchange=()=>saveBuf(bi.value);
+  const bs=host.querySelector("#potBalSave");
+  if(bs)bs.onclick=async()=>{const raw=host.querySelector("#potBal").value.trim();
+    const tp=settings().taxPot=settings().taxPot||{};
+    if(raw===""){delete tp.balance;delete tp.balanceAt;await commit("Tax pot balance cleared");toast("Cleared");}
+    else{const n=+raw; if(isNaN(n)||n<0){toast("Enter an amount");Sfx.error();return;}
+      tp.balance=n;tp.balanceAt=isoD(t);await commit("Tax pot balance: "+gbp(Math.round(n)));toast("Saved");Sfx.pop();}
+    go("tax",{keepScroll:true});};
+}
+/* Is this year running materially away from the instalments last year set? Only speaks up when
+   the gap is both proportionally large and worth acting on in cash terms -- a nudge on a 30
+   pound drift is noise, and noise is what stops people reading the ones that matter. */
+function poaDriftNote(ty){
+  const p=poaTowards(ty);
+  if(!(p.each>0))return null;
+  const L=taxLiability(ty);
+  if(L.status==="future")return null;
+  const set=p.each*2, exp=L.poa;
+  if(set<=0)return null;
+  const diff=exp-set;
+  if(Math.abs(diff)/set<0.25||Math.abs(diff)<300)return null;
+  return {diff,set,exp,over:diff<0,claimable:diff<0&&p.src!=="claim"};
+}
+/* One due date, everything behind it, and the one action that belongs to it: ticking it off. */
+function taxDueSheet(iso){
+  const row=taxTimeline().find(r=>r.iso===iso); if(!row)return;
+  const body=el('<div></div>'), t=today();
+  const money=x=>gbp(Math.round(x));
+  const days=Math.round((row.due-t)/86400000);
+  const poaPart=row.parts.find(p=>p.kind!=="balancing");
+  body.innerHTML='<div class="vmsg '+(row.state==="paid"?'ok':row.state==="unknown"?'':days<0?'err':days<=60?'warn':'ok')+'">'+
+      (row.state==="paid"?'✓ Recorded as paid'+(row.paid.date?' on '+fmtD(row.paid.date):'')+(row.paid.amount!=null?' — '+money(row.paid.amount):'')
+        :row.state==="unknown"?'This fell due on '+fmtD(row.due)+', before the app was keeping track. It is assumed paid and left out of your pot until you say otherwise.'
+        :days<0?'⚠️ '+(-days)+' day'+(days===-1?'':'s')+' past the due date'
+        :'Due in '+days+' day'+(days===1?'':'s'))+'</div>'+
+    '<div class="grp-h">What this date is made of</div>'+
+    '<table>'+row.parts.map(p=>trow(esc(taxPartLabel(p))+(p.src==="actual"?' <span class="chip y">from HMRC</span>':p.src==="claim"?' <span class="chip f">reduced</span>':''),
+        (p.amount<0?'−':'')+money(Math.abs(p.amount)))).join("")+
+      trow('<b>Total</b>','<b>'+money(row.total)+'</b>',true)+'</table>'+
+    (row.parts.length>1?'<p class="small muted">Two different tax years, one payment. That is normal, and it is why January is the month that catches people out. '+infoLink("balancing","How this works")+'</p>':'')+
+    (poaPart?'<p class="small muted">The instalment'+(row.parts.length>1?'':'')+' was set by '+esc(poaPart.from||prevTY(poaPart.ty))+'’s bill, not by how '+esc(poaPart.ty)+' is actually going. '+infoLink("sa303","You can ask to reduce it")+'</p>':'')+
+    '<div class="grp-h" style="margin-top:16px">Tick it off</div>'+
+    (row.state==="paid"
+      ? '<p class="small muted">Marked as paid. This is a record for you — it never changes a tax figure.</p>'+
+        '<button class="btn ghost full" id="tdUn">Not paid after all</button>'
+      : '<label>Date paid</label><input type="date" id="tdDate" value="'+esc(isoD(row.due>t?t:row.due))+'">'+
+        '<label>Amount actually paid</label><input type="number" step="0.01" id="tdAmt" value="'+esc(Math.round(row.total*100)/100)+'">'+
+        '<p class="prev">Enter what really left the account if it differs — the figure above is what the app expected.</p>'+
+        '<button class="btn full mt" id="tdPaid">Mark as paid</button>'+
+        (row.state==="unknown"
+          ? '<button class="btn sec full mt" id="tdOwed">No — this is still owed</button>'+
+            '<p class="prev">Counts it back into your tax pot and puts it at the top of the list.</p>'
+          : (row.rec&&row.rec.unpaid)
+          ? '<p class="prev">You have said this is still owed, so it is counted in your pot. <span class="taxlink" id="tdForget">Undo that</span></p>'
+          : ''))+
+    '<div class="grp-h" style="margin-top:16px">Behind the figures</div>'+
+    [...new Set(row.parts.map(p=>p.kind==="balancing"?p.ty:(p.from||prevTY(p.ty))))].map(y=>
+      '<button class="btn sec full mt" data-ysheet="'+esc(y)+'">How '+esc(y)+'’s tax was worked out</button>').join("");
+  wireInfo(body);
+  body.querySelectorAll("[data-ysheet]").forEach(b=>b.onclick=()=>{closeSheet();taxDetailsSheet(b.dataset.ysheet);});
+  const mk=body.querySelector("#tdPaid");
+  if(mk)mk.onclick=async()=>{
+    const d=body.querySelector("#tdDate").value||isoD(t);
+    const a=+body.querySelector("#tdAmt").value;
+    taxPaidMap()[iso]={date:d,amount:isNaN(a)?null:a};
+    await commit("Tax payment recorded for "+fmtD(row.due));
+    closeSheet();toast("Marked as paid");Sfx.complete();go("tax",{keepScroll:true});};
+  const un=body.querySelector("#tdUn");
+  if(un)un.onclick=async()=>{delete taxPaidMap()[iso];
+    await commit("Tax payment un-ticked for "+fmtD(row.due));
+    closeSheet();toast("Un-ticked");go("tax",{keepScroll:true});};
+  const ow=body.querySelector("#tdOwed");
+  if(ow)ow.onclick=async()=>{taxPaidMap()[iso]={unpaid:true};
+    await commit("Marked "+fmtD(row.due)+" as still owed");
+    closeSheet();toast("Counted in your pot");go("tax",{keepScroll:true});};
+  const fg=body.querySelector("#tdForget");
+  if(fg)fg.onclick=async()=>{delete taxPaidMap()[iso];
+    await commit("Cleared the note on "+fmtD(row.due));
+    closeSheet();go("tax",{keepScroll:true});};
+  openSheet(fmtD(row.due),body);
+}
+/* HMRC's own figures for a finished year. Entering a liability here overrides the estimate
+   everywhere; clearing it hands the year straight back to the estimate. Nothing is guessed for
+   the therapist -- an empty field means "not known", which is not the same as zero. */
+function taxActualSheet(ty){
+  const body=el('<div></div>'), L=taxLiability(ty), rec=taxYearRec(ty)||{};
+  const money=x=>gbp(Math.round(x));
+  const nx=nextTY(ty);
+  body.innerHTML='<p class="small muted">From your <b>tax calculation</b> (the SA302) and your HMRC online account. These replace the app’s estimates for '+esc(ty)+' wherever they appear.</p>'+
+    '<div class="acc-work"><div>The app estimates '+esc(ty)+' at <b>'+money(L.estimate)+'</b> from what you have logged.</div>'+
+      '<div class="small muted" style="margin-top:5px">It cannot see employment income, dividends, rental property, marriage allowance or anything HMRC adjusted itself — which is exactly why this screen exists.</div></div>'+
+    '<label style="margin-top:14px">Total tax due for '+esc(ty)+' (£)</label>'+
+    '<input type="number" step="0.01" min="0" id="taLiab" placeholder="Not entered" value="'+(rec.liability==null?"":esc(rec.liability))+'">'+
+    '<p class="prev">The bottom line of the calculation: income tax, Class 4, Class 2 and student loan together.</p>'+
+    '<label style="margin-top:14px">Each payment on account HMRC set towards '+esc(nx)+' (£)</label>'+
+    '<input type="number" step="0.01" min="0" id="taPoa" placeholder="Leave blank to work it out" value="'+((taxYearRec(nx)||{}).poaSet==null?"":esc((taxYearRec(nx)||{}).poaSet))+'">'+
+    '<p class="prev">One instalment, not both. Leave it blank and the app uses half the liability above, less Class 2 and student loan — which is the rule HMRC applies.</p>'+
+    '<label class="colchk" style="margin-top:14px"><input type="checkbox" id="taFiled"'+(rec.filed?" checked":"")+'> I have filed my '+esc(ty)+' return</label>'+
+    '<label style="margin-top:14px">Note <span class="muted">(optional)</span></label>'+
+    '<input id="taNote" maxlength="120" placeholder="e.g. includes PAYE from the clinic" value="'+esc(rec.note||"")+'">'+
+    '<button class="btn full mt" id="taSave">Save</button>'+
+    (rec.liability!=null?'<button class="btn ghost full mt" id="taClr">Clear and go back to the estimate</button>':'')+
+    '<p class="small muted mt">Recording a figure changes nothing at HMRC. It only makes this app agree with what you have actually been told.</p>';
+  body.querySelector("#taSave").onclick=async()=>{
+    const r=taxYearRecW(ty);
+    const lv=body.querySelector("#taLiab").value.trim();
+    if(lv===""){delete r.liability;delete r.liabilityAt;}
+    else{const n=+lv;if(isNaN(n)||n<0){toast("Enter an amount");Sfx.error();return;}
+      r.liability=n;r.liabilityAt=isoD(today());}
+    const pv=body.querySelector("#taPoa").value.trim();
+    const rn=taxYearRecW(nx);
+    if(pv===""){delete rn.poaSet;delete rn.poaSetAt;}
+    else{const n2=+pv;if(isNaN(n2)||n2<0){toast("Enter an instalment amount");Sfx.error();return;}
+      rn.poaSet=n2;rn.poaSetAt=isoD(today());}
+    r.filed=body.querySelector("#taFiled").checked;
+    const nt=body.querySelector("#taNote").value.trim();
+    if(nt)r.note=nt;else delete r.note;
+    await commit("HMRC figures for "+ty);
+    closeSheet();toast("Saved");Sfx.pop();go("tax",{keepScroll:true});};
+  const cl=body.querySelector("#taClr");
+  if(cl)cl.onclick=async()=>{const r=taxYearRecW(ty);delete r.liability;delete r.liabilityAt;
+    await commit("Cleared HMRC figures for "+ty);
+    closeSheet();toast("Back to the estimate");go("tax",{keepScroll:true});};
+  openSheet("HMRC figures · "+ty,body);
+}
+/* A claim to reduce payments on account (SA303). Recorded here so the timeline and the pot stop
+   asking for money that is not going to be demanded -- with the interest warning attached,
+   because reducing too far is the one way this decision costs real money. */
+function poaClaimSheet(ty){
+  const body=el('<div></div>'), p=poaTowards(ty), L=taxLiability(ty), rec=taxYearRec(ty)||{};
+  const money=x=>gbp(Math.round(x));
+  const suggested=Math.max(0,Math.round(L.poa/2));
+  body.innerHTML='<div class="vmsg warn"><b>Reduce these carefully.</b> If the year ends higher than you claimed, HMRC charges <b>interest on the shortfall from each instalment’s original due date</b> — not from when you eventually pay. '+infoLink("sa303","The full rule")+'</div>'+
+    '<div class="acc-work" style="margin-top:12px">'+
+      '<div>HMRC is asking for <b>'+money(p.each)+'</b> per instalment, set by '+esc(prevTY(ty))+'.</div>'+
+      '<div>'+esc(ty)+' is currently running at about <b>'+money(L.poa)+'</b> of liability that instalments are worked out from.</div>'+
+      '<div class="small muted" style="margin-top:5px">Half of that is '+money(suggested)+' per instalment — a starting point, not a recommendation.</div>'+
+    '</div>'+
+    '<label style="margin-top:14px">Reduced amount per instalment (£)</label>'+
+    '<input type="number" step="0.01" min="0" id="pcAmt" placeholder="'+suggested+'" value="'+(rec.poaClaim==null?"":esc(rec.poaClaim))+'">'+
+    '<label style="margin-top:14px">Why <span class="muted">(for your own records)</span></label>'+
+    '<input id="pcWhy" maxlength="140" placeholder="e.g. cutting back to two days a week" value="'+esc(rec.poaClaimWhy||"")+'">'+
+    '<button class="btn full mt" id="pcSave">Record the claim</button>'+
+    (rec.poaClaim!=null?'<button class="btn ghost full mt" id="pcClr">Withdraw it — back to HMRC’s figure</button>':'')+
+    '<p class="small muted mt"><b>This does not make the claim.</b> You still have to submit form SA303, in your HMRC online account or on the return itself. This only makes the app expect the reduced figure.</p>';
+  body.querySelector("#pcSave").onclick=async()=>{
+    const v=body.querySelector("#pcAmt").value.trim();
+    const n=+v;
+    if(v===""||isNaN(n)||n<0){toast("Enter the reduced instalment");Sfx.error();return;}
+    if(n>p.each){toast("A claim can only reduce them");Sfx.error();return;}
+    const r=taxYearRecW(ty);
+    r.poaClaim=n;r.poaClaimAt=isoD(today());
+    const w=body.querySelector("#pcWhy").value.trim(); if(w)r.poaClaimWhy=w;else delete r.poaClaimWhy;
+    await commit("Claim to reduce payments on account for "+ty);
+    closeSheet();toast("Recorded");Sfx.pop();go("tax",{keepScroll:true});};
+  const cl=body.querySelector("#pcClr");
+  if(cl)cl.onclick=async()=>{const r=taxYearRecW(ty);delete r.poaClaim;delete r.poaClaimAt;delete r.poaClaimWhy;
+    await commit("Withdrew the claim to reduce for "+ty);
+    closeSheet();toast("Withdrawn");go("tax",{keepScroll:true});};
+  wireInfo(body);
+  openSheet("Reduce payments on account · "+ty,body);
+}
+
 function drawMTD(host){
   const ty=curTaxYear(), t=today();
   const rows=mtdQuarters(ty).map(q=>{
@@ -3813,15 +4461,17 @@ function drawAllowances(host){
   const money=x=>gbp(Math.round(x));
   const simpAmt=uohRate(+draft.hours||0), actAmt=uohActualAnnual(draft)/12;
   const amtFor=m=>m==="simplified"?simpAmt:m==="actual"?actAmt:0;
-  /* which tax years to offer: any with sessions, any already set up, plus this one */
+  /* which tax years to offer: any with sessions, any that any per-year setting has touched,
+     plus this one. The strip governs every card on this screen, not just use of home. */
   const years=[...new Set(S.sessions.map(x=>x.date).filter(Boolean).map(d=>taxYear(d))
-    .concat(Object.keys(uohYears())).concat([curTaxYear()]))].sort().reverse();
+    .concat(Object.keys(uohYears())).concat(Object.keys(yearMap("studentLoanYears")))
+    .concat(Object.keys(yearMap("taxRegionYears"))).concat([curTaxYear()]))].sort().reverse();
   /* Newest first, so "‹" (back in time) moves DOWN the strip and "›" moves up it. */
   const yIdx=Math.max(0,years.indexOf(ty));
-  const status=uohYearStatus(ty), prevSrc=uohPrevSource(ty);
+  const status=taxYearStripStatus(ty), prevSrc=uohPrevSource(ty);
   const yearStrip='<div class="uohbar" id="uohBar">'+
     '<button class="uohnav" id="uohPrev" title="Earlier year" aria-label="Earlier tax year"'+(yIdx>=years.length-1?" disabled":"")+'>‹</button>'+
-    '<div class="uohyrs" id="uohYrs">'+years.map(y=>{const st=uohYearStatus(y);
+    '<div class="uohyrs" id="uohYrs">'+years.map(y=>{const st=taxYearStripStatus(y);
       return '<button type="button" class="uohyr'+(y===ty?" on":"")+'" data-yr="'+esc(y)+'">'+
         '<b>'+esc(y)+'</b><span class="st '+st.k+'">'+(st.filed?"filed · ":"")+esc(st.label)+'</span></button>';}).join("")+'</div>'+
     '<button class="uohnav" id="uohNext" title="Later year" aria-label="Later tax year"'+(yIdx<=0?" disabled":"")+'>›</button>'+
@@ -3835,10 +4485,33 @@ function drawAllowances(host){
       '<div class="li-right">'+(isApplied?'<span class="small muted">applied</span>'
         :'<button class="btn sm sec" data-use="'+m+'">Use this</button>')+'</div></div>';
   };
-  host.innerHTML='<div class="card"><h2>Use of home</h2>'+
-    '<p class="small muted">If you see clients or do your admin at home, part of running that home is a business cost. HMRC lets you work it out two ways, and you can pick a different one each tax year.</p>'+
+  /* ===== Student loan, per year =====
+     Which plan you are repaying is a fact about a tax year, not about you for ever. Held as one
+     value it meant the day someone finished repaying, every earlier year's estimate dropped with
+     it -- including years already filed and paid. Same carry-forward as use of home: a year with
+     no entry inherits the last one, so a plan never silently lapses either. */
+  const slInf=yearValue("studentLoanYears",ty,"none"), slKey=SL_PLANS[slInf.v]?slInf.v:"none";
+  const slOwn=yearMap("studentLoanYears")[ty]!=null, slP=SL_PLANS[slKey];
+  const slCard='<div class="card"><h2>Student loan</h2>'+
+    '<p class="small muted">Repayments are collected with your tax in the same January bill, so they belong in the pot \u2014 but they are never part of a payment on account.</p>'+
+    (slP
+      ? '<div class="vmsg ok">\ud83d\udd12 <b>'+esc(slP.n)+'</b> is what '+esc(ty)+' uses \u2014 9% is not deducted until profit passes \u00a3'+slP.thr.toLocaleString("en-GB")+'.'+
+        (slInf.inherited?' <b>Carried forward from '+esc(slInf.from)+'</b>, so it has no setting of its own yet.':'')+'</div>'
+      : '<div class="vmsg">No student loan is being repaid in '+esc(ty)+'.'+(slInf.inherited?' Carried forward from '+esc(slInf.from)+'.':'')+'</div>')+
+    '<label style="margin-top:12px">Plan for '+esc(ty)+'</label>'+
+    '<select id="slSel">'+opts2([["none","No student loan"]].concat(Object.keys(SL_PLANS).filter(k=>k!=="none").map(k=>[k,SL_PLANS[k].n+" \u2014 from \u00a3"+SL_PLANS[k].thr.toLocaleString("en-GB")+" at "+Math.round(SL_PLANS[k].rate*100)+"%"])),slKey)+'</select>'+
+    '<p class="prev">Changing this sets '+esc(ty)+' and every later year. Earlier years keep what they had \u2014 the year you finish repaying, the years you were repaying stay right.</p>'+
+    (slOwn&&slInf.from===ty
+      ? '<p class="small muted mt"><span class="taxlink" id="slClr">Clear '+esc(ty)+'\u2019s own setting and carry the earlier year forward again \u203a</span></p>'
+      : '')+
+    '</div>';
+  const yearCard='<div class="card"><h2>Set by tax year</h2>'+
+    '<p class="small muted">HMRC lets some things change from one year to the next, and once a year is filed its figures should stop moving. Pick a year here \u2014 everything below applies to it, and to later years until you say otherwise.</p>'+
     yearStrip+
-    (status.filed?'<div class="vmsg warn">\ud83d\uddc4 You have marked <b>'+esc(ty)+'</b> as filed. Changing anything below changes figures you have already submitted \u2014 if this is a correction, keep a note of what you changed and why.</div>':'')+
+    (status.filed?'<div class="vmsg warn" style="margin-top:10px">\ud83d\uddc4 You have marked <b>'+esc(ty)+'</b> as filed. Changing anything below changes figures you have already submitted \u2014 if this is a correction, keep a note of what you changed and why.</div>':'')+
+    '</div>';
+  host.innerHTML=yearCard+slCard+'<div class="card"><h2>Use of home</h2>'+
+    '<p class="small muted">If you see clients or do your admin at home, part of running that home is a business cost. HMRC lets you work it out two ways, and you can pick a different one each tax year.</p>'+
     (applied.method&&applied.method!=="none"
       ? '<div class="vmsg ok">\ud83d\udd12 <b>'+esc(applied.method==="simplified"?"Simplified":"Actual costs")+'</b> is what '+esc(ty)+' uses \u2014 '+money(uohMonthlyFor(applied))+' a month, '+money(yearAmt)+' for the year. It is already in your costs and tax estimate.'+
         (inForce.inherited?' <b>Carried forward from '+esc(inForce.from)+'</b> \u2014 it has no figures of its own yet, so editing '+esc(inForce.from)+' would move '+esc(ty)+' too.':'')+'</div>'
@@ -3860,6 +4533,16 @@ function drawAllowances(host){
     '<label class="colchk" style="margin-top:14px"><input type="checkbox" id="uohFiled"'+(status.filed?" checked":"")+'> I have filed my '+esc(ty)+' return</label>'+
     '<p class="prev">Only a reminder to yourself \u2014 it never locks anything or changes a figure.</p>'+
     '</div>';
+  const slx=host.querySelector("#slSel");
+  if(slx)slx.onchange=async()=>{
+    setYearValue("studentLoanYears",ty,slx.value,"studentLoan");
+    await commit("Student loan for "+ty+": "+slx.value);
+    go("tax",{keepScroll:true});};
+  const slc=host.querySelector("#slClr");
+  if(slc)slc.onclick=async()=>{
+    delete yearMap("studentLoanYears")[ty];
+    await commit("Cleared the student loan setting for "+ty);
+    go("tax",{keepScroll:true});};
   const bodyEl=host.querySelector("#uohBody");
   const suggested=uohSessionHours();
   function saveDraft(patch,label){
@@ -4143,6 +4826,7 @@ VIEWS.settings=function(){
      <input type="number" min="0" max="100" step="5" id="cxDna">
      <p class="prev">Set 0 if you don’t charge for these.</p>
    </div>
+   ${feat("tax")?taxRegionCardHTML():""}
    <div class="card"><h2>Features</h2>
      <p class="small muted">Switch off anything you don’t use — it disappears from the app. Nothing is deleted, and you can switch it back on any time.</p>
      <div class="mt" id="setAdvanced"></div>
@@ -4211,10 +4895,14 @@ VIEWS.settings=function(){
    </div></details>
    <details class="sgrp" data-g="help"><summary><span class="sgt">Setup &amp; help</span><span class="sgs">The tour, what’s new, and re-running setup</span></summary><div class="sgb">
    <div class="card"><h2>Setup &amp; help</h2>
-     <p class="small muted">The guided tour explains each tab, how to log a session and how your data is saved. It changes nothing.</p>
+     <p class="small muted">The guided tour points at things on the screen itself rather than describing them over the top — eight short stops on what each tab does, how to log a session and how your data is saved. It changes nothing.</p>
      <p class="small muted"><b>A reminder on notes:</b> the Notes field records <i>whether</i> your notes are written up, not the notes themselves. Keep the clinical record wherever you normally do — this app holds none, which is what keeps exports and receipts safe to hand over.</p>
      <button class="btn sec full" id="setTour">🧭 Replay the guided tour</button>
      <button class="btn sec full mt" id="setNew">✨ What’s new in this update</button>
+     <div class="grp-h" style="margin-top:18px">Tips on new screens</div>
+     <p class="small muted" style="margin:0 0 8px">The first time you open a screen, the app points out the two or three things worth knowing about it, then never again. <span id="tipsSeen"></span></p>
+     <label class="colchk"><input type="checkbox" id="tipsOn"> Show tips on screens I haven’t opened before</label>
+     <button class="btn sec full mt" id="tipsReset">↻ Show all the tips again</button>
      <p class="small muted mt" style="margin-bottom:6px">Re-running first-time setup walks through practice name, colours, features and defaults again — and <b>overwrites</b> them. Your clients, sessions and payments are untouched.</p>
      <button class="btn ghost full" id="setRerun" style="color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent)">↻ Re-run first-time setup…</button>
    </div>
@@ -4249,6 +4937,7 @@ VIEWS.settings=function(){
     out.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>{const ss=S.sessions.find(x=>x._id===li.dataset.id);if(ss)sessionForm(ss);});
     Sfx.error();
   };
+  wireTaxRegion(v);
   v.querySelector("#setNameSave").onclick=async()=>{
     const n=v.querySelector("#setName").value.trim(),t=v.querySelector("#setTag").value.trim();
     if(!n){toast("Enter a practice name");Sfx.error();return;}
@@ -4278,6 +4967,15 @@ VIEWS.settings=function(){
   wireCancelRules(v);
   wireAdvancedMode(v);
   v.querySelector("#setTour").onclick=()=>startTour();
+  const tOn=v.querySelector("#tipsOn"), tSeen=v.querySelector("#tipsSeen");
+  const paintTips=()=>{const c=coachCfg();
+    tOn.checked=c.off!==true;
+    tSeen.textContent=c.seen.length?("You have seen "+c.seen.length+" of "+TIPS.length+"."):"None seen yet.";};
+  paintTips();
+  tOn.onchange=async()=>{coachCfg().off=!tOn.checked;
+    await commit("Screen tips: "+(tOn.checked?"on":"off"));paintTips();toast(tOn.checked?"Tips on":"Tips off");};
+  v.querySelector("#tipsReset").onclick=async()=>{await coachResetTips();paintTips();
+    toast("Tips reset — they’ll show again as you visit each screen");Sfx.pop();};
   v.querySelector("#setNew").onclick=()=>showWhatsNew();
   v.querySelector("#setRerun").onclick=()=>confirmRerunSetup();
   v.querySelector("#setDanger").onclick=()=>dzMenu();
@@ -6388,6 +7086,9 @@ async function setupSave(w,opts){
   sg.onboarded=true; sg.onboardedAt=isoD(today());
   /* Never cleared here: a re-run of setup does not un-acknowledge something already agreed to. */
   if(w.taxAck&&!sg.taxAck){sg.taxAck=true;sg.taxAckAt=isoD(today());}
+  /* Dated from the CURRENT tax year, never retrospectively: a re-run of setup must not move the
+     bands an earlier year was assessed under. */
+  if(w.region&&w.region!==taxRegionFor(curTaxYear()))setYearValue("taxRegionYears",curTaxYear(),w.region,"taxRegion");
   const rv=sg.reveal=sg.reveal||{mode:"all",shown:[]};
   rv.mode=(w.depth==="simple")?"simple":"all";
   if(!Array.isArray(rv.shown))rv.shown=[];
@@ -6490,12 +7191,19 @@ function stepTax(w){return{emoji:"🧾", h:"About the tax figures",
   validate(){if(!w.taxAck){toast("Tick the box to continue");Sfx.error();return false;}},
   mount(host){
     host.innerHTML=ovPoints(TAX_DISCLAIMER)+
+      '<label style="margin-top:18px">Where do you pay income tax?</label>'+
+      '<div class="seg" id="spReg" style="display:inline-flex">'+
+        '<button data-r="rUK" class="'+(w.region==="rUK"?"on":"")+'">England, Wales or NI</button>'+
+        '<button data-r="scotland" class="'+(w.region==="scotland"?"on":"")+'">Scotland</button></div>'+
+      '<p class="prev">Scotland has its own income tax bands. Change it any time in ⚙ Settings — it applies from the tax year you change it in, so earlier years stay as they were.</p>'+
       '<label class="row" style="align-items:flex-start;gap:10px;margin-top:16px;cursor:pointer">'+
         '<input type="checkbox" id="spTaxAck"'+(w.taxAck?" checked":"")+' style="margin-top:3px">'+
         '<span>I understand these figures are estimates for my own planning, not tax advice</span>'+
       '</label>'+
       '<div class="ovnote">You can read this again any time in <b>⚙ Settings › About</b>.</div>';
     host.querySelector("#spTaxAck").onchange=e=>{w.taxAck=e.target.checked;};
+    host.querySelectorAll("#spReg button").forEach(b=>b.onclick=()=>{w.region=b.dataset.r;
+      host.querySelectorAll("#spReg button").forEach(x=>x.classList.toggle("on",x===b));Sfx.tick();});
   }};}
 
 function startSetup(opts){
@@ -6528,6 +7236,7 @@ function startSetup(opts){
        the one a brand-new user wants. Anyone who is not fresh is never asked. */
     depth:fresh?"simple":"all",
     rate:defaultRate(), pension:pensionPcm(), taxAck:!!sg.taxAck,
+    region:taxRegionFor(curTaxYear()),
     bkDays:backupDaysThreshold(), bkActs:backupActsThreshold(),
     rtNotes:retentionCfg().notesYears, rtFin:retentionCfg().financeYears,
     cpdTarget:cpdTarget(),
@@ -6574,12 +7283,29 @@ function startSetup(opts){
    button when a flow supplies one, and nothing else dismisses the overlay (no backdrop click, no
    Escape), so the Continue/Got it button is the only way past it.
    Bump WHATS_NEW and rewrite whatsNewSteps() for the next release. */
-const WHATS_NEW=2;
+const WHATS_NEW=3;
 function whatsNewSeen(){try{return +localStorage.getItem("tt_whatsnew")||0;}catch(e){return 0;}}
 function markWhatsNewSeen(){try{localStorage.setItem("tt_whatsnew",String(WHATS_NEW));}catch(e){}}
 function whatsNewDue(){return whatsNewSeen()<WHATS_NEW;}
 function whatsNewSteps(){
   const st=[];
+  st.push({emoji:"\ud83d\udca1", h:"Help that points at things", sub:"The tour used to describe the app from behind a full-screen card. It now dims the page and highlights whatever it is talking about.",
+    html:ovPoints([
+      ["\ud83e\udded","A shorter tour","Eight stops on the things worth knowing on day one, on the real screens. Replay it any time from \u2699 Settings."],
+      ["\ud83d\udcd8","The rest arrives when it matters","Open a screen for the first time and it points out the two or three things worth knowing about <i>it</i> \u2014 then never again. Switch them off or replay them in \u2699 Settings \u203a Setup & help."]
+    ])});
+  st.push({emoji:"\ud83e\uded9", h:"Pot & payments", sub:"A new section on the Tax tab, and the answer to \u201cwhat exactly am I paying in January?\u201d",
+    html:ovPoints([
+      ["\ud83d\udcc5","Every payment on one list, by date","A single 31 January is usually two different years\u2019 money \u2014 the balancing payment finishing one year and the first instalment towards the next. Now itemised on the date it actually leaves your account, and tickable once paid."],
+      ["\ud83d\udee0","A buffer you choose","The pot target is tax you have <b>already</b> earned, plus anything still owed on earlier years, plus a buffer you set. Tell it what is really in the account and it says whether you are ahead or short."],
+      ["\ud83d\uddc4","HMRC\u2019s figures beat the estimate","Filed your return? Enter the liability from your tax calculation and the instalments HMRC set, and every figure switches to the real ones. You can record a claim to reduce your payments on account too."],
+      ["\ud83d\udd27","A projection that was showing zero","The set-aside percentage and the projected tax on the pot were worked out from tax to date rather than the full year, so early in the year they read 0%. Fixed."]
+    ])});
+  st.push({emoji:"\ud83d\udd12", h:"Settings that belong to a tax year", sub:"Two things that used to apply to every year at once now change from a date, like use of home already did.",
+    html:ovPoints([
+      ["\ud83c\udf93","Student loan","Set per tax year in <b>Tax \u203a Allowances</b>. The year you finish repaying, the years you were repaying keep the repayments you actually made."],
+      ["\ud83c\udff4","Where you pay income tax","Moved to \u2699 Settings, where it belongs \u2014 it is a question you answer once. Changing it applies from the current tax year onwards, so moving to or from Scotland never rewrites a return you have filed."]
+    ])});
   st.push({emoji:"\u2728", h:"The app has been reorganised", sub:"Two tabs became four sections, and the tax side got a lot more capable. Two minutes and you\u2019ll know where everything went.",
     html:ovPoints([
       ["\ud83e\udded","New tabs","<b>Practice</b> holds clients, rooms and supervision. <b>Money</b> is the day-to-day. <b>Tax</b> is new."],
@@ -6632,79 +7358,257 @@ function showWhatsNew(){
     onDone:()=>{markWhatsNewSeen();toast("You can replay this any time from ⚙ Settings");}});
 }
 
-/* ---- guided tour ---- */
+/* ============================================================================
+   On-page coaching
+   ----------------------------------------------------------------------------
+   The tour used to be eight full-screen cards describing things the reader
+   could not see, because the card was on top of them. This points at the real
+   control instead: a spotlight cut out of a dimmed page, with a small bubble
+   beside it. Everything the bubble names is on screen while it is named.
+
+   Steps with nothing to point at -- "your notes don't live here", "use client
+   codes, not names" -- are ideas rather than controls, and are shown centred
+   with the page dimmed behind. Highlighting an arbitrary card to give an idea
+   somewhere to live would be worse than not highlighting anything.
+
+   The second half of the problem was volume: everything about every tab, up
+   front, before any of it meant anything. So the tour is now the handful of
+   things worth knowing on day one, and the per-screen detail waits until the
+   reader first opens that screen -- see TIPS.
+   ============================================================================ */
+let _coach=null,_coachRaf=0;
+function coachRoot(){return document.getElementById("coach");}
+function coachOn(){return !!_coach;}
+/* Which coaching has been shown. In settings, not localStorage: it travels with a backup, so
+   moving to a new phone does not replay every tip the therapist has already read and dismissed. */
+function coachCfg(){const sg=settings();const c=sg.coach=sg.coach||{};
+  if(!Array.isArray(c.seen))c.seen=[];return c;}
+function coachSeen(k){return coachCfg().seen.indexOf(k)>=0;}
+function coachMarkSeen(k){const c=coachCfg();if(c.seen.indexOf(k)<0){c.seen.push(k);return true;}return false;}
+function coachTipsOff(){return coachCfg().off===true;}
+
+function coachStart(steps,opts){
+  if(!steps||!steps.length)return;
+  opts=opts||{};
+  _coach={steps:steps.slice(),i:-1,opts,route:null};
+  const r=coachRoot();if(!r)return;
+  r.classList.add("show");
+  r.querySelector(".ccatch").onclick=()=>coachNext();
+  window.addEventListener("resize",coachTick);
+  window.addEventListener("scroll",coachTick,{passive:true});
+  coachGo(0);
+}
+function coachClose(done){
+  const r=coachRoot();if(r)r.classList.remove("show");
+  window.removeEventListener("resize",coachTick);
+  window.removeEventListener("scroll",coachTick);
+  const o=_coach&&_coach.opts; _coach=null;
+  if(o&&o.onEnd)o.onEnd(!!done);
+}
+function coachNext(){if(!_coach)return;
+  if(_coach.i>=_coach.steps.length-1)return coachClose(true);
+  coachGo(_coach.i+1);}
+function coachBack(){if(_coach&&_coach.i>0)coachGo(_coach.i-1);}
+/* Reposition without animating. Sliding the spotlight is right when the step changes and wrong
+   while the page is moving under it: every scroll event restarted the 0.3s transition from
+   wherever it had got to, so the mask chased the target for as long as the scroll lasted and
+   never arrived. */
+function coachTick(){if(!_coach||_coachRaf)return;
+  _coachRaf=requestAnimationFrame(()=>{_coachRaf=0;coachPlace(false);});}
+function coachGo(i){
+  if(!_coach)return;
+  i=Math.max(0,Math.min(_coach.steps.length-1,i));
+  _coach.i=i;
+  const st=_coach.steps[i];
+  /* Only re-route when the destination actually changes: re-rendering the tab on every step
+     inside the same tab makes the whole screen flash under the spotlight. */
+  const want=st.tab?(st.tab+"|"+(st.seg||"")):null;
+  const moved=want&&want!==_coach.route;
+  if(moved){_coach.route=want;try{go(st.tab,{seg:st.seg});}catch(err){}}
+  coachRender();
+  const settle=()=>{coachScroll();setTimeout(coachPlace,moved?340:260);};
+  if(moved)setTimeout(settle,60);else settle();
+}
+function coachRender(){
+  const st=_coach.steps[_coach.i], r=coachRoot();
+  const last=_coach.i===_coach.steps.length-1;
+  r.querySelector(".cbub").innerHTML=
+    '<div class="cbh"><span class="ce">'+(st.emoji||"💡")+'</span><b>'+esc(st.h||"")+'</b></div>'+
+    '<div class="cbb">'+(st.body||"")+'</div>'+
+    '<div class="cbf"><span class="cdots">'+_coach.steps.map((_,n)=>
+        '<i class="'+(n===_coach.i?"on":(n<_coach.i?"done":""))+'"></i>').join("")+'</span>'+
+      (last?'':'<button class="cbtn ghost" data-c="skip">'+(_coach.opts.skipLabel||"Skip")+'</button>')+
+      (_coach.i>0?'<button class="cbtn" data-c="back">Back</button>':'')+
+      '<button class="cbtn on" data-c="next">'+(last?(_coach.opts.doneLabel||"Got it"):"Next")+'</button></div>';
+  r.querySelectorAll(".cbub [data-c]").forEach(b=>b.onclick=ev=>{ev.stopPropagation();
+    const a=b.dataset.c;
+    if(a==="next")coachNext();else if(a==="back")coachBack();else coachClose(false);});
+}
+function coachTarget(){const st=_coach&&_coach.steps[_coach.i];
+  if(!st||!st.sel)return null;
+  try{return document.querySelector(st.sel);}catch(err){return null;}}
+/* Pinned chrome -- the tab bar, the FAB, the header -- is already on screen by definition, and
+   asking the browser to centre it scrolls the page for no reason at all. */
+function coachPinned(node){
+  for(let n=node;n&&n!==document.body;n=n.parentElement){
+    const p=getComputedStyle(n).position;
+    if(p==="fixed"||p==="sticky")return true;
+  }
+  return false;
+}
+function coachScroll(){
+  const tgt=coachTarget(); if(!tgt||coachPinned(tgt))return;
+  const r=tgt.getBoundingClientRect(), vh=window.innerHeight;
+  /* Only scroll when it is actually out of the comfortable band -- a bubble that jumps the page
+     on every step is more disorienting than one that leaves it alone. */
+  if(r.top<80||r.bottom>vh-120)tgt.scrollIntoView({block:"center",behavior:"smooth"});
+}
+function coachPlace(animate){
+  if(!_coach)return;
+  const r=coachRoot(), mask=r.querySelector(".cmask"), bub=r.querySelector(".cbub");
+  r.classList.toggle("noanim",animate===false);
+  const vw=window.innerWidth, vh=window.innerHeight;
+  const tgt=coachTarget();
+  /* A selector that finds nothing degrades to the centred form rather than pointing at the
+     wrong thing or vanishing -- a feature switched off is exactly this case. */
+  r.classList.toggle("center",!tgt);
+  const bw=bub.offsetWidth, bh=bub.offsetHeight;
+  if(!tgt){
+    mask.style.top=(vh/2)+"px";mask.style.left=(vw/2)+"px";
+    mask.style.width="0px";mask.style.height="0px";
+    bub.style.left=Math.max(12,(vw-bw)/2)+"px";
+    bub.style.top=Math.max(12,(vh-bh)/2)+"px";
+    return;
+  }
+  const b=tgt.getBoundingClientRect(), pad=6;
+  const top=Math.max(2,b.top-pad), left=Math.max(2,b.left-pad);
+  const w=Math.min(vw-4,b.width+pad*2), h=Math.min(vh-4,b.height+pad*2);
+  mask.style.top=top+"px";mask.style.left=left+"px";
+  mask.style.width=w+"px";mask.style.height=h+"px";
+  const gap=12;
+  let bt=top+h+gap;                                  /* below by preference */
+  if(bt+bh>vh-12){                                   /* no room: try above */
+    const above=top-gap-bh;
+    bt=(above>=12)?above:Math.max(12,Math.min(vh-bh-12,bt));
+  }
+  bub.style.top=bt+"px";
+  bub.style.left=Math.min(Math.max(12,left+w/2-bw/2),Math.max(12,vw-bw-12))+"px";
+}
+
+/* ---- the tour: what is worth knowing before you have used any of it ---- */
 function tourSteps(){
   const st=[];
-  st.push({emoji:"🧭", h:"A quick tour", sub:"Seven or eight screens on what each tab does, how to enter data, and how it’s saved. You can leave at any point with <b>Skip</b>.",
-    html:ovPoints([["⏱","Two minutes","Nothing here changes your data."],
-      ["🔁","Repeatable","⚙ Settings › <b>Replay guided tour</b>, whenever you want it."]])});
-  st.push({emoji:"🏠", h:"Home", sub:"Where you land, and usually all you need.",
-    html:ovPoints([
-      ["💷","Four figures at the top","Billed and received this tax year, what’s outstanding right now, and how many sessions are in the next 7 days. Tap the last two to jump straight to that list."],
-      ["🔔","Needs attention","Overdue payments, sessions missing notes, clients you haven’t seen in a while — the short list of what to chase."],
-      ["⌨","Quick add","Type <span class=\"ovkey\">AB tue 14:00 paid</span> and it fills in the rest from that client’s last session."],
-      ["📅","Coming up","Everything booked ahead, with a flag if the room isn’t booked yet."]])});
-  st.push({emoji:"✍️", h:"Logging a session", sub:"Tap the round <b>＋</b> button, or ＋ New session on Home. The fields, in order:",
-    html:ovPoints([
-      ["🔤","Client","Pick from your list. Their fee and usual room fill themselves in."],
-      ["#️⃣","Session number","Auto-counts up per client, so you can always see how far into the work you are."],
-      ["📆","Date & time","Log ahead as well as behind — future sessions show under Coming up and count towards nothing until the date passes."],
-      ["🚪","Room & mode","In person or online, and which location. The room cost is picked up automatically from that room’s dated cost."],
-      ["💰","Paid date","Leave it empty until the money actually arrives. That’s what drives “outstanding”, so it’s worth being honest with it."],
-      ["📝","Notes done?","A <b>marker</b>, not the notes — see the next screen. Tick <b>late cancellation</b> rather than deleting the session; it keeps your attendance figures accurate and is excluded from clinical hours."]])});
-  st.push({emoji:"🗒", h:"This isn’t where your notes live", sub:"Worth being clear about, because the field is called Notes.",
-    html:ovPoints([
-      ["✅","It tracks <i>whether</i> notes are done","A session counts as incomplete until you mark it, and the app chases the ones outstanding."],
-      ["🔐","Your actual notes stay where they are","Notebook, encrypted files, case-management system — wherever you already keep them. This app holds no clinical record."],
-      ["🧾","So nothing confidential leaves in an export","Statements and CSVs carry dates, fees and attendance against a client code, and nothing else."]])});
-  st.push({emoji:"🔒", h:"Client codes, not names", sub:"The single most important habit.",
-    html:ovPoints([
-      ["🆔","Use a short code","Initials, or anything only you can decode — <b>AB</b>, <b>JM2</b>. Never a full name."],
-      ["🗝","Keep the key elsewhere","Your record of who each code belongs to belongs in your normal confidential notes, not in this app."],
-      ["🧾","Receipts stay coded","A printed statement identifies the client by code only, so it can be handed over safely."]])});
-  st.push({emoji:"👥", h:"Practice", sub:"Everything clinical in one tab: who you see, where, and the supervision behind it.",
-    html:ovPoints([
-      ["📇","Clients","Add someone with their code, status and starting fee. Tap a client for their profile — attendance, income, session history, receipts."],
-      ["💷","Fees change from a date","Use <b>Change rate</b> rather than editing the number. Past sessions keep the fee you actually charged."],
-      ["📈","Trends","Retention funnel, attendance against expected frequency, and how long people stay."],
-      ["🚪","Rooms","Add or rename locations and set what each costs — per session, or a flat monthly rent if that’s how you pay. Also dated, same as fees."]])});
-  if(feat("supervision"))st.push({emoji:"🗣", h:"Supervision & CPD", sub:"Inside <b>Practice > Supervision</b>. Log each session with its cost and who you discussed.",
-    html:ovPoints([
-      ["🧾","Costs come off your profit","Supervision is a business expense, so it’s deducted before the tax estimate."],
-      ["👀","Discussion recency","Insights shows how long since each active client was last taken to supervision — useful for spotting who’s been quietly missed."]].concat(
-      feat("peer")?[["👥","Peer supervision","Logged separately on its own sub-tab. Those hours add to your total accreditation hours but never to the 1:6 ratio — that’s the rule, and keeping the logs apart is what makes it visible."]]:[],
-      feat("accreditation")?[["📜","Accreditation hours","Clinical vs supervision hours and the 1:6 ratio for BACP Form 3A. Logged sessions count as clinical hours; training and placement totals you type in yourself."]]:[]))});
-  if(feat("money"))st.push({emoji:"💷", h:"Money & tax", sub:"Everything money. Day-to-day on <b>Money</b>, the tax year on <b>Tax</b>.",
-    html:ovPoints([
-      ["📊","Per tax year","Billed, received, outstanding and net after room costs, supervision and your business costs."]].concat(
-      feat("finances")?[["🧮","Costs & other income","Log insurance, wifi, CPD — one-off or monthly — and income that isn’t a session, like subletting a room. Both feed the net and tax figures. Income from separate work (tutoring, a second job) can be marked as such and is kept out of the practice’s figures."]]:[],[
-      ["🧮","Tax estimate","Income Tax plus Class 4 (and Class 2 before 2024/25) for a sole trader. Mid-year it shows a pro-rata projection — tap the figure for the full working."],
-      ["🏦","Take-home & forecast","What lands in your pocket monthly, before and after pension, plus a year-end projection from your current run-rate."],
-      ["⚠️","An estimate, not advice","It works from what you’ve logged here and assumes the standard allowances. Treat it as a guide for setting money aside, not as a tax return."]]))});
-  st.push({emoji:"💾", h:"How your data is saved", sub:"The part worth remembering.",
-    html:ovPoints([
-      ["⚡","Saved the moment you tap Save","Straight into this device’s storage. There’s no separate “save file” step and nothing to lose by closing the app."],
-      ["↩︎","Undo and restore points","Settings › <b>Undo last change</b> reverts the last thing you did. <b>Restore points</b> lists the last 120 changes to roll back to."],
-      ["⤓","Back up regularly","Settings › <b>Export backup (.json)</b>. That one file is everything. Keep it somewhere that isn’t this device — iCloud, Drive, or email it to yourself."],
-      ["🔐","Encrypt it if you like","A passphrase makes the backup unreadable without it, so cloud storage is fine. On desktop Chrome or Edge it can re-save silently after every change."],
-      ["🩺","Data health","Settings › <b>Check data</b> sweeps every session for clashes, duplicate numbers, payment-date slips and rate mismatches."]])});
-  st.push({emoji:"📲", h:"Put it on your Home Screen", sub:"It behaves like a normal app once installed — full screen, offline, its own icon.",
-    html:ovPoints([
-      ["","iPhone / iPad","Share <b>⤴</b> → <b>Add to Home Screen</b>."],
-      ["🤖","Android","Chrome menu <b>⋮</b> → <b>Install app</b> / Add to Home screen."],
-      ["💻","Desktop","The install icon at the right-hand end of the address bar."]])});
-  st.push({emoji:"✅", h:"You’re ready", sub:"Start by adding a client, then log your first session.",
-    html:ovPoints([
-      ["＋","The round button","Bottom-right, on Home and Sessions — log a session from anywhere."],
-      ["⚙","Settings","Top-right. Appearance, features, backups, data health, and this tour again."],
-      ["💡","One habit","Back up after each week’s catch-up. It takes five seconds and it’s the whole safety net."]])});
+  st.push({emoji:"🧭",h:"A quick tour",tab:"home",
+    body:"Eight short stops on the screens themselves — the app dims and points at whatever is being described. <b>Nothing here changes your data</b>, and you can leave at any point."});
+  st.push({emoji:"🗂",h:"The tabs",tab:"home",sel:"#tabs",
+    body:"<b>Home</b> is where you land. <b>Sessions</b> is every session and the lists to clear. <b>Practice</b> holds clients, rooms and supervision."+
+      (feat("money")||feat("tax")?" <b>Money</b> and <b>Tax</b> are the financial side.":"")+
+      "<p>Each one explains itself the first time you open it, so there is nothing to memorise here.</p>"});
+  st.push({emoji:"💷",h:"Your four numbers",tab:"home",sel:'[data-coach="home-kpis"]',
+    body:"Billed and received this tax year, what is outstanding right now, and how many sessions are in the next seven days. <b>Tap the last two</b> to jump straight to that list."});
+  st.push({emoji:"＋",h:"Logging a session",tab:"home",sel:"#fab",
+    body:"This button, on Home and Sessions. Pick the client and the fee and their usual room fill themselves in. <p>Log ahead as well as behind — a future session shows under <b>Coming up</b> and counts towards nothing until the date passes.</p>"});
+  st.push({emoji:"🗒",h:"This isn’t where your notes live",
+    body:"The <b>Notes</b> field on a session is a tick — written up, or still outstanding. The app chases the ones you have not done and counts a session as incomplete until you mark it."+
+      "<p>Your actual clinical record stays wherever you already keep it. That is what makes an export or a receipt from here safe to hand over.</p>"});
+  st.push({emoji:"🔒",h:"Client codes, not names",
+    body:"Store people as short codes only — <b>AB</b>, <b>JM2</b>. Your record of who each code belongs to belongs in your normal confidential notes, not in this app."+
+      "<p>A printed statement then identifies the client by code alone, so it can go to an insurer without a second thought.</p>"});
+  st.push({emoji:"⚙",h:"Backups live here",tab:"home",sel:"#settingsBtn",
+    body:"Settings holds <b>Export backup (.json)</b> — one file with everything in it. Keep it somewhere that is not this device."+
+      "<p>Also here: undo, restore points, a data health check, and this tour again.</p>"});
+  st.push({emoji:"✅",h:"That’s the lot",
+    body:"Everything else explains itself as you go: open a screen for the first time and it points out the two or three things worth knowing about it."+
+      "<p>One habit worth having — back up after each week’s catch-up. It takes five seconds and it is the whole safety net.</p>"});
   return st;
 }
 function startTour(){
-  flowStart({title:"Guided tour", steps:tourSteps(), doneLabel:"Done",
-    onSkip:()=>{flowClose();toast("Tour closed — replay it from ⚙ Settings");},
-    onDone:()=>{toast("Tour complete");}});
+  coachStart(tourSteps(),{doneLabel:"Done",skipLabel:"Skip tour",
+    onEnd:done=>toast(done?"Tour complete — replay it any time from ⚙ Settings":"Tour closed — replay it from ⚙ Settings")});
 }
+
+/* ---- first-visit tips ----
+   The detail that used to be crammed into the tour, moved to the moment it becomes relevant:
+   the first time the reader opens the screen it is about. Each fires once, ever.
+
+   `when` is what makes them worth reading rather than noise — a tip about folding away finished
+   clients is meaningless on an empty list, so it waits until there is a list. */
+const TIPS=[
+  {k:"sessions",tab:"sessions",
+   steps:()=>[
+    {emoji:"☰",h:"Two ways to look",sel:"#viewseg",
+     body:"<b>List</b> for working through, <b>Calendar</b> for seeing a week or month laid out."},
+    {emoji:"🎯",h:"Four lists, not one",sel:"#seg",
+     body:"<b>Upcoming</b> is what is booked. <b>Unpaid</b> and <b>Incomplete</b> are worklists to clear — the badge counts what is overdue."+
+       "<p><b>All</b> is the history, newest first. Older sessions fold into one row per tax year so the list stays short; searching never folds anything away.</p>"}]},
+  {k:"practice",tab:"practice",
+   steps:()=>[
+    {emoji:"👥",h:"Everything clinical, in one tab",sel:"#crtab",
+     body:"<b>Clients</b> and their profiles, <b>Trends</b> for how the practice is holding up, <b>Rooms</b> and what each costs, and <b>Supervision</b> with your CPD hours."},
+    {emoji:"💷",h:"Fees change from a date",
+     body:"Use <b>Change rate</b> on a client rather than editing the number. Past sessions keep the fee you actually charged them — which is what your tax figures are built on."+
+       "<p>Room costs work the same way.</p>"}]},
+  {k:"money",tab:"money",ft:"money",
+   steps:()=>[
+    {emoji:"💷",h:"The day-to-day money",sel:"#moneyseg",
+     body:"<b>Overview</b> is what came in and what is still owed."+
+       (feat("finances")?" <b>Costs &amp; income</b> is what goes out — insurance, room rent, CPD — and any income that is not a session.":"")+
+       " <b>Table</b> is every session as a spreadsheet."+
+       "<p>Everything logged here feeds the profit your tax estimate is worked out from.</p>"}]},
+  {k:"tax",tab:"tax",ft:"tax",when:()=>taxAcked(),
+   steps:()=>[
+    {emoji:"🧾",h:"The year-end side",sel:"#taxseg",
+     body:"<b>Estimate</b> is what you will owe and what you take home. <b>Pot &amp; payments</b> is what to put by and when it leaves. <b>Allowances</b> is what you set per tax year. <b>MTD</b> is the quarterly figures."},
+    {emoji:"⚖️",h:"An estimate, not a return",
+     body:"Every figure here is worked out from what you have logged. It cannot see employment income, dividends or anything HMRC adjusted itself."+
+       "<p>Once you have filed, put HMRC’s real figures in on <b>Pot &amp; payments</b> and the app switches to them.</p>"}]},
+  {k:"tax-payments",tab:"tax",seg:"payments",ft:"tax",when:()=>taxAcked(),
+   steps:()=>[
+    {emoji:"🫙",h:"What to keep back",sel:'[data-coach="pot"]',
+     body:"Built from tax you have <b>already</b> earned, plus anything still owed on earlier years, plus a buffer you choose."+
+       "<p>Tax on money you have not earned yet is deliberately left out — that is what stops the figure being frightening.</p>"},
+    {emoji:"🛟",h:"The buffer is the point",sel:"#bufSeg",
+     body:"It is the difference between <i>probably</i> enough and <i>definitely</i> enough. Set it once and everything outside it is genuinely yours to spend."},
+    {emoji:"📅",h:"One line per date",sel:'[data-coach="due"]',
+     body:"A single 31 January is usually <b>two different years’ money</b> — the balancing payment finishing one year, and the first instalment towards the next."+
+       "<p>That is the thing that catches sole traders out, so it is listed by date rather than by year.</p>"}]},
+  {k:"tax-allowances",tab:"tax",seg:"allowances",ft:"tax",when:()=>taxAcked(),
+   steps:()=>[
+    {emoji:"🔒",h:"Set once, per tax year",sel:"#uohBar",
+     body:"Pick a year here and everything below applies to it, and to later years, until you change it again."+
+       "<p>So the year you finish repaying a student loan, or move to Scotland, the years before it keep the figures they were actually assessed on.</p>"}]}
+];
+/* Called at the end of every navigation. Deliberately quiet: never on top of setup, a sheet, a
+   reveal nudge or another tip, and never twice for the same key. */
+let _tipTimer=0;
+function coachMaybeTip(tab){
+  try{
+    if(_coach||_flow||coachTipsOff())return;
+    if(document.getElementById("sheet").classList.contains("open"))return;
+    const seg=(tab==="tax")?taxSeg:(tab==="money")?moneySeg:(tab==="practice")?pracTab:null;
+    const tip=TIPS.find(x=>x.tab===tab&&(!x.seg||x.seg===seg)&&!coachSeen(x.k)
+      &&(!x.ft||feat(x.ft))&&(!x.when||x.when()));
+    if(!tip)return;
+    const steps=tip.steps();
+    if(!steps.length)return;
+    steps.forEach(s=>{if(!s.tab)s.tab=tip.tab;if(!s.seg&&tip.seg)s.seg=tip.seg;});
+    /* The short delay lets the screen settle before anything is highlighted -- but nothing is
+       recorded until the tip actually appears. Marking it up front meant flicking through the
+       tabs burned every tip without showing one, and they never come back. */
+    if(_tipTimer)clearTimeout(_tipTimer);
+    _tipTimer=setTimeout(()=>{
+      _tipTimer=0;
+      if(_coach||_flow||coachSeen(tip.k)||cur!==tip.tab)return;
+      if(document.getElementById("sheet").classList.contains("open"))return;
+      /* Recorded whether it is then read or skipped, so nothing is ever offered twice. The save
+         is fire-and-forget: a tip is never worth blocking navigation over. */
+      if(coachMarkSeen(tip.k))commit("Saw the tips for "+tip.k);
+      coachStart(steps,{doneLabel:"Got it",skipLabel:"Not now"});
+    },450);
+  }catch(err){/* coaching is never worth breaking a screen over */}
+}
+function coachResetTips(){const c=coachCfg();c.seen=[];return commit("Tips reset");}
+
 
 /* re-running setup is behind a deliberate, typed confirmation */
 function confirmRerunSetup(){

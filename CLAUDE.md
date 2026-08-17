@@ -78,6 +78,12 @@ S = {
     features: {},       // key → false to disable; absent/true = on
     retention: {},      // {notesYears:6, financeYears:6, endedStatuses:[]} — review flags only
     cpdTarget,          // annual CPD hours target (default 30)
+    studentLoanYears:{},// tax year → plan key, carried forward (v6)
+    taxRegionYears: {}, // tax year → "rUK"|"scotland", carried forward (v6)
+    taxYears: {},       // tax year → what HMRC actually assessed / set / a claim to reduce (v6)
+    taxPaid: {},        // due date ISO → {date,amount} paid, or {unpaid:true} (v6)
+    taxPot: {},         // {bufferPct, balance, balanceAt} (v6)
+    coach: {},          // {seen:[tip keys], off} — first-visit tips (v6)
     onboarded, onboardedAt, setupRuns
   }
 }
@@ -95,9 +101,11 @@ Key functions:
 - **Never swallow a save error.** `commit()` calls `noteSaveFailure()` on failure, which raises `#saveBanner` and corrects the caller's "Saved" toast on the next tick. `clearSaveFailure()` runs on the next successful save.
 - **`requestPersistence()`** runs at init (`navigator.storage.persist()`). Without a grant, iOS Safari evicts this app's storage after ~7 days of no visits. Status is shown in Settings › Storage on this device; `denied` is normal until the app is added to the Home Screen.
 - **`exportJSON()` must work with `_db === null`** — the crash screen is the only way out of a broken render and it offers Export.
+- **`tyNet()` and `tyIncome()` are memoised** (`tyMemo`, cleared in `go()`, `commit()` and `normalize()`). Each walks every session and runs `ledgerBetween` twice; the Payments screen asks for several years at once and each year's schedule reaches into the year either side, so uncached the call count grows quadratically with history. Anything that mutates `S` outside those three entry points must call `tyMemoClear()`.
 
 ### Schema versioning
-`SCHEMA_VERSION` (currently `5`) is stamped on `S.meta.schemaVersion` and on every backup envelope. Unstamped data is treated as v1.
+`SCHEMA_VERSION` (currently `6`) is stamped on `S.meta.schemaVersion` and on every backup envelope. Unstamped data is treated as v1.
+- **v6 (Aug 2026)** dated the whole-practice tax settings to a tax year (`studentLoanYears`, `taxRegionYears`) and added the record of what HMRC actually assessed (`taxYears`), what has been paid (`taxPaid`) and the pot's own settings (`taxPot`). A v6 backup can say "Plan 2 until 2025-26, none after" and "HMRC assessed 2025-26 at £4,310"; a v5 build has neither field, so it would apply one loan plan to every year and show its own estimate in place of the real assessment.
 - **v5 (Aug 2026)** stamped a cancellation charge percentage on every missed session and added `settings.cancelRules` + `settings.reveal`. A v5 backup can hold a session charged at 50%; a v4 build has no such field and would bill it in full.
 - **v4 (Aug 2026)** gave every cost and income row a category *key* mapping to an SA103 box, migrated from the old free-text label (which is kept). Added `settings.taxBasis`, `useOfHome`, `taxRegion`, `studentLoan`, `class2Voluntary`.
 - **v3 (Aug 2026)** added expenses, other income, peer supervision and monthly room rent. No in-place migration: every new field's absence means exactly what it meant in v2. The bump exists for the other direction — a v3 backup carries money a v2 build cannot see, so restoring it there would drop those rows and save the loss back.
@@ -136,7 +144,7 @@ Five collapsible `<details class="sgrp">` groups (practice / data / records / he
 **Home · Sessions · Practice · Money · Tax.** `TAB_ALIAS` maps the old names (`clients`, `supervision`, `income`, `raw`) onto the new tab **and a segment**, so old deep links land somewhere meaningful; `go(tab,{seg})` sets it. A plain tab tap stays on whatever segment the reader last used.
 - **Practice** — Clients / Trends / Rooms / Supervision. `supervisionPanel()` and `rawPanel()` are panels, not views: they are mounted whole so their inner sub-tabs keep working.
 - **Money** — Overview / Costs & income / Table.
-- **Tax** — Estimate / Allowances / MTD.
+- **Tax** — Estimate / Pot & payments / Allowances / MTD. **Estimate** carries the take-home, the by-year table and a *summary* of the pot only; everything about paying — the buffer, the balance, every due date, and what HMRC actually assessed — lives on **Pot & payments**, so no figure appears twice with two different explanations behind it. **Allowances** is "things set per tax year": one year strip at the top governs every card below it (`taxYearStripStatus`), then student loan, then use of home. Region is *not* here — it moved to Settings.
 - The old `income` feature flag became `money` + `tax`; `normalize()` carries `income:false` across to both rather than switching a hidden tab back on.
 
 ## UK tax engine (Aug 2026)
@@ -146,16 +154,24 @@ Five collapsible `<details class="sgrp">` groups (practice / data / records / he
 - **Payments on account.** `taxSchedule(ty)` — once the liability passes £1,000, January is the balancing payment *plus* 50%, with another 50% in July. `poaBase()` excludes Class 2 and student loan, which never form part of a payment on account.
 - **Class 2** is no longer mandatory (2024/25+) but can be paid voluntarily below the Small Profits Threshold; the app offers it rather than omitting it.
 - **Region, student loan, pension.** Scottish bands via `settings.taxRegion`; `SL_PLANS` for plans 1/2/4/5/PG; pension contributions extend the basic-rate band (`penGross`) rather than being deducted after tax.
+- **Per-year settings.** `yearValue(key, ty, fallback)` / `setYearValue()` hold a setting against a tax year with carry-forward from the most recent earlier year — the same shape as `uohForYear`. Student loan (`studentLoanPlanKey`) and region (`taxRegionFor`) both use it, and `ukTax(profit, ty)` reads them by year. **The legacy scalars migrate onto `earliestTaxYearIn(st)`**, which is what makes carry-forward reproduce exactly the figures the install was already showing. Never read `settings.studentLoan` / `settings.taxRegion` directly — they are kept in step with the latest year only so an older build sees something sensible.
+- **Estimate vs assessment.** `taxLiability(ty)` is the one place a year's number comes from, and it reports `src`: `actual` (entered from a filed return — HMRC's figure wins everywhere), `estimate` (year ended, nothing entered) or `projected` (year still running, run-rated to a full year). `poa` is the part instalments are worked out from, never Class 2 or student loan.
+- **`poaTowards(ty)`** gives the two instalments due towards a year, set by the year before it. Precedence: a recorded **claim to reduce** (SA303) beats **what HMRC actually set** (`poaSet`) beats the calculated figure. A claim never reduces the tax — it defers it to January pound for pound, and there is a test asserting exactly that.
+- **`taxTimeline()` assembles by DUE DATE, never by tax year** — that is the whole point. One 31 January is usually two different years' money (the balancing payment finishing one year plus the first instalment towards the next), and listing by year puts those two amounts on different cards. It is the only place dates and amounts are put together, so the pot, the reminder and the Payments screen cannot drift apart.
+- **A past due date with no record is `unknown`, not overdue** (`PAY_GRACE_DAYS`, 60). Someone arriving with three years of history has almost certainly paid those bills; counting them would poison every pot figure. Inside the grace window "not ticked" still means owed, and a row can be marked `{unpaid:true}` to count it back in.
+- **`taxPot()`** answers two separate questions and keeps them separate: what should be put by *today* (tax **already earned** + unpaid bills from years that have **ended** + a buffer the therapist chose) and what has to be there by a *date* (`byNext`). Tax on money not yet earned is deliberately excluded. `rate` is projected tax over **projected income**, not profit — it is a share of money arriving in the account. Working it out from tax-to-date over full-year net is what used to display **0%** early in a year while the table showed thousands.
 - **MTD.** `mtdQuarters()`/`mtdPeriod()`/`mtdExport()`. **The quarters must reconcile to `tyNet` on both bases** — a regression here means a cost was added to the ledger but not to an SA103 box (per-session room fees were exactly that bug). Submission is deliberately out of scope: it needs an OAuth secret, fraud-prevention headers and HMRC recognition, none of which fit an offline PWA.
 
 ### Tax engine tests
-`tests/tax-tests.js` — 84 tests. Serve the app, open it, paste the file into the console. It lives **outside** `TherapyTracker-web/` so it never deploys, never calls `commit()`, and restores the live state when it finishes.
+`tests/tax-tests.js` — 118 tests. Serve the app, open it, paste the file into the console. It lives **outside** `TherapyTracker-web/` so it never deploys, never calls `commit()`, and restores the live state when it finishes.
 
 **Expected values are derived from the HMRC rule, never copied from the app.** That is not pedantry: the payment-date bug below initially *passed* a test written by pasting in what the code returned, and only surfaced when a second test approached the same figure from the rule. If a test needs updating after a change, re-derive the number.
 
 Two real bugs it has already caught:
 - `SCOT_BANDS` mixed band *widths above the personal allowance* with *absolute* thresholds while the loop treated all of them as absolute — overstating Scottish tax by up to ~£3,300/yr (£2,025 at £40k).
 - `taxSchedule()` dated every payment a year early. Self Assessment is due 31 January **following the end** of the tax year, so 2026-27 is 31 Jan 2028, not 2027.
+
+Several tests depend on TY (2026-27) being the year **in progress** — the projection, the pot's "earned so far", and the 60-day grace window. Re-anchor them once the real date passes 5 Apr 2027.
 
 The reconciliation block is the highest-value part: across six practice profiles, `profitBreakdown` = the four MTD quarters summed = `tyNet`. A mismatch means a cost reached one path but not another — exactly how the missing per-session room fee in the SA103 boxes was found.
 
@@ -231,10 +247,18 @@ No new gating layer — this only decides which existing `feat()` flags start of
 - **Confetti**: canvas-based `Confetti` object.
 - **Celebrate overlay**: `celebrate(emoji, title, sub, ribbon)`.
 
+## On-page coaching (added Aug 2026)
+The tour used to be eight full-screen `.ov` cards describing controls the reader could not see, because the card was on top of them. `coachStart(steps, opts)` dims the page and cuts a spotlight over the real element instead, with a small bubble beside it.
+- **A step with no `sel` is centred, deliberately.** "Your notes don't live here" and "use client codes, not names" are ideas, not controls; highlighting an arbitrary card to give an idea somewhere to live is worse than highlighting nothing. A `sel` that matches nothing (a switched-off feature) degrades to the same centred form rather than pointing at the wrong thing.
+- **Never animate a reposition driven by scrolling.** `coachPlace(false)` sets `.noanim`; every scroll event otherwise restarted the 0.3s transition from wherever it had got to, so the mask chased the target for the whole scroll and never arrived. `coachScroll()` also skips `coachPinned()` targets — centring the tab bar or the FAB scrolls the page for nothing.
+- **`z-index: 44`** — above the tab bar (35) and FAB (40), both of which it has to point at; below sheets (50) and the setup flow (45), neither of which it may ever cover.
+- **`TIPS` is the other half.** The per-screen detail that used to be crammed into the tour fires the *first time* that screen is opened, once ever, keyed in `settings.coach.seen` (in settings, not localStorage, so it travels with a backup and a new phone does not replay everything). `coachMaybeTip(tab)` runs at the end of `go()` and stays quiet when a flow, a sheet or another coach is up. `when()` is what keeps a tip worth reading — a tip about folding away finished clients is noise on an empty list.
+- Segment-scoped tips (`seg`) must come **after** the tab-wide one in `TIPS` only if you want the general one first; `TIPS.find` returns the first match, and the natural flow is the tab tip on the default segment, then the segment tip when that segment is first opened.
+
 ## Setup wizard & guided tour (S.settings)
 - **First run**: `startSetup()` fires from init when `S.settings.onboarded` is false. `normalize()` sets `onboarded = true` for any state that already has clients or sessions, so existing installs never see it.
 - **Flow engine**: `flowStart/flowGo/flowNext/flowClose` drive a full-screen `.ov` overlay (z-index 45 — above the tab bar, below `#sheet`) from an array of step objects `{emoji,h,sub,html,mount,validate,onLeave}`. Shared by setup and the tour.
-- **Tour**: `startTour()` — feature-aware, read-only. Replayable from Settings › Setup & help.
+- **Tour**: `startTour()` — now on-page coach marks, not the `.ov` flow. Eight stops on day-one essentials; per-screen depth lives in `TIPS`. Read-only, replayable from Settings › Setup & help, where the tips can also be switched off or reset.
 - **Re-run**: `confirmRerunSetup()` — warning sheet requiring the user to type `RESET SETUP`. Skips the rooms step once sessions exist.
 - **Feature flags**: `feat(key)` gates tabs (`TABS[].ft`), gamification (`celebrate`, `Confetti.burst`), quick-add, attention feed, receipts, accreditation, `peer` (peer supervision, dep: supervision) and `finances` (costs & other income, dep: income). Off = hidden, never deleted.
 - **Retention step**: `stepRetention()` sits between money and backup, and its `validate()` refuses blanks or anything outside 1–50 years — a retention period nobody chose is a compliance decision made by a default.

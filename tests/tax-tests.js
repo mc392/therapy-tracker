@@ -20,6 +20,12 @@
      changed, re-derive the number from the rule — do not paste in what the code
      now returns.
 
+   DATE-DEPENDENT BY DESIGN
+     TY is 2026-27 and several tests rely on it being the year IN PROGRESS —
+     the projection, the pot's "earned so far", and the 60-day grace window on
+     a missed payment date. Once the real date passes 5 Apr 2027 those need
+     re-anchoring to whatever the current year is.
+
    RULES ENCODED HERE (2026-27; thresholds frozen to 2027-28)
      Personal allowance   12,570, tapered £1 for every £2 over 100,000
      Basic 20% to 50,270 · Higher 40% to 125,140 · Additional 45% above
@@ -31,7 +37,12 @@
      Student loans        Plan 1 26,065 · Plan 2 28,470 · Plan 4 32,745
                           Plan 5 25,000 all at 9%; Postgraduate 21,000 at 6%
      Payments on account  due once the liability passes 1,000; two instalments of
-                          50%; Class 2 and student loan are never included
+                          50%; Class 2 and student loan are never included.
+                          A claim to reduce them (SA303) defers tax to January
+                          pound for pound — it never reduces the tax itself
+     Assessments          a liability entered from a filed return replaces the
+                          estimate everywhere; instalments HMRC actually set
+                          beat the calculated ones, and a claim beats both
      Deadlines            balancing payment 31 Jan FOLLOWING THE END of the tax
                           year (2026-27 -> 31 Jan 2028), second instalment 31 Jul
      Use of home          simplified £10 (25-50 hrs/mo), £18 (51-100), £26 (101+)
@@ -91,12 +102,12 @@
       clientCategories: [{ status: "Ongoing", category: "Active" }, { status: "Finished", category: "Finished" }],
       sessions: o.sessions || [], supervision: o.supervision || [], peerSupervision: o.peerSupervision || [],
       expenses: o.expenses || [], otherIncome: o.otherIncome || [], paidCharges: o.paidCharges || {},
-      settings: {
+      settings: Object.assign({
         onboarded: true, betaAck: true,
         taxBasis: o.basis || "accruals", taxRegion: o.region || "rUK",
         studentLoan: o.studentLoan || "none", class2Voluntary: !!o.class2Voluntary,
         useOfHome: o.useOfHome || { years: {} }, features: {}
-      }
+      }, o.settings || {})
     };
     S = normalize(st);
     setPensionPcm(o.pension || 0);
@@ -241,9 +252,186 @@
   run("Dates: 2025-26 balancing payment is 31 Jan 2027", function () {
     mkState({ fee: 800, sessions: mkSessions(50, "2025-04-08", 800) });
     return { act: isoD(taxSchedule("2025-26").jan.date), exp: "2027-01-31" }; });
-  run("Dates: the next payment is always in the future", function () {
-    busy(); var n = nextTaxPayment();
-    return { pass: !!n && n.when >= today(), act: n ? isoD(n.when) : "none" }; });
+  /* The next payment is the earliest one still OUTSTANDING, which may be one already past --
+     it stopped being "the next future date" when payments became tickable. */
+  run("Dates: the next payment is the earliest still outstanding", function () {
+    busy(); var n = nextTaxPayment(), line = taxTimeline();
+    var first = line.filter(function (r) { return r.outstanding > 0; })[0];
+    return { pass: !!n && !!first && isoD(n.when) === isoD(first.due), act: n ? isoD(n.when) : "none" }; });
+
+  /* =========================================================================
+     3a. Settings that belong to a tax year, not to the practice for ever
+     A student loan finishing, or a move to or from Scotland, must never reach
+     back and change a year that has already been assessed.
+     ========================================================================= */
+  run("Per-year: a plan set in one year does not reach back", function () {
+    mkState({ sessions: mkSessions(10, "2024-04-09", 800),
+      settings: { studentLoanYears: { "2025-26": "plan2" } } });
+    return { act: studentLoanPlanKey("2024-25") + "/" + studentLoanPlanKey("2025-26"),
+      exp: "none/plan2" }; });
+  run("Per-year: a later year with no plan of its own carries it forward", function () {
+    mkState({ sessions: mkSessions(10, "2024-04-09", 800),
+      settings: { studentLoanYears: { "2025-26": "plan2" } } });
+    return { act: studentLoanPlanKey("2027-28"), exp: "plan2" }; });
+  run("Per-year: finishing repayment leaves the repaying years alone", function () {
+    mkState({ sessions: mkSessions(10, "2024-04-09", 800),
+      settings: { studentLoanYears: { "2024-25": "plan2", "2026-27": "none" } } });
+    return { act: Math.round(ukTax(40000, "2024-25").sl) + "/" + Math.round(ukTax(40000, TY).sl),
+      exp: Math.round((40000 - 28470) * 0.09) + "/0" }; });
+  run("Per-year: region is dated too", function () {
+    mkState({ sessions: mkSessions(10, "2024-04-09", 800),
+      settings: { taxRegionYears: { "2024-25": "rUK", "2026-27": "scotland" } } });
+    return { act: taxRegionFor("2025-26") + "/" + taxRegionFor(TY), exp: "rUK/scotland" }; });
+  /* The migration has to reproduce, exactly, what the old whole-practice setting produced --
+     which means pinning it to the earliest year the practice has any record in. */
+  run("Per-year: the old single setting migrates onto the earliest year", function () {
+    mkState({ studentLoan: "plan2", sessions: mkSessions(10, "2024-04-09", 800) });
+    return { act: studentLoanPlanKey("2024-25") + "/" + studentLoanPlanKey("2025-26") + "/" + studentLoanPlanKey(TY),
+      exp: "plan2/plan2/plan2" }; });
+
+  /* =========================================================================
+     3b. Estimates, assessments and payments on account
+     ========================================================================= */
+  /* Two complete years then a partial one, so every branch of taxLiability is live. */
+  var hist = function (extra) {
+    return mkState(Object.assign({ fee: 800,
+      sessions: mkSessions(45, "2024-04-09", 800).concat(mkSessions(45, "2025-04-08", 800))
+        .concat(mkSessions(19, "2026-04-07", 800)) }, extra || {})); };
+
+  run("Liability: a finished year with no return entered is an estimate", function () {
+    hist(); var L = taxLiability("2025-26");
+    return { act: L.src + "/" + Math.round(L.total), exp: "estimate/" + Math.round(ukTax(36000, "2025-26").total) }; });
+  run("Liability: the year in progress is projected to a full year", function () {
+    hist(); var L = taxLiability(TY);
+    return { act: L.src, exp: "projected", note: Math.round(L.total) }; });
+  run("Liability: HMRC's own figure wins outright", function () {
+    hist({ settings: { taxYears: { "2025-26": { liability: 7400, filed: true } } } });
+    var L = taxLiability("2025-26");
+    return { act: L.src + "/" + L.total, exp: "actual/7400" }; });
+  run("Liability: an assessed total still excludes SL from the instalment base", function () {
+    hist({ studentLoan: "plan2", settings: { taxYears: { "2025-26": { liability: 7400 } } } });
+    var L = taxLiability("2025-26");
+    return { act: Math.round(L.poa), exp: Math.round(7400 - ukTax(36000, "2025-26").sl), tol: 1 }; });
+
+  /* 2024-25 is the first year, so nothing was paid on account towards it: its whole bill is
+     balanced on 31 Jan 2026, and it sets the two instalments towards 2025-26. */
+  run("Schedule: the first year's balancing payment is the whole bill", function () {
+    hist(); var sc = taxSchedule("2024-25");
+    return { act: Math.round(sc.jan.balancing), exp: Math.round(ukTax(36000, "2024-25").total) }; });
+  run("Schedule: the next year is balanced net of its two instalments", function () {
+    hist(); var prev = ukTax(36000, "2024-25"), cur = ukTax(36000, "2025-26");
+    var sc = taxSchedule("2025-26");
+    return { act: Math.round(sc.jan.balancing), exp: Math.round(cur.total - poaBase(prev)), tol: 1 }; });
+  run("Schedule: identical years leave nothing to balance", function () {
+    hist(); return { act: Math.round(taxSchedule("2025-26").jan.balancing), exp: 0, tol: 1 }; });
+  run("Schedule: an assessment above the estimate raises the balancing payment", function () {
+    hist({ settings: { taxYears: { "2025-26": { liability: 7400 } } } });
+    var prev = ukTax(36000, "2024-25");
+    return { act: Math.round(taxSchedule("2025-26").jan.balancing), exp: Math.round(7400 - poaBase(prev)), tol: 1 }; });
+  run("Schedule: instalments HMRC actually set override the calculated ones", function () {
+    hist({ settings: { taxYears: { "2026-27": { poaSet: 3300 } } } });
+    return { act: poaTowards(TY).each + "/" + poaTowards(TY).src, exp: "3300/hmrc" }; });
+  run("Schedule: a claim to reduce beats HMRC's own figure", function () {
+    hist({ settings: { taxYears: { "2026-27": { poaSet: 3300, poaClaim: 1500 } } } });
+    return { act: poaTowards(TY).each + "/" + poaTowards(TY).src, exp: "1500/claim" }; });
+  /* The whole point of the warning attached to a claim: reducing instalments does not reduce
+     the tax, it defers it to January. Every pound taken off the two instalments turns up in the
+     balancing payment. */
+  run("Schedule: reducing instalments defers, pound for pound, to January", function () {
+    hist(); var before = taxSchedule(TY).jan.balancing;
+    hist({ settings: { taxYears: { "2026-27": { poaClaim: 0 } } } });
+    var after = taxSchedule(TY).jan.balancing;
+    return { act: Math.round(after - before), exp: Math.round(poaTowards("2026-27").each * 0 + 2 * (taxLiability("2025-26").poa / 2)), tol: 1,
+      note: "instalments were " + Math.round(taxLiability("2025-26").poa / 2) + " each" }; });
+
+  /* =========================================================================
+     3c. The payment timeline, assembled by DUE DATE
+     ========================================================================= */
+  /* Needs two years that differ, or 2025-26 balances to exactly nil and the timeline correctly
+     drops the empty half -- which is the case the test below covers instead. */
+  run("Timeline: one 31 January carries two different years", function () {
+    hist({ settings: { taxYears: { "2025-26": { liability: 7400 } } } });
+    var row = taxTimeline().filter(function (r) { return r.iso === "2027-01-31"; })[0];
+    var kinds = row ? row.parts.map(function (p) { return p.kind + ":" + p.ty; }).sort().join(",") : "none";
+    return { act: kinds, exp: "balancing:2025-26,poa1:2026-27" }; });
+  run("Timeline: a year that balances to nil shows only the instalment", function () {
+    hist(); var row = taxTimeline().filter(function (r) { return r.iso === "2027-01-31"; })[0];
+    return { act: row ? row.parts.map(function (p) { return p.kind; }).join(",") : "none", exp: "poa1" }; });
+  run("Timeline: a date totals its own parts", function () {
+    hist(); var bad = taxTimeline().filter(function (r) {
+      return Math.abs(r.total - r.parts.reduce(function (a, p) { return a + p.amount; }, 0)) > 0.01; });
+    return { pass: bad.length === 0, act: bad.length + " mismatched" }; });
+  run("Timeline: July only ever carries the second instalment", function () {
+    hist(); var julys = taxTimeline().filter(function (r) { return /-07-31$/.test(r.iso); });
+    return { pass: julys.length > 0 && julys.every(function (r) {
+      return r.parts.length === 1 && r.parts[0].kind === "poa2"; }), act: julys.length + " July dates" }; });
+  /* A date the app has no record of is UNKNOWN, not overdue: someone arriving with three years
+     of history has almost certainly paid those bills, and counting them would poison the pot. */
+  run("Timeline: an old unticked date is 'unknown', not overdue", function () {
+    hist(); var row = taxTimeline().filter(function (r) { return r.iso === "2026-01-31"; })[0];
+    return { act: row ? row.state + "/" + row.outstanding : "missing", exp: "unknown/0" }; });
+  run("Timeline: a recently missed date still counts as owed", function () {
+    hist(); var t = today();
+    var recent = taxTimeline().filter(function (r) {
+      var age = (t - r.due) / 86400000; return age > 0 && age <= 60; });
+    return { pass: recent.every(function (r) { return r.state === "owed" && r.outstanding > 0; }),
+      act: recent.length + " inside the grace window" }; });
+  run("Timeline: ticking a date off clears it", function () {
+    hist({ settings: { taxPaid: { "2027-01-31": { date: "2027-01-20", amount: 3000 } } } });
+    var row = taxTimeline().filter(function (r) { return r.iso === "2027-01-31"; })[0];
+    return { act: row.state + "/" + row.outstanding, exp: "paid/0" }; });
+  run("Timeline: saying an old date is still owed counts it back in", function () {
+    hist({ settings: { taxPaid: { "2026-01-31": { unpaid: true } } } });
+    var row = taxTimeline().filter(function (r) { return r.iso === "2026-01-31"; })[0];
+    return { pass: row.state === "owed" && row.outstanding === row.total, act: row.state }; });
+
+  /* =========================================================================
+     3d. The tax pot
+     ========================================================================= */
+  /* The regression this exists to catch: the set-aside rate used to be tax-to-date over
+     full-year net, so early in a year -- while the personal allowance has swallowed everything
+     earned so far -- it read 0% next to a table showing thousands of pounds of projected tax. */
+  run("Pot: a rate is still set while tax to date is nil", function () {
+    mkState({ basis: "cash", fee: 1200, sessions: mkSessions(10, "2026-04-08", 1200) });
+    var toDate = ukTax(tyNet(TY, true), TY).total, p = taxPot();
+    return { pass: toDate === 0 && p.rate > 0 && p.projected > 0,
+      act: "to date " + Math.round(toDate) + ", rate " + Math.round(p.rate * 100) + "%",
+      note: "net to date " + tyNet(TY, true) + " is under the personal allowance" }; });
+  run("Pot: the rate is projected tax over projected income", function () {
+    mkState({ basis: "cash", fee: 1200, sessions: mkSessions(10, "2026-04-08", 1200) });
+    var p = taxPot();
+    return { act: p.rate, exp: p.projected / p.projInc, tol: 1e-9 }; });
+  run("Pot: setting that share aside all year lands on the projected bill", function () {
+    mkState({ basis: "cash", fee: 1200, sessions: mkSessions(10, "2026-04-08", 1200) });
+    var p = taxPot();
+    return { act: p.rate * p.projInc, exp: p.projected, tol: 1 }; });
+  run("Pot: the floor is tax earned plus what earlier years still owe", function () {
+    hist(); var p = taxPot();
+    return { act: Math.round(p.floor), exp: Math.round(p.earned + p.committed) }; });
+  run("Pot: 'earned' is tax on income actually taken, not a share of the forecast", function () {
+    hist(); var p = taxPot();
+    return { act: Math.round(p.earned), exp: Math.round(ukTax(tyNet(TY, true), TY).total) }; });
+  run("Pot: the buffer is a percentage of the floor", function () {
+    hist({ settings: { taxPot: { bufferPct: 20 } } });
+    var p = taxPot();
+    return { act: Math.round(p.buffer) + "/" + Math.round(p.target),
+      exp: Math.round(p.floor * 0.2) + "/" + Math.round(p.floor * 1.2) }; });
+  run("Pot: a zero buffer asks for exactly the floor", function () {
+    hist({ settings: { taxPot: { bufferPct: 0 } } });
+    var p = taxPot(); return { act: Math.round(p.target), exp: Math.round(p.floor) }; });
+  run("Pot: the year-end target is this year's own tax, buffered", function () {
+    hist({ settings: { taxPot: { bufferPct: 10 } } });
+    var p = taxPot(); return { act: Math.round(p.yearEnd), exp: Math.round(p.projected * 1.1) }; });
+  run("Pot: a recorded balance is measured against the target", function () {
+    hist({ settings: { taxPot: { bufferPct: 10, balance: 5000 } } });
+    var p = taxPot();
+    return { act: Math.round(p.over) + "/" + Math.round(p.vsFloor),
+      exp: Math.round(5000 - p.target) + "/" + Math.round(5000 - p.floor) }; });
+  run("Pot: what is needed by the next date is every outstanding row up to it", function () {
+    hist(); var p = taxPot();
+    var exp = taxTimeline().filter(function (r) { return r.outstanding > 0 && r.due <= p.next.due; })
+      .reduce(function (a, r) { return a + r.outstanding; }, 0);
+    return { act: Math.round(p.byNext), exp: Math.round(exp) }; });
 
   /* =========================================================================
      4. Cash versus accruals
