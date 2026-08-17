@@ -44,7 +44,7 @@ Live URL: `https://<username>.github.io/<repo>/`
 ## Service worker cache strategy
 `sw.js` uses **network-first for HTML** (`req.mode === "navigate"`) — every page load fetches a fresh `index.html` from the network, so updates land on next open without needing a cache bump.
 
-Static assets (icons, manifest) use cache-first. You only need to bump the cache name constant (`C = "tt-v3"`) if you rename or remove a static asset file, to force old caches to clear.
+Static assets (icons, manifest) use cache-first, so the cache name constant (`C`, currently **`"tt-v6"`**) must be bumped whenever one of them **changes as well as** when one is renamed or removed — an installed device otherwise keeps the old copy indefinitely. The GroundWork rename needed it twice: once for `manifest.webmanifest` (or the Home Screen keeps saying "Therapy Tracker") and again for the redrawn icons.
 
 Two rules the fetch handler depends on — don't regress them:
 - **`SHELL` (`./` + `index.html`) is precached at install.** The SW does not intercept the navigation that registers it, so without this a first-time visitor who goes offline before their second visit gets nothing at all.

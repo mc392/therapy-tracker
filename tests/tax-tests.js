@@ -37,6 +37,18 @@
      Use of home          simplified £10 (25-50 hrs/mo), £18 (51-100), £26 (101+)
 
    The suite never calls commit(), and restores the live state when it finishes.
+
+   NOT COVERED YET — cancellation charging (schema v5, Aug 2026)
+     derive() now returns rate = fullRate x cancelPct/100, where cancelPct is STAMPED on the
+     session (s.cancelCharge) rather than read from the policy. Every case below predates that
+     and builds sessions with no cancelCharge, so they all take the cancelPct=100 path and the
+     multiplication is never exercised here. The suite passing therefore says nothing about it.
+
+     It was verified by hand at the time — with 50/25/0/100% charges spread across all four
+     quarters, the MTD quarters still summed to tyNet on both the cash and accruals bases, and
+     the v5 backfill left every existing figure unchanged — but a hand check is not a test.
+     Adding it is the highest-value next work on this file. Derive the expectations from the
+     rule, as above: full fee x the stamped percentage, never from what derive() currently says.
    ============================================================================ */
 (function () {
   "use strict";
