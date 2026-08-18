@@ -770,6 +770,15 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 .ftrow .fmain{flex:1;min-width:0}
 .ftrow .fn{display:block;font-size:14.5px;font-weight:700}
 .ftrow .fd{font-size:12.5px;color:var(--muted);line-height:1.45;margin-top:2px}
+/* Settings lists twelve of these at once. Inline, the descriptions turn the card into a wall of
+   prose nobody reads past the third row of; behind a button they are one tap away at the moment
+   somebody actually wants them. Setup keeps its descriptions inline on purpose — that is where
+   the choice is being made for the first time, with nothing else to go on. */
+.ftrow .fq{flex:none;border:0;background:none;padding:5px;margin:-3px 0 0;color:var(--faint);
+  cursor:pointer;line-height:0;border-radius:50%;transition:color .15s,background .15s}
+.ftrow .fq .gi{width:18px;height:18px;vertical-align:middle}
+.ftrow.compact{align-items:center}
+.ftrow.compact .fn{font-size:14.5px}
 .ftrow.off{opacity:.62}
 .sw{flex:none;width:48px;height:28px;border-radius:20px;border:0;background:var(--line);position:relative;cursor:pointer;transition:background .2s;padding:0;margin-top:2px}
 .sw::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .2s}
@@ -1593,6 +1602,7 @@ const GLYPH={supervision:'<path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h11A2.5 2.5 0 0 1 1
   split:'<path d="M4 6.5h6.5l3 11H20"/><path d="M4 17.5h6.5l3-11H20"/><path d="M17.4 4l2.6 2.5-2.6 2.5M17.4 15l2.6 2.5-2.6 2.5"/>',
   export:'<path d="M12 16V4"/><path d="M8.2 7.8 12 4l3.8 3.8"/><path d="M4 15.5v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>',
   page:'<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5.4M12 7.7h.01"/>',
   sessionadd:'<rect x="3.5" y="5" width="17" height="16" rx="2.3"/><path d="M3.5 10h17"/><path d="M8 2.8v4.4M16 2.8v4.4"/><path d="M12 13v5M9.5 15.5h5"/>',
   soundoff:'<path d="M11 4.5 6.5 8.5H3.5v7h3L11 19.5z"/><path d="M16 10l4 4M20 10l-4 4"/>',
   sound:'<path d="M11 4.5 6.5 8.5H3.5v7h3L11 19.5z"/><path d="M15 9.2a4 4 0 0 1 0 5.6M17.8 6.4a8 8 0 0 1 0 11.2"/>'};
@@ -5108,7 +5118,9 @@ VIEWS.settings=function(){
   (function(){const host=v.querySelector("#setFeat");
     const sg=settings();sg.features=sg.features||{};
     const on=k=>sg.features[k]!==false;
-    host.innerHTML=FEATURES.map(f=>ovToggleRow(f.k,f.ic,f.n,esc(f.d),on(f.k),false)).join("");
+    host.innerHTML=FEATURES.map(f=>ovToggleRow(f.k,f.ic,f.n,"",on(f.k),false,f.k)).join("");
+    host.querySelectorAll("[data-fq]").forEach(b=>b.onclick=ev=>{ev.stopPropagation();
+      const f=FEATURES.find(x=>x.k===b.dataset.fq); if(f)featureInfoSheet(f);});
     const paint=()=>FEATURES.forEach(f=>{
       const live=on(f.k)&&(!f.dep||on(f.dep));
       const sw=host.querySelector('[data-sw="'+f.k+'"]');if(!sw)return;
@@ -6879,9 +6891,16 @@ function wireAdvancedMode(v){
   const cfg=revealCfg();
   const paint=()=>{
     const simple=revealCfg().mode==="simple";
-    host.innerHTML=ovToggleRow("adv","🗂","Show everything",
-      simple?"Some features are still hidden and will be offered as you go. Turn this on to switch them all on now."
-            :"Every feature is available. Individual switches below still apply.",!simple,false);
+    const advText=simple
+      ? "Some features are still hidden, and will be offered as you go once there is enough in the app for them to be worth anything. Turn this on to switch them all on now instead."
+      : "Every feature is available. The individual switches below still apply, so you can turn off anything you do not want.";
+    host.innerHTML=ovToggleRow("adv",gi("tabs"),"Show everything",advText,!simple,false,"adv");
+    const fq=host.querySelector("[data-fq]");
+    if(fq)fq.onclick=ev=>{ev.stopPropagation();
+      const b=el('<div></div>');
+      b.innerHTML='<p class="small">'+esc(advText)+'</p>'+
+        '<p class="small muted mt">Nothing here deletes anything. A hidden feature is only hidden.</p>';
+      openSheet("Show everything",b);};
     host.querySelector('[data-sw="adv"]').onclick=async()=>{
       const c=revealCfg();
       if(c.mode!=="simple"){c.mode="simple";await commit("Reveal features gradually");}
@@ -6949,10 +6968,30 @@ function flowNext(){
 /* small shared builders */
 function ovPoints(items){return '<div class="ovpts">'+items.map(p=>
   '<div class="ovpt"><span class="pe">'+p[0]+'</span><span class="pt"><b>'+p[1]+'</b>'+(p[2]?'<span class="sub">'+p[2]+'</span>':'')+'</span></div>').join("")+'</div>';}
-function ovToggleRow(id,ic,name,desc,on,disabled){
-  return '<div class="ftrow'+(on?"":" off")+'" data-row="'+id+'"><span class="fic">'+ic+'</span>'+
-    '<span class="fmain"><span class="fn">'+esc(name)+'</span><span class="fd">'+desc+'</span></span>'+
+/* `infoId` swaps the inline description for a button the caller wires to a sheet. Passing it is
+   how a long list stays scannable; leaving it off keeps the description in the row, which is
+   right wherever the reader is choosing rather than reviewing. */
+function ovToggleRow(id,ic,name,desc,on,disabled,infoId){
+  return '<div class="ftrow'+(on?"":" off")+(infoId?" compact":"")+'" data-row="'+id+'"><span class="fic">'+ic+'</span>'+
+    '<span class="fmain"><span class="fn">'+esc(name)+'</span>'+
+      (infoId?'':'<span class="fd">'+desc+'</span>')+'</span>'+
+    (infoId?'<button class="fq" data-fq="'+esc(infoId)+'" title="What this does" aria-label="What '+esc(name)+' does">'+gi("info")+'</button>':'')+
     '<button class="sw'+(on?" on":"")+'" data-sw="'+id+'"'+(disabled?" disabled":"")+' aria-label="'+esc(name)+'"></button></div>';}
+/* The description, plus the two things somebody checking a switch actually wants to know: is it
+   on, and does turning it off lose anything. */
+function featureInfoSheet(f){
+  const body=el('<div></div>');
+  const sg=settings(); sg.features=sg.features||{};
+  const on=sg.features[f.k]!==false, dep=f.dep?FEATURES.find(x=>x.k===f.dep):null;
+  const blocked=dep&&sg.features[dep.k]===false;
+  body.innerHTML='<div class="row" style="gap:11px;align-items:center;margin-bottom:12px">'+
+      '<span class="fic" style="font-size:24px;color:var(--brand)">'+f.ic+'</span>'+
+      '<span class="chip '+(on&&!blocked?"y":"na")+'">'+(blocked?"Unavailable":on?"On":"Off")+'</span></div>'+
+    '<p class="small">'+esc(f.d)+'</p>'+
+    (dep?'<p class="prev">Needs <b>'+esc(dep.n)+'</b> switched on'+(blocked?' \u2014 which it is not at the moment.':'.')+'</p>':'')+
+    '<p class="small muted mt">Switching a feature off only hides it. Nothing is deleted, and anything you have already recorded stays exactly where it is \u2014 turn it back on and it reappears.</p>';
+  openSheet(f.n,body);
+}
 
 /* ---- setup steps ---- */
 function stepPractice(w){return{emoji:gi("practice"), h:"What should we call your practice?",
