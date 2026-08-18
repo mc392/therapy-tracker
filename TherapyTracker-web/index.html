@@ -578,13 +578,16 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:0
 .attn{display:flex;flex-direction:column;gap:8px}
 .acard{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--muted);border-radius:0 12px 12px 0;padding:11px 12px;transition:opacity .3s,transform .3s}
 .acard.bad{border-left-color:var(--bad)} .acard.warn{border-left-color:var(--warn)} .acard.brand{border-left-color:var(--brand)} .acard.acc{border-left-color:var(--accent)}
-.acard .ae{font-size:20px;flex:none;line-height:1}
+.acard .ae{font-size:20px;flex:none;line-height:1;color:var(--muted)}
+.acard.bad .ae{color:var(--bad)} .acard.warn .ae{color:var(--warn)}
+.acard.brand .ae{color:var(--brand)} .acard.acc .ae{color:var(--accent-ink)}
 .acard .am{flex:1;min-width:0;font-size:13.5px;line-height:1.35}
 .acard .am b{color:var(--brand-dark)}
 .acard .am .sub{font-size:12px;color:var(--muted)}
 .acard.gone{opacity:0;transform:translateX(30px)}
 .allclear{text-align:center;padding:14px 8px;color:var(--good);font-weight:600;font-size:14px}
 .allclear .ace{font-size:30px;display:block;margin-bottom:3px}
+.allclear .ace .gi{width:28px;height:28px;vertical-align:middle}
 
 /* ===== launch screen =====
    Brand colours are hard-coded, not palette tokens: this is the product's identity and must look
@@ -5765,28 +5768,28 @@ function attentionItems(){
   const od=der.filter(x=>x.d.overdue&&(x.d.rate||0)>0);
   if(od.length){const amt=od.reduce((a,x)=>a+(x.d.rate||0),0);
     const oldest=od.reduce((m,x)=>{const d=parseD(x.s.date);return(!m||d<m)?d:m;},null);
-    items.push({cls:"bad",e:"💷",msg:"<b>"+od.length+" session"+(od.length===1?"":"s")+" unpaid</b> · "+gbp(amt)+" outstanding",
+    items.push({cls:"bad",e:gi("money"),msg:"<b>"+od.length+" session"+(od.length===1?"":"s")+" unpaid</b> · "+gbp(amt)+" outstanding",
       sub:oldest?("oldest "+fmtDM(oldest)):"",btn:"Collect",act:()=>{sessFilter.view="list";sessFilter.seg="unpaid";go("sessions");}});}
   const inc=der.filter(x=>x.d.past&&!x.d.complete);
-  if(inc.length)items.push({cls:"warn",e:"📝",msg:"<b>"+inc.length+" session"+(inc.length===1?"":"s")+" incomplete</b>",
+  if(inc.length)items.push({cls:"warn",e:gi("notes"),msg:"<b>"+inc.length+" session"+(inc.length===1?"":"s")+" incomplete</b>",
     sub:"notes or room-paid missing",btn:"Catch up",act:()=>{sessFilter.view="list";sessFilter.seg="incomplete";go("sessions");}});
   const rd=der.filter(x=>x.d.roomDue==="Y");
   if(rd.length){const amt=rd.reduce((a,x)=>a+(x.d.roomRate||0),0);
-    items.push({cls:"warn",e:"🏠",msg:"<b>Room fees due</b> · "+gbp(amt)+" across "+rd.length+" session"+(rd.length===1?"":"s"),
+    items.push({cls:"warn",e:gi("rooms"),msg:"<b>Room fees due</b> · "+gbp(amt)+" across "+rd.length+" session"+(rd.length===1?"":"s"),
       sub:"",btn:"Review",act:()=>go("money")});}
   const sups=(S.supervision||[]).filter(s=>s.date&&parseD(s.date)<=t).sort((a,b)=>parseD(b.date)-parseD(a.date));
   if(sups.length){const days=Math.floor((t-parseD(sups[0].date))/86400000);
-    if(days>35)items.push({cls:"acc",e:"🧭",msg:"<b>Supervision due</b> · last was "+days+" days ago",
+    if(days>35)items.push({cls:"acc",e:gi("supervision"),msg:"<b>Supervision due</b> · last was "+days+" days ago",
       sub:"guideline: min 1½ hrs per month",btn:"Log it",act:()=>supervisionForm(null)});}
   const bi=backupDueInfo();
-  if(bi.due)items.push({cls:"brand",e:"☁️",msg:"<b>Back up your data</b>"+(bi.acts?" · "+bi.acts+" change"+(bi.acts===1?"":"s")+" unsaved":""),
+  if(bi.due)items.push({cls:"brand",e:gi("backup"),msg:"<b>Back up your data</b>"+(bi.acts?" · "+bi.acts+" change"+(bi.acts===1?"":"s")+" unsaved":""),
     sub:bi.days!=null?(bi.days+" days since last backup"):"never backed up on this device",btn:"Back up",
     act:()=>{if(encReady())encBackupNow();else exportJSON();updateBackupBanner();go("home");}});
   return items;
 }
 function renderAttention(host){
   const items=attentionItems();
-  if(!items.length){host.innerHTML='<div class="allclear"><span class="ace">✨</span>All clear — nothing needs you today</div>';return;}
+  if(!items.length){host.innerHTML='<div class="allclear"><span class="ace">'+gi("done")+'</span>All clear — nothing needs you today</div>';return;}
   host.innerHTML=items.map((it,i)=>'<div class="acard '+it.cls+'" data-i="'+i+'"><span class="ae">'+it.e+'</span>'+
     '<div class="am">'+it.msg+(it.sub?'<div class="sub">'+it.sub+'</div>':'')+'</div>'+
     '<button class="btn sm">'+esc(it.btn)+'</button></div>').join("");
