@@ -377,28 +377,82 @@ summary{font-weight:600;cursor:pointer}
 .audit-row{font-size:12.5px;padding:7px 2px;border-bottom:1px solid var(--line);color:var(--muted)}
 .audit-row b{color:var(--ink)}
 @media(min-width:560px){.kpis{grid-template-columns:repeat(4,1fr)}}
+/* Hidden by default, shown by the desktop block below. Both rules have to name
+   `nav.tabs button` — the bare `.navset` lost to it on specificity — which makes them equal, so
+   this one has to come FIRST or source order hides the item everywhere. */
+nav.tabs button.navset{display:none}
+/* ===== Desktop =====
+   The layout the phone gets, widened, is not the same thing as a desktop app. What separates
+   them is mostly not layout at all: it is that a pointer can hover, a keyboard can focus, and
+   nothing is sized for a thumb. Everything below is either one of those, or an instance of the
+   app describing itself twice because the sidebar and the header both exist. */
 @media(min-width:900px){
   body{padding-left:236px}
   nav.tabs{flex-direction:column;justify-content:flex-start;align-items:stretch;top:0;bottom:0;left:0;right:auto;
-    width:236px;max-width:236px;margin:0;background:var(--brand);border-top:0;border-right:1px solid var(--line);
-    padding:calc(env(safe-area-inset-top) + 20px) 12px 20px;gap:5px}
-  nav.tabs::before{content:var(--appname,"⬡ GroundWork");display:block;color:#fff;font-weight:700;font-size:16px;padding:6px 14px 16px;opacity:.96;
+    width:236px;max-width:236px;margin:0;border-top:0;border-right:1px solid var(--line);
+    background:linear-gradient(165deg,var(--gs1),var(--gs2));
+    -webkit-backdrop-filter:none;backdrop-filter:none;
+    padding:calc(env(safe-area-inset-top) + 20px) 12px 20px;gap:3px}
+  nav.tabs::before{content:var(--appname,"⬡ GroundWork");display:block;color:#fff;font-weight:700;font-size:16px;padding:6px 14px 18px;opacity:.96;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  nav.tabs button{flex-direction:row;justify-content:flex-start;gap:12px;width:100%;color:rgba(255,255,255,.82);
-    padding:12px 14px;border-radius:12px;font-size:14.5px}
+  /* The nav is a list of items, not a set of panes: without this the buttons inherit `flex:1`
+     from the phone's bottom bar and each one stretches to a fifth of the window height. */
+  nav.tabs button{flex:0 0 auto;flex-direction:row;justify-content:flex-start;gap:12px;width:100%;
+    color:rgba(255,255,255,.82);padding:11px 14px;border-radius:11px;font-size:14.5px;
+    transition:background .15s,color .15s}
   nav.tabs button .ic{width:22px;height:22px}
   nav.tabs button .ic svg{width:21px;height:21px}
   nav.tabs button>span:last-child{font-size:14.5px;text-align:left;flex:1}
+  /* Flat, not the phone's raised gradient pill — the sidebar IS the gradient here, and a
+     gradient on a gradient reads as a mistake. */
   nav.tabs button.on{background:rgba(255,255,255,.18);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.16)}
-  .app{max-width:920px;margin:0 auto}
-  header.top{background:var(--card);color:var(--ink);border-bottom:1px solid var(--line)}
-  header.top .ty{background:var(--soft);color:var(--muted)}
-  header.top .themebtn{background:var(--soft);color:var(--ink)}
-  main{padding:22px 26px 60px}
-  .fab{bottom:26px;right:26px}
+  .app{max-width:960px;margin:0 auto}
+  /* The header keeps the brand gradient it has on the phone. It went white here, which left the
+     sidebar as the only coloured thing on screen and made the two read as separate apps. */
+  header.top{padding:16px 26px}
+  header.top h1{font-size:19px}
+  /* The practice name is already the sidebar's title, so the header pill was the same words a
+     second time, six inches away. */
+  header.top .ty{display:none}
+  main{padding:24px 26px 72px}
+  /* A round floating + is a phone idiom. With room for words, use them. */
+  .fab{bottom:26px;right:26px;width:auto;height:auto;border-radius:14px;padding:13px 19px;gap:9px;line-height:1.1}
+  .fab::after{content:"New session";font-size:14.5px;font-weight:650;letter-spacing:.01em}
+  .fab svg{width:20px;height:20px}
   .sheet{align-items:center}
   .sheet-inner{border-radius:18px;max-width:640px;max-height:88vh}
+  .kpis{gap:14px}
+  /* Pushed to the foot of the column, away from the five sections — it is where you go to
+     configure the app, not another place in it. */
+  nav.tabs button.navset{display:flex;margin-top:auto}
+  /* One route to Settings, not two. The sidebar item says the word; the gear was a guess. */
+  header.top .themebtn{display:none}
 }
+/* ===== Pointer affordances =====
+   Gated on a real pointer so nothing here reaches a touch device, where :hover sticks after a
+   tap and leaves rows looking selected. This is most of the difference between "a mobile app in
+   a big window" and "a web app". */
+@media(hover:hover) and (pointer:fine){
+  .list-item{transition:background .13s}
+  .list-item:hover{background:color-mix(in srgb,var(--brand) 7%,transparent)}
+  nav.tabs button:hover{background:rgba(255,255,255,.10);color:#fff}
+  nav.tabs button.on:hover{background:rgba(255,255,255,.24)}
+  .card{transition:box-shadow .18s,border-color .18s}
+  .seg button{transition:background .13s,color .13s}
+  .seg button:not(.on):hover{background:color-mix(in srgb,var(--brand) 9%,transparent);color:var(--brand-dark)}
+  .themebtn:hover{background:rgba(0,0,0,.28)}
+  .taxlink:hover{color:var(--brand-dark);border-bottom-color:var(--brand-dark)}
+  .palopt:hover{border-color:color-mix(in srgb,var(--brand) 45%,var(--line))}
+  .fab:hover{filter:brightness(1.05);box-shadow:0 14px 30px -6px color-mix(in srgb,var(--gs2) 70%,transparent),inset 0 1px 0 rgba(255,255,255,.3)}
+  .sheet .x:hover{background:color-mix(in srgb,var(--brand) 10%,transparent)}
+  .uohyr:hover{border-color:color-mix(in srgb,var(--brand) 40%,var(--line))}
+}
+/* ===== Keyboard focus =====
+   There was no focus style at all, so tabbing through the app was invisible. :focus-visible
+   only fires for keyboard users, so a click never draws a ring. */
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:6px}
+nav.tabs button:focus-visible{outline-color:#fff;outline-offset:-2px}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:0}
 
 /* ====================== Gamification & celebration FX ====================== */
 #confetti{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:80;display:none}
@@ -1457,10 +1511,40 @@ function resolveTab(tab,seg){
   return {tab:tab,seg:seg};
 }
 let cur="home";
+/* On a phone the header is the app's identity, so it says GroundWork. On desktop the sidebar
+   already says that — twice over, with the practice name — so the header is free to do the more
+   useful job of naming the screen you are on. */
+function wideLayout(){try{return window.matchMedia("(min-width:900px)").matches;}catch(e){return false;}}
+function sectionTitle(){
+  if(cur==="settings")return "Settings";
+  const t=TABS.find(x=>x.id===cur);
+  return t?t.label:"GroundWork";
+}
+function paintTopTitle(){
+  const h=document.getElementById("topTitle");
+  if(h)h.textContent=wideLayout()?sectionTitle():"GroundWork";
+}
+try{window.matchMedia("(min-width:900px)").addEventListener("change",()=>{
+  try{paintTopTitle();paintFab();}catch(e){}});}catch(e){}
+const SETTINGS_IC='<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
 function renderTabs(){const overdue=S.sessions.filter(s=>derive(s).overdue).length;
+  paintTopTitle();
+  /* The settings item is rendered always and shown by CSS only on desktop: on a phone the gear
+     in the header is the affordance people already know, and a sixth item would crowd a bar
+     that is already at five. */
   $("#tabs").innerHTML=visibleTabs().map(t=>`<button data-tab="${t.id}" class="${t.id===cur?"on":""}">
-    <span class="ic">${t.ic}</span><span>${t.label}${t.id==="sessions"&&overdue?` <span class="badge">${overdue}</span>`:""}</span></button>`).join("");
+    <span class="ic">${t.ic}</span><span>${t.label}${t.id==="sessions"&&overdue?` <span class="badge">${overdue}</span>`:""}</span></button>`).join("")+
+    `<button data-tab="settings" class="navset${cur==="settings"?" on":""}"><span class="ic">${SETTINGS_IC}</span><span>Settings</span></button>`;
   $("#tabs").querySelectorAll("button").forEach(b=>b.onclick=()=>go(b.dataset.tab));
+  paintFab();
+}
+/* Home already carries a New session button of its own, so the floating one beside it was the
+   same action twice, a hand's width apart. It earns its place on Sessions, and on a phone
+   everywhere, where it is a small circle rather than a labelled pill competing for attention. */
+function paintFab(){
+  const f=document.getElementById("fab"); if(!f)return;
+  const wants=(cur==="sessions")||(cur==="home"&&!wideLayout());
+  f.style.display=wants?"flex":"none";
 }
 /* Recovery screen. A view that throws used to leave <main> empty — a blank app, with no way
    to reach Settings and therefore no way to export the data out of it. Export is always here. */
@@ -1505,7 +1589,7 @@ function go(tab,opts){
   }
   if(keep!=null)window.scrollTo(0,Math.min(keep,Math.max(0,document.body.scrollHeight-window.innerHeight)));
   else window.scrollTo(0,0);
-  $("#fab").style.display=(tab==="sessions"||tab==="home")?"flex":"none";
+  paintFab();
   try{updateBackupBanner();updateSaveBanner();}catch(e){}
   try{coachMaybeTip(tab);}catch(e){}
 }
