@@ -8,3 +8,16 @@ therapy-tracker-backup-*.json
 # Local push helper and its output
 push-now.bat
 push-result.txt
+
+# ---- Native iOS wrapper (Capacitor) ----
+# The web app in TherapyTracker-web/ is the single source of truth. Everything the
+# wrapper derives from it is generated, never committed, so a stale copy cannot drift.
+node_modules/
+ios/App/App/public/
+
+# Derived artwork: 9MB of PNGs copied out of icon-ideas/groundwork/ by
+# scripts/install-assets.mjs on every sync. The sources are already in the repo; committing
+# six near-duplicates of them, again on every artwork change, is not worth it. Contents.json
+# IS committed — that is the configuration, not the output.
+ios/App/App/Assets.xcassets/Splash.imageset/*.png
+ios/App/App/Assets.xcassets/AppIcon.appiconset/*.png

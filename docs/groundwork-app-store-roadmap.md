@@ -24,9 +24,9 @@ Any one or two of these is enough to clear 4.2 comfortably; doing two or three a
 ## Step-by-step
 
 1. ~~**Rebrand the codebase.**~~ **Done (Aug 2026).** `manifest.webmanifest`, `<title>`, header, tab-rail label, `practiceName()` fallback, service-worker offline message, terms/privacy and export filenames all say GroundWork. A web launch screen was added at the same time (inline SVG, not the PNGs — see CLAUDE.md § Launch screen). `TherapyTrackerDB`, the `tt_*` localStorage keys and the `TherapyTracker-web/` folder were deliberately left alone: renaming them orphans existing data or breaks the deploy path.
-2. **Set up Capacitor.** `npm install @capacitor/core @capacitor/cli`, `npx cap init` (app id suggestion: `uk.co.charlottebloortherapy.groundwork` — reverse-DNS, doesn't have to match a domain you own), `npx cap add ios`, `npx cap copy`. This produces an Xcode project wrapping the existing web app unchanged.
-3. **Add the native feature(s)** chosen above via their Capacitor plugins, then `npx cap sync`.
-4. **Drop in the brand assets.** Xcode's asset catalog wants the 1024 icon plus a `LaunchScreen.storyboard` (or SwiftUI launch screen) built from the light/dark splash sources — Capacitor's default template already has a slot at `ios/App/App/Assets.xcassets/Splash.imageset`. **The PNGs in `icon-ideas/groundwork/` exist for exactly this step and are still unused by the web app** — the PWA launch screen is inline SVG instead, because 2.4MB of PNG would have to be precached for offline and cannot follow the theme or an arbitrary aspect ratio. The web icons (`icon-180/192/512.png`) are already downscales of `icon-1024.png`, so the identity matches across both.
+2. ~~**Set up Capacitor.**~~ **Done (Aug 2026).** Capacitor 8, app id `uk.co.charlottebloortherapy.groundwork`, `webDir` pointed straight at `TherapyTracker-web/` rather than a copy of it. The Xcode project is in `ios/`; none of it touches the Pages deploy, which uploads `TherapyTracker-web/` alone. See **`docs/ios-native.md`**.
+3. ~~**Add the native feature(s)**~~ **Done (Aug 2026) — all four, not one or two.** Face ID / Touch ID lock (with app-switcher hiding and a grace period), daily reminders built from the live Attention feed, the share sheet for every export, and receipts rendered to real PDFs. The last two replace things that were *silently broken* in a web view: `<a download>` and `window.print()` both do nothing on iOS, so an installed PWA has always had a dead Export button and a dead Generate & print button.
+4. ~~**Drop in the brand assets.**~~ **Done (Aug 2026).** `icon-1024.png` into the app icon slot and both splash sources into `Splash.imageset` with a **dark variant**, so a dark-mode cold start no longer flashes white. `launchAutoHide` is off and the web `#splash` takes over on first paint, so the two launch screens read as one. Installed by `scripts/install-assets.mjs` on every sync, because `cap sync` would otherwise restore Capacitor's placeholders.
 5. **Enroll in the Apple Developer Program** — **$99/year**. Enroll as an **Individual** (fastest — no D-U-N-S number or company verification needed) unless you specifically want the listing to show "Charlotte Bloor Therapy" as the seller of record, in which case enroll as an Organization, which requires a D-U-N-S number and takes longer.
 6. **Create the App Store Connect record.** Bundle ID from step 2, category — **Business** is the safer fit than Medical/Health & Fitness, since this is practice administration, not a clinical tool making health claims (Medical-category apps get extra scrutiny and sometimes need regulatory documentation).
 7. **Host the privacy policy and terms live.** ~~with the app name updated to GroundWork~~ — both already say GroundWork and both already deploy to GitHub Pages via `.github/workflows/deploy.yml`, so this step is just taking the two public URLs. `terms.html` also gained a **section 4 on tax figures** (estimates, not advice; the app cannot file) that is worth re-reading before it goes in front of App Review.
@@ -54,4 +54,18 @@ You said "public App Store listing" without specifying a platform — worth know
 2. ~~Rebrand pass on `index.html`/`manifest.webmanifest`.~~ Done — see step 1. The SW cache was bumped to `tt-v5` so installed devices pick up the new manifest name rather than keeping "Therapy Tracker" on the Home Screen.
 3. Decide Individual vs Organization for the Apple Developer enrollment — that's the one step only you can do (it needs your/Charlotte's Apple ID and payment details).
 
-**So the remaining work is steps 2–6 and 8–11**: Capacitor, the native features that clear Guideline 4.2, the developer enrolment, the App Store Connect record, the privacy label, TestFlight and the listing assets. Nothing in the web app blocks any of it.
+**Steps 2, 3 and 4 are done** — see `docs/ios-native.md` for the wrapper and the three iOS
+traps it walks around. **Steps 6, 8 and 10 are drafted** in `docs/app-store-listing.md`:
+the App Store Connect fields, the "Data Not Collected" answer and why it is honest, the
+Guideline 4.2 reviewer note, the screenshot list and the store copy.
+
+**What is actually left is step 5, and everything downstream of it.** The Apple Developer
+enrolment ($99/year, Individual unless you want "Charlotte Bloor Therapy" as the seller of
+record) is the gate: without it there is no App Store Connect record to fill in, no
+TestFlight build and nothing to submit. Once it exists, steps 6/8/10 are copy-paste from
+the listing pack, step 9 is one TestFlight build — worth it, since Face ID, notification
+delivery and AirPrint have only been exercised in the simulator — and step 11 is submission.
+
+One thing to tell testers: **data does not carry across from the installed PWA.** The
+native app is a different origin, so its database starts empty. Export a `.json` backup
+from the web app and restore it in the native one.

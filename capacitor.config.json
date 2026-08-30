@@ -1,0 +1,16 @@
+{
+  "appId": "uk.co.charlottebloortherapy.groundwork",
+  "appName": "GroundWork",
+  "webDir": "TherapyTracker-web",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#F5F8F5"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": false,
+      "backgroundColor": "#F5F8F5",
+      "launchFadeOutDuration": 200
+    }
+  }
+}

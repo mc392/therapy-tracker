@@ -41,6 +41,37 @@ TherapyTracker-web/
 Hosted on GitHub Pages. Push to `main` → GitHub Actions deploys `TherapyTracker-web/` automatically.
 Live URL: `https://<username>.github.io/<repo>/`
 
+## Native iOS wrapper (Capacitor, added Aug 2026)
+The iOS app is **this same `index.html`**, not a fork — `webDir` points at `TherapyTracker-web/`
+itself and `ios/App/App/public/` is a gitignored copy rebuilt on every sync. Full detail in
+**`docs/ios-native.md`**; the parts that constrain editing this file:
+
+- **One guarded block at the end of `index.html` holds everything iOS-specific.** It returns
+  immediately unless `Capacitor.isNativePlatform()`, so the PWA is byte-for-byte unaffected.
+  It **wraps** `download()`, `printReceipt()` and `VIEWS.settings` rather than reimplementing
+  them, which is what keeps the two builds in step — but it also means **renaming any of those
+  silently breaks a native feature while the web app carries on working perfectly.**
+  `npm run check` asserts every name it reaches for; run it before pushing a rename.
+- **`receiptHTML()` was split out of `printReceipt()`** so the native side can render the same
+  markup to a real PDF. Keep it returning `{html,num}` — the native layer names both.
+- **`.webonly`** hides copy that only makes sense in a browser tab (currently the "Add to your
+  Home Screen" line). Mark, don't delete.
+- **Device-only settings are `tt_lock`, `tt_lock_grace`, `tt_notify` in localStorage, never in
+  `S`** — `S` travels in backups, and restoring onto another phone must not change that phone's
+  lock.
+- **`sw.js` is skipped on native** (service workers do not register on Capacitor's scheme and the
+  bundle is already local) and pruned from the copied app, along with `icon-ideas/`.
+
+### WebKit is not Blink — check form controls on a phone
+Two layout bugs looked perfect in Chrome and broke on iOS, both fixed here, both improving the
+PWA as well. Don't regress either:
+- **Checkboxes and radios are excluded from the bare `input` selector.** They were picking up
+  `width:100%` and 14px of padding, making a ~160px flex item that pushed its own label off the
+  screen edge on the beta gate.
+- **`.field2>*` and the controls carry `min-width:0`.** Grid items default to `min-width:auto`,
+  and WebKit's intrinsic minimum for `input[type=date]`/`[type=time]` is far larger than Blink's,
+  so the Time column ran off the right edge in the session form.
+
 ## Service worker cache strategy
 `sw.js` uses **network-first for HTML** (`req.mode === "navigate"`) — every page load fetches a fresh `index.html` from the network, so updates land on next open without needing a cache bump.
 
