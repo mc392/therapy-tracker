@@ -62,6 +62,29 @@ itself and `ios/App/App/public/` is a gitignored copy rebuilt on every sync. Ful
 - **`sw.js` is skipped on native** (service workers do not register on Capacitor's scheme and the
   bundle is already local) and pruned from the copied app, along with `icon-ideas/`.
 
+### Mobile chrome: floating bar, grouped rows, iOS-weight switches (Aug 2026)
+A deliberate step toward the way a native app looks, taken in the **shared** CSS rather than behind
+the native guard — these read as "modern mobile app", not specifically iPhone, so the Android and
+desktop builds keep looking deliberate. Three things, and the traps in each:
+- **`nav.tabs` is a floating capsule**, inset from the edges. The safe-area inset became the bar's
+  *distance from the bottom* (`bottom:max(10px, env(safe-area-inset-bottom))`), not padding inside
+  it — adding to the inset floats it so high a band of content shows underneath. `main`'s
+  bottom padding (108px) and `.fab`'s offset both clear it. **The desktop block at `min-width:900px`
+  turns this back into a full-height sidebar and must keep undoing `border-radius` and `box-shadow`**
+  — anything new added to the base rule has to be reset there too.
+- **The active tab is a soft tint, not the filled gradient pill.** A pill inside a capsule reads as
+  a button inside a button. Pure colour alone was too close to `--muted` to see at a glance on a real
+  screen, hence the 16% sage wash behind it. Desktop overrides this with its own white tint.
+- **`.ftrow` is a grouped list**, not one box per row: hairline separators inset to where the text
+  starts, with only the ends of a run rounded. It uses **`:has()`, not `:last-child`** — the setup
+  wizard puts an `.ovnote` straight after the last row, so the run does not always end its container.
+- **`.sw` is 51×31 with a 27px knob**, iOS's size and a bigger tap target than the 48×28 it was. The
+  knob overshoots slightly on the way across; a linear slide is what makes a copied switch feel copied.
+
+Not done, and deliberately: **large-title navigation.** It would retire the sage gradient header that
+carries the brand on every screen, and it is the change that makes the web builds look like they are
+pretending to be an iPhone. See the design comparison referenced in `docs/ios-native.md`.
+
 ### WebKit is not Blink — check form controls on a phone
 Two layout bugs looked perfect in Chrome and broke on iOS, both fixed here, both improving the
 PWA as well. Don't regress either:

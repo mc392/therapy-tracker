@@ -83,6 +83,20 @@ Device settings (`tt_lock`, `tt_lock_grace`, `tt_notify`) live in localStorage, 
 `S` travels in backups, and restoring a backup onto a different phone must not silently
 switch that phone's lock off.
 
+## The look, and where it stops
+
+GroundWork Notes has no design system to copy: twelve SwiftUI view files contain thirteen styling
+calls between them, and the main screens contain none. What reads as "native" there is iOS 26
+drawing stock `TabView`, `List` and `Toggle`. So none of it was ported — the parts worth having
+were rebuilt in CSS, in the **shared** stylesheet rather than behind the native guard, because a
+floating bar and heavier switches say "modern mobile app" rather than "iPhone" and so cost the
+Android and desktop builds nothing. Details and the traps are in CLAUDE.md § Mobile chrome.
+
+What was deliberately **not** taken: large-title navigation. It would retire the sage gradient
+header that is the brand on every screen, and it is the one change that would make the web builds
+look like they are imitating a platform they do not run on. If the goal ever becomes making it
+*feel* native rather than look native, that is SwiftUI and a rewrite, not a restyle.
+
 ## Three iOS traps, already hit
 
 **Capacitor 8 does not discover plugins by scanning the runtime.**
