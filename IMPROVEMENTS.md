@@ -80,11 +80,9 @@ submitted year. Verified all four tax years' monthly, annual and net figures unc
 
 ## Follow-ups still open
 
-1. **The tax test suite has no coverage for cancellation charging.** `tests/tax-tests.js` runs
-   84/84 green, but every case predates v5 and builds sessions with no `cancelCharge`, so the
-   `fullRate × cancelPct` path in `derive()` is never exercised there. It was verified by hand —
-   MTD quarters reconcile to `tyNet` on both bases with 50/25/0/100% charges spread across all four
-   quarters — and that check belongs in the suite. **Highest-value next test work.**
+1. ~~**The tax test suite has no coverage for cancellation charging.**~~ **Done (Aug 2026,
+   task T9)** — stamped charges, policy resolution, and MTD reconciliation with mixed
+   50/25/0/100% charges on both bases are now in `tests/tax-tests.js`.
 2. **Peer supervision has no milestone reveal.** Hidden by "start simple" and only reachable from
    Settings › Features. Deliberate — whether someone attends peer supervision is a fact about their
    practice, not something a session count can infer — but worth revisiting if it goes unfound.
@@ -95,9 +93,9 @@ submitted year. Verified all four tax years' monthly, annual and net figures unc
    nothing — but it does not belong in the deploy.
 5. **Multi-tab / multi-device writes still overwrite each other** — pre-existing, documented in
    CLAUDE.md § Known limitations, deliberately deferred. Do not "fix" it opportunistically.
-6. **App Store work** — see `docs/groundwork-app-store-roadmap.md`. Steps 1–2 (rebrand, brand
-   assets) are done; Capacitor, the native features needed to clear Guideline 4.2, and the Apple
-   Developer enrolment are not started.
+6. **App Store work** — see `docs/groundwork-app-store-roadmap.md`. Rebrand, brand assets,
+   Capacitor and the native features are done, and the app has an App Store Connect record
+   (Aug 2026). Remaining: TestFlight on real hardware, screenshots, submission.
 
 ## Notes
 - These were prompted by user feedback and security/compliance considerations.
