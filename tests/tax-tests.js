@@ -49,17 +49,12 @@
 
    The suite never calls commit(), and restores the live state when it finishes.
 
-   NOT COVERED YET — cancellation charging (schema v5, Aug 2026)
-     derive() now returns rate = fullRate x cancelPct/100, where cancelPct is STAMPED on the
-     session (s.cancelCharge) rather than read from the policy. Every case below predates that
-     and builds sessions with no cancelCharge, so they all take the cancelPct=100 path and the
-     multiplication is never exercised here. The suite passing therefore says nothing about it.
-
-     It was verified by hand at the time — with 50/25/0/100% charges spread across all four
-     quarters, the MTD quarters still summed to tyNet on both the cash and accruals bases, and
-     the v5 backfill left every existing figure unchanged — but a hand check is not a test.
-     Adding it is the highest-value next work on this file. Derive the expectations from the
-     rule, as above: full fee x the stamped percentage, never from what derive() currently says.
+   CANCELLATION CHARGING (schema v5, Aug 2026) — covered in section 9 (T9, Aug 2026)
+     derive() returns rate = fullRate x cancelPct/100, where cancelPct is STAMPED on the
+     session (s.cancelCharge) rather than read from the policy. Section 9 exercises that
+     multiplication directly, the policy-resolution helper it is stamped from, and the
+     reconciliation invariant (breakdown = MTD quarters = tyNet) with mixed charge
+     percentages spread across all four quarters on both the cash and accruals bases.
    ============================================================================ */
 (function () {
   "use strict";
@@ -597,6 +592,117 @@
         act: Math.round(bd) + "/" + Math.round(qs) + "/" + Math.round(tn) };
     });
   });
+
+  /* =========================================================================
+     9. Cancellation charging (schema v5, added T9, Aug 2026)
+     derive() returns rate = fullRate x cancelPct/100, and cancelPct is read from
+     cancelPctFor(s) -- the STAMPED s.cancelCharge, never the live policy. Expected
+     values below are worked out longhand (full fee x the stamped percentage), never
+     copied from what derive() currently returns.
+
+     The reconciliation fixture (9f) dates its four sessions inside TY (2026-27), like
+     every other fixture in this file, so the suite-wide caveat in the file header
+     applies here too: it depends on TY being the year IN PROGRESS and needs
+     re-anchoring, along with everything else here, once the real date passes
+     5 Apr 2027. Not re-anchored now.
+     ========================================================================= */
+
+  /* 9a. Stamped charge wins over the full fee */
+  run("Cancel: a stamped 50% charge halves an £80 fee", function () {
+    mkState({ fee: 80, sessions: [{ _id: "cx1", client: "AB", num: 1, date: "2026-05-05", time: "10:00",
+      location: "At home", room: "-", notes: "Y", roomPaid: "n/a", paidDate: "2026-05-05",
+      cancelKind: "late", cancelCharge: 50 }] });
+    var d = derive(S.sessions[0]);
+    /* £80 fee x 50% = £40 */
+    return { act: d.rate + "/" + d.fullRate + "/" + d.cancelPct, exp: "40/80/50" }; });
+
+  /* 9b. Absent stamp = full fee (pre-v5 behaviour preserved) */
+  run("Cancel: no stamped charge still bills the full fee", function () {
+    mkState({ fee: 80, sessions: [{ _id: "cx2", client: "AB", num: 1, date: "2026-05-05", time: "10:00",
+      location: "At home", room: "-", notes: "Y", roomPaid: "n/a", paidDate: "2026-05-05" }] });
+    return { act: derive(S.sessions[0]).rate, exp: 80 }; });
+
+  /* 9c. A DNA stamped at 0% carries no fee but still counts as cancelled */
+  run("Cancel: a DNA at 0% carries no fee but is still excluded as cancelled", function () {
+    mkState({ fee: 60, sessions: [{ _id: "cx3", client: "AB", num: 1, date: "2026-05-05", time: "10:00",
+      location: "At home", room: "-", notes: "Y", roomPaid: "n/a", paidDate: "2026-05-05",
+      cancelKind: "dna", cancelCharge: 0 }] });
+    var s = S.sessions[0], d = derive(s);
+    return { pass: d.rate === 0 && isCancelled(s) === true && isFinite(tyNet(TY, false)),
+      act: d.rate + " / isCancelled=" + isCancelled(s) }; });
+
+  /* 9d. Editing the policy afterwards never reaches back and rewrites a stamped session */
+  run("Cancel: a later policy change leaves an already-stamped session alone", function () {
+    var sess = { _id: "cx4", client: "AB", num: 1, date: "2026-05-05", time: "10:00",
+      location: "At home", room: "-", notes: "Y", roomPaid: "n/a", paidDate: "2026-05-05",
+      cancelKind: "late", cancelCharge: 50 };
+    mkState({ fee: 80, sessions: [sess] });
+    var before = derive(S.sessions[0]).rate;
+    mkState({ fee: 80, sessions: [sess],
+      settings: { cancelRules: { window: [{ hoursBefore: 1000, chargePct: 90 }], dnaChargePct: 10 } } });
+    var after = derive(S.sessions[0]).rate;
+    /* £80 x 50% = £40, both before and after the policy edit */
+    return { act: before + "/" + after, exp: "40/40" }; });
+
+  /* 9e. Policy resolution: longest-notice window that clears wins; no notice or no
+     clearing window charges in full; a DNA never consults the windows at all. */
+  mkState({ settings: { cancelRules: {
+    window: [{ hoursBefore: 48, chargePct: 0 }, { hoursBefore: 24, chargePct: 50 }],
+    dnaChargePct: 75 } } });
+  run("Cancel policy: 72h notice clears the 48h window", function () {
+    return { act: cancelPolicyPct("late", 72), exp: 0 }; });
+  run("Cancel policy: 30h notice clears the 24h window, not the 48h one", function () {
+    return { act: cancelPolicyPct("late", 30), exp: 50 }; });
+  run("Cancel policy: 2h notice clears no window, full fee", function () {
+    return { act: cancelPolicyPct("late", 2), exp: 100 }; });
+  run("Cancel policy: notice never recorded charges in full", function () {
+    return { act: cancelPolicyPct("late", null), exp: 100 }; });
+  run("Cancel policy: a DNA uses its own rate, not the windows", function () {
+    return { act: cancelPolicyPct("dna", 72), exp: 75 }; });
+
+  /* 9f. Reconciliation with mixed charges across all four MTD quarters, plus a
+     couple of payments landing in a later quarter than the one they were earned
+     in -- the high-value check that a stamped percentage, not just a full or
+     unpaid fee, still reaches the breakdown sheet, the quarters and tyNet alike. */
+  var cancelFixture = { fee: 100, sessions: [
+    /* Q1 (6 Apr - 5 Jul): full fee, paid the same quarter */
+    { _id: "rx1", client: "AB", num: 1, date: "2026-05-10", time: "10:00", location: "At home", room: "-",
+      notes: "Y", roomPaid: "n/a", paidDate: "2026-05-10", cancelCharge: 100 },
+    /* Q2 (6 Jul - 5 Oct): late cancel at 50%, paid two quarters later (Q3) */
+    { _id: "rx2", client: "AB", num: 2, date: "2026-08-10", time: "10:00", location: "At home", room: "-",
+      notes: "Y", roomPaid: "n/a", paidDate: "2026-11-10", cancelKind: "late", cancelCharge: 50 },
+    /* Q3 (6 Oct - 5 Jan): late cancel at 25%, paid the following quarter (Q4) */
+    { _id: "rx3", client: "AB", num: 3, date: "2026-11-20", time: "10:00", location: "At home", room: "-",
+      notes: "Y", roomPaid: "n/a", paidDate: "2027-02-15", cancelKind: "late", cancelCharge: 25 },
+    /* Q4 (6 Jan - 5 Apr): DNA at 0%, never paid */
+    { _id: "rx4", client: "AB", num: 4, date: "2027-02-20", time: "10:00", location: "At home", room: "-",
+      notes: "Y", roomPaid: "n/a", paidDate: "", cancelKind: "dna", cancelCharge: 0 }
+  ] };
+  ["cash", "accruals"].forEach(function (basis) {
+    run("Reconcile [cancellations, " + basis + "]: breakdown = quarters = tyNet", function () {
+      mkState(Object.assign({ basis: basis }, cancelFixture));
+      var b = tyBounds(TY);
+      var bd = profitBreakdown(b.start, b.end).net;
+      var qs = mtdQuarters(TY).reduce(function (a, q) { return a + mtdPeriod(q).net; }, 0);
+      var tn = tyNet(TY, false);
+      /* £100 (100%) + £50 (50%) + £25 (25%) + £0 (0%) = £175, whichever basis moves
+         a payment into a later quarter than the one the session fell in */
+      return { pass: Math.abs(bd - tn) < 1 && Math.abs(qs - tn) < 1 && Math.abs(tn - 175) < 1,
+        act: Math.round(bd) + "/" + Math.round(qs) + "/" + Math.round(tn) };
+    });
+  });
+
+  /* 9g. A charged missed session appears on statements/receipts with the reduced
+     amount, so the total matches what the client was actually billed. */
+  run("Receipts: a charged late cancellation appears with the reduced amount", function () {
+    mkState({ fee: 80, sessions: [{ _id: "rc1", client: "AB", num: 1, date: "2026-05-05", time: "10:00",
+      location: "At home", room: "-", notes: "Y", roomPaid: "n/a", paidDate: "2026-05-05",
+      cancelKind: "late", cancelCharge: 50 }] });
+    var client = S.clients.filter(function (c) { return c.code === "AB"; })[0];
+    var rows = receiptRows(client, "all").rows;
+    var row = rows.filter(function (x) { return x.s._id === "rc1"; })[0];
+    return { pass: !!row && row.d.rate === 40 && row.d.cancelPct === 50,
+      act: row ? (row.d.rate + "/" + row.d.cancelPct) : "missing" }; });
 
   /* ---------- restore and report ---------- */
   S = savedState; setPensionPcm(savedPension);

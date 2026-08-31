@@ -62,6 +62,35 @@ itself and `ios/App/App/public/` is a gitignored copy rebuilt on every sync. Ful
 - **`sw.js` is skipped on native** (service workers do not register on Capacitor's scheme and the
   bundle is already local) and pruned from the copied app, along with `icon-ideas/`.
 
+### Automatic backups on the phone (Aug 2026)
+Desktop Chrome/Edge auto-saves an encrypted backup silently through the File System Access API.
+That API does not exist on iOS, so the only safety net there was the nag banner and a manual
+share sheet. Behind the native guard, **every `commit()` also writes a copy into the app's
+Documents folder**, 2s debounced:
+- `backupPayload()` (near `exportJSON`) is now the **single** backup envelope — `exportJSON`,
+  `encPayload` and the native auto-backup all build their file from it. Adding a field in one
+  place is the whole point; don't reintroduce a second literal.
+- **`encReady()` decides per write.** Passphrase set → `encPayload()` → `GroundWork
+  auto-backup.enc.json`; otherwise the plain payload → `GroundWork auto-backup.json`. A change of
+  mode deletes the superseded *live* file, or yesterday's readable copy would sit in Files
+  forever. The dated copies are deliberately left — they are restore points that cannot be
+  re-encrypted, and they age out within a week anyway.
+- **Rotation**: at most once a day (`tt_autobk_day`) a dated copy goes to
+  `auto-backups/GroundWork YYYY-MM-DD.json`, pruned to the newest 7. Daily, not per-save — seven
+  copies from one afternoon are seven copies of the same afternoon.
+- **It never toasts and never blocks.** `nativeAutoBackup()` returns a boolean and logs; only the
+  Settings › This iPhone › "Back up now" button speaks. The `commit` wrap passes the original's
+  `true`/`false` straight back, so a failed IndexedDB write still raises `#saveBanner` and a
+  failed backup can neither block nor mask it. Last outcome is in `tt_autobk_status`.
+- **`flushAutoBackup()` runs on backgrounding.** iOS suspends the WebView, and a pending 2s timer
+  suspends with it — logging a session then putting the phone straight down is exactly the case
+  this exists for.
+- **`markBackedUp()` is deliberately untouched.** A copy on the same phone is no protection for
+  someone with iCloud Backup off, so the manual-export nag is unchanged; the banner detail line
+  only appends "(an automatic copy is kept on this iPhone)".
+- `UIFileSharingEnabled` + `LSSupportsOpeningDocumentsInPlace` in `Info.plist` are what make that
+  folder visible in the Files app. Without them the files exist but nobody can reach them.
+
 ### Mobile chrome: floating bar, grouped rows, iOS-weight switches (Aug 2026)
 A deliberate step toward the way a native app looks, taken in the **shared** CSS rather than behind
 the native guard — these read as "modern mobile app", not specifically iPhone, so the Android and
@@ -90,7 +119,7 @@ Two layout bugs looked perfect in Chrome and broke on iOS, both fixed here, both
 PWA as well. Don't regress either:
 - **Checkboxes and radios are excluded from the bare `input` selector.** They were picking up
   `width:100%` and 14px of padding, making a ~160px flex item that pushed its own label off the
-  screen edge on the beta gate.
+  screen edge in a setup step.
 - **`.field2>*` and the controls carry `min-width:0`.** Grid items default to `min-width:auto`,
   and WebKit's intrinsic minimum for `input[type=date]`/`[type=time]` is far larger than Blink's,
   so the Time column ran off the right edge in the session form.
@@ -109,7 +138,7 @@ Global `S` object — persisted to IndexedDB (`TherapyTrackerDB`) with a localSt
 
 ```js
 S = {
-  clients: [],          // each has _id
+  clients: [],          // each has _id; usualDay/usualTime override the derived slot
   rooms: [],            // {location, rate, due, billing:"session"|"monthly", pay:{freq,day}}
   sessions: [],         // therapy sessions
   supervision: [],      // clinical supervision (counts toward the 1:6 ratio)
@@ -137,6 +166,7 @@ S = {
     taxYears: {},       // tax year → what HMRC actually assessed / set / a claim to reduce (v6)
     taxPaid: {},        // due date ISO → {date,amount} paid, or {unpaid:true} (v6)
     taxPot: {},         // {bufferPct, balance, balanceAt} (v6)
+    taxMoments: {},     // seasonal-prompt id → date dismissed — see taxMoments()
     coach: {},          // {seen:[tip keys], off} — first-visit tips (v6)
     onboarded, onboardedAt, setupRuns
   }
@@ -198,7 +228,7 @@ Five collapsible `<details class="sgrp">` groups (practice / data / records / he
 **Home · Sessions · Practice · Money · Tax.** `TAB_ALIAS` maps the old names (`clients`, `supervision`, `income`, `raw`) onto the new tab **and a segment**, so old deep links land somewhere meaningful; `go(tab,{seg})` sets it. A plain tab tap stays on whatever segment the reader last used.
 - **Practice** — Clients / Trends / Rooms / Supervision. `supervisionPanel()` and `rawPanel()` are panels, not views: they are mounted whole so their inner sub-tabs keep working.
 - **Money** — Overview / Costs & income / Table.
-- **Tax** — Estimate / Pot & payments / Allowances / MTD. **Estimate** carries the take-home, the by-year table and a *summary* of the pot only; everything about paying — the buffer, the balance, every due date, and what HMRC actually assessed — lives on **Pot & payments**, so no figure appears twice with two different explanations behind it. **Allowances** is "things set per tax year": one year strip at the top governs every card below it (`taxYearStripStatus`), then student loan, then use of home. Region is *not* here — it moved to Settings.
+- **Tax** — Now / Estimate / Pot & payments / Per year / Quarterly (MTD). **Now** is the default (`taxSeg`) and the only screen most of the year: the standing disclaimer, any live seasonal moments, then three numbers — on track to owe (`taxLiability`), keep in your pot (`taxPot`), next payment (`nextTaxPayment`) — each tapping through to the screen that owns its detail. It **summarises, never replaces**: the pot *summary* card moved off Estimate onto it, so **Estimate** now carries the take-home, the basis and the by-year table, while everything about paying — the buffer, the balance, every due date, and what HMRC actually assessed — still lives on **Pot & payments**, so no figure appears twice with two different explanations behind it. **Per year** is "things set per tax year" (renamed from "Allowances" in T6 — student loan and region aren't allowances): one year strip at the top governs every card below it (`taxYearStripStatus`), then student loan, then use of home. Region is *not* here — it moved to Settings.
 - The old `income` feature flag became `money` + `tax`; `normalize()` carries `income:false` across to both rather than switching a hidden tab back on.
 
 ## UK tax engine (Aug 2026)
@@ -215,6 +245,20 @@ Five collapsible `<details class="sgrp">` groups (practice / data / records / he
 - **A past due date with no record is `unknown`, not overdue** (`PAY_GRACE_DAYS`, 60). Someone arriving with three years of history has almost certainly paid those bills; counting them would poison every pot figure. Inside the grace window "not ticked" still means owed, and a row can be marked `{unpaid:true}` to count it back in.
 - **`taxPot()`** answers two separate questions and keeps them separate: what should be put by *today* (tax **already earned** + unpaid bills from years that have **ended** + a buffer the therapist chose) and what has to be there by a *date* (`byNext`). Tax on money not yet earned is deliberately excluded. `rate` is projected tax over **projected income**, not profit — it is a share of money arriving in the account. Working it out from tax-to-date over full-year net is what used to display **0%** early in a year while the table showed thousands.
 - **MTD.** `mtdQuarters()`/`mtdPeriod()`/`mtdExport()`. **The quarters must reconcile to `tyNet` on both bases** — a regression here means a cost was added to the ledger but not to an SA103 box (per-session room fees were exactly that bug). Submission is deliberately out of scope: it needs an OAuth secret, fraud-prevention headers and HMRC recognition, none of which fit an offline PWA.
+
+### Tax moments & guided flows (added Aug 2026)
+`taxMoments()` is a **pure** function returning the seasonal cards that are live *today* — zero of them for most of the year. It adds no arithmetic: everything comes from `today()`, `curTaxYear()`, `prevTY`, `taxYearRec`, `nextTaxPayment`, `taxPot` and `mtdQuarters`.
+- **The ids carry their year** (`file-2025-26`, `jan-pay-2027`, `new-year-2027-28`, `mtd-q3-2026-27`). That is what makes dismissal safe: `settings.taxMoments[id] = <date dismissed>` silences *this* year's instance and next year's returns on its own. In settings rather than localStorage, like `coach.seen`, so it travels with a backup.
+- Windows: **file** 1–31 Jan (only while the ended year has no `liability` and isn't `filed`), **jan-pay** 1 Jan – 5 Feb and **jul-pay** 1 Jul – 5 Aug (only when `nextTaxPayment()` really is that date — a bill already ticked off gets no card), **new-year** 6 Apr – 31 May, **mtd-q_n_** for `MTD_MOMENT_DAYS` (35) after each quarter end.
+- **MTD is gated on `taxPot().projInc >= MTD_INCOME_FLOOR`** (£50,000). MTD for Income Tax does not reach a small practice, and a quarterly nudge it can only ignore is worse than no nudge. Both this tax year's quarters and last year's are scanned — the quarter ending 5 April belongs to a year that has ended before its five weeks are up.
+- `nextTaxPayment()` and `taxPot()` are resolved **lazily, once**, so a month with no open window reaches neither.
+
+**Two of the moments launch a guided flow**, because the jobs behind them are done once a year and are therefore the ones nobody remembers how to do. Both run on the existing `flowStart` overlay.
+- **`startAfterFileFlow(ty)`** — which year / the bill / instalments (optional) / confirm. Entered from the `file-<TY>` card and from **"Walk me through it ›"** on Pot & payments. Defaults to the most recent ended year with no `liability` yet. Writes `liability`, `liabilityAt`, `filed=true` via `taxYearRecW(ty)`, and `poaSet`/`poaSetAt` on `nextTY(ty)` **only if an instalment was given** — skipping leaves an existing one alone. The SA303 claim to reduce is deliberately **not** in this flow: it has a real interest penalty behind it and stays an expert control on Pot & payments.
+- **`startNewYearFlow(ty)`** — region / student loan / use of home / pot buffer / done. Entered from the `new-year-<TY>` card and from **"Review for <TY> ›"** at the top of Per year, which appears only inside `newYearWindowOpen()` — the *same* 6 Apr – 31 May window the card uses, so the two can never disagree about when it is April. Confirming writes nothing: carry-forward already handles it, which is what makes a no-op review four taps of Continue and **zero audit entries**.
+- **Every step stages into a local `w` and writes nothing** — the same shape as `startSetup`. Skipping or closing therefore discards, and the single `commit()` happens on the last screen only if `newYearReviewChanges(w)` is non-empty. The use-of-home step's "copy and edit" button is the one early exit: it applies whatever is staged plus `uohCopyFrom`, commits **once**, and hands off to Per year by design.
+- **`taxYearsPreview(patches, fn)`** is how the confirm screen shows a recomputed `taxSchedule` without writing: the engine reads `settings.taxYears` and has no pure variant, so the records are staged, read, and restored in a `finally`. It is a staging helper, not maths — no figure is ever computed here that `taxSchedule`/`taxLiability` do not already produce.
+- Both flows guard on `_flow` and refuse to stack on setup or on each other. The raw editors (`taxActualSheet`, `poaClaimSheet`, the Per year cards) are **untouched and stay fully functional** — the flows are a guided path to the same fields, never a replacement.
 
 ### Tax engine tests
 `tests/tax-tests.js` — 118 tests. Serve the app, open it, paste the file into the console. It lives **outside** `TherapyTracker-web/` so it never deploys, never calls `commit()`, and restores the live state when it finishes.
@@ -249,6 +293,56 @@ Rules that must not regress:
 - **`impTemplate()` generates the template from `IMP_FIELDS`**, so template headers can never drift from the parser. There's a test for this: the template's own column list must guess back to itself exactly.
 - `impGuess()` matches header synonyms exact-first then substring, one field per column. Field order in `IMP_FIELDS` breaks ties (`location` claims a bare "Room" before the `room` field does).
 - Offered as a setup-wizard step (`stepImport`) on first run only — a re-run promises not to touch client data. Inside the overlay it runs with `{quiet:true}` so it doesn't `go()` or `celebrate()` behind it.
+
+## Session schedules & GroundWork Notes (added Aug 2026)
+How often each client is seen, shared with the companion notes app so it can work out which
+sessions still need writing up. **The specification both apps implement is
+`../GroundWork/docs/schedule-sync.md`** — it is the authority, and a change to the rule has to be
+made in three places at once: here, in GroundWork Notes' `SessionPrediction`, and in that document.
+
+- **`clientSchedule(c)`** is the one place a client's cadence comes from: `freqDays(c)` for the
+  interval, and their usual day/time. `c.usualDay` / `c.usualTime` are **overrides** — blank means
+  `usualSlotFor(code)` reads the commonest day and time out of their last `SLOT_WINDOW` (8)
+  attended sessions, so this works for every existing client with nothing typed.
+- **`placeOnSchedule(d, sched)`** snaps a date onto the usual day, moving **at most three days
+  either way**, and is ported line for line from `SessionPrediction.place` in the notes app.
+  Change both, or the two apps offer different dates for the same client. The two clamps together
+  map a delta into ±3; note that `>3`/`<-3` is not the same as `>3`/`<-4` — the second bound is
+  the one that decides whether a four-day pull-back is allowed, and it must not be.
+- **`SLOT_DAYS` is not `WEEKDAYS`.** `WEEKDAYS` further up the file is the payment-schedule picker
+  and runs Monday-first with its own numbering; `SLOT_DAYS` is indexed to match `Date.getDay()`,
+  Sunday first. They collided once already.
+- **`suggestFor()` now goes through this**, so the session form offers a client's usual slot back
+  after a session that was moved, rather than repeating the moved day forever.
+- **The cadence travels as a number of days, never a label.** `freqDays()` maps "Monthly" to a flat
+  **28**; a calendar month at the Swift end would drift a few days per quarter and neither app
+  would look wrong on its own. `npm run check` runs `scripts/check-schedule-parity.mjs`, which
+  pulls these functions out of `index.html` and asserts the **same 14 cases** the notes app asserts
+  in `SessionScheduleTests.swift`. If it fails, fix both apps and the spec — never just one.
+
+### The schedule file (Settings › Data & backup › GroundWork Notes)
+`syncSchedules()` writes `groundwork-schedules.json`: client codes, status, cadence, usual day and
+time, and the first session's date. **No names, no fees, no attendance, nothing clinical**, and
+nothing comes back — whether notes are done stays a tick in this app.
+- **`kind:"schedules"` is what identifies the file.** A full backup also holds client codes and
+  would half-work at the other end, so the notes app refuses anything without that marker.
+- **`rosterCode()` enforces the notes app's own rule** (2–12 letters and digits). A code that fails
+  it is left out of the file *and counted on screen*, rather than exported and silently rejected
+  where the counsellor cannot see why.
+- **Three ways to write it, one per platform.** Desktop Chrome/Edge keeps a `FileSystemFileHandle`
+  in the `state` store (**not** localStorage — a handle is structured-cloneable, and
+  `JSON.stringify` would turn it into `{}`) so every later sync overwrites the same file silently.
+  iOS goes through the existing share sheet, because `download()` is already wrapped natively.
+  Everything else downloads. Last sync is `tt_rostersync` in localStorage — device state, so it
+  stays out of `S`.
+
+## Restore from backup (Settings › Data & backup — hardened Aug 2026)
+`importJSON()` is a whole-state replace, so it is gated by **smart friction, not uniform friction** — `restoreConfirm()` picks one of two tiers from `restorePlan()`. A restore onto a new phone stays one tap; stamping a stale file over weeks of newer entries earns the same ladder as erase.
+- **Tier A** (`sheetPromise`, one Restore button) when the device is effectively empty (`sessions===0 && clients===0`) **or** the backup is neither older nor smaller. **Tier B** (`dzConfirm`, `phrase:"RESTORE"`, 3-second arm) when the backup has **fewer sessions** than the device or an **`exportedAt` older than the device's last change**. Both tiers show the same block: the export date ("unknown date" for a bare state file with no envelope), backup vs device counts side by side, `validateImport`'s `problems`, and the restore-point line.
+- **The device's last change is the audit log's newest entry (`auditLatest()`), not `tt_state_ts`.** `loadState()` calls `mirror()` on every open, so that key means "last opened" whenever the database is there — using it would make every backup on a used device look stale and put *everyone* in Tier B, which is the one outcome this design exists to avoid. `tt_state_ts` is read only in fallback mode (`_db===null`), where nothing mirrors at load. An unknown date on either side is not evidence: the counts decide alone.
+- **The empty-device short-circuit is load-bearing.** A fresh install's audit already holds "App installed — starting fresh" dated *now*, so without it every restore onto a new phone would be Tier B.
+- `dzConfirm` takes an optional **`o.detail`** HTML slot (rendered under the lead) so Tier B can show that same comparison; no other caller passes it.
+- **No extra snapshot.** `commit("Restored backup (…)")` already snapshots, so the pre-restore state *is* the top restore point — adding one here would make Undo take two taps, the same rule as the spreadsheet import. `validateImport` is untouched; the `askPassphrase` prompt still runs before validation; an unreadable file still `alert()`s.
 
 ## Data removal (Settings › Privacy & removal)
 Collapsed `<details class="dz">` → `dzMenu()`. Four routes, all gated by `dzConfirm()`: a summary of what changes, an export-first button, an acknowledgement checkbox, a typed phrase, and a 3-second arming delay on the final button.
@@ -288,8 +382,9 @@ Two kinds of missed session, and the charge is **stamped on the session**, never
 ## Gradual reveal (settings.reveal, added Aug 2026)
 No new gating layer — this only decides which existing `feat()` flags start off for a brand-new install.
 - `settings.reveal = {mode:"simple"|"all", shown:[]}`. `normalize()` defaults `mode` to **"all"**; only `stepDepth` ever sets `"simple"`, and it is only offered when `!rerun && no sessions && no clients`. Hiding tabs from someone already using them is the one outcome this must never produce.
-- `REVEAL_CORE` is what stays on. `REVEAL_STEPS` is the ordered list of what gets offered back and what earns it. A step's `keys` may hold **more than one flag**: `tax` and `finances` are revealed together at 10 sessions, because an estimate that ignores what the practice costs you is one nobody should set money aside against. `shown` is keyed on `keys[0]`.
-- Schedule: **10** sessions → Tax + Costs & other income · **20** → Trends · **25** → Quick-add · **40** → Table view.
+- `REVEAL_CORE` is what stays on: **`supervision`, `money`, `attention`** — who am I seeing next, and who owes me money. `attention` is core because overdue payments are worth knowing about from week one; `gamify` and `receipts` were moved out of it because rings, medals and a statement button answer neither question on day one. `REVEAL_STEPS` is the ordered list of what gets offered back and what earns it. A step's `keys` may hold **more than one flag**: `tax` and `finances` are revealed together at 10 sessions, because an estimate that ignores what the practice costs you is one nobody should set money aside against. `shown` is keyed on `keys[0]`.
+- Schedule (ordered by threshold): **5** sessions *and at least one paid* → Receipts & statements · **10** → Tax + Costs & other income · **15** → Streaks & celebrations · **20** → Trends · **25** → Quick-add · **40** → Table view.
+- Home gates two extras on its own, in **every** mode: the revenue sparkline needs 10 sessions (24 weeks of £0 is not a trend) and the longstanding-clients card needs a client at 6+ sessions. Neither is a `feat()` flag, so neither is ever offered — they simply appear.
 - `trends` is a feature flag (a segment inside Practice, not a tab). Absent = on, so existing installs and "show everything" keep it; only the simple preset switches it off.
 - **`accreditation` and `peer` are excluded from the simple preset** — `stepCPD` asks about both directly, and an answered question beats a default. Peer is never offered by a milestone: whether someone attends peer supervision is a fact about their practice, not something a session count can infer. `startSetup` unticks `peer` for a fresh install only (normalize leaves it absent = on, so existing installs keep it).
 - `revealCheck()` runs from `commit()` **after** the write, never before — an accepted nudge commits again and must not interleave with the save that triggered it. One offer per save; the key goes into `shown` whether accepted or declined, so nothing is ever asked twice.
@@ -366,6 +461,6 @@ Fix sketch when picked up: add a monotonic `S.meta.rev`, refuse a write whose ba
 
 ## Known gotchas
 - **Frozen bash mount**: the bash workspace mount of the CBT folder can serve stale content. Use the Read/Edit/Grep file tools (not bash `cat`/`grep`) to read index.html reliably.
-- **SEED object**: `window.SEED` at the top of the `<script>` block is the initial data seed. It contains real room names/rates — update carefully.
+- **SEED object**: `window.SEED` at the top of the `<script>` block is the initial data seed. It is generic (one "At home" room at £0) — no personal data — update carefully.
 - **No build step**: pure vanilla JS/CSS/HTML. No npm, no bundler, no TypeScript.
 - **IndexedDB version**: `DBV=1` — only bump if adding new object stores (triggers `onupgradeneeded`).

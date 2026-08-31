@@ -196,6 +196,18 @@ details.dz[open]>summary::before{content:"▾ "}
 .kpi .l{font-size:12px;color:var(--muted);margin-top:3px}
 .kpi.good .v{color:var(--good)} .kpi.bad .v{color:var(--bad)}
 .kpi.clk{cursor:pointer} .kpi.clk:active{transform:scale(.98)}
+/* Tax › Now — the three numbers that answer the everyday questions, one full-width card each.
+   Deliberately bigger than a .kpi: there are only three of them and they are the whole screen. */
+.nowcard{cursor:pointer}
+.nowcard:active{transform:scale(.995)}
+.nowcard .nv{font-size:34px;font-weight:800;letter-spacing:-.02em;line-height:1.1;margin-top:6px;color:var(--brand-dark);
+  background:linear-gradient(135deg,var(--brand-dark),var(--brand));-webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent}
+.nowcard .nv.nvtext{font-size:21px}
+.nowcard .nl{font-size:13px;color:var(--muted);margin-top:4px}
+/* A seasonal moment: a job that only matters for a few weeks a year, marked so it does not read
+   as one more permanent card that is always there. */
+.mom{border-left:3px solid var(--brand)}
 .row{display:flex;gap:10px;align-items:center}
 .btn{appearance:none;border:0;border-radius:14px;padding:13px 18px;font-size:15px;font-weight:650;
   background:linear-gradient(135deg,var(--gs1),var(--gs2));color:#fff;cursor:pointer;
@@ -245,6 +257,12 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .list-item:last-child{border-bottom:0}
 .list-item{border-radius:10px}
 .list-item:active{background:color-mix(in srgb,var(--brand) 8%,transparent)}
+/* A .list-item used as a radio — the year picker in the "After you file" flow. It has to show
+   which one is chosen: the flow defaults to a year, and a default nobody can see is a default
+   nobody agreed to. Same treatment as the Allowances year strip (.uohyr.on). */
+.nyopt{padding-left:10px;padding-right:10px}
+.nyopt.on{background:var(--card);box-shadow:0 0 0 2px color-mix(in srgb,var(--brand) 22%,transparent)}
+.nyopt.on .li-title{color:var(--brand-dark)}
 .li-main{flex:1;min-width:0}
 .li-title{font-weight:600;font-size:15px}
 .li-sub{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -871,7 +889,7 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 <canvas id="confetti"></canvas>
 <div class="celebr" id="celebr"><div class="cb"><span class="cemoji" id="celEmoji">🎉</span><div class="ctitle" id="celTitle"></div><div class="csub" id="celSub"></div><div class="cribbon" id="celRibbon" style="display:none"></div></div></div>
 <script>
-window.SEED = {"clients": [], "rooms": [{"location": "At home", "rate": 0, "due": "n/a"}, {"location": "London Bridge", "rate": 12.5, "due": "EOM"}, {"location": "Clapham", "rate": 16, "due": "EOW"}], "sessions": [], "supervision": [], "rateHistory": [], "roomRateHistory": [{"location": "At home", "effectiveFrom": "2000-01-01", "rate": 0}, {"location": "London Bridge", "effectiveFrom": "2000-01-01", "rate": 12.5}, {"location": "Clapham", "effectiveFrom": "2000-01-01", "rate": 16}], "clientCategories": [{"status": "Ongoing", "category": "Active"}, {"status": "Initial session booked", "category": "Active"}, {"status": "Active enquiry", "category": "Pipeline"}, {"status": "Paused", "category": "Pipeline"}, {"status": "Finished", "category": "Finished"}], "meta": {"shell": true}};
+window.SEED = {"clients": [], "rooms": [{"location": "At home", "rate": 0, "due": "n/a"}], "sessions": [], "supervision": [], "rateHistory": [], "roomRateHistory": [{"location": "At home", "effectiveFrom": "2000-01-01", "rate": 0}], "clientCategories": [{"status": "Ongoing", "category": "Active"}, {"status": "Initial session booked", "category": "Active"}, {"status": "Active enquiry", "category": "Pipeline"}, {"status": "Paused", "category": "Pipeline"}, {"status": "Finished", "category": "Finished"}], "meta": {"shell": true}};
 </script>
 
 <script>
@@ -895,6 +913,12 @@ async function kvGet(k){return pr(tx("state","readonly").get(k))}
 async function kvPut(k,v){return pr(tx("state","readwrite").put(v,k))}
 async function auditAdd(rec){return pr(tx("audit","readwrite").add(rec))}
 async function auditAll(){return pr(tx("audit","readonly").getAll())}
+/* Newest entry only, off a cursor — the log is read to date the last change, not to list it. */
+function auditLatest(){return new Promise((res,rej)=>{
+  const rq=tx("audit","readonly").openCursor(null,"prev");
+  rq.onsuccess=e=>{const c=e.target.result;res(c?c.value:null)};
+  rq.onerror=e=>rej(e.target.error);
+})}
 async function snapAdd(rec){return pr(tx("snapshots","readwrite").add(rec))}
 async function snapDel(id){return pr(tx("snapshots","readwrite").delete(id))}
 async function snapCount(){return pr(tx("snapshots","readonly").count())}
@@ -977,7 +1001,7 @@ function normalize(st){
   /* practice branding + feature switches, set in first-run setup (travels with backups) */
   st.settings=st.settings||{}; const sg=st.settings;
   const hasData=(st.sessions.length>0||st.clients.length>0);
-  if(sg.practiceName==null)sg.practiceName=hasData?"Charlotte Bloor Therapy":"GroundWork"; // existing installs keep their header
+  if(sg.practiceName==null)sg.practiceName="GroundWork";
   if(sg.practiceTagline==null)sg.practiceTagline="Counselling & psychotherapy";
   if(sg.palette==null)sg.palette="sage";
   sg.features=sg.features||{};
@@ -1035,6 +1059,11 @@ function normalize(st){
      the therapist last told us is in the account. Both absent means "not set", which is not zero. */
   sg.taxPot=sg.taxPot||{};
   if(sg.taxPot.bufferPct==null)sg.taxPot.bufferPct=10;
+  /* Which seasonal prompts on Tax › Now have been dismissed: id -> the date it was dismissed.
+     Every id carries its year, so dismissing this January's prompt never silences next
+     January's. Kept in settings rather than localStorage, like coach.seen, so it travels with a
+     backup — a prompt already dealt with should not reappear on a new phone. */
+  sg.taxMoments=sg.taxMoments||{};
   if(sg.onboarded==null)sg.onboarded=hasData; // anyone with data already knows the app — don't ambush them with setup
   /* Gradual reveal. `mode` defaults to "all" for anyone who already has data, for the same
      reason accreditation does above: hiding tabs from someone who is already using them is the
@@ -1138,8 +1167,8 @@ async function loadState(){
   if(!st){ st=clone(window.SEED); seeded=true; }
   normalize(st);
   if(_db){ try{ await kvPut("current",st);
-    if(seeded){ await snapAdd({ts:new Date().toISOString(),label:"Imported from spreadsheet (initial)",data:clone(st)});
-      await auditAdd({ts:new Date().toISOString(),summary:"Seeded from 'Tracking Spreadsheet May26.xlsx' ("+st.sessions.length+" sessions)"}); }
+    if(seeded){ await snapAdd({ts:new Date().toISOString(),label:"First run",data:clone(st)});
+      await auditAdd({ts:new Date().toISOString(),summary:"App installed — starting fresh"}); }
   }catch(e){console.warn(e);} }
   S=st; mirror(S);
 }
@@ -1371,7 +1400,7 @@ function settings(){if(!S.settings)S.settings={};return S.settings;}
 function practiceName(){const n=(S&&S.settings&&S.settings.practiceName||"").trim();return n||"GroundWork";}
 function practiceTagline(){return (S&&S.settings&&S.settings.practiceTagline||"").trim();}
 function practiceInitials(){const i=practiceName().split(/\s+/).map(w=>w[0]||"").join("").replace(/[^A-Za-z0-9]/g,"").toUpperCase().slice(0,4);
-  return i||"TT";}
+  return i||"GW";}
 /* a feature is on unless it has been explicitly switched off */
 function feat(k){try{const f=S&&S.settings&&S.settings.features;return !f||f[k]!==false;}catch(e){return true;}}
 function applyBranding(){const n=practiceName();
@@ -1775,7 +1804,9 @@ VIEWS.home=function(){
     weekSeries.push({l:ws.toLocaleDateString("en-GB",{day:"2-digit",month:"short"}),revenue:Math.round(weekRev[isoD(ws)]||0)});}
   const sparkVals=weekSeries.map(d=>d.revenue);
   const lastW=weekSeries[weekSeries.length-1];
-  const sparkCard=S.sessions.length?'<div class="card"><div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Revenue trend</h2><span class="small muted">last 24 weeks</span></div>'+sparkline(sparkVals)+'<div class="row small muted" style="justify-content:space-between;margin-top:4px"><span>'+(weekSeries[0]?"w/c "+esc(weekSeries[0].l):"")+'</span><span><b style="color:var(--brand-dark)">'+gbp(lastW?lastW.revenue:0)+'</b> this week</span></div></div>':'';
+  /* 24 weeks of £0 with two bars in it is not a trend. Ten sessions is where the line starts
+     saying something, in every mode — an established practice passes it on day one. */
+  const sparkCard=S.sessions.length>=10?'<div class="card"><div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Revenue trend</h2><span class="small muted">last 24 weeks</span></div>'+sparkline(sparkVals)+'<div class="row small muted" style="justify-content:space-between;margin-top:4px"><span>'+(weekSeries[0]?"w/c "+esc(weekSeries[0].l):"")+'</span><span><b style="color:var(--brand-dark)">'+gbp(lastW?lastW.revenue:0)+'</b> this week</span></div></div>':'';
   v.innerHTML=(S.sessions.length?"":'<div class="hint" style="font-size:14px">👋 <b>Nothing logged yet.</b> Tap <b>＋ New session</b> below to start, or open <b>⚙ Settings → Restore from backup</b> to load a <b>.json</b> backup from another device. Need a refresher? <span class="taxlink" id="hTour">Take the guided tour ›</span></div>')+
    (S.sessions.length&&feat("attention")?'<div class="card"><h2>Needs attention</h2><div class="attn" id="attn"></div></div>':'')+`
    <div class="kpis mb" data-coach="home-kpis">
@@ -1829,11 +1860,11 @@ let sessFilter={q:"",seg:"upcoming",view:"list"};
 let calY=null,calM=null,statGran="month",taxMode="proj",thMode="net",supTab="log";
 /* Which segment each merged tab is showing. Module-level like the others, so a redraw
    (go(tab,{keepScroll:true})) lands the reader back where they were. */
-let pracTab="clients", moneySeg="overview", taxSeg="estimate";
+let pracTab="clients", moneySeg="overview", taxSeg="now";
 function setSeg(tab,seg){
   if(tab==="practice"&&["clients","trends","rooms","supervision"].indexOf(seg)>=0)pracTab=seg;
   else if(tab==="money"&&["overview","costs","table"].indexOf(seg)>=0)moneySeg=seg;
-  else if(tab==="tax"&&["estimate","payments","allowances","mtd"].indexOf(seg)>=0)taxSeg=seg;
+  else if(tab==="tax"&&["now","estimate","payments","allowances","mtd"].indexOf(seg)>=0)taxSeg=seg;
 }
 /* A segment bar from [value,label] pairs. Renders nothing when there is only one segment. */
 function segBar(id,segs,active){
@@ -2089,7 +2120,7 @@ function mountCPD(host){
   const pct=Math.max(0,Math.min(100,Math.round(c.total/target*100)));
   const short=Math.max(0,target-c.total);
   host.innerHTML='<div class="card"><h2>CPD hours</h2>'+
-    '<p class="small muted" style="margin:0 0 4px">Continuing professional development in the <b>last 12 months</b> ('+fmtD(c.from)+' – '+fmtD(c.to)+'). Clinical supervision counts one hour per logged session'+(feat("peer")?', and peer supervision counts the hours you logged':'')+'.</p>'+
+    '<p class="small muted" style="margin:0 0 4px">Continuing professional development in the last 12 months. '+infoLink("cpd-window")+'</p>'+
     '<div class="kpis mt">'+
       '<div class="kpi'+(c.total>=target?' good':'')+'"><div class="v">'+r1(c.total)+'</div><div class="l">hrs in 12 months</div></div>'+
       '<div class="kpi"><div class="v">'+r1(c.sup)+'</div><div class="l">from supervision</div></div>'+
@@ -2104,6 +2135,7 @@ function mountCPD(host){
     '<input type="number" min="1" max="200" step="1" id="cpdT" value="'+target+'">'+
     '<p class="small muted">BACP asks accredited members for 30 hours a year; other bodies differ. Set whatever yours requires.</p>'+
     '</div>';
+  wireInfo(host);
   const inp=host.querySelector("#cpdT");
   inp.onchange=async()=>{
     const v=Math.max(1,Math.min(200,Math.round(+inp.value||0)));
@@ -2117,7 +2149,7 @@ function mountCPD(host){
 function mountAccreditation(host){if(!host||!feat("accreditation"))return;
   const ac=S.accreditation;
   host.innerHTML=`<div class="card"><h2>Accreditation hours &amp; ratio</h2>
-    <p class="small muted" style="margin:0 0 4px">Totals for Form 3A. <b>Clinical hours</b> = your logged client sessions, each counted as 1 hour (50-min minimum). Any session flagged as a <b>late cancellation</b> is excluded, in line with the rule that missed sessions don’t count. <b>Supervision hours</b> = each logged supervision session (1 hour) plus the training &amp; placement totals below.</p>
+    <p class="small muted" style="margin:0 0 4px">Totals for Form 3A. ${infoLink("form3a-mechanics")}</p>
     <div class="field2">
       <div><label>Training supervision hrs</label><input type="number" min="0" step="0.5" id="ac_train" value="${esc(ac.trainingSupHrs)}"></div>
       <div><label>Placement supervision hrs</label><input type="number" min="0" step="0.5" id="ac_place" value="${esc(ac.placementSupHrs)}"></div>
@@ -2125,6 +2157,7 @@ function mountAccreditation(host){if(!host||!feat("accreditation"))return;
     <label>Other clinical hrs <span class="muted small">(e.g. signed-off training — added to logged sessions)</span></label>
     <input type="number" min="0" step="0.5" id="ac_other" value="${esc(ac.otherClinicalHrs)}">
     <div id="ac_out"></div></div>`;
+  wireInfo(host);
   const g=id=>host.querySelector(id), out=g("#ac_out"), r1=x=>Math.round(x*10)/10;
   function calc(){
     const cs=clinicalStats(), t=today();
@@ -2615,6 +2648,9 @@ VIEWS.practice=function(){
     const lcCur=lcFold?lcClients.filter(e=>trendsIsCurrent(lcOf(e),lastSeen[(e.code||"").toLowerCase()])):lcClients;
     const lcOld=lcFold?lcAged:[];
     const lcOldMissed=lcOld.reduce((s,e)=>s+e.lc,0), lcOldLost=lcOld.reduce((s,e)=>s+e.lost,0);
+    infoDef("missed-sessions-detail","About this trend",
+      (projLost>0?'<p class="small">At the last 90 days’ rate that is about <b>'+gbp(projLost)+' a year</b> in fees you don’t charge.</p>':'')+
+      '<p class="small">The per-client % is each client’s share of their own sessions.</p>');
     const lcCard='<div class="card"><h2>Missed sessions</h2>'+
       '<div class="kpis mb">'+
         '<div class="kpi"><div class="v">'+totalLC+'</div><div class="l">Missed'+(totalDNA?' · '+totalDNA+' DNA':'')+'</div></div>'+
@@ -2624,9 +2660,7 @@ VIEWS.practice=function(){
         '<div class="kpi"><div class="v">'+affected+'</div><div class="l">Clients affected</div></div>'+
         '<div class="kpi"><div class="v">'+recent90+'</div><div class="l">In the last 90 days</div></div>'+
       '</div>'+
-      '<p class="small muted" style="margin:0 0 6px">Trend '+trendChip(recent90,prev90)+' — '+recent90+' in the last 90 days vs '+prev90+' in the previous 90.'+
-        (projLost>0?' At the last 90 days’ rate that is about <b>'+gbp(projLost)+' a year</b> in fees you don’t charge.':'')+
-        ' The per-client % is each client’s share of their own sessions.</p>'+
+      '<p class="small muted" style="margin:0 0 6px">Trend '+trendChip(recent90,prev90)+' — '+recent90+' in the last 90 days vs '+prev90+' in the previous 90. '+infoLink("missed-sessions-detail")+'</p>'+
       (lcClients.length?lcCur.map(lcLi).join("")+
           (lcOld.length?agedFold("lc","Finished & long inactive · "+plural(lcOld.length,"client"),
             plural(lcOldMissed,"missed session")+(lcOldLost>0?' · '+gbp(Math.round(lcOldLost))+' not charged':'')):"")
@@ -2657,7 +2691,7 @@ VIEWS.practice=function(){
     const attOldSessions=attOld.reduce((s,x)=>s+x.a.n,0);
     const attSeries=rollingAttendanceSeries(attRows);   /* the chart keeps everyone — it is history */
     const attCard='<div class="card"><h2>Attendance</h2>'+
-      '<p class="small muted" style="margin:0 0 8px">How regularly each client attends vs their expected frequency, since their first session. Long gaps (3× the interval or more) count as a pause and are excluded from the rate (but noted ⏸). Missed sessions don’t count as attended.</p>'+
+      '<p class="small muted" style="margin:0 0 8px">How regularly each client attends vs their expected frequency, since their first session. '+infoLink("attendance-mechanics")+'</p>'+
       '<div class="kpis mb">'+
         '<div class="kpi"><div class="v">'+attAvg+'%</div><div class="l">Avg attendance</div></div>'+
         '<div class="kpi"><div class="v">'+attRows.length+'</div><div class="l">Clients tracked</div></div>'+
@@ -2694,6 +2728,7 @@ VIEWS.practice=function(){
       lc:()=>lcOld.map(lcLi).join(""),
       deep:()=>deepOld.map(deepLi).join("")
     });
+    wireInfo(body);
     requestAnimationFrame(()=>body.querySelectorAll(".funnel .fbar>i").forEach(i=>{i.style.width=(+i.dataset.w)+"%";}));
   }
   /* Supervision keeps its own inner Log / Peer / Insights bar - mounted whole rather than
@@ -3067,7 +3102,7 @@ function paymentsDueCard(){
       (done.length?'<details class="dz" style="margin-top:10px"><summary>Recently settled ('+done.length+')</summary>'+done.map(row).join("")+'</details>':'')
     : '<p class="muted small mt">Nothing due. Costs and rents with a repeat show up here as their date approaches.</p>';
   return '<div class="card"><h2>Payments due</h2>'+
-    '<p class="small muted">Room rent and repeating costs, so nothing slips. Ticking one off changes nothing in your tax figures — a cost still counts in the year it fell due.</p>'+
+    '<p class="small muted">Room rent and repeating costs, so nothing slips. '+infoLink("payments-due-ticking")+'</p>'+
     (overdue.length?'<div class="vmsg warn" style="margin-top:10px">'+gi("warning")+' '+overdue.length+' payment'+(overdue.length===1?'':'s')+' overdue'+(owed?', '+gbp(Math.round(owed))+' outstanding':'')+'.</div>':'')+
     '<div style="padding:0 2px">'+body+'</div></div>';
 }
@@ -3078,6 +3113,7 @@ function wirePaymentsDue(v){
     const ok=await setChargePaid(b.dataset.pay,on?null:isoD(today()),b.dataset.lbl);
     if(ok){toast(on?"Marked unpaid":"Marked paid");if(!on)Sfx.pop();}
     go("money",{seg:"costs",keepScroll:true});});
+  wireInfo(v);
 }
 /* The two ledger cards on the Revenue tab, plus the monthly rents that come from Rooms. */
 function financeCards(){
@@ -3104,26 +3140,24 @@ function financeCards(){
   const exps=sortFin(S.expenses||[]), incs=sortFin(S.otherIncome||[]);
   const costTotal=led.expenses+led.roomRent;
   const uohRow=led.useOfHome?('<div class="list-item"><div class="li-main"><div class="li-title">Use of home <span class="chip f">allowance</span></div>'+
-    '<div class="li-sub">Set in Tax \u203a Allowances \u00b7 '+gbp(Math.round(led.useOfHome))+' this tax year</div></div>'+
+    '<div class="li-sub">Set in Tax \u203a Per year \u00b7 '+gbp(Math.round(led.useOfHome))+' this tax year</div></div>'+
     '<div class="li-right">'+gbp(Math.round(uohMonthly(curTaxYear())))+'<span class="small muted"> /mo</span></div></div>'):"";
   const expCard='<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
       '<h2 style="margin:0">Business costs</h2><button class="btn sm" id="addExp">＋ Add a cost</button></div>'+
-    '<p class="small muted">Everything you pay to run the practice that isn’t a room charge on a session — insurance, wifi, CPD. Monthly costs repeat on their own.</p>'+
+    '<p class="small muted">Everything you pay to run the practice that isn’t a room charge on a session — insurance, wifi, CPD. '+infoLink("business-costs-detail")+'</p>'+
     '<div class="kpis mt" style="grid-template-columns:1fr 1fr">'+
       '<div class="kpi"><div class="v">'+gbp(Math.round(costTotal))+'</div><div class="l">'+ty+' costs</div></div>'+
       '<div class="kpi"><div class="v">'+gbp(Math.round(led.roomRent))+'</div><div class="l">of that, room rent</div></div></div>'+
     (rentRows||uohRow||exps.length?'<div style="padding:0 2px;margin-top:8px">'+rentRows+uohRow+exps.map(x=>line(x,"exp")).join("")+'</div>'
-      :'<p class="muted small mt">No costs logged yet.</p>')+
-    '<p class="small muted" style="margin-top:8px">These come off your net income and tax estimate. Room rent is shown here but edited on the room itself.</p></div>';
+      :'<p class="muted small mt">No costs logged yet.</p>')+'</div>';
   const incCard='<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
       '<h2 style="margin:0">Other income</h2><button class="btn sm" id="addInc">＋ Add income</button></div>'+
-    '<p class="small muted">Money in that isn’t a client session — subletting a room, running a workshop.</p>'+
+    '<p class="small muted">Money in that isn’t a client session — subletting a room, running a workshop. '+infoLink("other-income-detail")+'</p>'+
     '<div class="kpis mt" style="grid-template-columns:1fr 1fr">'+
       '<div class="kpi good"><div class="v">'+gbp(Math.round(led.otherIncome))+'</div><div class="l">'+ty+' practice income</div></div>'+
       '<div class="kpi"><div class="v">'+gbp(Math.round(led.personalIncome))+'</div><div class="l">separate work (not counted)</div></div></div>'+
     (incs.length?'<div style="padding:0 2px;margin-top:8px">'+incs.map(x=>line(x,"inc")).join("")+'</div>'
-      :'<p class="muted small mt">No other income logged yet.</p>')+
-    '<p class="small muted" style="margin-top:8px">Practice income counts toward your net and tax estimate. Anything marked <b>separate</b> — a second job, tutoring — is a different trade, so it’s totalled here but kept out of both.</p></div>';
+      :'<p class="muted small mt">No other income logged yet.</p>')+'</div>';
   return paymentsDueCard()+expCard+incCard;
 }
 function wireFinance(v){
@@ -3132,6 +3166,7 @@ function wireFinance(v){
   v.querySelectorAll("[data-fin]").forEach(li=>li.onclick=()=>{
     const kind=li.dataset.fin, rec=finArr(kind).find(x=>x._id===li.dataset.id);
     if(rec)financeForm(kind,rec);});
+  wireInfo(v);
 }
 
 
@@ -3911,6 +3946,43 @@ infoDef("potfloor","What should be in the pot today",
   '<div><b>Bills already fixed</b> \u2014 anything on the timeline for a tax year that has already ended and has not been paid.</div>'+
   '<div><b>+ your buffer</b></div><div><b>= the target</b></div></div>'+
   '<p class="small mt">Tax on income you have <i>not yet earned</i> is deliberately left out. Instalments towards the year you are in are covered by the \u201calready earned\u201d line instead, so nothing is counted twice.</p>');
+infoDef("sa302","Where to find HMRC\u2019s figures",
+  '<p class="small">Two different pages, and you need both:</p>'+
+  '<div class="acc-work"><div><b>The tax calculation (SA302)</b> \u2014 sign in to your HMRC online account, go to <i>Self Assessment</i>, then <i>More Self Assessment details</i> \u2192 <i>Get your SA302 tax calculation</i>. The bottom line is the total tax due for the year.</div>'+
+  '<div><b>What you owe, and when</b> \u2014 the Self Assessment account summary lists the balancing payment and each payment on account with its due date.</div></div>'+
+  '<p class="small mt">If an accountant files for you, the tax calculation is the page in their pack with the year\u2019s total on it. Ask for the payments on account figures too \u2014 they are the ones that decide next January.</p>'+
+  '<p class="small muted">Entering these changes nothing at HMRC. It only makes this app agree with what you have actually been told. '+infoLink("actuals","Estimate versus assessment")+'</p>');
+infoDef("carryforward","Why nothing needs changing most years",
+  '<p class="small">Where you pay tax, which student loan you are repaying and your use-of-home claim are held <b>against a tax year</b>, not against you for ever. A year with no setting of its own inherits the most recent earlier one.</p>'+
+  '<p class="small">That is what makes this review short: if nothing about your circumstances changed, confirming each screen writes nothing at all, and the new year carries on using exactly what the last one used.</p>'+
+  '<p class="small">It also means a change only ever moves <b>this year and the ones after it</b>. The year you finish repaying a loan, or move to or from Scotland, every earlier year keeps the figures it was actually assessed on \u2014 including returns you have already filed.</p>');
+infoDef("cpd-window","How your CPD hours are counted",
+  '<p class="small">This is a rolling last 12 months, not the current tax year or calendar year \u2014 the window moves forward every time you check.</p>'+
+  '<p class="small">Clinical supervision counts one hour per logged session. Peer supervision counts the hours you have logged for it, when that\u2019s switched on.</p>');
+infoDef("form3a-mechanics","How these hours are worked out",
+  '<p class="small"><b>Clinical hours</b> are your logged client sessions, each counted as 1 hour (50-minute minimum). Any session flagged as a late cancellation is excluded, in line with the rule that missed sessions don\u2019t count.</p>'+
+  '<p class="small"><b>Supervision hours</b> are each logged supervision session (1 hour), plus the training and placement totals below.</p>');
+infoDef("retention-rationale","How long, and why",
+  '<p class="small">When a client passes one of these dates they appear below, and you decide what happens next.</p>'+
+  '<p class="small">Six years each is the common default: the BACP complaint window is around three years, and insurers often ask for six. Your own insurer or supervisor may say otherwise \u2014 this is your call, not the app\u2019s.</p>');
+infoDef("payments-due-ticking","What ticking a payment does",
+  '<p class="small">Ticking one off changes nothing in your tax figures \u2014 a cost still counts in the year it fell due, whether or not it has been ticked here.</p>');
+infoDef("business-costs-detail","How business costs work",
+  '<p class="small">Monthly costs repeat on their own \u2014 enter one and it carries on without you re-adding it.</p>'+
+  '<p class="small">These come off your net income and tax estimate. Room rent is shown here but edited on the room itself.</p>');
+infoDef("other-income-detail","How other income counts",
+  '<p class="small">Practice income counts toward your net and tax estimate.</p>'+
+  '<p class="small">Anything marked <b>separate</b> \u2014 a second job, tutoring \u2014 is a different trade, so it\u2019s totalled here but kept out of both.</p>');
+infoDef("attendance-mechanics","How attendance is worked out",
+  '<p class="small">Long gaps (3\u00d7 the usual interval or more) count as a pause and are excluded from the rate, though they are still noted (\u23f8).</p>'+
+  '<p class="small">Missed sessions \u2014 late cancellations and DNAs \u2014 don\u2019t count as attended.</p>');
+infoDef("backup-restore-detail","What a backup contains",
+  '<p class="small">Export regularly to a file you keep (iCloud/Files/email).</p>'+
+  '<p class="small">The <b>.json backup is the complete copy</b> \u2014 it holds every session, supervision entry, client, room and setting. The CSVs are spreadsheet-friendly extracts.</p>'+
+  '<p class="small">No export contains clinical notes \u2014 the sessions\u2019 <b>notes</b> column records whether yours were written up, nothing more.</p>');
+infoDef("encrypted-backup-detail","How encrypted backup works",
+  '<p class="small">The file is unreadable without the passphrase \u2014 safe to keep in iCloud, Drive or email.</p>'+
+  '<p class="small">On desktop Chrome/Edge you can also pick a file that backups <b>auto-save to silently</b> after every change.</p>');
 
 /* ===== Monthly take-home & pension =====
    Both of these return **null when the therapist has never set one**, which is deliberately not
@@ -4024,6 +4096,18 @@ VIEWS.money=function(){
 };
 
 /* ===== Tax — the year-end machinery, kept out of the day-to-day ===== */
+
+/* Standing reminder, not a one-off gate: the acknowledgement was given once, but the figures are
+   read every month and the caveat has to travel with them. One definition, because "Now" and
+   "Estimate" both carry it and two copies would eventually say two different things. */
+function taxDisclaimBar(){
+  return '<div class="vmsg warn" style="margin-bottom:12px">'+gi("scales")+' <b>Estimates, not tax advice.</b> Worked out from what you have entered, using published HMRC rates. '+
+    '<span class="taxlink" id="taxDiscMore">What this means ›</span></div>';
+}
+function wireTaxDisclaimBar(host){
+  const n=host.querySelector("#taxDiscMore"); if(n)n.onclick=()=>taxDisclaimerSheet();
+}
+
 VIEWS.tax=function(){
   const v=el('<div class="view active"></div>');
   /* Nothing is drawn until the disclaimer has been acknowledged. Existing installs never see
@@ -4038,11 +4122,15 @@ VIEWS.tax=function(){
     setTimeout(()=>{if(!_flow)open();},120);   /* don't stack on top of setup or What's new */
     return v;
   }
-  const segs=[["estimate","Estimate"],["payments","Pot & payments"],["allowances","Allowances"],["mtd","MTD"]];
+  /* "Now" leads and is the default. Most of the year the only questions are what you are on
+     track to owe, what should be in the pot and when money next leaves; everything else on this
+     tab is a job with a season, and taxMoments is what raises those when their season arrives.
+     Nothing was removed from the other segments — every existing go("tax",{seg:...}) still lands. */
+  const segs=[["now","Now"],["estimate","Estimate"],["payments","Pot & payments"],["allowances","Per year"],["mtd","Quarterly (MTD)"]];
   v.innerHTML=segBar("taxseg",segs,taxSeg)+'<div id="taxbody"></div>';
   const body=v.querySelector("#taxbody");
   if(taxSeg!=="estimate"){
-    (taxSeg==="mtd"?drawMTD:taxSeg==="payments"?drawPayments:drawAllowances)(body);
+    (taxSeg==="now"?drawNow:taxSeg==="mtd"?drawMTD:taxSeg==="payments"?drawPayments:drawAllowances)(body);
     wireSegBar(v,"taxseg","tax",()=>go("tax",{keepScroll:true}));
     return v;
   }
@@ -4068,24 +4156,6 @@ VIEWS.tax=function(){
     '<div class="kpis mt" style="grid-template-columns:1fr 1fr"><div class="kpi good"><div class="v" id="thMain"></div><div class="l" id="thMainL"></div></div>'+
     '<div class="kpi"><div class="v" id="thYr"></div><div class="l" id="thYrL"></div></div></div>'+
     '<p class="small muted mt" id="thNote"></p></div>';
-  const pot=taxPot(), nxt=pot.next;
-  /* A summary only. Everything about paying \u2014 the buffer, the balance, every due date and
-     what HMRC actually assessed \u2014 lives on Pot & payments, so there is exactly one place to
-     look and no figure appears twice with two different explanations behind it. */
-  const potCard='<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
-      '<h2 style="margin:0">Your tax pot</h2><button class="btn sec sm" id="potOpen">Open \u203a</button></div>'+
-    '<div class="kpis mt">'+
-      '<div class="kpi good"><div class="v">'+Math.round(pot.rate*100)+'%</div><div class="l">of everything you\u2019re paid, set aside</div></div>'+
-      '<div class="kpi"><div class="v">'+gbp(Math.round(pot.target))+'</div><div class="l">should be put by today</div></div>'+
-      (nxt?'<div class="kpi'+((nxt.due-today())/86400000<60?' bad':'')+'"><div class="v">'+gbp(Math.round(nxt.total))+'</div><div class="l">due '+fmtD(nxt.due)+'</div></div>':'')+
-    '</div>'+
-    (pot.balance!=null
-      ? '<div class="vmsg '+(pot.vsFloor<0?'err':pot.over<0?'warn':'ok')+'" style="margin-top:12px">'+
-        (pot.vsFloor<0?'You have '+gbp(Math.round(pot.balance))+' put by, '+gbp(Math.round(-pot.vsFloor))+' short of the tax you have already earned.'
-         :pot.over<0?'You have '+gbp(Math.round(pot.balance))+' put by \u2014 enough for the tax so far, '+gbp(Math.round(-pot.over))+' short of your buffer.'
-         :'You have '+gbp(Math.round(pot.balance))+' put by \u2014 '+gbp(Math.round(pot.over))+' more than you need. That is yours to spend.')+'</div>'
-      : '')+
-    '<p class="small muted mt">Based on '+gbp(Math.round(pot.earned))+' of tax earned so far this year'+(pot.committed>0?' plus '+gbp(Math.round(pot.committed))+' still owed on earlier years':'')+', with a '+pot.cfg.bufferPct+'% buffer. '+infoLink("potfloor","How this is worked out")+'</p></div>';
   /* Only ever shown when it is actually a live choice \u2014 below the Small Profits Threshold. */
   const c2Card=(tyNet(curTaxYear(),false)<taxRates(curTaxYear()).spt)
     ? '<div class="card"><h2>Class 2 National Insurance</h2>'+
@@ -4099,13 +4169,9 @@ VIEWS.tax=function(){
     '<p class="small muted mt">'+basisNote()+'</p>'+
     (taxBasis()==="cash"?'<p class="small muted">Sessions you have not been paid for yet are not in these totals \u2014 they arrive in the year the money does.</p>':'')+
     '</div>';
-  /* Standing reminder, not a one-off gate: the acknowledgement was given once, but the figures
-     are read every month and the caveat has to travel with them. */
-  const disclaimBar='<div class="vmsg warn" style="margin-bottom:12px">'+gi("scales")+' <b>Estimates, not tax advice.</b> Worked out from what you have entered, using published HMRC rates. '+
-    '<span class="taxlink" id="taxDiscMore">What this means ›</span></div>';
-  body.innerHTML=disclaimBar+thCard+potCard+basisCard+c2Card+
+  body.innerHTML=taxDisclaimBar()+thCard+basisCard+c2Card+
     '<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">By tax year</h2><div class="seg" id="taxmode" style="display:inline-flex"><button data-m="proj" class="'+(taxMode==="proj"?"on":"")+'">Projected</button><button data-m="todate" class="'+(taxMode==="todate"?"on":"")+'">To date</button></div></div><div class="rawscroll"><table><thead><tr><th>Year</th><th class="num">Sess</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Overdue</th><th class="num">Net</th><th class="num">Tax</th></tr></thead><tbody>'+tyTable+'</tbody></table></div><p class="small muted"><b>'+esc(basisLabel())+'.</b> Net = income less room, supervision and business costs, plus any other practice income. Tax = Income Tax + Class 4 NIC (sole trader); tap a figure for the breakdown. <b>*</b> in-progress year shown as '+(taxMode==="proj"?"a pro-rata projection":"tax on income to date")+'.</p></div>';
-  const tdm=body.querySelector("#taxDiscMore");if(tdm)tdm.onclick=()=>taxDisclaimerSheet();
+  wireTaxDisclaimBar(body);
   /* [data-y] only — .taxlink is also the style for the pension link, which is not a year. */
   body.querySelectorAll(".taxlink[data-y]").forEach(elx=>elx.onclick=()=>{
     const y=elx.dataset.y, bn=tyBounds(y);
@@ -4115,8 +4181,6 @@ VIEWS.tax=function(){
   const c2v=body.querySelector("#c2v");
   if(c2v)c2v.onchange=async()=>{settings().class2Voluntary=c2v.checked;
     await commit("Voluntary Class 2: "+(c2v.checked?"on":"off"));go("tax",{keepScroll:true});};
-  const po=body.querySelector("#potOpen");
-  if(po)po.onclick=()=>go("tax",{seg:"payments"});
   wireInfo(body);
   const bsg=body.querySelector("#basisSeg");
   if(bsg)bsg.querySelectorAll("button").forEach(b=>b.onclick=async()=>{
@@ -4145,6 +4209,481 @@ VIEWS.tax=function(){
   wireSegBar(v,"taxseg","tax",()=>go("tax",{keepScroll:true}));
   return v;
 };
+
+/* ============================================================================
+   Tax › Now — what matters the rest of the year
+   ----------------------------------------------------------------------------
+   Most of this tab's power is only wanted at particular times: entering HMRC's real figures
+   after filing (January), the new-year allowance review (April), the quarterly MTD export.
+   Between those moments there are exactly three questions — how much am I on track to owe,
+   how much should be sitting in the pot, and when does money next leave the account — and
+   they used to be buried in two of seven cards.
+
+   So the infrequent jobs are *guided when their season arrives* and *out of the way the rest
+   of the time*. That is the whole design: three numbers, with seasonal cards above them only
+   while their window is open.
+
+   No new arithmetic lives here. Every figure comes from taxLiability, taxPot and
+   nextTaxPayment — the same functions the detail screens read — so a number on this screen
+   cannot drift from the screen it links to. "Now" summarises; it never replaces the detail.
+   ============================================================================ */
+const MTD_MOMENT_DAYS=35;       /* how long after a quarter closes its prompt stays up */
+const MTD_INCOME_FLOOR=50000;   /* MTD for Income Tax does not reach a practice below this */
+
+function taxMomentsMap(){const sg=settings();return (sg.taxMoments=sg.taxMoments||{});}
+
+/* Pure: reads today(), the state and the existing tax engine, and returns the seasonal cards
+   that are live right now — zero of them for most of the year. Each id carries its year, so a
+   dismissal is scoped to this year's instance and next year's returns on its own. */
+function taxMoments(){
+  const t=today(), y=t.getFullYear(), ty=curTaxYear(), pTY=prevTY(ty);
+  const dis=settings().taxMoments||{};
+  const D=(m,d,yr)=>new Date(yr==null?y:yr,m,d);
+  const live=(from,to)=>t>=from&&t<=to;
+  const money=x=>gbp(Math.round(x));
+  const out=[];
+  /* Both of these reach into taxTimeline, so they are worked out once and only when a window is
+     actually open — most of the year nothing below asks for them at all. */
+  let _np,_npDone=false;
+  const nextPay=()=>{if(!_npDone){_np=nextTaxPayment();_npDone=true;}return _np;};
+  let _mtd=null;
+  const mtdApplies=()=>{if(_mtd==null)_mtd=(taxPot().projInc>=MTD_INCOME_FLOOR);return _mtd;};
+
+  /* Self Assessment season. Only while there is actually something to do: the year has ended and
+     nothing has been entered from HMRC for it. */
+  const fileFrom=D(0,1), fileTo=D(0,31);
+  if(live(fileFrom,fileTo)&&tyBounds(pTY).end<t){
+    const rec=taxYearRec(pTY)||{};
+    if(numOrNull(rec.liability)==null&&!rec.filed)
+      out.push({id:"file-"+pTY,from:fileFrom,to:fileTo,
+        title:"Self Assessment season",
+        body:"Your <b>"+esc(pTY)+"</b> return, and the tax on it, are due by <b>31 January "+y+"</b>."+
+          "<p>Once you have filed, put HMRC’s real figures in and every estimate here switches to them — the schedule, the timeline and your pot.</p>",
+        cta:{label:"Enter what HMRC said ›",action:()=>startAfterFileFlow(pTY)}});
+  }
+  /* The two payment dates. Shown only when the next money out really is this one — a bill
+     already ticked off does not need a card about it. */
+  const payMoment=(id,from,to,dueD,title)=>{
+    if(!live(from,to))return;
+    const np=nextPay(); if(!np||+np.when!==+dueD)return;
+    out.push({id:id,from:from,to:to,title:title,
+      body:"<b>"+money(np.amount)+"</b> is due on <b>"+fmtD(np.when)+"</b>."+
+        "<p>"+esc(np.what)+".</p>",
+      cta:{label:"See the working ›",action:()=>go("tax",{seg:"payments"})}});
+  };
+  payMoment("jan-pay-"+y,D(0,1),D(1,5),D(0,31),"January’s payment");
+  payMoment("jul-pay-"+y,D(6,1),D(7,5),D(6,31),"July’s payment");
+
+  /* The new tax year. Everything set per year carries forward on its own, which is right — but
+     it means a change nobody makes is a choice nobody made. */
+  const ny=newYearWindow(t);
+  if(live(ny.from,ny.to))
+    out.push({id:"new-year-"+ty,from:ny.from,to:ny.to,
+      title:"New tax year — a two-minute review",
+      body:"Your student loan plan, where you pay tax and your use-of-home claim carry forward automatically — confirm they’re still right for <b>"+esc(ty)+"</b>.",
+      cta:{label:"Check them ›",action:()=>startNewYearFlow(ty)}});
+
+  /* MTD quarters. Gated on projected income, because MTD for Income Tax does not reach a small
+     practice at all and a quarterly nudge it can ignore is worse than no nudge. Both this tax
+     year's quarters and last year's are checked — the quarter ending 5 April belongs to a year
+     that has ended by the time its five weeks are half over. */
+  [ty,pTY].forEach(qy=>{mtdQuarters(qy).forEach(q=>{
+    const from=q.to, to=addDays(q.to,MTD_MOMENT_DAYS);
+    if(!live(from,to))return;
+    if(!mtdApplies())return;
+    out.push({id:"mtd-q"+q.n+"-"+qy,from:from,to:to,
+      title:"MTD quarter "+q.n+" has closed",
+      body:"The quarter <b>"+esc(q.label)+"</b> of "+esc(qy)+" ended on <b>"+fmtD(q.to)+"</b>."+
+        "<p>Its totals are ready to hand to your accountant or to bridging software.</p>",
+      cta:{label:"Open the quarterly figures ›",action:()=>go("tax",{seg:"mtd"})}});
+  });});
+
+  return out.filter(m=>!dis[m.id]);
+}
+
+function drawNow(host){
+  const ty=curTaxYear(), L=taxLiability(ty), pot=taxPot(), nxt=nextTaxPayment();
+  const money=x=>gbp(Math.round(x));
+  const moments=taxMoments();
+  /* A moment is a job, not a statistic — so it gets a title, a sentence and one button, and a
+     way to say "not this year" that survives a reload. */
+  const momHTML=moments.map((m,i)=>'<div class="card mom">'+
+    '<div class="row" style="justify-content:space-between;align-items:baseline;gap:10px">'+
+      '<h2 style="margin:0">'+gi("calendar")+' '+esc(m.title)+'</h2>'+
+      '<span class="small muted" data-momx="'+esc(m.id)+'" style="cursor:pointer;white-space:nowrap">Dismiss</span></div>'+
+    '<div class="small" style="margin-top:8px">'+m.body+'</div>'+
+    '<button class="btn sec sm mt" data-momgo="'+i+'">'+esc(m.cta.label)+'</button></div>').join("");
+
+  /* Where the headline figure came from, said plainly. HMRC's own number wins everywhere it
+     exists, and the reader should be able to see which one they are looking at. */
+  const srcNote=L.src==="actual"?"HMRC’s assessed figure"
+    :L.src==="projected"?"projected from this year so far"
+    :L.src==="estimate"?"estimated — nothing entered from HMRC yet"
+    :"nothing logged for this year yet";
+  const oweCard='<div class="card nowcard" id="nowOwe">'+
+    '<div class="row" style="justify-content:space-between;align-items:baseline;gap:8px">'+
+      '<h2 style="margin:0">On track to owe for '+esc(ty)+'</h2><span class="small muted" style="white-space:nowrap">the working ›</span></div>'+
+    '<div class="nv">'+money(L.total)+'</div><div class="nl">'+srcNote+'</div></div>';
+
+  /* Same source, same words as the pot card on Pot & payments — that screen is the detail home
+     and this is a summary of it, so the two cannot tell different stories. */
+  const verdict=pot.balance==null?''
+    :'<div class="vmsg '+(pot.vsFloor<0?'err':pot.over<0?'warn':'ok')+'" style="margin-top:12px">'+
+      (pot.vsFloor<0?'You have '+money(pot.balance)+' put by, '+money(-pot.vsFloor)+' short of the tax you have already earned.'
+       :pot.over<0?'You have '+money(pot.balance)+' put by — enough for the tax so far, '+money(-pot.over)+' short of your buffer.'
+       :'You have '+money(pot.balance)+' put by — '+money(pot.over)+' more than you need. That is yours to spend.')+'</div>';
+  const potCard='<div class="card nowcard" id="nowPot">'+
+    '<div class="row" style="justify-content:space-between;align-items:baseline;gap:8px">'+
+      '<h2 style="margin:0">Keep in your pot</h2><span class="small muted" style="white-space:nowrap">pot &amp; payments ›</span></div>'+
+    '<div class="nv">'+money(pot.target)+'</div>'+
+    '<div class="nl">that’s about '+Math.round(pot.rate*100)+'% of everything you’re paid</div>'+verdict+'</div>';
+
+  const nextCard='<div class="card nowcard" id="nowNext">'+
+    '<div class="row" style="justify-content:space-between;align-items:baseline;gap:8px">'+
+      '<h2 style="margin:0">Next payment</h2><span class="small muted" style="white-space:nowrap">pot &amp; payments ›</span></div>'+
+    (nxt?'<div class="nv">'+money(nxt.amount)+'</div><div class="nl">due '+fmtD(nxt.when)+' · '+esc(nxt.what)+'</div>'
+        :'<div class="nv nvtext">Nothing due yet</div><div class="nl">No tax year has produced a bill.</div>')+'</div>';
+
+  host.innerHTML=taxDisclaimBar()+momHTML+
+    '<div data-coach="now">'+oweCard+potCard+nextCard+'</div>'+
+    '<p class="small muted center" style="margin:0 0 14px">'+
+      '<span class="taxlink" id="nowFull">Full estimate ›</span>&nbsp; · &nbsp;'+
+      '<span class="taxlink" id="nowTH">Monthly take-home ›</span>&nbsp; · &nbsp;'+
+      'Counted on the '+esc(basisLabel().toLowerCase())+'</p>';
+
+  wireTaxDisclaimBar(host);
+  host.querySelectorAll("[data-momgo]").forEach(n=>n.onclick=()=>{
+    const m=moments[+n.dataset.momgo]; if(m&&m.cta&&m.cta.action)m.cta.action();});
+  host.querySelectorAll("[data-momx]").forEach(n=>n.onclick=async()=>{
+    taxMomentsMap()[n.dataset.momx]=isoD(today());
+    await commit("Dismissed tax prompt: "+n.dataset.momx);
+    toast("Hidden until next year"); go("tax",{keepScroll:true});});
+  host.querySelector("#nowOwe").onclick=()=>taxDetailsSheet(ty);
+  host.querySelector("#nowPot").onclick=()=>go("tax",{seg:"payments"});
+  host.querySelector("#nowNext").onclick=()=>go("tax",{seg:"payments"});
+  host.querySelector("#nowFull").onclick=()=>go("tax",{seg:"estimate"});
+  host.querySelector("#nowTH").onclick=()=>go("tax",{seg:"estimate"});
+}
+
+
+/* ============================================================================
+   Guided flows for the once-a-year jobs
+   ----------------------------------------------------------------------------
+   Entering HMRC's figures after filing, and the April carry-forward review, are the two
+   things a therapist does once a year — which makes them the two things nobody remembers
+   how to do. Both already have raw editors (the HMRC-figures sheet on Pot & payments, the
+   per-year cards on Allowances) and those stay exactly as they are; these are a guided path
+   to the SAME fields, reached from the seasonal cards on Tax › Now.
+
+   Two rules both flows keep:
+   - **Every step stages into a local `w` and writes nothing** — the same shape as startSetup.
+     Skipping, or closing, therefore discards; and a review where nothing changed produces no
+     commit and no audit entry at all.
+   - **No new arithmetic and no new persistence.** Writes go through `taxYearRecW`,
+     `setYearValue` and `uohCopyFrom`, in the shapes the existing editors already use.
+   ============================================================================ */
+
+/* The review window, in one place: Tax › Now raises the card and Allowances offers the link
+   from the same dates, so the two can never disagree about when it is April. */
+function newYearWindow(t){t=t||today();const y=t.getFullYear();
+  return {from:new Date(y,3,6), to:new Date(y,4,31)};}
+function newYearWindowOpen(t){t=t||today();const w=newYearWindow(t);return t>=w.from&&t<=w.to;}
+
+/* Tax years that have actually finished, newest first — the only ones a return exists for. */
+function endedTaxYears(){const t=today();return taxPlanYears().filter(y=>tyBounds(y).end<t).sort().reverse();}
+
+/* What the schedule WOULD say if these figures were entered. The engine reads
+   `settings.taxYears` and has no pure variant, so the record is staged, read and put back in a
+   `finally`. Nothing is committed, nothing is memoised on the way through, and the restore runs
+   even if the read throws — a confirm screen must never be able to leave a figure behind. */
+function taxYearsPreview(patches,fn){
+  const sg=settings(); const yrs=sg.taxYears=sg.taxYears||{};
+  const keys=Object.keys(patches||{});
+  const had={}, keep={};
+  keys.forEach(k=>{had[k]=Object.prototype.hasOwnProperty.call(yrs,k);
+    keep[k]=had[k]?Object.assign({},yrs[k]):null;});
+  try{
+    keys.forEach(k=>{yrs[k]=Object.assign({},yrs[k]||{},patches[k]);});
+    return fn();
+  }finally{
+    keys.forEach(k=>{if(had[k])yrs[k]=keep[k];else delete yrs[k];});
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Flow 1 — After you file
+   The SA303 claim to reduce is deliberately NOT here. It is an expert control with a real
+   interest penalty behind it, and it belongs on Pot & payments where the reader has the
+   instalments in front of them; this flow only mentions that it exists.
+   --------------------------------------------------------------------------- */
+function startAfterFileFlow(ty0){
+  if(_flow)return;                       /* flows never stack — see flowStart */
+  const ended=endedTaxYears();
+  if(!ended.length){toast("No tax year has finished yet");Sfx.error();return;}
+  /* Default to the most recent ended year that has no figure from HMRC yet — the one the
+     January card is about. Re-running for a year that already has one just re-edits it. */
+  const firstOpen=ended.find(y=>numOrNull((taxYearRec(y)||{}).liability)==null);
+  const w={ty:(ty0&&ended.indexOf(ty0)>=0)?ty0:(firstOpen||ended[0]),liab:null,poaMode:"skip",poa:null};
+  const money=x=>gbp(Math.round(x));
+  /* Whatever is already recorded for the year in view, so a re-run starts where it left off. */
+  const syncFromRecord=()=>{
+    const rn=taxYearRec(nextTY(w.ty))||{};
+    const set=numOrNull(rn.poaSet);
+    w.poaMode=(set==null)?"skip":"amount";
+    w.poa=set;
+  };
+  syncFromRecord();
+
+  const stepYear={emoji:gi("calendar"), h:"Which year have you filed?",
+    sub:"Your <b>tax calculation</b> (the SA302) is per tax year, and so is everything on it.",
+    mount(host){
+      const rows=ended.map(y=>{const L=taxLiability(y), has=L.src==="actual";
+        return '<div class="list-item nyopt'+(y===w.ty?" on":"")+'" data-y="'+esc(y)+'"><div class="li-main">'+
+          '<div class="li-title">'+esc(y)+(has?' <span class="chip y">already entered</span>':'')+'</div>'+
+          '<div class="li-sub">'+(has?'HMRC '+money(L.total)+' \u00b7 the app estimated '+money(L.estimate)
+                                     :'The app estimates '+money(L.estimate))+'</div></div></div>';}).join("");
+      host.innerHTML='<div style="padding:0 2px">'+rows+'</div>'+
+        '<p class="prev">Filed in January? That is the year that <b>ended</b> the previous 5 April. '+infoLink("sa302","Where to find your figures")+'</p>';
+      wireInfo(host);
+      host.querySelectorAll("[data-y]").forEach(n=>n.onclick=()=>{
+        w.ty=n.dataset.y; syncFromRecord(); w.liab=null;
+        host.querySelectorAll(".nyopt").forEach(x=>x.classList.toggle("on",x===n));Sfx.tick();});
+    }};
+
+  const stepBill={emoji:gi("scales"), h:"What did HMRC calculate?",
+    sub:"The bottom line of the tax calculation: income tax, Class 4, Class 2 and student loan together.",
+    validate(){if(w.liab==null||isNaN(w.liab)||w.liab<0){toast("Enter the total tax for "+w.ty);Sfx.error();return false;}},
+    mount(host){
+      const L=taxLiability(w.ty), rec=taxYearRec(w.ty)||{}, had=numOrNull(rec.liability);
+      host.innerHTML='<label>Total tax HMRC calculated for '+esc(w.ty)+' (\u00a3)</label>'+
+        '<input type="number" step="0.01" min="0" id="afLiab" placeholder="From your tax calculation" value="">'+
+        '<div class="acc-work"><div>The app estimated <b>'+money(L.estimate)+'</b> for '+esc(w.ty)+' from what you have logged.</div>'+
+          '<div class="small muted" style="margin-top:5px">It cannot see employment income, dividends, rental property or anything HMRC adjusted itself \u2014 which is exactly why this asks.</div></div>'+
+        (had!=null?'<div class="ovnote">You have already recorded <b>'+money(had)+'</b> for '+esc(w.ty)+'. Entering a figure here replaces it.</div>':'')+
+        '<p class="prev">Nothing is saved until the last screen.</p>';
+      const i=host.querySelector("#afLiab");
+      i.oninput=e=>{const raw=e.target.value.trim();w.liab=raw===""?null:+raw;};
+      if(w.liab!=null){i.value=w.liab;}
+    }};
+
+  const stepPoa={emoji:gi("calendar"), h:"Did HMRC set payments on account?",
+    sub:"Instalments towards <b>"+esc(nextTY(w.ty))+"</b>, shown on your Self Assessment account summary.",
+    validate(){if(w.poaMode==="amount"&&(w.poa==null||isNaN(w.poa)||w.poa<0)){
+      toast("Enter one instalment, or choose Skip");Sfx.error();return false;}},
+    mount(host){
+      host.innerHTML='<div class="seg" id="afMode" style="display:inline-flex">'+
+          '<button data-m="skip" class="'+(w.poaMode==="skip"?"on":"")+'">Skip \u2014 work it out</button>'+
+          '<button data-m="amount" class="'+(w.poaMode==="amount"?"on":"")+'">Enter what HMRC set</button></div>'+
+        '<div id="afPoaBox" class="mt"></div>'+
+        '<p class="prev">Skipping leaves whatever is already recorded alone and uses the rule instead: half the liability above, less Class 2 and student loan. '+infoLink("poa","What these are")+'</p>';
+      wireInfo(host);
+      const box=host.querySelector("#afPoaBox");
+      const paint=()=>{
+        box.innerHTML=w.poaMode==="amount"
+          ? '<label>Each instalment towards '+esc(nextTY(w.ty))+' (\u00a3)</label>'+
+            '<input type="number" step="0.01" min="0" id="afPoa" placeholder="One instalment, not both" value="'+(w.poa==null?"":esc(w.poa))+'">'+
+            '<p class="prev">The same figure falls due on 31 January and again on 31 July.</p>'
+          : '<p class="small muted">The app will work the instalments out from the figure you just entered.</p>';
+        const p=box.querySelector("#afPoa");
+        if(p)p.oninput=e=>{const raw=e.target.value.trim();w.poa=raw===""?null:+raw;};
+      };
+      host.querySelectorAll("#afMode button").forEach(b=>b.onclick=()=>{
+        w.poaMode=b.dataset.m;
+        host.querySelectorAll("#afMode button").forEach(x=>x.classList.toggle("on",x===b));
+        paint();Sfx.tick();});
+      paint();
+    }};
+
+  const stepConfirm={emoji:gi("done"), h:"Here is what changes",
+    sub:"Nothing has been saved yet.",
+    mount(host){
+      const L=taxLiability(w.ty);
+      const patches={}; patches[w.ty]={liability:w.liab};
+      const givePoa=(w.poaMode==="amount"&&w.poa!=null);
+      if(givePoa)patches[nextTY(w.ty)]={poaSet:w.poa,poaSetAt:isoD(today())};
+      const sched=taxYearsPreview(patches,()=>taxSchedule(w.ty));
+      host.innerHTML='<div class="setsum">'+
+          '<div><span>'+esc(w.ty)+' tax</span><b>'+money(w.liab)+' from HMRC</b></div>'+
+          '<div><span>The app\u2019s estimate</span><b>'+money(L.estimate)+', kept alongside</b></div>'+
+          '<div><span>'+esc(w.ty)+'</span><b>marked as filed</b></div>'+
+          (givePoa?'<div><span>Each instalment towards '+esc(nextTY(w.ty))+'</span><b>'+money(w.poa)+'</b></div>':'')+
+        '</div>'+
+        '<div class="acc-work" style="margin-top:12px">'+
+          '<div>'+fmtD(sched.jan.date)+' \u2014 <b>'+money(sched.jan.total)+'</b>'+
+            (Math.round(sched.jan.poa)!==0?' (balancing '+money(sched.jan.balancing)+' + first instalment '+money(sched.jan.poa)+')':' (balancing payment)')+'</div>'+
+          (Math.round(sched.jul.total)!==0?'<div>'+fmtD(sched.jul.date)+' \u2014 <b>'+money(sched.jul.total)+'</b> (second instalment)</div>':'')+
+          '<div class="small muted" style="margin-top:5px">Every figure on the Tax tab switches to HMRC\u2019s \u2014 the timeline, the pot and the balancing payment.</div>'+
+        '</div>'+
+        '<p class="prev">Expecting a much quieter year? You can ask HMRC to reduce the instalments afterwards, from <b>Pot &amp; payments</b>. '+infoLink("sa303","The catch")+'</p>';
+      wireInfo(host);
+    }};
+
+  flowStart({
+    title:"After you file",
+    steps:[stepYear,stepBill,stepPoa,stepConfirm],
+    doneLabel:"Save HMRC\u2019s figures",
+    onSkip:()=>{flowClose();toast("Nothing was saved");},
+    onDone:async()=>{
+      /* Exactly the fields, and the shapes, the HMRC-figures sheet already writes. */
+      const r=taxYearRecW(w.ty);
+      r.liability=w.liab; r.liabilityAt=isoD(today()); r.filed=true;
+      if(w.poaMode==="amount"&&w.poa!=null){
+        const rn=taxYearRecW(nextTY(w.ty));
+        rn.poaSet=w.poa; rn.poaSetAt=isoD(today());
+      }
+      await commit("Entered HMRC\u2019s figures for "+w.ty);
+      toast("Saved \u2014 every figure now uses HMRC\u2019s");Sfx.pop();
+      go("tax",{seg:"now"});
+    }
+  });
+}
+
+/* ---------------------------------------------------------------------------
+   Flow 2 — New tax year review
+   Carry-forward means a year where nothing changed needs NO writes, so every step confirms by
+   default and Continue is the "that's right" button. Steps stage into `w`; the single commit
+   happens on the last screen, and only if something actually changed.
+   --------------------------------------------------------------------------- */
+function newYearReviewChanges(w){
+  const out=[];
+  if(w.region!=null&&w.region!==taxRegionFor(w.ty))
+    out.push({k:"region",label:"Where you pay income tax",
+      to:w.region==="scotland"?"Scotland":"England, Wales or NI"});
+  if(w.loan!=null&&w.loan!==studentLoanPlanKey(w.ty))
+    out.push({k:"loan",label:"Student loan",to:SL_PLANS[w.loan]?SL_PLANS[w.loan].n:"No student loan"});
+  if(w.buffer!=null&&w.buffer!==taxPotCfg().bufferPct)
+    out.push({k:"buffer",label:"Your pot buffer",to:w.buffer+"%"});
+  return out;
+}
+/* Applies the staged changes. Never commits — the caller does, once, so an early exit into
+   Allowances and the normal finish both produce exactly one audit entry. */
+function applyNewYearReview(w){
+  const ch=newYearReviewChanges(w);
+  ch.forEach(c=>{
+    if(c.k==="region")setYearValue("taxRegionYears",w.ty,w.region,"taxRegion");
+    else if(c.k==="loan")setYearValue("studentLoanYears",w.ty,w.loan,"studentLoan");
+    else if(c.k==="buffer"){const tp=settings().taxPot=settings().taxPot||{};tp.bufferPct=w.buffer;}
+  });
+  return ch;
+}
+function startNewYearFlow(ty0){
+  if(_flow)return;                       /* flows never stack — see flowStart */
+  const w={ty:ty0||curTaxYear(),region:null,loan:null,buffer:null};
+  const money=x=>gbp(Math.round(x));
+  const carried=(inf)=>inf.inherited?'<span class="chip na">carried from '+esc(inf.from)+'</span>'
+    :inf.from?'<span class="chip y">set for '+esc(inf.from)+'</span>':'<span class="chip na">not set</span>';
+
+  const stepRegion=(()=>{
+    const inf=yearValue("taxRegionYears",w.ty,"rUK");
+    const cur=taxRegionFor(w.ty);
+    return {emoji:gi("privacy"), h:"Where do you pay income tax?",
+      sub:"Scotland sets its own bands, so the estimate is simply wrong without this.",
+      mount(host){
+        const sel=()=>w.region||cur;
+        host.innerHTML='<div class="vmsg ok">'+esc(w.ty)+' is using <b>'+(cur==="scotland"?"Scotland":"England, Wales or NI")+'</b> '+carried(inf)+'</div>'+
+          '<div class="seg mt" id="nyReg" style="display:inline-flex">'+
+            '<button data-r="rUK" class="'+(sel()==="rUK"?"on":"")+'">England, Wales or NI</button>'+
+            '<button data-r="scotland" class="'+(sel()==="scotland"?"on":"")+'">Scotland</button></div>'+
+          '<p class="prev">Still right? Just Continue \u2014 nothing is written. '+infoLink("carryforward","Why")+'</p>';
+        wireInfo(host);
+        host.querySelectorAll("#nyReg button").forEach(b=>b.onclick=()=>{
+          w.region=b.dataset.r;
+          host.querySelectorAll("#nyReg button").forEach(x=>x.classList.toggle("on",x===b));Sfx.tick();});
+      }};
+  })();
+
+  const stepLoan=(()=>{
+    const inf=yearValue("studentLoanYears",w.ty,"none");
+    const cur=studentLoanPlanKey(w.ty), p=SL_PLANS[cur];
+    return {emoji:gi("fees"), h:"Are you still repaying a student loan?",
+      sub:"Collected with your tax in the same January bill \u2014 but never part of a payment on account.",
+      mount(host){
+        host.innerHTML='<div class="vmsg '+(p?"ok":"")+'">'+esc(w.ty)+' is using <b>'+(p?esc(p.n):"no student loan")+'</b> '+carried(inf)+'</div>'+
+          '<label style="margin-top:12px">Plan for '+esc(w.ty)+'</label>'+
+          '<select id="nySl">'+opts2([["none","No student loan"]].concat(Object.keys(SL_PLANS).filter(k=>k!=="none")
+            .map(k=>[k,SL_PLANS[k].n+" \u2014 from \u00a3"+SL_PLANS[k].thr.toLocaleString("en-GB")+" at "+Math.round(SL_PLANS[k].rate*100)+"%"])),w.loan||cur)+'</select>'+
+          '<p class="prev">The year you finish repaying, set it to <b>None</b> from that year \u2014 the years you were repaying keep their figures.</p>';
+        host.querySelector("#nySl").onchange=e=>{w.loan=e.target.value;Sfx.tick();};
+      }};
+  })();
+
+  const stepUoh=(()=>{
+    const inf=uohForYear(w.ty), cfg=inf.cfg;
+    const prevSrc=uohPrevSource(w.ty), ownYet=!!uohYears()[w.ty];
+    return {emoji:gi("rooms"), h:"Your use-of-home claim",
+      sub:"Bills move every year, so this is the one worth a proper look.",
+      mount(host){
+        const label=cfg.method==="simplified"?"Simplified":cfg.method==="actual"?"Actual costs":"Nothing claimed";
+        host.innerHTML='<div class="vmsg '+(cfg.method&&cfg.method!=="none"?"ok":"warn")+'">'+esc(w.ty)+' is using <b>'+label+'</b>'+
+            (cfg.method&&cfg.method!=="none"?' \u2014 '+money(uohMonthlyFor(cfg))+' a month':'')+' '+carried(inf)+'</div>'+
+          '<p class="small muted mt">Confirm and it carries on unchanged. To move the hours or the bills on, '+esc(w.ty)+
+            (prevSrc&&!ownYet?' gets its own copy of '+esc(prevSrc)+'\u2019s figures to edit':' opens for editing')+' \u2014 which finishes this review and takes you to Per year.</p>'+
+          '<button class="btn sec full mt" id="nyUoh">'+(prevSrc&&!ownYet?"\u2398 Copy "+esc(prevSrc)+"\u2019s figures and edit them \u203a":"Open Per year to edit them \u203a")+'</button>'+
+          '<p class="prev">Everything you have confirmed so far is saved on the way through. '+infoLink("carryforward","How carry-forward works")+'</p>';
+        wireInfo(host);
+        host.querySelector("#nyUoh").onclick=async()=>{
+          const ch=applyNewYearReview(w);
+          const copied=(prevSrc&&!ownYet)?uohCopyFrom(prevSrc,w.ty):false;
+          if(ch.length||copied)await commit("New tax year review "+w.ty);
+          flowClose();
+          uohYearSel=w.ty; uohEdit=null;
+          if(copied)toast("Copied into "+w.ty);
+          go("tax",{seg:"allowances"});
+        };
+      }};
+  })();
+
+  const stepBuffer=(()=>{
+    const cur=taxPotCfg().bufferPct;
+    const bufOpts=[0,5,10,15,20,25];
+    return {emoji:gi("buffer"), h:"Still the right buffer?",
+      sub:"What turns \u201cprobably enough\u201d in the pot into \u201cdefinitely enough\u201d.",
+      validate(){if(w.buffer!=null&&(isNaN(w.buffer)||w.buffer<0||w.buffer>100)){
+        toast("A buffer between 0 and 100%");Sfx.error();return false;}},
+      mount(host){
+        const sel=()=>w.buffer==null?cur:w.buffer;
+        host.innerHTML='<div class="vmsg ok">Your pot is holding <b>'+cur+'%</b> over the tax you have already earned.</div>'+
+          '<div class="seg mt" id="nyBuf" style="display:inline-flex;flex-wrap:wrap">'+
+            bufOpts.map(p=>'<button data-b="'+p+'" class="'+(sel()===p?"on":"")+'">'+p+'%</button>').join("")+'</div>'+
+          '<div class="row mt" style="gap:8px;align-items:center"><span class="small muted">or set your own</span>'+
+            '<input type="number" min="0" max="100" step="1" id="nyBufIn" value="'+esc(sel())+'" style="max-width:110px;margin:0"></div>'+
+          '<p class="prev">A first year, or income that moves a lot, wants more than a settled practice. '+infoLink("potbuffer","How much is enough")+'</p>';
+        wireInfo(host);
+        const inp=host.querySelector("#nyBufIn");
+        host.querySelectorAll("#nyBuf button").forEach(b=>b.onclick=()=>{
+          w.buffer=+b.dataset.b; inp.value=w.buffer;
+          host.querySelectorAll("#nyBuf button").forEach(x=>x.classList.toggle("on",x===b));Sfx.tick();});
+        inp.oninput=e=>{const raw=e.target.value.trim();
+          w.buffer=raw===""?null:Math.round(+raw);
+          host.querySelectorAll("#nyBuf button").forEach(x=>x.classList.toggle("on",+x.dataset.b===w.buffer));};
+      }};
+  })();
+
+  const stepDoneNY={emoji:gi("done"), h:"That is "+w.ty+" reviewed",
+    mount(host){
+      const ch=newYearReviewChanges(w);
+      host.innerHTML=(ch.length
+        ? '<div class="setsum">'+ch.map(c=>'<div><span>'+esc(c.label)+'</span><b>'+esc(c.to)+'</b></div>').join("")+'</div>'+
+          '<p class="prev">Saved when you finish. Earlier tax years are untouched \u2014 a change only ever applies to '+esc(w.ty)+' and the years after it.</p>'
+        : '<div class="vmsg ok">Nothing needed changing \u2014 '+esc(w.ty)+' carries on with exactly what '+esc(prevTY(w.ty))+' used.</div>'+
+          '<p class="prev">Nothing will be written. '+infoLink("carryforward","Why that is enough")+'</p>');
+      wireInfo(host);
+    }};
+
+  flowStart({
+    title:"New tax year review",
+    steps:[stepRegion,stepLoan,stepUoh,stepBuffer,stepDoneNY],
+    doneLabel:"Finish",
+    onSkip:()=>{flowClose();toast("Nothing was changed");},
+    onDone:async()=>{
+      const ch=applyNewYearReview(w);
+      if(!ch.length){toast("Nothing needed changing");go("tax",{seg:"now"});return;}
+      await commit("New tax year review "+w.ty);
+      toast(ch.length===1?"1 change saved":ch.length+" changes saved");Sfx.pop();
+      go("tax",{seg:"now"});
+    }
+  });
+}
 
 /* ===== Where a figure came from =====
    One breakdown for any date range, used by the tax-year sheet and by each MTD quarter, so the
@@ -4453,6 +4992,10 @@ function drawPayments(host){
     '<p class="small muted">Until a return is filed everything here is the app’s own estimate. Once you have your tax calculation, put the real figure in and every number above switches to it. '+infoLink("actuals","When to do this")+'</p>'+
     (done.length?'<div style="padding:0 2px">'+done.map(actRow).join("")+'</div>'
       :'<p class="muted small">No tax year has finished yet.</p>')+
+    /* The rows above are the raw editor and stay exactly as they are. This is the same fields,
+       walked through, for the once-a-year reader who no longer remembers the vocabulary. */
+    (done.length?'<button class="btn sec full mt" id="pyGuide">Walk me through it ›</button>'+
+      '<p class="prev">Four short questions, straight off your tax calculation.</p>':'')+
     '</div>';
 
   host.innerHTML=potCard+dueCard+actCard;
@@ -4461,6 +5004,8 @@ function drawPayments(host){
   host.querySelectorAll("[data-act]").forEach(n=>n.onclick=()=>taxActualSheet(n.dataset.act));
   const pc=host.querySelector("#pyClaim");
   if(pc)pc.onclick=e2=>{e2.stopPropagation();poaClaimSheet(curTaxYear());};
+  const pg=host.querySelector("#pyGuide");
+  if(pg)pg.onclick=()=>startAfterFileFlow();
   const saveBuf=async v=>{const n=Math.max(0,Math.min(100,Math.round(+v||0)));
     settings().taxPot=settings().taxPot||{};settings().taxPot.bufferPct=n;
     await commit("Tax pot buffer: "+n+"%");go("tax",{keepScroll:true});};
@@ -4728,7 +5273,14 @@ function drawAllowances(host){
       ? '<p class="small muted mt"><span class="taxlink" id="slClr">Clear '+esc(ty)+'\u2019s own setting and carry the earlier year forward again \u203a</span></p>'
       : '')+
     '</div>';
-  const yearCard='<div class="card"><h2>Set by tax year</h2>'+
+  /* Only during the April window the seasonal card uses, so this is never a permanent button
+     for a job that is only worth doing once a year. */
+  const reviewRow=newYearWindowOpen()
+    ? '<p class="small" style="margin:0 0 10px"><span class="taxlink" id="alReview">Review for '+esc(curTaxYear())+' \u203a</span> '+
+      '<span class="muted">\u2014 confirm what carried forward, in four questions.</span></p>'
+    : '';
+  const yearCard='<div class="card"><h2>Settings that follow the tax year</h2>'+
+    reviewRow+
     '<p class="small muted">HMRC lets some things change from one year to the next, and once a year is filed its figures should stop moving. Pick a year here \u2014 everything below applies to it, and to later years until you say otherwise.</p>'+
     yearStrip+
     (status.filed?'<div class="vmsg warn" style="margin-top:10px">\ud83d\uddc4 You have marked <b>'+esc(ty)+'</b> as filed. Changing anything below changes figures you have already submitted \u2014 if this is a correction, keep a note of what you changed and why.</div>':'')+
@@ -4756,6 +5308,8 @@ function drawAllowances(host){
     '<label class="colchk" style="margin-top:14px"><input type="checkbox" id="uohFiled"'+(status.filed?" checked":"")+'> I have filed my '+esc(ty)+' return</label>'+
     '<p class="prev">Only a reminder to yourself \u2014 it never locks anything or changes a figure.</p>'+
     '</div>';
+  const arv=host.querySelector("#alReview");
+  if(arv)arv.onclick=()=>startNewYearFlow(curTaxYear());
   const slx=host.querySelector("#slSel");
   if(slx)slx.onchange=async()=>{
     setYearValue("studentLoanYears",ty,slx.value,"studentLoan");
@@ -5061,7 +5615,7 @@ VIEWS.settings=function(){
    </div></details>
    <details class="sgrp" data-g="data"><summary><span class="sgt">Data &amp; backup</span><span class="sgs">Backups, storage, import, undo and health checks</span></summary><div class="sgb">
    <div class="card"><h2>Backup &amp; restore</h2>
-     <p class="small muted">Your data lives on this device. Export regularly to a file you keep (iCloud/Files/email). The <b>.json backup is the complete copy</b> — it holds every session, supervision entry, client, room and setting. The CSVs are spreadsheet-friendly extracts. No export contains clinical notes — the sessions’ <b>notes</b> column records whether yours were written up, nothing more.</p>
+     <p class="small muted">Your data lives on this device. GroundWork works on one device at a time — restore a backup to move your records, don’t run two copies side by side. ${infoLink("backup-restore-detail")}</p>
      <div class="row mt" style="flex-wrap:wrap;gap:8px">
        <button class="btn" id="expJ">⤓ Export backup (.json)</button>
        <button class="btn sec" id="expC">⤓ Export sessions (.csv)</button>
@@ -5070,6 +5624,14 @@ VIEWS.settings=function(){
        <button class="btn ghost" id="impB">⤒ Restore from backup</button>
        <input type="file" id="impF" accept=".json,application/json" style="display:none">
      </div>
+   </div>
+   <div class="card"><h2>GroundWork Notes</h2>
+     <p class="small muted">If you write your clinical notes in <b>GroundWork Notes</b>, this sends over how often you see each client and when — so that app can work out which sessions still need writing up, on whichever device you write them on.</p>
+     <p class="small muted"><b>Client codes and appointment times only.</b> No names, no fees, and nothing clinical ever comes back the other way — whether your notes are done stays a tick in this app.</p>
+     <div class="row mt" style="flex-wrap:wrap;gap:8px">
+       <button class="btn" id="rosterSync">↻ Sync schedules</button>
+     </div>
+     <p class="small muted mt" id="rosterState"></p>
    </div>
    <div class="card"><h2>Import from a spreadsheet</h2>
      <p class="small muted">Moving over from Excel, Numbers or Google Sheets? Paste your rows or pick a <b>.csv</b> and match your columns to the app’s fields. Your existing data is <b>kept</b> — this only adds to it, and one Undo reverses the whole import.</p>
@@ -5081,7 +5643,7 @@ VIEWS.settings=function(){
      <button class="btn sec mt" id="stAsk" style="display:none">Ask the browser to protect it</button>
    </div>
    <div class="card"><h2>Encrypted backup 🔐</h2>
-     <p class="small muted">Protect backups with a passphrase (AES-256). The file is unreadable without it — safe to keep in iCloud, Drive or email. On desktop Chrome/Edge you can also pick a file that backups <b>auto-save to silently</b> after every change. <b>If you forget the passphrase, encrypted backups cannot be opened.</b></p>
+     <p class="small muted">Protect backups with a passphrase (AES-256). ${infoLink("encrypted-backup-detail")} <b>If you forget the passphrase, encrypted backups cannot be opened.</b></p>
      <p class="small" id="encStatus" style="font-weight:600"></p>
      <div class="row mt" style="flex-wrap:wrap;gap:8px">
        <button class="btn sec" id="encSet"></button>
@@ -5210,6 +5772,7 @@ VIEWS.settings=function(){
   v.querySelector("#setRerun").onclick=()=>confirmRerunSetup();
   v.querySelector("#setDanger").onclick=()=>dzMenu();
   wireRetention(v);
+  wireInfo(v);
   /* Every section starts collapsed each time Settings is opened, so the tab presents as a short
      list of headings rather than a wall. Open state is held in memory only and cleared by go()
      on a fresh entry — a section left open last week is not one you want reopened today. It has
@@ -5270,6 +5833,30 @@ VIEWS.settings=function(){
     offB.onclick=async()=>{if(!confirm("Turn off encrypted backups? Existing encrypted files still need the passphrase to open."))return;
       await encDisable();toast("Encrypted backups off");paintEnc();};
     paintEnc();
+  })();
+  (function(){
+    const btn=v.querySelector("#rosterSync"), st=v.querySelector("#rosterState");
+    const paint=(msg)=>{
+      const last=rosterLastSync();
+      st.innerHTML=(msg?esc(msg)+" ":"")+
+        (last?"Last synced "+esc(fmtD(last.slice(0,10)))+".":"Not synced yet.")+
+        (fsaAvailable()?" This browser can write straight over the same file each time — you pick it once."
+                      :" Save it over the same file each time, so GroundWork Notes keeps finding it.");
+    };
+    paint("");
+    btn.onclick=async()=>{
+      btn.disabled=true;
+      const r=await syncSchedules();
+      btn.disabled=false;
+      if(!r)return paint("");
+      /* A code the notes app cannot use is left out of the file, so say so here rather than
+         letting a client silently fail to appear at the other end. */
+      const skipped=r.skipped.length?" "+r.skipped.length+" client"+(r.skipped.length===1?"":"s")+
+        " left out — codes must be 2–12 letters and numbers ("+r.skipped.slice(0,3).join(", ")+
+        (r.skipped.length>3?", …":"")+").":"";   /* paint() escapes; don't escape twice here */
+      paint(r.count+" client"+(r.count===1?"":"s")+" written."+skipped);
+      toast("Schedules synced");
+    };
   })();
   v.querySelector("#expJ").onclick=exportJSON;
   v.querySelector("#impSheet").onclick=()=>impOpen();
@@ -5427,14 +6014,93 @@ function rollingAttendanceSeries(rows){
   return months.map((m,i)=>{let sa=0,se=0;for(let q=Math.max(0,i-W+1);q<=i;q++){sa+=months[q].attended;se+=months[q].expected;}
     return {lab:m.lab,avg:se>0?Math.round(sa/se*100):null};});
 }
+/* ============ Session schedules — shared with GroundWork Notes ============
+   How often a client is seen, and when. GroundWork uses it to predict the next session; the
+   notes app uses the SAME rule, from the same numbers, to work out which past sessions still
+   need writing up. The specification both apps implement is `docs/schedule-sync.md`, and it is
+   the authority if this code and that document ever disagree.
+
+   The cadence travels between the apps as a NUMBER OF DAYS, never a label, because `freqDays`
+   maps "Monthly" to a flat 28 — a calendar month at the other end would put the two apps three
+   days apart by the fourth session and neither would look wrong on its own. */
+/* Indexed to match `Date.getDay()` — Sunday is 0. Deliberately NOT the `WEEKDAYS` list further
+   up this file, which is the payment-schedule picker and runs Monday-first with its own numbering;
+   the two must not be confused, hence the different name. */
+const SLOT_DAYS=["sun","mon","tue","wed","thu","fri","sat"];
+const SLOT_DAY_NAMES={sun:"Sunday",mon:"Monday",tue:"Tuesday",wed:"Wednesday",thu:"Thursday",fri:"Friday",sat:"Saturday"};
+/* How far back to look when working out a client's usual slot. Long enough to survive one
+   session being moved, short enough that a slot changed in the spring is not outvoted by the
+   winter's. */
+const SLOT_WINDOW=8;
+function sessionsOf(code){
+  return S.sessions.filter(s=>(s.client||"").toLowerCase()===(code||"").toLowerCase()&&parseD(s.date))
+    .sort((a,b)=>parseD(a.date)-parseD(b.date));
+}
+/* The commonest day and time in a client's recent history. Cancelled sessions and DNAs are
+   excluded: a session that did not happen is still evidence of the slot, but a run of them
+   rearranged around a holiday is not, and the attended ones are the ones being written up. */
+function usualSlotFor(code){
+  const rs=sessionsOf(code).filter(s=>!isCancelled(s)).slice(-SLOT_WINDOW);
+  if(!rs.length)return {day:"",time:""};
+  const tally=(vals)=>{const n={};let best="",bestN=0;
+    /* Walked newest-last so the most recent value wins a tie — a slot that has just moved
+       should not be outvoted by the same number of sessions in the old one. */
+    vals.forEach(v=>{if(!v)return;n[v]=(n[v]||0)+1;if(n[v]>=bestN){bestN=n[v];best=v}});
+    return best;};
+  return {
+    day:tally(rs.map(s=>SLOT_DAYS[parseD(s.date).getDay()])),
+    time:tally(rs.map(s=>s.time||""))
+  };
+}
+/* A client's schedule: their frequency, and the slot they sit in. `usualDay` / `usualTime` on the
+   client record are overrides — blank means "work it out from what actually happened", which is
+   right for almost everybody and needs no data entry at all. */
+function clientSchedule(c){
+  if(!c)return null;
+  const slot=usualSlotFor(c.code);
+  return {cadenceDays:freqDays(c),
+    usualDay:(c.usualDay||slot.day||""),
+    usualTime:(c.usualTime||slot.time||"")};
+}
+/* Moves a candidate date onto the client's usual day and time. The day snap moves at most three
+   days either way, so it can only ever pull a series back onto its own rhythm, never relocate it:
+   one session moved to a Thursday should not shift every future Tuesday. Every cadence is a whole
+   number of weeks, so after one correction this does nothing at all.
+
+   Ported line for line from `SessionPrediction.place` in GroundWork Notes. Change both. */
+function placeOnSchedule(d,sched){
+  if(!d)return d;
+  let out=new Date(d);
+  const want=SLOT_DAYS.indexOf(sched&&sched.usualDay||"");
+  if(want>=0){
+    let delta=want-out.getDay();
+    if(delta>3)delta-=7;
+    if(delta<-3)delta+=7;
+    if(delta)out=addDays(out,delta);
+  }
+  return out;
+}
+/* The next session this client is due, from the last one on record. Returns null when there is no
+   history to count from — inventing a first appointment would be worse than leaving today in the
+   box, which is what the form does anyway. */
+function nextSessionFor(code,excludeId){
+  const last=lastSessionFor(code,excludeId); if(!last)return null;
+  const d=parseD(last.date); if(!d)return null;
+  const c=S.clients.find(x=>(x.code||"").toLowerCase()===(code||"").toLowerCase());
+  const sched=clientSchedule(c); if(!sched)return null;
+  return {date:isoD(placeOnSchedule(addDays(d,sched.cadenceDays),sched)),
+    time:sched.usualTime||last.time||"10:00"};
+}
 function suggestFor(code){
   const rs=S.sessions.filter(s=>(s.client||"").toLowerCase()===(code||"").toLowerCase());
   if(!rs.length)return {num:1,date:isoD(today()),time:"10:00",mode:"In-person",location:"At home",room:""};
   rs.sort((a,b)=>parseD(b.date)-parseD(a.date));const last=rs[0];
   const maxNum=Math.max(...rs.map(s=>+s.num||0));
-  const cl=S.clients.find(c=>c.code.toLowerCase()===code.toLowerCase());
-  const nd=addDays(parseD(last.date),freqDays(cl));
-  return {num:maxNum+1,date:isoD(nd),time:last.time||"10:00",mode:last.mode||"In-person",
+  /* Was last-date + frequency. Now the shared rule, so a client whose last session was moved is
+     offered their usual slot back rather than the moved day repeated forever. */
+  const next=nextSessionFor(code);
+  return {num:maxNum+1,date:next?next.date:isoD(addDays(parseD(last.date),freqDays(S.clients.find(c=>c.code.toLowerCase()===code.toLowerCase())))),
+    time:next?next.time:(last.time||"10:00"),mode:last.mode||"In-person",
     location:last.location||"At home",room:last.room&&last.room!=="-"?last.room:""};
 }
 
@@ -5611,6 +6277,10 @@ function clientForm(c){
     <label>Client code</label><input id="c_code" value="${esc(m.code)}" ${isNew?"":"readonly"}>
     <div class="field2"><div><label>Status</label><select id="c_status">${opts(statuses,m.status)}</select></div>
       <div><label>Frequency</label><select id="c_freq">${opts(["Weekly","Every 2 weeks","Every 3 weeks","Monthly"],m.frequency)}</select></div></div>
+    <div class="field2">
+      <div><label>Usual day</label><select id="c_uday">${opts2([["","From their history"]].concat(SLOT_DAYS.map(d=>[d,SLOT_DAY_NAMES[d]])),m.usualDay||"")}</select></div>
+      <div><label>Usual time</label><input type="time" id="c_utime" value="${esc(m.usualTime||"")}"></div></div>
+    <p class="small muted" id="c_slotHint"></p>
     ${isNew?`<label>Starting rate (£)</label><input type="number" min="0" id="c_rate" placeholder="What you charge this client" value="${defaultRate()==null?"":esc(defaultRate())}"><div class="prev" style="margin-top:5px"><span class="taxlink" id="setDefRate">${defaultRate()==null?"Set a default for new clients ›":"Update default (£"+esc(defaultRate())+") ›"}</span></div>`:
       `<div class="hint">Current rate: <b>${gbp(rateNow)}</b> <button class="btn sm" id="chRate" style="float:right">Change rate</button></div>
        <div id="histWrap"></div>`}
@@ -5624,6 +6294,21 @@ function clientForm(c){
       hist.map(r=>`<div class="audit-row"><b>${gbp(r.rate)}</b> from ${fmtD(r.effectiveFrom)}</div>`).join("")+'</details>';
     body.querySelector("#chRate").onclick=()=>rateChange(m.code);
   }
+  /* Both fields are overrides: blank means "work it out from what actually happened", which is
+     right for almost every client and needs nothing typed. The hint says what that comes to, so
+     the blank state is visibly doing something rather than looking unfilled. */
+  const paintSlot=()=>{
+    const h=body.querySelector("#c_slotHint"); if(!h)return;
+    const probe={code:m.code,frequency:body.querySelector("#c_freq").value,
+      usualDay:body.querySelector("#c_uday").value,usualTime:body.querySelector("#c_utime").value};
+    const sc=clientSchedule(probe);
+    const day=sc.usualDay?SLOT_DAY_NAMES[sc.usualDay]+"s":"whatever day the last session fell on";
+    h.textContent=isNew?"Left blank, these are read from this client’s sessions as they build up."
+      :"Currently: every "+sc.cadenceDays+" days, "+day+(sc.usualTime?" at "+sc.usualTime:"")+
+       ". Used to suggest the next session, and shared with GroundWork Notes.";
+  };
+  paintSlot();
+  ["#c_freq","#c_uday","#c_utime"].forEach(sel=>{const n=body.querySelector(sel);if(n)n.onchange=paintSlot;});
   const sdr=body.querySelector("#setDefRate");
   if(sdr)sdr.onclick=()=>{const v=prompt("Default starting rate for new clients (£) — leave blank for none:",defaultRate()==null?"":defaultRate());if(v==null)return;
     if(v.trim()===""){setDefaultRate(null);sdr.textContent="Set a default for new clients ›";toast("Default cleared");return;}
@@ -5632,6 +6317,7 @@ function clientForm(c){
   body.querySelector("#cSave").onclick=async()=>{
     m.code=body.querySelector("#c_code").value.trim();m.status=body.querySelector("#c_status").value;
     m.frequency=body.querySelector("#c_freq").value;m.insurance=body.querySelector("#c_ins").value;m.notes=body.querySelector("#c_notes").value;
+    m.usualDay=body.querySelector("#c_uday").value;m.usualTime=body.querySelector("#c_utime").value;
     if(!m.code){toast("Enter a code");return}
     const cat=S.clientCategories.find(x=>x.status===m.status);m.category=cat?cat.category:m.status;
     if(isNew){
@@ -6072,10 +6758,102 @@ function download(name,text,type){const b=new Blob([text],{type:type||"applicati
 /* Stated on the file itself, because a backup outlives the app that made it and whoever opens it
    next needs to know that a "notes" field here means "notes were done", not the notes. */
 const NOTES_SCOPE="The 'notes' field on a session records whether clinical notes were completed elsewhere. This file contains no clinical notes.";
-async function exportJSON(){
+/* The backup envelope, built in exactly one place. The plain export, the encrypted payload and
+   the iOS automatic backup all take their file from here, so a field added to one can never be
+   missing from another — which would only ever show up on the day someone restored. */
+async function backupPayload(){
   const audit=_db?await auditAll():[]; // must still work with no database — the crash screen relies on it
-  const out={app:"GroundWork",version:1,schemaVersion:SCHEMA_VERSION,note:NOTES_SCOPE,exportedAt:new Date().toISOString(),state:S,audit:audit.slice(-800)};
+  return {app:"GroundWork",version:1,schemaVersion:SCHEMA_VERSION,note:NOTES_SCOPE,exportedAt:new Date().toISOString(),state:S,audit:audit.slice(-800)};
+}
+async function exportJSON(){
+  const out=await backupPayload();
   download("groundwork-backup-"+isoD(today())+".json",JSON.stringify(out));markBackedUp();toast("Backup downloaded")}
+
+/* ===== The schedule file GroundWork Notes reads =====
+   Client codes and appointment cadence. No names, no fees, no attendance, and nothing clinical —
+   the notes app already holds every note it has and does not need to be told anything about them.
+   Nothing comes back the other way: whether notes are written up stays a tick in this app.
+
+   The format is specified in `docs/schedule-sync.md`. `kind` is what identifies it: a full
+   GroundWork backup also holds client codes and would half-work at the other end, so the notes
+   app refuses anything without this marker rather than doing its best with it. */
+const ROSTER_FILENAME="groundwork-schedules.json";
+const ROSTER_SCOPE="Client codes and appointment cadence only. No names and no clinical content.";
+const ROSTER_HANDLE_KEY="notesRosterHandle";
+/* The notes app's ClientCode: two to twelve characters, letters and digits only. A code that
+   fails it is left out of the file entirely rather than exported and rejected at the far end,
+   where the counsellor cannot see why. */
+function rosterCode(code){const c=String(code||"").trim().toUpperCase();return /^[A-Z0-9]{2,12}$/.test(c)?c:null;}
+function rosterStatus(c){
+  const st=String(c&&c.status||"");
+  const rt=(S.settings&&S.settings.retention)||{};
+  const ended=(Array.isArray(rt.endedStatuses)&&rt.endedStatuses.length?rt.endedStatuses:defaultEndedStatuses(S))
+    .map(x=>String(x).toLowerCase());
+  if(ended.includes(st.toLowerCase()))return "ended";
+  return /pause/i.test(st)?"paused":"active";
+}
+function scheduleRoster(){
+  const skipped=[];
+  const clients=[];
+  S.clients.forEach(c=>{
+    const code=rosterCode(c.code);
+    if(!code){skipped.push(c.code||"(blank)");return;}
+    const sched=clientSchedule(c)||{};
+    const first=sessionsOf(c.code)[0];
+    const row={code:code,status:rosterStatus(c),cadenceDays:sched.cadenceDays};
+    /* Omitted rather than sent empty. A missing day means "keep whatever day the last session
+       fell on", which is a different instruction from any particular day. */
+    if(sched.usualDay)row.usualDay=sched.usualDay;
+    if(sched.usualTime)row.usualTime=sched.usualTime;
+    if(first&&first.date)row.seriesStart=first.date;
+    clients.push(row);
+  });
+  return {payload:{app:"GroundWork",kind:"schedules",version:1,
+    exportedAt:new Date().toISOString(),note:ROSTER_SCOPE,clients:clients},skipped:skipped};
+}
+/* Where the last sync wrote to, when the browser can hand back a durable handle.
+   Chrome and Edge on the desktop can: the counsellor picks the file once and every later sync
+   overwrites it silently, which is the whole point of a sync button. Safari cannot, and the iOS
+   app goes through the share sheet instead — both fall back to an ordinary download, and the
+   file has to be replaced by hand. */
+function fsaAvailable(){return typeof window!=="undefined"&&typeof window.showSaveFilePicker==="function";}
+/* The handle lives in the `state` store rather than localStorage: a FileSystemFileHandle is a
+   structured-cloneable object, not a string, and JSON.stringify would silently turn it into `{}`. */
+async function rosterHandle(){try{return _db?await kvGet(ROSTER_HANDLE_KEY):null;}catch(e){return null;}}
+async function syncSchedules(){
+  const built=scheduleRoster();
+  const text=JSON.stringify(built.payload,null,2);
+  let where="";
+  try{
+    if(fsaAvailable()){
+      let h=await rosterHandle();
+      /* Permission is not durable across sessions, and re-requesting it needs a user gesture —
+         which the Sync button is. Asking every session is the cost of not re-picking the file. */
+      if(h&&(await h.queryPermission({mode:"readwrite"}))!=="granted"){
+        if((await h.requestPermission({mode:"readwrite"}))!=="granted")h=null;
+      }
+      if(!h){
+        h=await window.showSaveFilePicker({suggestedName:ROSTER_FILENAME,
+          types:[{description:"GroundWork schedules",accept:{"application/json":[".json"]}}]});
+        if(_db)await kvPut(ROSTER_HANDLE_KEY,h);
+      }
+      const w=await h.createWritable();
+      await w.write(text); await w.close();
+      where=h.name||ROSTER_FILENAME;
+    }else{
+      /* On iOS this is the share sheet — `download()` is wrapped natively. Saving over the same
+         file in Files ("Replace") is what keeps the notes app's bookmark pointing at it. */
+      download(ROSTER_FILENAME,text);
+      where=ROSTER_FILENAME;
+    }
+  }catch(e){
+    if(e&&e.name==="AbortError")return null;   /* the picker was dismissed — not a failure */
+    toast("Couldn’t write the schedule file");Sfx.error();return null;
+  }
+  try{localStorage.setItem("tt_rostersync",new Date().toISOString());}catch(e){}
+  return {count:built.payload.clients.length,skipped:built.skipped,where:where};
+}
+function rosterLastSync(){try{return localStorage.getItem("tt_rostersync")||"";}catch(e){return "";}}
 
 /* ===== Encrypted backups (AES-256-GCM via WebCrypto, passphrase-derived key) =====
    The passphrase is never stored. A non-extractable AES key derived from it (PBKDF2, 210k iterations)
@@ -6100,8 +6878,7 @@ async function encDisable(){await kvPut("encKey",null);await kvPut("encSalt",nul
 async function encPayload(){
   const key=await kvGet("encKey"),saltB=await kvGet("encSalt");
   if(!key||!saltB)throw new Error("no passphrase set");
-  const audit=_db?await auditAll():[];
-  const plain=JSON.stringify({app:"GroundWork",version:1,schemaVersion:SCHEMA_VERSION,note:NOTES_SCOPE,exportedAt:new Date().toISOString(),state:S,audit:audit.slice(-800)});
+  const plain=JSON.stringify(await backupPayload());
   const iv=crypto.getRandomValues(new Uint8Array(12));
   const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv:iv},key,new TextEncoder().encode(plain));
   return JSON.stringify({app:"GroundWork",enc:1,cipher:"AES-256-GCM",kdf:"PBKDF2-SHA256",iter:ENC_ITER,salt:saltB,iv:bufToB64(iv.buffer),data:bufToB64(ct)});
@@ -6798,6 +7575,96 @@ function impStagePreview(){
   openSheet("Import · preview",b);
 }
 
+/* ===== Restore: how far behind is this backup? (added Aug 2026) =====
+   importJSON replaces the ENTIRE state, and it used to do that behind one confirm() while
+   anonymise and erase ran the full ladder. Stamping a stale file over weeks of newer entries is
+   the most realistic way someone destroys their own data here — more so with the documented
+   last-write-wins between devices — so the friction is earned rather than uniform. A restore
+   onto an effectively empty device (new phone), or from a backup that is neither older nor
+   smaller than what is here, stays one sheet and one button. Either warning sign promotes it to
+   the same dzConfirm ladder as erase, with the specific facts spelled out.
+   Two signals, both cheap: fewer sessions than the device holds, and an exportedAt older than
+   the device's last change.
+   That last change is the AUDIT LOG's newest entry, not tt_state_ts. loadState() mirrors on
+   every open, so tt_state_ts means "last opened" whenever the database is there, and using it
+   would make every backup on a used device look stale — Tier B for everyone, which is the one
+   outcome this design is trying to avoid. tt_state_ts is trusted only in fallback mode, where
+   nothing mirrors at load and it is the only signal there is. */
+async function deviceLastChange(){
+  if(_db){try{const a=await auditLatest();const t=a&&a.ts?Date.parse(a.ts):NaN;return isNaN(t)?null:t;}catch(e){return null;}}
+  try{const t=Date.parse(localStorage.getItem("tt_state_ts")||"");return isNaN(t)?null:t;}catch(e){return null;}
+}
+function restoreGap(ms){
+  const mins=Math.round(ms/60000);
+  if(mins<90){const m=Math.max(1,mins);return m+" minute"+(m===1?"":"s");}
+  const hrs=Math.round(mins/60);
+  if(hrs<48)return hrs+" hour"+(hrs===1?"":"s");
+  const days=Math.round(hrs/24);return days+" day"+(days===1?"":"s");
+}
+const RESTORE_ROWS=[["Sessions","sessions"],["Clients","clients"],["Supervision","supervision"],["Rooms","rooms"]];
+function restorePlan(o,st,rep){
+  const dev={sessions:S.sessions.length,clients:S.clients.length,
+    supervision:(S.supervision||[]).length,rooms:(S.rooms||[]).length};
+  const ea=(o&&o.exportedAt)||st.exportedAt||null;          // envelope date; a bare state file has none
+  const eaMs=ea?Date.parse(ea):NaN;
+  return deviceLastChange().then(changed=>{
+    const exported=isNaN(eaMs)?null:eaMs;
+    const fewer=dev.sessions-rep.counts.sessions;            // >0 → the backup is smaller
+    /* Unknown on either side is not evidence of staleness: the counts decide alone. */
+    const older=(exported!=null&&changed!=null&&exported<changed)?changed-exported:0;
+    const empty=dev.sessions===0&&dev.clients===0;           // new phone — nothing here to lose
+    const facts=[];
+    if(fewer>0)facts.push(fewer+" fewer session"+(fewer===1?"":"s"));
+    if(older>0)facts.push(restoreGap(older)+" older");
+    return {dev,bk:rep.counts,exported,changed,fewer,older,facts,tierB:!empty&&(fewer>0||older>0)};
+  });
+}
+/* Shown by both tiers: where this file came from, what it holds against what is here now. */
+function restoreSummaryHTML(p,rep){
+  const when=p.exported!=null
+    ? "Exported "+new Date(p.exported).toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})
+    : "Exported: unknown date — this file does not say when it was made";
+  return '<p class="small muted">'+esc(when)+'</p>'+
+    '<div style="overflow:auto"><table><thead><tr><th></th><th class="num">Backup</th><th class="num">This device</th></tr></thead><tbody>'+
+      RESTORE_ROWS.map(r=>'<tr><td>'+r[0]+'</td><td class="num">'+(p.bk[r[1]]||0)+'</td><td class="num">'+p.dev[r[1]]+'</td></tr>').join("")+
+    '</tbody></table></div>'+
+    (rep.problems.length?'<div class="vmsg warn mt">'+gi("warning")+' Checks found:<br>'+rep.problems.map(esc).join("<br>")+'</div>':'')+
+    '<p class="small muted mt">Your current data is kept as a restore point (Settings › Undo &amp; history).</p>';
+}
+async function restoreConfirm(o,st,rep){
+  const p=await restorePlan(o,st,rep);
+  const sum=restoreSummaryHTML(p,rep);
+  if(!p.tierB){                                             /* Tier A — routine restore */
+    const body=el('<div></div>');
+    body.innerHTML=sum+
+      '<button class="btn full mt" id="rsGo">Restore</button>'+
+      '<button class="btn ghost full mt" id="rsNo">Cancel</button>';
+    const ok=await sheetPromise("Restore this backup?",body,(b,fin)=>{
+      b.querySelector("#rsGo").onclick=()=>fin(true);
+      b.querySelector("#rsNo").onclick=()=>fin(null);
+    });
+    return !!ok;                                            // null on any dismissal
+  }
+  /* Tier B — the backup is behind this device. Same ladder as erase, deltas by count. */
+  const d=p.dev,b2=p.bk,gone=[];
+  if(p.fewer>0)gone.push("<b>"+p.fewer+"</b> session"+(p.fewer===1?"":"s")+" logged after this backup was made");
+  if(d.clients>b2.clients)gone.push("<b>"+(d.clients-b2.clients)+"</b> client record"+(d.clients-b2.clients===1?"":"s")+" the backup does not have");
+  if(d.supervision>b2.supervision)gone.push("<b>"+(d.supervision-b2.supervision)+"</b> supervision entr"+(d.supervision-b2.supervision===1?"y":"ies")+" the backup does not have");
+  if(d.rooms>b2.rooms)gone.push("<b>"+(d.rooms-b2.rooms)+"</b> room"+(d.rooms-b2.rooms===1?"":"s")+" the backup does not have");
+  if(p.older>0)gone.push("Every correction made on this device in the last <b>"+restoreGap(p.older)+"</b> — the backup predates them");
+  gone.push("Everything else here is replaced by the backup’s copy: fees, payments, costs, settings and branding");
+  return await dzConfirm({
+    title:"Restore a backup that is behind this device",
+    lead:"This backup is <b>"+p.facts.join("</b> and <b>")+"</b> than what is on this device. Restoring replaces everything here with the backup’s contents.",
+    detail:sum,
+    destroys:gone,
+    keeps:["A restore point of today’s data, until restore points roll over",
+      "Backup files you have already exported or saved elsewhere",
+      "This device’s own settings — app lock and reminders never travel in a backup"],
+    undoable:true,
+    summary:"the "+d.sessions+" session"+(d.sessions===1?"":"s")+" on this device "+(d.sessions===1?"is":"are")+" replaced by the backup’s "+b2.sessions+".",
+    phrase:"RESTORE",verb:"Restore backup"});
+}
 function importJSON(e){const f=e.target.files[0];if(!f)return;const rd=new FileReader();
   rd.onload=async()=>{try{let o=JSON.parse(rd.result);
     if(o&&o.enc===1){
@@ -6813,12 +7680,7 @@ function importJSON(e){const f=e.target.files[0];if(!f)return;const rd=new FileR
     const st=o.state||o;
     const rep=validateImport(st);
     if(!rep.ok)throw new Error(rep.problems.join("; "));
-    let msg="Restore this backup?\n\n"+rep.counts.sessions+" sessions · "+rep.counts.clients+" clients · "+rep.counts.supervision+" supervision · "+rep.counts.rooms+" rooms";
-    if(rep.counts.peer)msg+=" · "+rep.counts.peer+" peer supervision";
-    if(rep.counts.expenses||rep.counts.otherIncome)msg+="\n"+rep.counts.expenses+" business costs · "+rep.counts.otherIncome+" other income";
-    if(rep.problems.length)msg+="\n\n⚠️ Checks found:\n– "+rep.problems.join("\n– ");
-    msg+="\n\nCurrent data is kept as a restore point.";
-    if(!confirm(msg))return;
+    if(!await restoreConfirm(o,st,rep))return;
     S=normalize(st);
     await commit("Restored backup ("+(S.sessions.length)+" sessions)");markBackedUp();
     applySettings();toast("Backup restored");go("home");
@@ -6862,15 +7724,21 @@ function featureOn(w,k){return w.features[k]!==false;}
 
    REVEAL_CORE is what a therapist needs on day one to log a session and see what they are owed.
    Everything else is real but not yet earned, and each entry below says what earns it. */
-const REVEAL_CORE=["supervision","money","gamify","attention","receipts"];
+const REVEAL_CORE=["supervision","money","attention"];
 /* `keys` may hold more than one flag: some features are only worth meeting together. Tax and
    business costs are the case in point — an estimate that ignores what the practice costs you is
    not an estimate worth setting money aside against, so revealing one without the other would
    put a knowingly overstated figure in front of someone. */
 const REVEAL_STEPS=[
+  {keys:["receipts"], when:st=>st.sessions.length>=5&&st.sessions.some(s=>s.paidDate),
+   emoji:gi("receipts"), title:"Statements for clients",
+   sub:"Now that money is actually coming in, <b>Receipts &amp; statements</b> prints a dated statement of what a client has paid — for their insurer, their employer, or their own records."},
   {keys:["tax","finances"], when:st=>st.sessions.length>=10,
    emoji:gi("tax"), title:"Ready to think about tax?",
    sub:"Ten sessions in. <b>Tax</b> turns them into a running estimate of what to set aside — including the January payment on account that catches people out — and <b>Costs &amp; other income</b> takes insurance, supervision, room rent and CPD off the profit it is worked out from. They arrive together because the estimate is wrong without the costs."},
+  {keys:["gamify"],   when:st=>st.sessions.length>=15,
+   emoji:gi("gamify"), title:"Want a bit of celebration?",
+   sub:"Streaks, goal rings and the occasional confetti when you clear a backlog. Entirely cosmetic — plenty of people leave it off."},
   {keys:["trends"],   when:st=>st.sessions.length>=20,
    emoji:gi("trends"), title:"Enough history to see a pattern",
    sub:"Twenty sessions is about where <b>Practice › Trends</b> starts telling you something true: who stays, who drifts, how attendance holds up against the frequency you agreed, and what missed sessions are costing."},
@@ -6945,7 +7813,7 @@ function stepDepth(w){return{emoji:gi("depth"), h:"How much do you want to see?"
   },
   mount(host){
     host.innerHTML='<div class="palgrid" id="spDepth">'+
-      [["simple","🌱","Start simple","Sessions, clients, money owed and supervision. The tax side, business costs, the table view and the quick-add bar stay out of the way, and the app offers them one at a time as you go."],
+      [["simple","🌱","Start simple","Sessions, clients, money owed and supervision. Tax, costs, trends, the table view, quick-add, statements and streaks stay out of the way, and the app offers them one at a time as you go."],
        ["all","🗂","Show me everything","Every feature on from the start. Best if you are moving over from a spreadsheet you already run, or you just want to look around."]]
       .map(o=>'<button type="button" class="palopt'+(w.depth===o[0]?" on":"")+'" data-d="'+o[0]+'">'+
         '<span class="pswatch" style="font-size:22px;width:auto">'+o[1]+'</span>'+
@@ -7158,7 +8026,7 @@ function stepCPD(w){return{emoji:gi("cpd"), h:"CPD, supervision and accreditatio
         sw.classList.toggle("on",on);sw.closest(".ftrow").classList.toggle("off",!on);Sfx.tick();};});
   }};}
 function stepRooms(w){return{emoji:gi("rooms"), h:"Where do you see clients?",
-  sub:"Add each room or location you use and what it costs you per session. Sessions at home usually cost <b>£0</b>.",
+  sub:"Add each room or location you use and what it costs you per session.",
   validate(){
     const names=(w.rooms||[]).map(r=>(r.loc||"").trim().toLowerCase()).filter(Boolean);
     if(!names.length){toast("Add at least one location");Sfx.error();return false;}
@@ -7179,7 +8047,7 @@ function stepRooms(w){return{emoji:gi("rooms"), h:"Where do you see clients?",
             '<button class="rmx" data-x="'+i+'" title="Remove">✕</button>'+
           '</div>').join("")+'</div>'+
         '<button class="btn sec sm mt" id="rmAdd">＋ Add a location</button>'+
-        '<div class="ovnote">Most rooms charge <b>per session</b>. Pick <b>per month</b> for a room you rent at a flat monthly rate — those sessions then carry no room cost of their own. Costs are dated, so changing one later never rewrites past sessions. You can set when each venue invoices you (end of month / week) in <b>Clients › Rooms</b>.</div>';
+        '<div class="ovnote">Sessions at home usually cost <b>£0</b>. Most rooms charge <b>per session</b>. Pick <b>per month</b> for a room you rent at a flat monthly rate — those sessions then carry no room cost of their own. Costs are dated, so changing one later never rewrites past sessions. You can set when each venue invoices you (end of month / week) in <b>Clients › Rooms</b>.</div>';
       host.querySelectorAll(".rmrow").forEach(row=>{
         const i=+row.dataset.i;
         row.querySelectorAll("[data-f]").forEach(inp=>inp.oninput=inp.onchange=()=>{
@@ -7200,11 +8068,11 @@ function stepRooms(w){return{emoji:gi("rooms"), h:"Where do you see clients?",
 function stepMoney(w){
   const val=v=>(v==null||v==="")?"":esc(v);
   return{emoji:gi("fees"), h:"Your usual numbers",
-  sub:"Both optional — leave either blank if it doesn’t apply. Every client keeps their own dated fee history, so a rate change never rewrites past sessions.",
+  sub:"Both optional — leave either blank if it doesn’t apply.",
   mount(host){
     host.innerHTML='<label>Usual session fee for a new client (£) <span class="muted">(optional)</span></label>'+
       '<input id="spRate" type="number" min="0" step="1" placeholder="Leave blank for none" value="'+val(w.rate)+'">'+
-      '<p class="prev">If you set one, it pre-fills when you add a client — you can still change it per client, and change it again from any date. Leave it blank and the app won’t suggest a fee.</p>'+
+      '<p class="prev">If you set one, it pre-fills when you add a client — you can still change it per client. Every client keeps their own dated fee history, so a rate change never rewrites past sessions. Leave it blank and the app won’t suggest a fee.</p>'+
       '<label style="margin-top:14px">Monthly pension contribution (£) <span class="muted">(optional)</span></label>'+
       '<input id="spPen" type="number" min="0" step="5" placeholder="Leave blank for none" value="'+val(w.pension)+'">'+
       '<p class="prev">Used only by the “after pension” take-home figure on the Tax tab. Leave it blank if you don’t pay into a pension.</p>';
@@ -7234,7 +8102,7 @@ function stepImport(w){return{emoji:gi("import"), h:"Already keep a spreadsheet?
 /* Not skippable-with-blanks: a retention period the therapist never chose is a compliance
    decision made by a default, which is exactly what this step exists to avoid. */
 function stepRetention(w){return{emoji:gi("retention"), h:"How long do you keep records?",
-  sub:"After a client finishes, records are usually kept for a set number of years. The app flags them when the time is up — it never deletes anything by itself.",
+  sub:"After a client finishes, records are usually kept for a set number of years.",
   validate(){
     const n=+w.rtNotes, f=+w.rtFin;
     if(!(n>=1&&n<=50)||!(f>=1&&f<=50)){toast("Enter both periods, between 1 and 50 years");Sfx.error();return false;}
@@ -7260,7 +8128,8 @@ function stepBackup(w){return{emoji:gi("backup"), h:"How your data is kept safe"
       [gi("phone"),"It lives on this device only","No account, no server, nothing uploaded. That’s what keeps client data private — and it means nobody else can recover it for you."],
       [gi("warning"),"Deleting the app or clearing site data wipes it","So does “clear browsing data” in your browser. A backup is the only thing standing between you and starting over."],
       ["⤓","The .json backup is a complete copy","Every session, client, room, rate and setting. Restore it on any device and you’re exactly where you left off. The CSVs are extracts for spreadsheets — they can’t be restored from."],
-      ["↩︎","Undo and restore points work inside the app","Every change is snapshotted, so a slip is easy to walk back. They live on this device too, so they’re no substitute for a backup."]
+      ["↩︎","Undo and restore points work inside the app","Every change is snapshotted, so a slip is easy to walk back. They live on this device too, so they’re no substitute for a backup."],
+      [gi("desktop"),"One device at a time","GroundWork doesn’t merge changes made in two places at once — whichever saves last wins. Do your day-to-day logging on one device, and use backups to move your data when you switch."]
     ])+
     '<label style="margin-top:16px">Remind me to back up after</label>'+
     '<div class="field2"><div><label>Days</label><input id="spDays" type="number" min="1" value="'+w.bkDays+'"></div>'+
@@ -7373,38 +8242,11 @@ async function setupSave(w,opts){
   applySettings();go("home");updateBackupBanner();
 }
 
-/* one-time beta acknowledgement — shown before setup on a fresh install, and once (only) to
-   existing testers who already have data, since setup itself won't fire for them again */
-function showBetaGate(after){
-  const w={ack:false};
-  const step={emoji:gi("beta"), h:"Before you dive in — beta software",
-    sub:"Please read this once, it only takes a moment.",
-    validate(){if(!w.ack){toast("Tick the box to continue");Sfx.error();return false;}},
-    mount(host){
-      host.innerHTML=ovPoints([
-        [gi("phone"),"Beta, still moving","Features and data formats may change as this gets finished. Keep independent backups (Settings → Backups) — don’t rely on this as your only record yet."],
-        [gi("desktop"),"One device at a time","Changes made in two open tabs or devices at once aren’t merged — whichever saves last silently wins. Stick to a single active device per dataset for now."],
-        [gi("page"),"The details","Full terms in the <a href=\"terms.html\" target=\"_blank\" rel=\"noopener\">Terms of Service</a> and <a href=\"privacy.html\" target=\"_blank\" rel=\"noopener\">Privacy Policy</a> — short version: everything stays on this device, nothing is ever sent anywhere."]
-      ])+
-      '<label class="row" style="align-items:flex-start;gap:10px;margin-top:16px;cursor:pointer">'+
-        '<input type="checkbox" id="betaAckBox" style="margin-top:3px">'+
-        '<span>I understand this is beta software and I’ll keep independent backups</span>'+
-      '</label>';
-      host.querySelector("#betaAckBox").onchange=e=>{w.ack=e.target.checked;};
-    }};
-  flowStart({title:"Before you start", steps:[step], doneLabel:"Continue",
-    onDone:async()=>{
-      const sg=settings(); sg.betaAck=true; sg.betaAckAt=isoD(today());
-      await commit("Acknowledged beta terms");
-      if(after)after();
-    }});
-}
-
 /* ============ Tax disclaimer ============
    The tax side reads real data and produces a real number, which is exactly why it has to say
    out loud what that number is and is not. One acknowledgement, recorded on `settings.taxAck`:
    asked in setup for anyone new, and on first opening the Tax tab for the existing installs that
-   will never see setup again — the same reasoning showBetaGate already uses.
+   will never see setup again — the same reasoning the old beta gate used.
    TAX_DISCLAIMER is the single source: the setup step, the gate and the Settings card all
    render this array, so the three can never end up saying different things. */
 const TAX_DISCLAIMER=[
@@ -7568,7 +8410,7 @@ function whatsNewSteps(){
     ])});
   st.push({emoji:"\ud83d\udd12", h:"Settings that belong to a tax year", sub:"Two things that used to apply to every year at once now change from a date, like use of home already did.",
     html:ovPoints([
-      ["\ud83c\udf93","Student loan","Set per tax year in <b>Tax \u203a Allowances</b>. The year you finish repaying, the years you were repaying keep the repayments you actually made."],
+      ["\ud83c\udf93","Student loan","Set per tax year in <b>Tax \u203a Per year</b>. The year you finish repaying, the years you were repaying keep the repayments you actually made."],
       ["\ud83c\udff4","Where you pay income tax","Moved to \u2699 Settings, where it belongs \u2014 it is a question you answer once. Changing it applies from the current tax year onwards, so moving to or from Scotland never rewrites a return you have filed."]
     ])});
   st.push({emoji:"\u2728", h:"The app has been reorganised", sub:"Two tabs became four sections, and the tax side got a lot more capable. Two minutes and you\u2019ll know where everything went.",
@@ -7590,7 +8432,7 @@ function whatsNewSteps(){
       ["\ud83d\udcc9","So some totals will move","A session you have not been paid for is no longer in this year\u2019s income \u2014 it arrives in the year the money does."],
       ["\ud83d\udd01","You can switch back","If you have elected the accruals basis with HMRC, change it on the <b>Tax</b> tab and everything reverts. The tab always says which one is in use."]
     ])});
-  st.push({emoji:"\ud83c\udfe0", h:"Use of home", sub:"In <b>Tax \u203a Allowances</b>.",
+  st.push({emoji:"\ud83c\udfe0", h:"Use of home", sub:"In <b>Tax \u203a Per year</b>.",
     html:ovPoints([
       ["\ud83d\udcd0","Both HMRC methods","The <b>simplified</b> flat rate by hours worked at home (\u00a310, \u00a318 or \u00a326 a month), or <b>actual costs</b> apportioned by rooms and how much of the time they are used for work."],
       ["\ud83d\udd0e","Shown side by side","So you can see which is worth more before choosing. It counts your logged home sessions as a starting point for the hours \u2014 your real total will be higher, because notes and admin count too."],
@@ -7603,7 +8445,7 @@ function whatsNewSteps(){
       ["\ud83c\udff4","Scotland, student loans, pension","All three change the number. Set them once under <b>Your tax situation</b> and the estimate follows. Pension contributions now get higher-rate relief properly."],
       ["\ud83e\udd1d","Class 2 when profits are low","Under the Small Profits Threshold it is not due \u2014 but paying it voluntarily keeps the year counting towards your State Pension. The app offers it rather than quietly leaving it out."]
     ])});
-  st.push({emoji:"\ud83e\uddfe", h:"Ready for Making Tax Digital", sub:"In <b>Tax \u203a MTD</b>.",
+  st.push({emoji:"\ud83e\uddfe", h:"Ready for Making Tax Digital", sub:"In <b>Tax \u203a Quarterly (MTD)</b>.",
     html:ovPoints([
       ["\ud83d\udcc5","Your four quarters","6 Apr\u20135 Jul, 6 Jul\u20135 Oct, 6 Oct\u20135 Jan, 6 Jan\u20135 Apr, each totalled and reconciled to your year."],
       ["\ud83d\udce6","Totals by tax-return box","Every cost mapped to its SA103 box, exportable as a file."],
@@ -7822,8 +8664,9 @@ const TIPS=[
        "<p>Everything logged here feeds the profit your tax estimate is worked out from.</p>"}]},
   {k:"tax",tab:"tax",ft:"tax",when:()=>taxAcked(),
    steps:()=>[
-    {emoji:gi("tax"),h:"The year-end side",sel:"#taxseg",
-     body:"<b>Estimate</b> is what you will owe and what you take home. <b>Pot &amp; payments</b> is what to put by and when it leaves. <b>Allowances</b> is what you set per tax year. <b>MTD</b> is the quarterly figures."},
+    {emoji:gi("tax"),h:"Three numbers, most of the year",sel:'[data-coach="now"]',
+     body:"<b>Now</b> is the everyday answer: what you are on track to owe, what should be sitting in your pot, and when money next leaves your account. Tap any of the three for the detail behind it."+
+       "<p>The rest of this tab is jobs with a season — <b>Estimate</b> for the full working and your take-home, <b>Pot &amp; payments</b> for every due date and HMRC’s own figures, <b>Per year</b> for what changes with the tax year, <b>Quarterly (MTD)</b> for the quarterly totals. When one of them falls due, <b>Now</b> says so.</p>"},
     {emoji:gi("scales"),h:"An estimate, not a return",
      body:"Every figure here is worked out from what you have logged. It cannot see employment income, dividends or anything HMRC adjusted itself."+
        "<p>Once you have filed, put HMRC’s real figures in on <b>Pot &amp; payments</b> and the app switches to them.</p>"}]},
@@ -7982,6 +8825,7 @@ function dzConfirm(o){
   return sheetPromise(o.title,body,(b,fin)=>{
     function step1(){
       b.innerHTML='<div class="vmsg err">'+gi("warning")+' '+o.lead+'</div>'+
+        (o.detail||"")+                      /* optional evidence block (restore shows its comparison here) */
         '<p class="small" style="margin:12px 0 4px"><b>What this changes:</b></p>'+bullets(o.destroys)+
         (o.keeps&&o.keeps.length?'<p class="small" style="margin:14px 0 4px"><b>What it leaves alone:</b></p>'+bullets(o.keeps):"")+
         '<div class="vmsg '+(o.undoable?"warn":"err")+'" style="margin-top:14px">'+
@@ -8123,12 +8967,11 @@ function retentionCardHTML(){
         (r.finOver?'<button class="btn sm ghost" data-rters="'+esc(r.code)+'" style="color:var(--bad)">Erase</button>':'')+
       '</div></div>';
   return '<div class="card"><h2>Records retention</h2>'+
-    '<p class="small muted">How long you keep records after a client finishes. Nothing is ever deleted for you — when a client passes one of these dates they appear below, and you decide.</p>'+
+    '<p class="small muted">How long you keep records after a client finishes. Nothing is ever deleted for you. '+infoLink("retention-rationale")+'</p>'+
     '<div class="field2">'+
       '<div><label>Keep clinical notes for (years)</label><input type="number" min="1" max="50" step="1" id="rtNotes" value="'+esc(cfg.notesYears)+'"></div>'+
       '<div><label>Keep financial records for (years)</label><input type="number" min="1" max="50" step="1" id="rtFin" value="'+esc(cfg.financeYears)+'"></div>'+
     '</div>'+
-    '<p class="small muted">Six years each is the common default: the BACP complaint window is around three years, and insurers often ask for six. Your own insurer or supervisor may say otherwise — this is your call, not the app’s.</p>'+
     '<details class="dz" style="margin-top:10px"><summary>Which statuses count as finished? ('+cfg.endedStatuses.length+')</summary>'+
       '<p class="small muted" style="margin-top:6px">The clock starts at the last session of clients with these statuses. Paused clients are usually left out — they may come back.</p>'+
       '<div class="dzpick">'+statuses.map(s=>'<label><input type="checkbox" class="rtst" value="'+esc(s)+'"'+(on.has(String(s).toLowerCase())?" checked":"")+'><span>'+esc(s)+'</span></label>').join("")+'</div>'+
@@ -8297,8 +9140,7 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
     if(!settings().onboarded){startSetup();markWhatsNewSeen();return;} // new here: setup and the tour cover all of it
     if(whatsNewDue())showWhatsNew();
   };
-  if(!settings().betaAck)setTimeout(()=>showBetaGate(afterGates),120);
-  else setTimeout(afterGates,120);
+  setTimeout(afterGates,120);
 })();
 </script>
 <script>
@@ -8422,6 +9264,132 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
     })();
   };
 
+  /* ================= Automatic backups =================
+     On desktop Chrome/Edge an encrypted backup auto-saves silently through the File System
+     Access API. That API does not exist on iOS, so on the platform this app is actually
+     shipping on the only safety net was a nag banner and a manual share sheet — a lost or
+     broken phone loses everything since the customer last bothered.
+
+     Every save now also writes a copy into the app's own Documents folder: visible to the
+     user in the Files app (UIFileSharingEnabled in Info.plist) and carried by the phone's
+     own iCloud/device backup.
+
+     It deliberately does NOT call markBackedUp(). A copy that lives on the same phone is no
+     protection at all for someone with iCloud Backup switched off, so the manual-export nag
+     stays exactly as it was — see the note in docs/ios-native.md. */
+  const AUTO_DIR   = "auto-backups";
+  const autoName   = enc => "GroundWork auto-backup" + (enc ? ".enc.json" : ".json");
+  const autoDayName= (enc, day) => AUTO_DIR + "/GroundWork " + day + (enc ? ".enc.json" : ".json");
+  const AUTO_KEEP  = 7;
+
+  function autoStatus(){ try{ return JSON.parse(LSget("tt_autobk_status","null")) || null; }catch(e){ return null; } }
+  function setAutoStatus(o){
+    const prev = autoStatus();                       /* a failure must not erase when the last good copy was */
+    if(!o.ok && prev) o.okAt = prev.ok ? prev.at : prev.okAt;
+    LSset("tt_autobk_status", JSON.stringify(o));
+  }
+
+  /* Returns true/false rather than reporting anything itself: this runs behind whatever the
+     user is doing, and a background backup that interrupts them is worse than one that fails
+     quietly. The Settings button is the one caller that speaks up. */
+  async function nativeAutoBackup(){
+    const FS = P("Filesystem");
+    if(!FS) return false;                            /* plugin absent — no-op, not an error */
+    try{
+      const enc  = typeof encReady==="function" && !!encReady();
+      const data = enc ? await encPayload() : JSON.stringify(await backupPayload());
+      const prev = autoStatus();
+      await FS.writeFile({ path:autoName(enc), data, directory:"DOCUMENTS", encoding:"utf8" });
+      setAutoStatus({ ok:true, at:Date.now(), enc:enc });
+      /* Turning a passphrase on must not leave the readable copy sitting in Files. Only when the
+         mode has actually changed — otherwise this is a failing plugin call on every single save. */
+      if(prev && prev.enc != null && !!prev.enc !== enc){
+        try{ await FS.deleteFile({ path:autoName(!enc), directory:"DOCUMENTS" }); }catch(e){}
+      }
+      try{ await rotateAutoBackup(FS, enc, data); }
+      catch(e){ console.warn("Automatic backup: daily copy failed", e); }   /* the live copy is written; this is the extra */
+      return true;
+    }catch(e){
+      console.error("Automatic backup failed", e);
+      setAutoStatus({ ok:false, at:Date.now(), msg:String((e && e.message) || e) });
+      return false;
+    }
+  }
+
+  /* One dated copy a day, newest seven kept. The live file is overwritten on every save, so on
+     its own it is one bad edit away from being no backup at all — a mistake noticed on Thursday
+     needs Wednesday's file. Daily, not per-save, because seven copies from one afternoon are
+     seven copies of the same afternoon. */
+  async function rotateAutoBackup(FS, enc, data){
+    const day = isoD(today());
+    if(LSget("tt_autobk_day","") === day) return;
+    await FS.writeFile({ path:autoDayName(enc, day), data, directory:"DOCUMENTS", encoding:"utf8", recursive:true });
+    LSset("tt_autobk_day", day);                     /* only after the write, so a failure retries on the next save */
+    const ls = await FS.readdir({ path:AUTO_DIR, directory:"DOCUMENTS" });
+    const files = (ls.files||[])
+      .map(f => (typeof f === "string" ? f : f && f.name))
+      .filter(n => /^GroundWork \d{4}-\d{2}-\d{2}\.(enc\.)?json$/.test(n||""))
+      .sort();                                       /* the date leads the name, so this is oldest-first */
+    for(const n of files.slice(0, Math.max(0, files.length - AUTO_KEEP)))
+      await FS.deleteFile({ path:AUTO_DIR+"/"+n, directory:"DOCUMENTS" });
+  }
+
+  /* commit() is the single save choke point, so wrapping it covers every edit in the app.
+     The original's return value is what callers check to know whether the write landed — it is
+     passed straight back, and the backup is fired and forgotten after it. A failed backup can
+     therefore neither block a save nor mask a failed one: the red banner is raised by commit()
+     itself, before this ever runs. */
+  let _autoBkT = null, _autoBkPending = false;
+  function scheduleAutoBackup(){
+    _autoBkPending = true;
+    clearTimeout(_autoBkT);
+    _autoBkT = setTimeout(() => { _autoBkPending = false; nativeAutoBackup(); }, 2000);
+  }
+  /* iOS suspends the WebView when the app is backgrounded and a pending timer suspends with it.
+     Log a session, put the phone straight down, and the copy would never be written — which is
+     exactly the moment it matters. */
+  function flushAutoBackup(){
+    if(!_autoBkPending) return;
+    _autoBkPending = false; clearTimeout(_autoBkT);
+    nativeAutoBackup();
+  }
+  const _commit = window.commit;
+  window.commit = async function(){
+    const ok = await _commit.apply(this, arguments);
+    try{ scheduleAutoBackup(); }catch(e){}
+    return ok;
+  };
+
+  /* The nag itself is untouched (see above); the banner may as well say the copy exists. */
+  const _updateBackupBanner = window.updateBackupBanner;
+  window.updateBackupBanner = function(){
+    const r = _updateBackupBanner.apply(this, arguments);
+    try{
+      const bar = document.getElementById("backupBanner"), d = document.getElementById("bkdetail"), st = autoStatus();
+      if(bar && d && st && st.ok && bar.classList.contains("show"))
+        d.textContent += " (an automatic copy is kept on this iPhone)";
+    }catch(e){}
+    return r;
+  };
+
+  /* Same wording as the app's own "last backed up" line, so the two read as one idea. */
+  function autoAgo(t){
+    if(!t) return "never";
+    const mins = Math.floor((Date.now()-t)/60000);
+    if(mins < 1)  return "just now";
+    if(mins < 60) return mins+" min"+(mins===1?"":"s")+" ago";
+    const hrs = Math.floor(mins/60);  if(hrs < 24) return hrs+" hour"+(hrs===1?"":"s")+" ago";
+    const days= Math.floor(hrs/24);   return days+" day"+(days===1?"":"s")+" ago";
+  }
+  const AUTO_WHERE = "kept in GroundWork’s folder in the Files app, and included in your iPhone’s own backup";
+  function autoBkLine(){
+    const st = autoStatus();
+    if(!st)    return "Automatic backup: nothing saved yet — the next change you make writes one.";
+    if(st.ok)  return "Automatic backup: last saved "+autoAgo(st.at)+" · "+AUTO_WHERE+".";
+    return "Automatic backup: the last attempt ("+autoAgo(st.at)+") failed — "+(st.msg||"unknown error")+". "+
+      (st.okAt ? "The copy from "+autoAgo(st.okAt)+" is still on this iPhone." : "No copy has been saved on this iPhone yet.");
+  }
+
   /* ================= Receipts become real PDFs =================
      window.print() is a no-op in WKWebView, so printReceipt()'s hidden iframe silently
      does nothing on iOS. The same markup goes to UIMarkupTextPrintFormatter instead and
@@ -8499,6 +9467,7 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
       if(!isActive){
         lastHidden = Date.now();
         if(lockOn() && bio.available) showLock();
+        flushAutoBackup();
         rescheduleNotifications();
       }else{
         if(locked){
@@ -8550,7 +9519,13 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
               '<button data-g="'+g[0]+'">'+g[1]+'</button>').join("")+'</div>'+
           '<p class="prev">How long you can leave GroundWork before it asks again.</p>'
         : '<div class="vmsg warn mt">'+gi("lock")+' This iPhone has no passcode or Face ID set up, so the app lock is unavailable. Add one in the iPhone’s own Settings.</div>')+
-      '</div></div></details>');
+      '</div>'+
+      '<div class="card"><h2>Automatic backup</h2>'+
+        '<p class="small" id="natBkStatus" style="font-weight:600"></p>'+
+        '<p class="prev" id="natBkHint"></p>'+
+        '<button class="btn sec mt" id="natBkNow">Back up now</button>'+
+      '</div>'+
+      '</div></details>');
 
     const host = d.querySelector("#natRows");
     host.innerHTML =
@@ -8600,6 +9575,31 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
       });
       paint();
     }
+
+    /* Painted from the stored status, never by reading the folder back: that would put an
+       await on every Settings render for a line that only says when. */
+    const bkStat = d.querySelector("#natBkStatus"), bkHint = d.querySelector("#natBkHint"), bkNow = d.querySelector("#natBkNow");
+    function paintAutoBk(){
+      if(!P("Filesystem")){
+        bkStat.textContent = "Automatic backup: not available in this build of the app.";
+        bkHint.textContent = "Export a backup by hand from Data & backup instead.";
+        bkNow.style.display = "none";
+        return;
+      }
+      bkStat.textContent = autoBkLine();
+      bkHint.textContent = (typeof encReady==="function" && encReady())
+        ? "The copy is encrypted with your passphrase, the same as an encrypted export."
+        : "Set a passphrase under Data & backup and this copy is encrypted too.";
+    }
+    bkNow.onclick = async () => {
+      bkNow.disabled = true; bkNow.textContent = "Backing up\u2026";
+      const ok = await nativeAutoBackup();
+      bkNow.disabled = false; bkNow.textContent = "Back up now";
+      paintAutoBk();
+      if(ok){ Sfx.tick(); toast("Copy saved on this iPhone"); }
+      else { Sfx.error(); toast("Could not save a copy on this iPhone"); }
+    };
+    paintAutoBk();
 
     /* VIEWS.settings wires open/close state for the groups it built itself; this one is
        appended afterwards, so it needs the same three lines to stay folded like the rest. */

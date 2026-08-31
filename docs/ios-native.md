@@ -74,14 +74,67 @@ the copied bundle (5.8MB that has no business in an app binary).
 | **Daily reminders** | the Attention feed, which cannot speak while the app is shut | `@capacitor/local-notifications` |
 | **Share sheet for exports** | `<a download>`, which does nothing in a WKWebView | `@capacitor/filesystem` + `@capacitor/share` |
 | **Receipts as real PDFs** | `window.print()`, a no-op in a WKWebView | custom Swift plugin |
+| **Automatic backups** | the File System Access API, which iOS does not have | `@capacitor/filesystem` |
 
 Two of those replace things that were **silently broken** on iOS rather than merely
 missing: an installed PWA on an iPhone has always had a dead Export button and a dead
 Generate & print button. The wrapper is what makes them work.
 
-Device settings (`tt_lock`, `tt_lock_grace`, `tt_notify`) live in localStorage, not in `S`.
-`S` travels in backups, and restoring a backup onto a different phone must not silently
-switch that phone's lock off.
+Device settings (`tt_lock`, `tt_lock_grace`, `tt_notify`, and the automatic-backup bookkeeping
+`tt_autobk_day` / `tt_autobk_status`) live in localStorage, not in `S`. `S` travels in backups,
+and restoring a backup onto a different phone must not silently switch that phone's lock off —
+or tell it that a copy it has never written was saved five minutes ago.
+
+## Automatic backups
+
+On desktop Chrome/Edge an encrypted backup auto-saves silently through the File System Access
+API. iOS has no such API, so until now the only safety net on the platform this app actually
+ships on was a nag banner and a manual share sheet: a lost or broken phone lost everything since
+the customer last bothered.
+
+Every `commit()` — the app's single save choke point — now also writes a backup file, debounced
+2s, into the app's own **Documents** directory:
+
+```
+On My iPhone/GroundWork/
+  GroundWork auto-backup.json          ← rewritten on every save …
+  GroundWork auto-backup.enc.json      ← … or this one, if a passphrase is set
+  auto-backups/
+    GroundWork 2026-08-31.json         ← one dated copy a day, newest 7 kept
+```
+
+- **`encReady()` decides per write**, so a passphrase set halfway through the week takes effect
+  on the next save — and the now-superseded live file in the other mode is deleted rather than
+  left sitting in Files. The **dated** copies are left alone: they are the only record of what
+  the data looked like on those days, they cannot be re-encrypted without the state that made
+  them, and deleting somebody's restore points as a side effect of setting a passphrase would
+  be the worse trade. They age out of the folder within a week either way.
+- **Rotation is daily, not per-save.** The live file is overwritten every time, which on its own
+  is one bad edit away from being no backup at all; a mistake noticed on Thursday needs
+  Wednesday's file. Seven copies written in one afternoon would just be seven copies of that
+  afternoon. `tt_autobk_day` holds the last rotation date, set only after the write succeeds.
+- **Nothing is ever toasted.** `nativeAutoBackup()` catches everything, logs, records the outcome
+  in `tt_autobk_status` and returns a boolean; a background backup that interrupts someone
+  mid-sentence is worse than one that fails quietly. The only caller that speaks is the
+  **Back up now** button in Settings › This iPhone, which is a deliberate user action.
+- **The `commit` wrap is transparent.** It awaits the original, fires the backup and forgets it,
+  and returns the original's `true`/`false` — callers check that value, and a failed IndexedDB
+  write must still raise the red save banner. A failed backup can neither block a save nor mask
+  a failed one.
+- **It flushes on backgrounding.** iOS suspends the WebView and a pending 2s timer with it, so
+  `flushAutoBackup()` runs from the same `appStateChange` listener as the lock. Logging a session
+  and putting the phone straight down is precisely the case this feature exists for.
+- **`Filesystem` may be absent** in some future build; the `P("Filesystem")` guard makes the whole
+  thing a clean no-op and the settings card says so instead of lying about a copy.
+
+Two Info.plist keys are what make any of this reachable by a human: `UIFileSharingEnabled` and
+`LSSupportsOpeningDocumentsInPlace`. Without them the files are written and nobody can ever open
+them. With them, the folder appears in the Files app under On My iPhone.
+
+**The manual-backup nag is deliberately unchanged.** `markBackedUp()` is still tied to explicit
+exports only, because a copy sitting on the same phone protects nobody who has iCloud Backup
+switched off — which is exactly the person the banner is for. The banner's detail line just
+appends "(an automatic copy is kept on this iPhone)"; the thresholds and the clock are untouched.
 
 ## The look, and where it stops
 
@@ -132,9 +185,13 @@ reminders (permission requested only on opt-in; three notifications scheduled wi
 Attention-feed text), backup export → share sheet → Save to Files, and receipt → 20KB
 one-page PDF → share sheet with AirPrint. Web build re-checked after every change.
 
+**Automatic backups are not yet verified on a device or in the simulator** — the web build and
+the drift/syntax checks pass, but the Documents write, the daily rotation, the prune and the
+Files-app visibility all need a run in Xcode. Do that before it ships.
+
 **Not yet verified on real hardware**, which is what TestFlight is for: Face ID on a device
 with a real enrolment, notifications actually firing at 09:00, AirPrint to a real printer,
-and the share sheet's iPad popover anchor.
+the share sheet's iPad popover anchor, and the automatic backups above.
 
 ## Data does not carry over from the PWA
 

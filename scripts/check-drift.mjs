@@ -33,7 +33,12 @@ const SEAMS = [
   ["_setGrpOpen",               "the appended settings group folds with the rest using this"],
   ["function el(",              "used to build the native settings card"],
   ["function toast(",           "native paths report back through the app's own toast"],
-  ["function gi(",              "icons for the native settings rows"]
+  ["function gi(",              "icons for the native settings rows"],
+  ["async function commit(",    "wrapped so every save also writes an automatic backup to the phone"],
+  ["async function backupPayload(", "the one backup envelope — the automatic backup writes this, not its own copy of it"],
+  ["function encReady(",        "decides, per write, whether the automatic backup is encrypted"],
+  ["async function encPayload(","the encrypted payload the automatic backup writes when a passphrase is set"],
+  ["function updateBackupBanner(", "wrapped to add 'an automatic copy is kept on this iPhone' to the nag"]
 ];
 for (const [needle, why] of SEAMS)
   if (!html.includes(needle)) fail(`index.html no longer contains \`${needle}\` — ${why}`);

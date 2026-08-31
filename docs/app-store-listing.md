@@ -20,6 +20,8 @@ paste; the account itself (step 5) is the one thing only Charlotte can do.
 | Support URL | https://mc392.github.io/therapy-tracker/ | the Pages site already deploys |
 | Privacy Policy URL | https://mc392.github.io/therapy-tracker/privacy.html | already live |
 
+The companion app, GroundWork Notes, will also list under Business — the two listings should read as one family, not as a clinical tool paired with an admin tool.
+
 ## Privacy nutrition label — "Data Not Collected"
 
 The app has no backend, no accounts and no analytics; everything lives in IndexedDB and
@@ -46,11 +48,12 @@ plainly what the app does that a browser tab cannot:
 > GroundWork stores confidential therapy records entirely on-device. The iOS app adds
 > Face ID / Touch ID locking of those records including hiding them in the app switcher,
 > scheduled local notifications for overdue payments and outstanding session notes, native
-> PDF generation of client receipts with AirPrint and share-sheet delivery, and native file
-> access for encrypted backups. None of these are available to the web version.
+> PDF generation of client receipts with AirPrint and share-sheet delivery, native file
+> access for encrypted backups, and automatic on-device backups written to the app's
+> Documents folder on every save. None of these are available to the web version.
 
-That is four native capabilities, two of which replace functions that do not work at all
-inside a web view. Any one would likely clear 4.2; four is comfortable.
+That is five native capabilities, two of which replace functions that do not work at all
+inside a web view. Any one would likely clear 4.2; five is comfortable.
 
 ## Screenshots
 
@@ -83,8 +86,8 @@ Suggested five, in order:
 > • Room costs per session or as monthly rent, with history kept when rates change
 > • Receipts and statements for clients as PDFs, printed or shared straight from the app
 > • Supervision and CPD hours tracked against the 1:6 ratio
-> • A UK tax estimate that updates as you work, with expenses and mileage
-> • Encrypted backups you keep yourself
+> • A UK tax estimate that updates as you work, with your business costs counted in
+> • Automatic on-device backups kept in your iPhone's own backup, plus encrypted backups you can export yourself
 >
 > GroundWork records attendance and money. It is not a clinical record and holds no session
 > notes — keep those where you keep them now. Tax figures are estimates to help you plan,
