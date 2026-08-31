@@ -59,12 +59,13 @@ traps it walks around. **Steps 6, 8 and 10 are drafted** in `docs/app-store-list
 the App Store Connect fields, the "Data Not Collected" answer and why it is honest, the
 Guideline 4.2 reviewer note, the screenshot list and the store copy.
 
-**What is actually left is step 5, and everything downstream of it.** The Apple Developer
-enrolment ($99/year, Individual unless you want "Charlotte Bloor Therapy" as the seller of
-record) is the gate: without it there is no App Store Connect record to fill in, no
-TestFlight build and nothing to submit. Once it exists, steps 6/8/10 are copy-paste from
-the listing pack, step 9 is one TestFlight build — worth it, since Face ID, notification
-delivery and AirPrint have only been exercised in the simulator — and step 11 is submission.
+**Steps 5 and 6 are done (Aug 2026):** the Apple Developer enrolment is in place and both
+GroundWork and GroundWork Notes have App Store Connect records, both under **Business**.
+The pre-submission release work (seed cleanup, beta-gate removal, restore hardening,
+automatic iOS backups, the tax "Now" view — see `docs/tasks/00-INDEX.md`) shipped at the
+same time. **What is actually left:** step 9, a TestFlight build on real hardware — Face
+ID, notification delivery, AirPrint and the new auto-backup have only been exercised in
+the simulator — then step 10 screenshots from demo data, and step 11, submission.
 
 One thing to tell testers: **data does not carry across from the installed PWA.** The
 native app is a different origin, so its database starts empty. Export a `.json` backup
