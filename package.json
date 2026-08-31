@@ -8,6 +8,7 @@
     "sync": "cap sync ios && node scripts/add-native-plugin.mjs && node scripts/register-native-plugin.mjs && node scripts/install-assets.mjs && node scripts/prune-public.mjs",
     "ios": "npm run check && npm run sync && cap open ios",
     "open": "cap open ios",
+    "release": "node scripts/release-ios.mjs",
     "check:drift": "node scripts/check-drift.mjs",
     "check:schedules": "node scripts/check-schedule-parity.mjs"
   },

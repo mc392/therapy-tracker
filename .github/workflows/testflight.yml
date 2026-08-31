@@ -1,0 +1,159 @@
+name: TestFlight
+
+# The web app deploys on every push (see deploy.yml). This does NOT, deliberately: a build
+# that reaches testers should be a decision. It runs when you push a tag that `npm run
+# release` created, or when you start it by hand from the Actions tab.
+#
+# One-time setup and the manual fallback are documented in docs/releasing.md.
+
+on:
+  push:
+    tags: ["ios-v*"]
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: "Build number to use (leave blank to use the run number)"
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    name: Build and upload to TestFlight
+    runs-on: macos-14
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      # Capacitor 8 resolves its iOS dependencies with SwiftPM, not CocoaPods — there is no
+      # .xcworkspace, and the archive step below builds the .xcodeproj directly. The App
+      # scheme is shared (checked in under xcshareddata) so a machine that has never opened
+      # Xcode can still find it.
+      - name: Install dependencies
+        run: npm ci
+
+      # The same checks as everywhere else. A build that fails these should never reach a
+      # tester, and finding out here costs ten minutes rather than a wasted TestFlight slot.
+      - name: Check
+        run: npm run check
+
+      # Rebuilds ios/App/App/public from TherapyTracker-web. Without it the archive would
+      # carry whatever the last local sync left behind — the exact staleness this pipeline
+      # exists to prevent.
+      - name: Sync the web app into the iOS project
+        run: npm run sync
+
+      # The API key has to exist as a file for xcodebuild's automatic signing to use it.
+      # Written outside the workspace so it cannot be picked up by anything else, and the
+      # runner is destroyed afterwards regardless.
+      - name: Write the App Store Connect API key
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: |
+          if [ -z "$KEY_ID" ] || [ -z "$PRIVATE_KEY" ]; then
+            echo "::error::App Store Connect secrets are missing — see docs/releasing.md."
+            exit 1
+          fi
+          mkdir -p ~/private_keys
+          echo "$PRIVATE_KEY" > ~/private_keys/AuthKey_$KEY_ID.p8
+
+      # A tag carries its own build number; a manual run takes the input, and falls back to
+      # the run number, which is monotonic — so a hand-started build can never collide with
+      # one Apple has already accepted.
+      - name: Decide the build number
+        id: build
+        run: |
+          if [ -n "${{ github.event.inputs.build_number }}" ]; then
+            echo "number=${{ github.event.inputs.build_number }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.ref_name }}" =~ -b([0-9]+)$ ]]; then
+            echo "number=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          else
+            echo "number=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # -allowProvisioningUpdates lets Xcode create and download the provisioning profile
+      # using the API key, which is what makes this work without a checked-in certificate.
+      - name: Archive
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          xcodebuild archive \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/GroundWork.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_$KEY_ID.p8 \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID" \
+            CURRENT_PROJECT_VERSION=${{ steps.build.outputs.number }}
+
+      - name: Export the archive
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>export</string>
+            <key>teamID</key><string>L8B6623MNM</string>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/GroundWork.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_$KEY_ID.p8 \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID"
+
+      - name: Upload to App Store Connect
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          IPA=$(find "$RUNNER_TEMP/export" -name '*.ipa' | head -1)
+          echo "Uploading $IPA"
+          xcrun altool --upload-app -f "$IPA" -t ios \
+            --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
+
+      # Kept for 14 days: when a tester reports something odd, the build they have and the
+      # symbols to read its crash logs are both here.
+      - name: Keep the archive
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: GroundWork-build-${{ steps.build.outputs.number }}
+          path: |
+            ${{ runner.temp }}/export/*.ipa
+            ${{ runner.temp }}/GroundWork.xcarchive/dSYMs
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: What happens next
+        run: |
+          echo "### Build ${{ steps.build.outputs.number }} uploaded" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "App Store Connect processes it in ~5-15 minutes, then it appears in TestFlight." >> $GITHUB_STEP_SUMMARY
+          echo "First upload only: answer the export-compliance question in App Store Connect." >> $GITHUB_STEP_SUMMARY

@@ -42,6 +42,15 @@ Hosted on GitHub Pages. Push to `main` → GitHub Actions deploys `TherapyTracke
 Live URL: `https://<username>.github.io/<repo>/`
 
 ## Native iOS wrapper (Capacitor, added Aug 2026)
+
+> **Pushing to GitHub updates the website, not the iPhone app.** The web app deploys to
+> Pages on every push; the iOS app bundles a *copy* of it (`ios/App/App/public`, gitignored,
+> rebuilt by `npm run sync`) that only changes when someone cuts a build. `npm run release`
+> bumps the build number, syncs and tags; pushing that tag runs `.github/workflows/testflight.yml`.
+> Full detail — including the App Store Connect secrets it needs — in **`docs/releasing.md`**.
+> Capacitor 8 uses SwiftPM, so there is **no `.xcworkspace`**: build `ios/App/App.xcodeproj`,
+> whose `App` scheme is checked in under `xcshareddata` precisely so CI can find it.
+
 The iOS app is **this same `index.html`**, not a fork — `webDir` points at `TherapyTracker-web/`
 itself and `ios/App/App/public/` is a gitignored copy rebuilt on every sync. Full detail in
 **`docs/ios-native.md`**; the parts that constrain editing this file:
