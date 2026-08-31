@@ -63,6 +63,20 @@ workflow misbehaves): run `npm run release`, then `npm run open`, then in Xcode 
 
 ---
 
+## If you would rather use Xcode Cloud
+
+Apple's own CI is the alternative to the workflow above, and GroundWork Notes is already
+part-configured for it. It signs without you storing an API key, at the cost of living in
+Apple's UI rather than in a diff. **Do not run both**: two pipelines uploading at once
+means two builds racing for one build number, and Apple rejects the loser with an error
+that reads like a signing fault.
+
+If you go that way here, delete `.github/workflows/testflight.yml` and keep `npm run
+release` — the build-number bump and the sync are still exactly what Xcode Cloud needs to
+find in the commit it builds. Note it would need a `ci_scripts/ci_post_clone.sh` that runs
+`npm ci && npm run sync`, for the same reason Notes needs one: the bundled web app is
+gitignored, so a fresh clone has nothing to build.
+
 ## One-time setup for the automated upload
 
 `testflight.yml` needs an App Store Connect API key. In App Store Connect → Users and
