@@ -17,7 +17,7 @@ it has not.
 | **Model** | **Annual subscription** — "GroundWork Plus" | Everything in the tier is local computation with no server cost, which normally makes a recurring charge hard to defend. The tax engine is the exception and it is the anchor of the tier: HMRC bands, thresholds, Class 2/4 rates, student-loan plans and MTD rules change every April, and keeping `ukTax()` correct is genuine recurring work. "Your tax figures stay current" is an honest annual promise. A one-off unlock would fund none of it. |
 | **Sequencing** | **iOS first. Web stays free until Phase 2.** | StoreKit needs no accounts, no server, no auth and no VAT registration. It answers "will anyone pay for this?" before you build billing infrastructure to find out. The PWA on Pages carries on as the free shopfront. |
 | **Tier contents** | Tax · Costs & other income · MTD export · Trends · Accreditation · GroundWork Notes sync · extra colour schemes | See §3. |
-| **Existing users** | **Charlotte only** is comped. Other existing PWA users are not grandfathered. | Chosen deliberately. Note the timing consequence in §7 — this decision costs nothing in Phase 1 and is the single biggest risk in Phase 2. |
+| **Existing users** | **Charlotte only** is comped. No general grandfathering. | Chosen deliberately — and close to free, because as of Sept 2026 the user base is Charlotte, Matt and one tester. The risk this once carried is retired for now; see §7 for the condition on which it returns. |
 
 ---
 
@@ -134,7 +134,8 @@ localStorage, never in `S`.
 
 ```
 tt_plus  →  {"active":true,"expiresAt":"2027-09-01T00:00:00Z",
-             "source":"storekit","checkedAt":"2026-09-01T09:12:00Z"}
+             "source":"storekit","kind":null,"name":null,
+             "checkedAt":"2026-09-01T09:12:00Z"}
 ```
 
 - **A cache, not the truth.** StoreKit is the truth; this is what makes the app work on a
@@ -144,6 +145,9 @@ tt_plus  →  {"active":true,"expiresAt":"2027-09-01T00:00:00Z",
 - **Offline grace.** If `checkedAt` is stale but `expiresAt` has not passed, stay active.
   Re-verify silently in the background on resume. **Never hard-block on a failed network
   check** — a flaky café wifi must not lock someone out of their tax screen.
+- `source` is `"storekit"`, `"web"`, `"licence"` or `"comp"`; `kind` and `name` carry a
+  granted licence through to the UI (§6). Include them from the first version even though
+  Phase 1 only ever writes `"storekit"` — retrofitting the cache shape later is annoying.
 - On expiry, fall back to locked *gracefully*: the paid views show the paywall, everything in
   §2.1 carries on exactly as before, and no data is touched.
 - `S.settings.entitlements` is never written. **No `SCHEMA_VERSION` bump** — there is no new
@@ -249,41 +253,129 @@ guideline text at the time you build it rather than trusting this document.
 
 ---
 
-## 6. Comped licences (and Charlotte)
+## 6. Granting Plus without a sale — comps, gifts and founding members
 
-Charlotte is comped. Do not hardcode her device or a magic string in `index.html` — build the
-general mechanism, because you will want it again for support cases, refunds, press and beta
-testers.
+As of Sept 2026 the entire user base is **Charlotte, Matt and one tester**. So this section is
+mostly forward-looking; §6.5 says what is actually needed today, which is very little.
 
-**An offline signed licence key.** A short signed blob, pasted into a field in Settings ›
-About, verified against a public key embedded in the app, writing `tt_plus` with
-`source:"comp"` and a long or absent expiry. No network, works on both platforms, revocable
-only by expiry — which is fine for the handful of cases it exists for.
+### 6.1 One entitlement, several reasons
+
+`plusActive()` stays a single boolean. The *kind* of grant changes the wording on screen, the
+default expiry, and your own records — **never the feature set**. Do not build per-kind tiers;
+there is one Plus, reached by several routes.
+
+| Kind | Who | Expiry |
+|---|---|---|
+| `founding` | Early adopters, the people who were here first | None |
+| `comp` | Charlotte, Matt | None |
+| `gift` | Someone you want to give a year to | 12 months |
+| `beta` | Testers | Dated, reissued as needed |
+| `support` | Goodwill after a problem, refund cases | Fixed short period |
+
+### 6.2 On iOS, use Apple's Offer Codes — not your own keys
+
+This supersedes the "signed key on both platforms" sketch this document originally carried.
+
+StoreKit has **subscription offer codes** built in, redeemable through
+`presentOfferCodeRedeemSheet()` or a redemption URL, and they can grant a free period. For
+gifting on iOS they are strictly better than anything home-grown:
+
+- Unambiguously compliant — it is Apple's own mechanism, so there is no App Review argument
+  about payment routes to have.
+- No key format, no crypto, no private key to look after.
+- The subscription then appears in the recipient's own Apple ID subscriptions, where they
+  expect to manage it.
+
+Worth knowing before relying on them: codes are tied to a specific subscription, carry their
+own expiry and redemption caps, and need the recipient to be in the right storefront. If you
+use them, App Review expects redemption to be reachable from inside the app.
+
+### 6.3 Your own licence keys — for the web, and anything Apple cannot reach
+
+Needed from Phase 2 onward, and for anyone you cannot route through the App Store.
+
+**Ed25519 signed licence.** Public key embedded in `index.html`; **private key held offline
+and never committed to this repo**. A `scripts/issue-licence.mjs` mints them (`--keygen` once
+to create the pair).
+
+```
+payload  {v:1, k:"founding", n:"Charlotte Bloor", exp:null, id:"f3a9"}
+key      base64url(payload) "." base64url(signature)
+```
+
+Roughly 180–220 characters — an email paste, not something anyone types.
+
+**Why not a friendly `GW-FOUND-7K2M` short code?** A short code needs a symmetric secret
+embedded in the app, and anyone can extract it and build a key generator. That is the one
+attack that actually matters here. A single clever person bypassing the gate is already
+possible and already accepted (§5.4 — they can just set `tt_plus` in devtools); a **keygen
+circulating that lets non-technical people do it** is a different problem. An Ed25519 public
+key cannot mint anything, and the only cost is a longer string in an email where paste is free.
+
+Redemption UI: a "GroundWork Plus" card in Settings — a paste field plus a status line. After
+redeeming it shows **"Licensed to «name»"**, which does two useful things: mild social friction
+against passing a key around, and instant clarity in a support conversation. It writes `tt_plus`
+with `source:"licence"` and carries the kind and name through.
+
+**There is no revocation.** Offline verification means no revocation list, so manage it with
+expiry instead: perpetual only for `founding` and `comp`, everything else dated. The only way
+to kill an issued key is a future release that refuses its `id`, which means **keeping a
+ledger of what you issued** — outside this repo, since it holds names and email addresses.
+
+### 6.4 Founding members — two different things, don't conflate them
+
+- **(a) Free forever.** A `founding` licence or an offer code. Right for the three people who
+  exist now, and for a small early cohort.
+- **(b) Price locked at launch.** This is StoreKit's own price-increase mechanic: when you
+  raise a subscription price you choose whether existing subscribers are preserved at the old
+  one. It costs nothing today and it rewards people who actually pay.
+
+Use **(a)** for the handful who are here now and early testers; **(b)** as the ongoing
+early-bird once you are selling. Resist giving perpetual free licences at volume — a large
+founding cohort that never renews is a permanent support obligation with no revenue behind it,
+and support is the cost that scales, not hosting.
+
+The badge is most of the emotional value and costs nothing: a "Founding member" line in
+Settings › About.
+
+### 6.5 What is actually needed today: almost nothing
+
+Phase 1 gates **iOS only**, and Charlotte, Matt and the tester are all on the free web PWA.
+They need no licence at all until they move to the native app, and at that point a TestFlight
+build or an offer code covers it. **Do not build the licence system before it has a job.**
+
+One thing worth doing now, because retrofitting it later is annoying: give `tt_plus` its
+`kind` and `name` fields from the very first version (§4.1), even while nothing writes anything
+but `"storekit"`.
 
 ---
 
 ## 7. Risks and open questions
 
-**The Phase 2 retraction is the real risk.** "Charlotte only" costs nothing in Phase 1,
-because the web app is not gated at all — no existing PWA user notices anything. It bites the
-day Phase 2 ships: every existing web user who has been using Tax, Trends or Accreditation
-loses them. That is precisely the outcome the gradual-reveal design was built to avoid
-(`CLAUDE.md`: "Hiding tabs from someone already using them is the one outcome this must never
-produce"), and those users are also the most likely to have told other therapists about it.
+**The Phase 2 retraction risk is retired — conditionally.** This plan originally carried it as
+the headline risk: gating the web app in Phase 2 would strip Tax, Trends and Accreditation from
+existing PWA users, the exact outcome the gradual-reveal design forbids (`CLAUDE.md`: "Hiding
+tabs from someone already using them is the one outcome this must never produce"). With a user
+base of three, all of whom are comped or building the thing, there is no cohort to retract from.
 
-Mitigations, none chosen yet — **OPEN, and worth deciding before Phase 2 starts, not during**:
+The condition: **the free web app keeps running throughout Phase 1, and may accumulate users
+before Phase 2 lands.** So the risk returns quietly, and the rule that follows from it is:
 
-- a long notice period announced in-app before the gate lands;
-- a legacy window (anyone with data before date *X* keeps their current features);
-- read-only grace (existing tax figures stay visible, new tax years need Plus).
+> Decide the legacy policy **before** the free web app has users worth retracting from — not
+> when Phase 2 starts.
 
-Other open items:
+The cheapest insurance is to say the intent out loud early (a line in the app or on the site
+that the tax features will become part of a paid tier), so nobody builds a habit on a promise
+you did not make.
+
+Open items:
 
 - **OPEN: price.** Not set. Anchor it against what a therapist pays an accountant, not against
   other apps.
 - **OPEN: trial length**, and whether it spans January.
+- **OPEN: the founding cohort** — how many, and free-forever (§6.4a) or price-locked (§6.4b).
 - **OPEN:** whether the annual renewal message leans on "tax rates kept current" (honest,
-  specific, and the actual reason) or on a broader "support development" framing.
+  specific, and the actual reason) or a broader "support development" framing.
 
 ---
 
