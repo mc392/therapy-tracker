@@ -803,6 +803,21 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 .palopt .pswatch i:nth-child(3){top:66%;left:0;right:0;bottom:0}
 .palopt .pn{font-size:14px;font-weight:700;line-height:1.2}
 .palopt .pd{font-size:11.5px;color:var(--muted);margin-top:1px}
+/* Locked schemes stay legible and still show their colours — a greyed-out swatch advertises
+   nothing. The lock is a tag, not a disabled state: the button still opens the paywall. */
+.palopt.locked{opacity:.78}
+.paltag{display:inline-block;font-size:10px;font-weight:700;vertical-align:1px;padding:1px 6px;
+  border-radius:999px;margin-left:5px;background:color-mix(in srgb,var(--brand) 16%,transparent);color:var(--brand-dark)}
+/* GroundWork Plus — the paywall sheet and the in-place lock that replaces a paid view. */
+.plusgate{text-align:center;padding:4px 2px 2px}
+.plusgate .plmark{width:46px;height:46px;margin:0 auto 10px;border-radius:14px;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--brand) 14%,transparent);color:var(--brand)}
+.plusgate .plmark .gi{width:24px;height:24px}
+.plusgate h2{margin:0 0 4px;font-size:17px}
+.plusgate .plfeat{text-align:left;margin-top:14px}
+.plusgate .plfeat div{font-size:12.5px;color:var(--muted);padding:6px 0;border-top:1px solid var(--line)}
+.plusgate .plfeat b{color:var(--ink);font-weight:700}
+.plusgate input{text-align:center}
 .palopt.locked{opacity:.55}
 .palopt .paltag{font-size:10px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:1px 5px;margin-left:2px;vertical-align:1px;white-space:nowrap}
 /* feature toggles */
@@ -1374,26 +1389,218 @@ function applyPalette(k){if(!PALETTES.some(p=>p.k===k))k="sage";
   paintThemeColor();}
 function paletteSwatch(p){return '<span class="pswatch"><i style="background:'+p.c[0]+'"></i><i style="background:'+p.c[1]+'"></i><i style="background:'+p.c[2]+'"></i></span>';}
 
-/* ---- colour-scheme unlock (infrastructure only, not switched on)
-   Sage is the only free:true entry; everything else is a candidate for a future paid tier.
-   PALETTE_GATE_ENABLED is the single switch: while it's false, paletteLocked() always returns
-   false, so every scheme stays picked exactly as before, in Settings and in the setup wizard.
-   Turning gating on for real needs three things, none of which exist yet: flip this constant,
-   teach paletteOwned() to read a real entitlement (a purchase receipt, a subscription flag) once
-   one is wired up, and decide whether the setup wizard's own palette step (stepLook) should also
-   gate — right now it renders PALETTES directly and ignores locking entirely. */
-const PALETTE_GATE_ENABLED=false;
-function paletteOwned(k){return !!(S.settings&&S.settings.entitlements&&S.settings.entitlements.colourSchemes);}
-function paletteLocked(p){return PALETTE_GATE_ENABLED&&!p.free&&!paletteOwned(p.k);}
+/* ===== GroundWork Plus — the entitlement gate =====
+   One boolean, reached by several routes (a subscription, an offer code, a granted licence).
+   The whole design is in docs/monetisation.md; three rules from it are load-bearing here.
+
+   1. THE GATE NEVER TOUCHES THE DATA PLANE. Logging, receipts, and every import, export and
+      backup path stay free forever — a paywall must never sit between a therapist and her own
+      records. Nothing in this block is called from commit(), exportJSON() or importJSON().
+
+   2. plusLocked() IS NOT feat(). feat(k) means "the user switched this off", which is a
+      preference; plusLocked(k) means "not paid for", which is a billing state. Overloading
+      feat would drop paid tabs out of visibleTabs() altogether — leaving nothing to sell
+      from — and would tangle a preference with an entitlement, so subscribing would have to
+      guess which flags to switch back on. Paid tabs still appear and still open; their view
+      renders a lock in place of its content.
+
+   3. THE GATE STAYS OUT OF THE ENGINE. tyNet(), taxLiability(), mtdQuarters() and mtdExport()
+      are pure and ungated, both because that is where correctness lives and because
+      tests/tax-tests.js calls them directly. If a tax test ever fails because of the paywall,
+      the paywall has been put in the wrong layer — move it back to the view. */
+const PLUS_NAME="GroundWork Plus";
+/* Keys the gate understands. Most are also feat() keys; "mtd", "notesSync" and "palettes" are
+   not features anyone can switch off, only things that can be locked. */
+const PLUS_FEATURES=["tax","finances","mtd","trends","accreditation","notesSync","palettes"];
+const PLUS_KEY="tt_plus";
+/* Grace past the paid-through date. A renewal we could not verify — offline, or StoreKit not
+   yet caught up — must not lock someone out of their own tax figures on the morning it lands. */
+const PLUS_EXPIRY_GRACE_DAYS=7;
+const PLUS_KINDS={founding:"Founding member",comp:"Complimentary",gift:"Gift",
+                  beta:"Tester",support:"Complimentary"};
+
+/* Device state, never S: an entitlement belongs to this device and this Apple ID, and S travels
+   in backups — the same rule that keeps tt_lock out of S. Restoring a backup onto someone
+   else's phone must not carry a subscription with it. */
+function plusRead(){try{const raw=localStorage.getItem(PLUS_KEY);if(!raw)return null;
+  const o=JSON.parse(raw);return (o&&typeof o==="object")?o:null;}catch(e){return null;}}
+function plusWrite(o){try{localStorage.setItem(PLUS_KEY,JSON.stringify(o));}catch(e){}}
+function plusClear(){try{localStorage.removeItem(PLUS_KEY);}catch(e){}}
+/* Synchronous by design — this is called from render paths all over the file, so it must never
+   await and must never throw. The cache is not the truth (StoreKit is); it is what lets the app
+   work on a train. Every failure mode below fails OPEN, never shut. */
+function plusActive(){
+  const s=plusRead();
+  if(!s||!s.active)return false;
+  if(!s.expiresAt)return true;                    /* comps and founding licences never expire */
+  const t=Date.parse(s.expiresAt);
+  if(isNaN(t))return true;                        /* unreadable date: don't lock someone out over it */
+  return Date.now()<=t+PLUS_EXPIRY_GRACE_DAYS*864e5;
+}
+/* Can this build actually sell? Phase 1 is iOS only — the PWA stays free as the shopfront, and
+   a lock with no way to buy behind it is just a broken feature. */
+function plusSellable(){try{return !!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());}catch(e){return false;}}
+/* Is anything gated at all? tt_plus_gate only ever switches the gate ON. It exists so the locked
+   states can be exercised in a desktop browser; it is deliberately incapable of unlocking. */
+function plusGateOn(){if(plusSellable())return true;
+  try{return localStorage.getItem("tt_plus_gate")==="on";}catch(e){return false;}}
+function plusLocked(k){return plusGateOn()&&PLUS_FEATURES.indexOf(k)>=0&&!plusActive();}
+/* Set by the native block when StoreKit is available. Shared code never touches Capacitor
+   directly — it asks for this and degrades to the web path when it is absent. */
+function plusNative(){return window.GWPlusNative||null;}
+function plusStatusLine(){
+  const s=plusRead();
+  if(!plusActive())return s&&s.expiresAt?"Expired "+esc(fmtD(String(s.expiresAt).slice(0,10)))+".":"Not subscribed.";
+  const kind=(s&&PLUS_KINDS[s.kind])||"Active";
+  const who=s&&s.name?" \u00b7 "+esc(s.name):"";
+  return kind+who+(s.expiresAt?" \u00b7 renews "+esc(fmtD(String(s.expiresAt).slice(0,10))):" \u00b7 no expiry")+".";
+}
+
+/* ---- what Plus is, in the order it is worth paying for ---- */
+const PLUS_SELL=[
+  ["Tax","Estimates, the pot, payments on account and what HMRC actually assessed \u2014 kept current as the rates change each April."],
+  ["Costs & other income","What the practice costs you, taken off the profit the tax is worked out from."],
+  ["Quarterly (MTD)","Your four quarters, reconciled to the same figures, ready to file."],
+  ["Trends","Retention, attendance against the frequency you agreed, and what missed sessions cost."],
+  ["Accreditation hours","Clinical and supervision hours and the 1:6 ratio, for Form 3A."],
+  ["GroundWork Notes sync","Sends each client's cadence to the notes app so it knows what still needs writing up."],
+  ["Colour schemes","Five more palettes beyond Sage."]
+];
+const PLUS_REASONS={
+  tax:"Tax is part of "+PLUS_NAME, finances:"Costs & other income is part of "+PLUS_NAME,
+  mtd:"The MTD export is part of "+PLUS_NAME, trends:"Trends is part of "+PLUS_NAME,
+  accreditation:"Accreditation hours are part of "+PLUS_NAME,
+  notesSync:"Notes sync is part of "+PLUS_NAME, palettes:"More colour schemes are part of "+PLUS_NAME
+};
+/* Filled from StoreKit when the sheet opens. Never hardcode a price — the store owns it, it is
+   per-storefront, and App Review checks the paywall against the real product. */
+let _plusPrice="";
+
+/* ---- the one paywall ---- */
+function openPlusSheet(reason){
+  const active=plusActive(), nat=plusNative(), lic=plusLicenceConfigured();
+  const b=el('<div class="plusgate"></div>');
+  b.innerHTML=
+    '<div class="plmark">'+gi("tax")+'</div>'+
+    '<h2>'+esc(active?PLUS_NAME:(PLUS_REASONS[reason]||PLUS_NAME))+'</h2>'+
+    '<p class="small muted">'+(active?plusStatusLine()
+      :"Everything you already use stays free \u2014 logging sessions, receipts, and every backup and "+
+       "export. "+PLUS_NAME+" adds the parts that do the year-end work for you.")+'</p>'+
+    '<div class="plfeat">'+PLUS_SELL.map(f=>'<div><b>'+esc(f[0])+'</b> \u2014 '+esc(f[1])+'</div>').join("")+'</div>'+
+    (active?'<button class="btn sec full mt" id="plManage">Manage subscription</button>'
+     :nat?'<p class="small muted mt" id="plPrice">'+(_plusPrice?esc(_plusPrice):"Checking the price\u2026")+'</p>'+
+          '<button class="btn full" id="plBuy">Subscribe</button>'+
+          '<button class="btn ghost full mt" id="plRestore">Restore purchases</button>'+
+          '<button class="btn ghost full mt" id="plRedeem">Redeem a code</button>'
+     :'<p class="small muted mt">'+PLUS_NAME+' is sold in the iPhone app.'+
+      (lic?' If you have been given a licence key, enter it here.':'')+'</p>'+
+      (lic?'<input id="plKey" placeholder="Licence key" autocomplete="off" spellcheck="false">'+
+           '<button class="btn full mt" id="plKeyGo">Redeem</button>':''))+
+    '<p class="prev">Auto-renewing annual subscription. '+
+      '<a href="terms.html" target="_blank" rel="noopener">Terms</a> \u00b7 '+
+      '<a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>';
+
+  const q=s=>b.querySelector(s);
+  /* The store owns the price and the period; ask for it rather than shipping a number that
+     goes stale or is wrong in another storefront. */
+  if(nat&&!active&&nat.products)nat.products().then(p=>{
+    if(!p||!p.price)return; _plusPrice=p.price+(p.period?" / "+p.period:"");
+    const el2=q("#plPrice"); if(el2)el2.textContent=_plusPrice;
+    const bb=q("#plBuy"); if(bb)bb.textContent="Subscribe \u2014 "+_plusPrice;
+  }).catch(()=>{const el2=q("#plPrice");if(el2)el2.textContent="";});
+
+  const done=async(ok,msg)=>{
+    if(!ok)return;
+    closeSheet(); toast(msg||PLUS_NAME+" is active"); Sfx.complete();
+    renderTabs(); go(curTab(),{keepScroll:true});
+  };
+  const run=async(btn,fn,msg)=>{
+    if(!btn)return; const t=btn.textContent; btn.disabled=true; btn.textContent="\u2026";
+    let ok=false; try{ok=await fn();}catch(e){ok=false;}
+    btn.disabled=false; btn.textContent=t;
+    if(ok)done(true,msg); else {toast("Nothing to restore");Sfx.error();}
+  };
+  if(q("#plBuy"))q("#plBuy").onclick=()=>run(q("#plBuy"),()=>nat.purchase(),PLUS_NAME+" is active \u2014 thank you");
+  if(q("#plRestore"))q("#plRestore").onclick=()=>run(q("#plRestore"),()=>nat.restore());
+  if(q("#plRedeem"))q("#plRedeem").onclick=()=>{if(nat.redeem)nat.redeem();};
+  if(q("#plManage"))q("#plManage").onclick=()=>{if(nat&&nat.manage)nat.manage();else toast("Manage it where you bought it");};
+  if(q("#plKeyGo"))q("#plKeyGo").onclick=async()=>{
+    const btn=q("#plKeyGo"); btn.disabled=true;
+    const ok=await plusRedeemLicence(q("#plKey").value); btn.disabled=false;
+    if(ok)done(true,"Licence accepted"); else {toast("That licence key wasn\u2019t valid");Sfx.error();}
+  };
+  openSheet(active?PLUS_NAME:"Unlock "+PLUS_NAME,b);
+}
+
+/* ---- the lock that replaces a paid view in place ----
+   A card, not an empty screen: it says what the feature does and offers the one way in. */
+function plusLockHTML(reason,title,blurb){
+  return '<div class="card plusgate">'+
+    '<div class="plmark">'+gi("tax")+'</div>'+
+    '<h2>'+esc(title)+'</h2>'+
+    '<p class="small muted">'+esc(blurb)+'</p>'+
+    '<button class="btn full mt" data-plus="'+esc(reason)+'">About '+PLUS_NAME+'</button>'+
+    '</div>';
+}
+/* Wires every lock card inside `host`. Safe to call on hosts that contain none. */
+function plusWireLocks(host){
+  if(!host)return;
+  host.querySelectorAll("[data-plus]").forEach(b=>b.onclick=()=>openPlusSheet(b.dataset.plus));
+}
+
+/* ---- granted licences (comps, gifts, founding members) ----
+   ECDSA P-256 rather than Ed25519: WebCrypto has had P-256 everywhere for years, while Ed25519
+   only reached Safari 17 and Chrome 137, and this has to verify on whatever browser a therapist
+   already has. The security level is the same for this purpose either way.
+
+   A public key cannot mint licences, which is the whole point: one person bypassing the gate in
+   devtools is already possible and already accepted (docs/monetisation.md §5.4), but a key
+   generator circulating so anyone can do it is a different problem, and a symmetric secret
+   embedded in this file would be exactly that.
+
+   PLUS_PUBKEY stays null until `node scripts/issue-licence.mjs --keygen` writes one in. While it
+   is null the redemption UI is simply not offered — there is nothing to verify against. */
+const PLUS_PUBKEY=null; /* GW-LICENCE-PUBKEY */
+function plusLicenceConfigured(){return !!PLUS_PUBKEY;}
+function plusB64u(s){s=String(s||"").replace(/-/g,"+").replace(/_/g,"/");
+  while(s.length%4)s+="=";
+  const bin=atob(s),u=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
+  return u;}
+/* Returns the payload on success, null on anything else. The signature covers the encoded
+   payload text, so there is no canonical-JSON problem to get wrong. */
+async function plusVerifyLicence(key){
+  if(!PLUS_PUBKEY)return null;
+  const parts=String(key||"").trim().split(".");
+  if(parts.length!==2||!parts[0]||!parts[1])return null;
+  let pay=null;
+  try{pay=JSON.parse(new TextDecoder().decode(plusB64u(parts[0])));}catch(e){return null;}
+  if(!pay||typeof pay!=="object")return null;
+  try{
+    const pk=await crypto.subtle.importKey("jwk",PLUS_PUBKEY,{name:"ECDSA",namedCurve:"P-256"},false,["verify"]);
+    const ok=await crypto.subtle.verify({name:"ECDSA",hash:"SHA-256"},pk,
+      plusB64u(parts[1]),new TextEncoder().encode(parts[0]));
+    if(!ok)return null;
+  }catch(e){return null;}
+  /* An expired licence verifies perfectly well — it is just no longer in date. */
+  if(pay.exp&&!isNaN(Date.parse(pay.exp))&&Date.parse(pay.exp)<Date.now())return null;
+  return pay;
+}
+async function plusRedeemLicence(key){
+  const pay=await plusVerifyLicence(key);
+  if(!pay)return false;
+  plusWrite({active:true,expiresAt:pay.exp||null,source:"licence",
+             kind:pay.k||"comp",name:pay.n||"",id:pay.id||"",checkedAt:new Date().toISOString()});
+  return true;
+}
+
+/* ---- colour schemes now sit on the general gate ----
+   Sage is the only free:true entry. paletteLocked() reads plusLocked("palettes") and nothing
+   else, so there is one switch for the whole tier rather than a second one for palettes. */
+function paletteLocked(p){return !!p&&!p.free&&plusLocked("palettes");}
 function paletteOptionHTML(p,isOn){const locked=paletteLocked(p);
   return '<button type="button" class="palopt'+(isOn?" on":"")+(locked?" locked":"")+'" data-p="'+p.k+'">'+paletteSwatch(p)+
-    '<span><span class="pn">'+p.n+(locked?' <span class="paltag">🔒 Plus</span>':'')+'</span><span class="pd">'+p.d+'</span></span></button>';}
-function openPaletteGateSheet(p){
-  const b=el('<div></div>');
-  b.innerHTML='<p class="small muted">'+esc(p.n)+' and the other extra colour schemes will be part of a future paid tier — for example a one-off unlock or a subscription. Nothing to buy yet.</p>'+
-    '<button class="btn full mt" disabled>Coming soon</button>';
-  openSheet("More colour schemes",b);
-}
+    '<span><span class="pn">'+p.n+(locked?' <span class="paltag">\ud83d\udd12 Plus</span>':'')+'</span><span class="pd">'+p.d+'</span></span></button>';}
 
 /* ---- practice branding + feature switches ---- */
 function settings(){if(!S.settings)S.settings={};return S.settings;}
@@ -2147,6 +2354,11 @@ function mountCPD(host){
 }
 /* Form 3A accreditation card: clinical hrs (from sessions) vs supervision hrs (manual), ratio must stay ≤ 6 */
 function mountAccreditation(host){if(!host||!feat("accreditation"))return;
+  if(plusLocked("accreditation")){
+    host.innerHTML=plusLockHTML("accreditation","Accreditation hours",
+      "Clinical and supervision hours, the 1:6 ratio and the totals for Form 3A.");
+    plusWireLocks(host); return;
+  }
   const ac=S.accreditation;
   host.innerHTML=`<div class="card"><h2>Accreditation hours &amp; ratio</h2>
     <p class="small muted" style="margin:0 0 4px">Totals for Form 3A. ${infoLink("form3a-mechanics")}</p>
@@ -2591,6 +2803,12 @@ VIEWS.practice=function(){
     body.querySelector("#addR").onclick=()=>roomForm(null); r();
   }
   function renderMetrics(){
+    if(plusLocked("trends")){
+      body.innerHTML=plusLockHTML("trends","Trends",
+        "Who stays and who drifts, attendance against the frequency you agreed, how long clients "+
+        "stay, and what missed sessions are costing you.");
+      plusWireLocks(body); return;
+    }
     const counts=clientSessionCounts();
     const lastSeen=lastSessionDates();   /* drives the current/historical split on every list below */
     const withSess=S.clients.map(c=>({c,n:counts[c.code.toLowerCase()]||0}));
@@ -4085,6 +4303,14 @@ VIEWS.money=function(){
     body.querySelector("#gran").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{statGran=bt.dataset.g;go("money",{keepScroll:true});});
   }
   function drawCosts(){
+    /* Locked and switched-off are different states and must say different things: one is a
+       purchase, the other is a preference the reader set themselves. */
+    if(plusLocked("finances")){
+      body.innerHTML=plusLockHTML("finances","Costs & other income",
+        "Insurance, room rent, CPD and everything else the practice costs you \u2014 taken off the "+
+        "profit your tax is worked out from.");
+      plusWireLocks(body); return;
+    }
     body.innerHTML=feat("finances")?financeCards()
       :'<div class="card"><h2>Costs &amp; other income</h2><p class="small muted">Switched off in ⚙ Settings › Features. Turn it back on there and your costs reappear — nothing was deleted.</p></div>';
     wireFinance(body); wirePaymentsDue(body);
@@ -4110,6 +4336,14 @@ function wireTaxDisclaimBar(host){
 
 VIEWS.tax=function(){
   const v=el('<div class="view active"></div>');
+  /* The lock comes before the disclaimer. There is no sense making someone acknowledge how the
+     estimates are worked out on a screen they cannot see yet. */
+  if(plusLocked("tax")){
+    v.innerHTML=plusLockHTML("tax","Tax",
+      "What to set aside, what to keep in the pot and when it leaves \u2014 payments on account, "+
+      "the January balancing payment, and the quarterly figures for MTD.");
+    plusWireLocks(v); return v;
+  }
   /* Nothing is drawn until the disclaimer has been acknowledged. Existing installs never see
      setup again, so this is where they meet it; a fresh install has already agreed in stepTax
      and never lands here. Declining goes Home and asks again next time — see showTaxGate. */
@@ -5198,7 +5432,11 @@ function drawMTD(host){
     (boxRows?'<div class="rawscroll"><table><thead><tr><th>Box</th><th>What HMRC calls it</th><th class="num">'+ty+'</th></tr></thead><tbody>'+boxRows+'</tbody></table></div>'
             :'<p class="muted small">No costs recorded for '+ty+' yet.</p>')+
     '<p class="small muted mt">When MTD applies to you depends on turnover: over \u00a350,000 from April 2026, over \u00a330,000 from April 2027, over \u00a320,000 from April 2028.</p></div>';
-  const b=host.querySelector("#mtdExp"); if(b)b.onclick=()=>mtdExport(ty);
+  /* Redundant while the whole Tax tab is locked, and kept deliberately: the export is its own
+     line in the tier, and this is the guard that survives Tax ever being unlocked separately.
+     Note it gates the BUTTON \u2014 mtdExport() itself stays pure, because tests call it. */
+  const b=host.querySelector("#mtdExp");
+  if(b)b.onclick=()=>{if(plusLocked("mtd"))return openPlusSheet("mtd");mtdExport(ty);};
   host.querySelectorAll(".qrow").forEach(tr=>tr.onclick=()=>{
     const q=mtdQuarters(ty).find(x=>x.n===+tr.dataset.q);
     periodBreakdownSheet("Quarter "+q.n+" \u00b7 "+q.label,q.from,q.to,
@@ -5572,6 +5810,19 @@ function rawPanel(){
   draw();return v;
 }
 
+/* Hidden entirely where nothing is gated and nothing is owned \u2014 on the Phase 1 web build that
+   is everyone, and a subscription card for something you cannot buy here is just noise. */
+function plusSettingsCardHTML(){
+  if(!plusGateOn()&&!plusActive())return "";
+  const active=plusActive();
+  return '<div class="card"><h2>'+PLUS_NAME+'</h2>'+
+    '<p class="small muted">'+plusStatusLine()+'</p>'+
+    '<p class="small muted">Tax, costs &amp; other income, the MTD export, Trends, accreditation '+
+      'hours, GroundWork Notes sync and the extra colour schemes. Logging, receipts and every '+
+      'backup and export stay free.</p>'+
+    '<button class="btn '+(active?"sec ":"")+'full mt" data-plus="settings">'+
+      (active?"View details":"Unlock "+PLUS_NAME)+'</button></div>';
+}
 VIEWS.settings=function(){
   const v=el('<div class="view active"></div>');
   v.innerHTML=`
@@ -5582,6 +5833,7 @@ VIEWS.settings=function(){
      <label>Strapline <span class="muted">(receipts only)</span></label><input id="setTag" maxlength="70" value="${esc(practiceTagline())}">
      <button class="btn full mt" id="setNameSave">Save practice details</button>
    </div>
+   ${plusSettingsCardHTML()}
    <div class="card"><h2>Appearance &amp; sound</h2>
      <p class="small muted">Colour scheme, light/dark and sound effects. Stored on this device; the scheme also travels with your backups.</p>
      <label>Colour scheme</label>
@@ -5733,10 +5985,11 @@ VIEWS.settings=function(){
     await commit("Renamed practice to “"+n+"”");applyBranding();toast("Saved");Sfx.pop();};
   v.querySelectorAll("#setPalMain .palopt, #setPal .palopt").forEach(b=>b.onclick=async()=>{
     const k=b.dataset.p,p=PALETTES.find(x=>x.k===k);
-    if(paletteLocked(p)){openPaletteGateSheet(p);return;}
+    if(paletteLocked(p)){openPlusSheet("palettes");return;}
     applyPalette(k);settings().palette=k;
     v.querySelectorAll("#setPalMain .palopt, #setPal .palopt").forEach(x=>x.classList.toggle("on",x.dataset.p===k));
     Sfx.tick();await commit("Colour scheme: "+k);});
+  plusWireLocks(v);
   v.querySelectorAll("#setThemeSeg button").forEach(b=>b.onclick=()=>{setTheme(b.dataset.t);
     v.querySelectorAll("#setThemeSeg button").forEach(x=>x.classList.toggle("on",x===b));});
   (function(){const host=v.querySelector("#setFeat");
@@ -5836,6 +6089,9 @@ VIEWS.settings=function(){
   })();
   (function(){
     const btn=v.querySelector("#rosterSync"), st=v.querySelector("#rosterState");
+    /* Tagged rather than hidden. The card is what explains the sync, which makes it the best
+       advert the feature has \u2014 so it stays visible and the tap is what asks for payment. */
+    if(plusLocked("notesSync"))btn.innerHTML='\u21bb Sync schedules <span class="paltag">\ud83d\udd12 Plus</span>';
     const paint=(msg)=>{
       const last=rosterLastSync();
       st.innerHTML=(msg?esc(msg)+" ":"")+
@@ -5845,6 +6101,7 @@ VIEWS.settings=function(){
     };
     paint("");
     btn.onclick=async()=>{
+      if(plusLocked("notesSync"))return openPlusSheet("notesSync");
       btn.disabled=true;
       const r=await syncSchedules();
       btn.disabled=false;
@@ -7778,11 +8035,16 @@ function revealCheck(){
 function revealOffer(step){
   const fs=step.keys.map(k=>FEATURES.find(x=>x.k===k)||{k,n:k,d:""});
   const names=fs.map(f=>f.n).join(" and ");
+  /* A reveal for something in the tier says so on the card. The flag still turns on either way:
+     the flag is a preference and the entitlement is separate (see plusLocked), and the locked
+     view is where the selling belongs \u2014 not in a nudge the reader did not ask for. */
+  const plusStep=step.keys.some(k=>plusLocked(k));
   const body=el('<div></div>');
   body.innerHTML='<div style="text-align:center;font-size:40px;line-height:1">'+step.emoji+'</div>'+
     '<h3 style="text-align:center;margin:8px 0 4px">'+esc(step.title)+'</h3>'+
     '<p class="small muted" style="text-align:center">'+step.sub+'</p>'+
     fs.map(f=>'<div class="vmsg ok mt">'+esc(f.n)+' — '+f.d+'</div>').join("")+
+    (plusStep?'<div class="vmsg warn mt">Part of '+PLUS_NAME+'.</div>':'')+
     '<button class="btn full mt" id="rvYes">'+(fs.length>1?"Turn them on":"Turn it on")+'</button>'+
     '<button class="btn ghost full mt" id="rvNo">Not for me</button>'+
     '<p class="prev" style="text-align:center">Either way you can change your mind in <b>⚙ Settings › Features</b>.</p>';
@@ -7950,15 +8212,18 @@ function stepPractice(w){return{emoji:gi("practice"), h:"What should we call you
 function stepLook(w){return{emoji:gi("look"), h:"Pick a look",
   sub:"Applied straight away so you can see it. Everything here is per-device.",
   mount(host){
+    /* Goes through paletteOptionHTML so the wizard shows exactly the locks Settings shows. It
+       used to render PALETTES itself and ignore locking, which handed every paid scheme out
+       free on first run \u2014 the one path that bypassed the gate completely. */
     host.innerHTML='<label>Colour scheme</label><div class="palgrid" id="spPal">'+
-        PALETTES.map(p=>'<button type="button" class="palopt'+(p.k===w.palette?" on":"")+'" data-p="'+p.k+'">'+
-          paletteSwatch(p)+'<span><span class="pn">'+p.n+'</span><span class="pd">'+p.d+'</span></span></button>').join("")+'</div>'+
+        PALETTES.map(p=>paletteOptionHTML(p,p.k===w.palette)).join("")+'</div>'+
       '<label style="margin-top:18px">Light or dark</label>'+
       '<div class="seg" id="spTheme" style="display:inline-flex">'+
         ["light","dark","auto"].map(t=>'<button data-t="'+t+'" class="'+(w.theme===t?"on":"")+'">'+
           (t==="light"?"☀ Light":t==="dark"?"☾ Dark":"⚙ Match device")+'</button>').join("")+'</div>'+
       '<div style="margin-top:16px">'+ovToggleRow("snd",gi("sound"),"Sound effects","Short synthesised chimes when you save, clear a backlog or hit a milestone.",w.sound)+'</div>';
     host.querySelectorAll("#spPal .palopt").forEach(b=>b.onclick=()=>{
+      if(paletteLocked(PALETTES.find(x=>x.k===b.dataset.p)))return openPlusSheet("palettes");
       w.palette=b.dataset.p;applyPalette(w.palette);
       host.querySelectorAll("#spPal .palopt").forEach(x=>x.classList.toggle("on",x===b));Sfx.tick();});
     host.querySelectorAll("#spTheme button").forEach(b=>b.onclick=()=>{
@@ -9180,6 +9445,45 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
      is seamless — both draw the same mark on the same #F5F8F5. */
   const Splash = P("SplashScreen");
   if(Splash) requestAnimationFrame(()=>setTimeout(()=>{ Splash.hide().catch(()=>{}); },80));
+
+  /* ================= GroundWork Plus (StoreKit) =================
+     Shared code never touches Capacitor directly: it reads window.GWPlusNative and takes the
+     web path when that is absent. Everything here only ever REFRESHES the tt_plus cache, so
+     plusActive() stays synchronous, offline-tolerant, and safe to call from a render path.
+     See docs/monetisation.md §4.2. */
+  const applyPlus = (r, allowClear) => {
+    try{
+      if(!r || typeof r.active === "undefined") return plusActive();
+      const prev = plusRead() || {};
+      if(r.active){
+        plusWrite({ active:true, expiresAt:r.expiresAt||null, source:"storekit",
+                    kind:prev.kind||null, name:prev.name||null,
+                    checkedAt:new Date().toISOString() });
+      }else if(allowClear && (prev.source==="storekit" || !prev.source)){
+        /* Only ever clear a cache StoreKit owns. A granted licence (a comp, a gift, a founding
+           member) is not StoreKit's to revoke, and a cancelled purchase is not a lapse — hence
+           allowClear, which purchase() passes false. */
+        plusClear();
+      }
+      return plusActive();
+    }catch(e){ return plusActive(); }
+  };
+  if(GW && GW.plusStatus){
+    window.GWPlusNative = {
+      products: async () => { try{ const p = await GW.plusProduct(); return (p && p.found) ? p : null; }catch(e){ return null; } },
+      purchase: async () => { try{ return applyPlus(await GW.plusPurchase(), false); }catch(e){ return plusActive(); } },
+      restore:  async () => { try{ return applyPlus(await GW.plusRestore(),  true ); }catch(e){ return plusActive(); } },
+      redeem:   () => { try{ GW.plusRedeem(); }catch(e){} },
+      manage:   () => { try{ window.open("itms-apps://apps.apple.com/account/subscriptions","_system"); }catch(e){} }
+    };
+    const refreshPlus = async () => {
+      /* Offline is not a lapse: a thrown call leaves the cache exactly as it was. */
+      try{ applyPlus(await GW.plusStatus(), true); }catch(e){}
+    };
+    refreshPlus();
+    /* A subscription can renew, lapse, or be restored on another device while this one slept. */
+    document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) refreshPlus(); });
+  }
 
   /* ================= Face ID / Touch ID app lock =================
      The PWA has no lock at all. These are client records — special-category data under

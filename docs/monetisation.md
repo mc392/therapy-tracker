@@ -294,16 +294,22 @@ use them, App Review expects redemption to be reachable from inside the app.
 
 Needed from Phase 2 onward, and for anyone you cannot route through the App Store.
 
-**Ed25519 signed licence.** Public key embedded in `index.html`; **private key held offline
-and never committed to this repo**. A `scripts/issue-licence.mjs` mints them (`--keygen` once
-to create the pair).
+**ECDSA P-256 signed licence** — not Ed25519, which this document originally said. WebCrypto
+has had P-256 everywhere for years; Ed25519 only reached Safari 17 and Chrome 137, and this has
+to verify in whatever browser a therapist already has. The security level is equivalent for this
+purpose. Public key embedded in `index.html`; **private key held outside the repo and never
+committed**. `scripts/issue-licence.mjs` mints them (`--keygen` once to create the pair, which
+also patches the public key in).
 
 ```
-payload  {v:1, k:"founding", n:"Charlotte Bloor", exp:null, id:"f3a9"}
-key      base64url(payload) "." base64url(signature)
+payload  {v:1, k:"founding", n:"Charlotte Bloor", exp:null, id:"374360b1"}
+key      base64url(payload) "." base64url(raw r||s signature)
 ```
 
-Roughly 180–220 characters — an email paste, not something anyone types.
+182 characters in practice — an email paste, not something anyone types. The signature covers
+the *encoded* payload text, so there is no canonical-JSON problem to get wrong. Node signs with
+`dsaEncoding:"ieee-p1363"` because WebCrypto's ECDSA verify wants raw r||s, not Node's default
+DER.
 
 **Why not a friendly `GW-FOUND-7K2M` short code?** A short code needs a symmetric secret
 embedded in the app, and anyone can extract it and build a key generator. That is the one
@@ -391,3 +397,43 @@ Open items:
 - **The PWA's privacy label and Phase-1 privacy policy are unaffected.** StoreKit purchases are
   Apple's data collection, not yours. Keep the rule from `docs/app-store-listing.md:34`: no
   analytics SDK, ever.
+
+---
+
+## 9. Implementation status (Sept 2026)
+
+**Phase 1 is built** on `claude/app-store-monetization-ujwihp`. What landed:
+
+| | Where |
+|---|---|
+| Entitlement core — `plusActive/plusSellable/plusGateOn/plusLocked`, `tt_plus` cache | `index.html`, replacing the dormant palette-gate block |
+| Paywall sheet `openPlusSheet()` + in-place lock card `plusLockHTML()`/`plusWireLocks()` | same block |
+| All seven gates | Tax view · `drawCosts` · `#mtdExp` · `renderMetrics` · `mountAccreditation` · `#rosterSync` · palettes |
+| Settings card `plusSettingsCardHTML()` | first card in Settings › Your practice, hidden where nothing is gated or owned |
+| Licence verify (ECDSA P-256) + `scripts/issue-licence.mjs` | `PLUS_PUBKEY` is `null` until `--keygen` runs |
+| StoreKit 2 — product, status, purchase, restore, offer-code sheet | `GroundWorkNativePlugin.swift`; bridged as `window.GWPlusNative` |
+| Drift guards | `check-drift.mjs`: 22 seams, plus assertions that the gate stays out of the engine and off the data plane |
+
+**Two latent bugs fixed on the way through**, both of which would have shipped broken:
+
+- `paletteOwned()` read `S.settings.entitlements`, and `S` travels in backups — a purchase would
+  have ridden a `.json` file onto anyone else's phone.
+- `stepLook()` rendered `PALETTES` directly and ignored locking, so the setup wizard handed out
+  every paid scheme free on first run. It was the one path that bypassed the gate completely.
+
+**Testing the locked states on a desktop browser:** the web build is ungated in Phase 1, so set
+`localStorage.tt_plus_gate = "on"` to exercise them. That key can only ever switch the gate
+*on* — it is deliberately incapable of unlocking anything.
+
+### Not built, and why
+
+- **Phase 2 in its entirety** — accounts, the licence-signing endpoint, magic-link auth, Paddle
+  or Lemon Squeezy. All of it needs external accounts and a deployed Worker, and it is
+  sequenced after iOS has shown whether anyone pays. §5 is the spec for when it starts.
+- **`PLUS_PUBKEY` is `null`.** Run `node scripts/issue-licence.mjs --keygen` when you first need
+  to grant a licence; it writes the private key outside the repo and patches the public key in.
+  Until then the redemption field is simply not offered, because there is nothing to verify
+  against.
+- **The App Store Connect product does not exist**, so `plusProductID` in the Swift file is a
+  guess at the ID and the paywall will show no price until it is created and the ID matches.
+- **Price, trial length and the founding cohort** are still open (§7).

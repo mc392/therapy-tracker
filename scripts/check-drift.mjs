@@ -38,7 +38,16 @@ const SEAMS = [
   ["async function backupPayload(", "the one backup envelope — the automatic backup writes this, not its own copy of it"],
   ["function encReady(",        "decides, per write, whether the automatic backup is encrypted"],
   ["async function encPayload(","the encrypted payload the automatic backup writes when a passphrase is set"],
-  ["function updateBackupBanner(", "wrapped to add 'an automatic copy is kept on this iPhone' to the nag"]
+  ["function updateBackupBanner(", "wrapped to add 'an automatic copy is kept on this iPhone' to the nag"],
+  /* GroundWork Plus: the native StoreKit block refreshes the shared entitlement cache by name.
+     Rename one of these and the PWA carries on perfectly while purchases stop working on iOS. */
+  ["function plusActive(",      "the entitlement gate every locked view asks"],
+  ["function plusRead(",        "the native StoreKit block reads the cache through this"],
+  ["function plusWrite(",       "the native StoreKit block writes the cache through this"],
+  ["function plusClear(",       "how a lapsed subscription clears the cache"],
+  ["function openPlusSheet(",   "the one paywall; every lock card and the Settings row open it"],
+  ["window.GWPlusNative",       "the only seam between shared code and StoreKit — shared code never calls Capacitor directly"],
+  ["GW-LICENCE-PUBKEY",         "the marker scripts/issue-licence.mjs --keygen patches the public key into"]
 ];
 for (const [needle, why] of SEAMS)
   if (!html.includes(needle)) fail(`index.html no longer contains \`${needle}\` — ${why}`);
@@ -50,6 +59,32 @@ if (!html.includes("CAP.isNativePlatform && CAP.isNativePlatform()"))
   fail("the native block's isNativePlatform() guard is missing — it would now run in the browser too");
 if (!html.includes('window.Capacitor.isNativePlatform()')) 
   fail("the service worker registration no longer skips the native shell");
+
+/* ---- 3b. The paywall stayed in the layer it belongs in ----
+   docs/monetisation.md §2: the gate lives in views and buttons only. Two ways that can rot,
+   both silent — the tax engine would still be correct and the tests would still pass, but a
+   lapsed subscriber would lose access to their own records, or a tax test would start failing
+   for a reason that has nothing to do with tax. */
+const ENGINE_MUST_BE_PURE = [
+  "function tyNet(", "function taxLiability(", "function mtdQuarters(",
+  "function mtdExport(", "function ledgerBetween("
+];
+for (const fn of ENGINE_MUST_BE_PURE) {
+  const at = html.indexOf(fn);
+  if (at < 0) { fail(`index.html no longer contains \`${fn}\` — the drift check cannot see the engine`); continue; }
+  // the function body, near enough: up to the next top-level `\nfunction `
+  const end = html.indexOf("\nfunction ", at + fn.length);
+  if (html.slice(at, end < 0 ? html.length : end).includes("plusLocked("))
+    fail(`${fn} calls plusLocked() — the paywall belongs in the view layer, not the tax engine (tests/tax-tests.js calls this directly)`);
+}
+const DATA_PLANE = ["async function commit(", "async function exportJSON(", "function importJSON("];
+for (const fn of DATA_PLANE) {
+  const at = html.indexOf(fn);
+  if (at < 0) { fail(`index.html no longer contains \`${fn}\``); continue; }
+  const end = html.indexOf("\nfunction ", at + fn.length);
+  if (html.slice(at, end < 0 ? html.length : end).includes("plusLocked("))
+    fail(`${fn} calls plusLocked() — a paywall must never sit between a therapist and her own records`);
+}
 
 /* ---- 4. Nothing has committed a second copy of the app ---- */
 let tracked = "";
