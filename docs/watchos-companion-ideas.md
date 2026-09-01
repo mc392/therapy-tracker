@@ -1,6 +1,8 @@
 # A watchOS companion — what would earn its place
 
-*Ideas, not a commitment. Written Sep 2026, before any watch code exists.*
+*Ideas, not a commitment. Written Sep 2026. Stage 1 — the timer — has since been built;
+see the build order at the end and `docs/ios-native.md` § The watch app. Everything else here
+is still a sketch.*
 
 The question this document answers is not "could GroundWork run on a watch" — it is
 **which job is better done on a wrist than on the phone already in the room.** Most of
@@ -45,6 +47,10 @@ from the data model: a start time and a length.
 > a practice-level default, overridable on the watch for the one client seen for 80
 > minutes. It is a settings field, not a schema bump: an older build that has never heard
 > of it simply keeps showing what it always showed.
+>
+> **Not done in stage 1**, on second thoughts: with nothing syncing, a phone-side setting
+> could not reach the watch and would have changed nothing anywhere. The length lives in the
+> watch's own `UserDefaults` until the phone can push it.
 
 ### 2. Close out the session before leaving the room
 
@@ -198,9 +204,14 @@ did that, so this is not a reason to build it.
 
 Rough order, each stage useful on its own:
 
-1. **Timer only.** No sync, no complication, `settings.sessionMins` on the phone. Proves
-   the watch target, the build, and whether the haptic actually feels right in a real
-   session — which is the only question that matters and cannot be answered from a desk.
+1. ~~**Timer only.**~~ **Built (Sep 2026)** — `ios/App/GroundWorkWatch/`, wired in by
+   `scripts/add-watch-target.mjs`, documented in `docs/ios-native.md` § The watch app. No
+   sync and no complication, as planned. One deviation: `settings.sessionMins` on the phone
+   was dropped, because with no sync it would have been a setting in the web app that
+   changed nothing anywhere; the length lives in the watch's own `UserDefaults` until the
+   phone can push. **Not yet compiled or worn** — the question this stage exists to answer,
+   whether the tap at ten-minutes-left actually feels right in a real session, is still
+   open and still cannot be answered from a desk.
 2. **Roster push + complication.** `updateApplicationContext` one way. Read-only, so
    nothing can be lost while the transport is being learned.
 3. **Captures.** `transferUserInfo`, the Swift-side disk queue, the JS drain. The stage
