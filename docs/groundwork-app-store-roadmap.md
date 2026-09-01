@@ -70,3 +70,12 @@ the simulator — then step 10 screenshots from demo data, and step 11, submissi
 One thing to tell testers: **data does not carry across from the installed PWA.** The
 native app is a different origin, so its database starts empty. Export a `.json` backup
 from the web app and restore it in the native one.
+
+## Monetisation
+
+Decided Sept 2026 and specified in **`docs/monetisation.md`**: an annual "GroundWork Plus"
+subscription, sold on iOS via StoreKit first, with the web app staying free until a second
+phase adds accounts. The tier is the tax engine (plus costs & other income, which is
+inseparable from it), the MTD export, Trends, Accreditation, GroundWork Notes sync and the
+extra colour schemes. Logging, receipts, and every import/export/backup path stay free
+permanently — the paywall never sits between a therapist and her own records.
