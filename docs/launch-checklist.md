@@ -23,6 +23,100 @@ If a tester reports a bug you already fixed, this is almost always why.
 
 ---
 
+## Doing all of this from a phone
+
+You do not need a Mac. Read this before Phase 0, because it decides which route you pick
+there.
+
+### Why not Xcode Cloud
+
+Xcode Cloud looks like the phone-friendly option and is not. **Its first-time setup runs
+from Xcode on a Mac** — you onboard the app from Xcode's *Product → Xcode Cloud → Create
+Workflow* menu, which detects the local project and then opens a browser to connect GitHub.
+Only *after* that onboarding can you manage workflows and start builds from App Store
+Connect in a browser. So the single thing you are trying to avoid is its entry fee.
+
+It is still a reasonable choice **later**, for one real benefit: Apple signs the build
+without you storing an API key anywhere. If you ever get an hour on a Mac and want to stop
+holding a `.p8` in GitHub secrets, it is worth doing then. It buys you nothing now.
+
+### What you already have instead
+
+`.github/workflows/testflight.yml` is already a no-Mac pipeline. Three things make it work
+from a phone:
+
+- It has a **"Run workflow" button** on the GitHub website (the `workflow_dispatch`
+  trigger). Mobile Safari handles it fine. No tag, no terminal.
+- **All the machine work happens on GitHub's Mac runner** — `npm ci`, `npm run check` and
+  `npm run sync` all run there. Nothing needs Node, Xcode, or a clone of the repo on any
+  device you own.
+- **Signing uses the API key** (`-allowProvisioningUpdates`), so there is no certificate or
+  provisioning profile to install on anything.
+
+### The phone-only build, step by step
+
+1. Do Phase 0.2 below once — the three GitHub secrets. This is the fiddliest part on a
+   phone: you download the `.p8` in Safari, open it from **Files**, select all, copy, and
+   paste into the GitHub secret. Awkward, once, then never again.
+2. In mobile Safari go to the repo → **Actions** → **TestFlight** in the left list (you may
+   need to tap the workflow name; the mobile layout hides it under a menu).
+3. Tap **Run workflow**, choose the branch, and either leave the build number blank or set
+   it — see the trap below.
+4. Tap the green **Run workflow** button. Watch it for 10–15 minutes.
+5. App Store Connect processes the build for another 5–15 minutes; it then appears under
+   TestFlight, and the TestFlight app on your phone offers it.
+
+That is the whole loop, and none of it is a Mac.
+
+### The build-number trap, which is the one thing to get right
+
+Apple requires every build number to be **higher than the last one you uploaded** for the
+same version. Reject a duplicate, reject a lower one — same outcome, and the error does not
+explain itself well.
+
+Your repo has two schemes that count differently:
+
+| Route | Build number comes from |
+|---|---|
+| `npm run release` + push a tag | the number stored in the Xcode project, bumped by one |
+| Run workflow, box left blank | GitHub's **run number** for that workflow |
+
+These are two separate counters, and **mixing them can go backwards**. If tags have already
+got you to build 7 and you then hit Run workflow when GitHub's run number is 3, Apple
+rejects it for being lower.
+
+**Pick one and stay with it.** Since you want phone-first, pick the button — and to be safe
+whenever you are unsure, type a number into the **build number** box that is plainly higher
+than anything you have uploaded (look at the list in App Store Connect → TestFlight and add
+a comfortable margin — 20, 50, whatever). An unnecessarily high build number costs nothing
+and is never seen by a user; it is only ever an internal counter.
+
+The **version** number (the `1.0` a customer sees) is a different field, currently `1.0` in
+the project, and the Run-workflow button does not change it. That is correct for a first
+release — leave it alone until you ship a 1.1.
+
+### Asking a cloud session to do it instead
+
+The other phone route: a Claude Code session on the web runs on a machine in the cloud with
+this repo checked out, so it can run `npm run release` and push the tag on your behalf while
+you are on a phone. That gets you the tidier tag-based build (`ios-v1.0-b8`), and the tag
+names a commit, so months later you can tell exactly what a tester was running. Ask for it
+in as many words: *cut an iOS build and push the tag.*
+
+### What still genuinely needs a screen
+
+Not a Mac, but not comfortable on a phone either:
+
+- **Screenshots** (Phase 3) want an iPhone 17 Pro Max **simulator**, which is a Mac app.
+  The honest workaround if you have no Mac at all: take them on your own phone and check
+  the pixel dimensions App Store Connect will accept — it wants 1320 × 2868 for the 6.9"
+  class, which is what a Pro Max actually produces. On a smaller phone you would be
+  submitting a smaller size class instead, which is allowed but looks worse on the listing.
+- **Filling in the listing** (Phase 4) is all web forms and works on a phone, but there is a
+  lot of pasting. A tablet or a borrowed laptop makes it an hour instead of an evening.
+
+---
+
 ## Phase 0 — one-time setup (do once, then never again)
 
 These are the things that will fail your first build if they are missing. Doing them now
@@ -35,8 +129,11 @@ Two options, and you only need one:
 | | GitHub Actions (`testflight.yml`) | Your own Mac, in Xcode |
 |---|---|---|
 | Setup cost | three GitHub secrets, below | none |
-| Per-build effort | `npm run release` then `git push --tags` | `npm run release`, `npm run open`, click through Xcode |
-| Needs a Mac? | No | Yes |
+| Per-build effort | tap **Run workflow** on the GitHub website, or `npm run release` then `git push --tags` | `npm run release`, `npm run open`, click through Xcode |
+| Needs a Mac? | **No — works from a phone** | Yes |
+
+Xcode Cloud is a third option and is **not** the phone-friendly one it appears to be — see
+the section above. Take Actions.
 
 **Do not run both, and do not run Actions and Xcode Cloud both.** Two pipelines uploading
 at the same time race for the same build number, and Apple rejects the loser with an error
@@ -301,6 +398,7 @@ iOS work above.
 | Symptom | Cause | Fix |
 |---|---|---|
 | Upload rejected: duplicate build number | Apple refuses to see the same build number twice, ever | `npm run release` again — bumping it is the first thing the script does |
+| Upload rejected: build number too low | You mixed the tag route and the Run-workflow button, which count separately | Type a build number into the Run-workflow box that is clearly higher than anything in TestFlight. Then stay on one route |
 | Workflow builds fine, fails at upload | The three App Store Connect secrets are missing or wrong | Phase 0.2. The private key must include the BEGIN/END lines |
 | An error that reads like a signing fault | Two pipelines uploaded at once and raced for a build number | Pick one pipeline. Never run Actions and Xcode Cloud together |
 | TestFlight does not have a fix you pushed | Pushing updates the website, not the app | Cut a build. This is the trap at the top of this file |
