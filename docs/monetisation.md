@@ -402,6 +402,8 @@ Open items:
 
 ## 9. Implementation status (Sept 2026)
 
+The steps left, as a tick-list to work through: **`docs/plus-launch-checklist.md`**.
+
 **Phase 1 is built** on `claude/app-store-monetization-ujwihp`. What landed:
 
 | | Where |
