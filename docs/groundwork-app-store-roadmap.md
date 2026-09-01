@@ -67,6 +67,10 @@ same time. **What is actually left:** step 9, a TestFlight build on real hardwar
 ID, notification delivery, AirPrint and the new auto-backup have only been exercised in
 the simulator — then step 10 screenshots from demo data, and step 11, submission.
 
+**The remaining steps, written out in order to be followed after testing, are in
+`docs/launch-checklist.md`** — build, device testing, screenshots, listing, submission, and
+the same again for GroundWork Notes.
+
 One thing to tell testers: **data does not carry across from the installed PWA.** The
 native app is a different origin, so its database starts empty. Export a `.json` backup
 from the web app and restore it in the native one.
