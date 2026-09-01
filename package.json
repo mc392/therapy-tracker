@@ -5,7 +5,7 @@
   "description": "Capacitor native shell for the GroundWork web app. The web app in TherapyTracker-web/ is the single source of truth; this wrapper never forks it.",
   "scripts": {
     "check": "node scripts/check-syntax.mjs && node scripts/check-drift.mjs && node scripts/check-schedule-parity.mjs",
-    "sync": "cap sync ios && node scripts/add-native-plugin.mjs && node scripts/register-native-plugin.mjs && node scripts/install-assets.mjs && node scripts/prune-public.mjs",
+    "sync": "cap sync ios && node scripts/add-native-plugin.mjs && node scripts/register-native-plugin.mjs && node scripts/add-watch-target.mjs && node scripts/install-assets.mjs && node scripts/prune-public.mjs",
     "ios": "npm run check && npm run sync && cap open ios",
     "open": "cap open ios",
     "release": "node scripts/release-ios.mjs",

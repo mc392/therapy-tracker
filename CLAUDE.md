@@ -100,6 +100,40 @@ Documents folder**, 2s debounced:
 - `UIFileSharingEnabled` + `LSSupportsOpeningDocumentsInPlace` in `Info.plist` are what make that
   folder visible in the Files app. Without them the files exist but nobody can reach them.
 
+### The watchOS app (Sep 2026) — a timer, and nothing else
+`ios/App/GroundWorkWatch/` is a SwiftUI watch app embedded in the iPhone app. It times a
+session and taps the wrist at ten minutes left and at time. **It is the first code here that
+is not the web app**, which is only tolerable because it owns no logic and no data — no
+`derive()`, no `S`, no client anything. Two integers and a date. Nothing syncs in either
+direction; stage 2 is sketched in `docs/watchos-companion-ideas.md`, mechanics in
+`docs/ios-native.md` § The watch app.
+- **The end date is the state; nothing counts down.** watchOS suspends the app the moment the
+  wrist drops, so every figure derives from `Date()` against `endsAt`, and the digits are drawn
+  by `Text(timerInterval:)` / `ProgressView(timerInterval:)`, which keep counting unaided. A
+  decrementing counter would stop with the app and look fine doing it.
+- **The taps are local notifications, scheduled at Start.** A `Timer` in a suspended app does
+  not fire and the tap *is* the feature. The `Timer`s that do exist only flip the screen from
+  counting down to counting up, and are allowed to be late — `refresh()` recomputes from the
+  dates on wake.
+- **`AppDelegate` exists only to present a notification while the app is frontmost**, which
+  watchOS otherwise suppresses — without it the one person who gets no tap is the one looking
+  at the timer. It plays the haptic itself and returns `[.banner]`, never `[.sound]`, so there
+  is no second tap to collide with.
+- **The session length lives in the watch's own `UserDefaults`, not in `S`.** A
+  `settings.sessionMins` on the phone was considered and dropped: with no sync it would be a
+  setting that changes nothing. It becomes the phone's to own when the phone can push.
+- **`scripts/add-watch-target.mjs` wires the target**, idempotently, from `npm run sync` — same
+  reason as `add-native-plugin.mjs`. `npm run check` asserts the target, all four Swift files
+  being compiled, the embed phase, the build dependency, and that the watch's
+  `WKCompanionAppBundleIdentifier` still matches `capacitor.config.json`'s `appId`.
+- **`CURRENT_PROJECT_VERSION` / `MARKETING_VERSION` are literal in the watch target's build
+  settings**, because `release-ios.mjs` bumps them by regex and a watch build number that has
+  drifted from its host is rejected at upload.
+- Accent is `#5C7A6D` — the header's darker sage, not the icon's `#6A8B7C`, because the Start
+  button is white text on it. Same contrast rule as the header gradient.
+- **None of it has been compiled** — written without Xcode. See the checklist at the end of
+  `docs/ios-native.md` § The watch app.
+
 ### Mobile chrome: floating bar, grouped rows, iOS-weight switches (Aug 2026)
 A deliberate step toward the way a native app looks, taken in the **shared** CSS rather than behind
 the native guard — these read as "modern mobile app", not specifically iPhone, so the Android and

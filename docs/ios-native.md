@@ -136,6 +136,113 @@ exports only, because a copy sitting on the same phone protects nobody who has i
 switched off — which is exactly the person the banner is for. The banner's detail line just
 appends "(an automatic copy is kept on this iPhone)"; the thresholds and the clock are untouched.
 
+## The watch app
+
+`ios/App/GroundWorkWatch/` — a SwiftUI watchOS app, embedded in the iPhone app, that does one
+thing: time a session and tap the wrist twice, at ten minutes left and at time.
+
+It is the first code in this repository that is **not** the web app. That cuts against rule 1
+above, and it is only tolerable because the watch app owns no logic and no data: there is no
+`derive()`, no fee history, no client list, no `S`. It holds two integers and a date. Nothing
+is synced, in either direction — see `docs/watchos-companion-ideas.md` for what stage 2 would
+add and why it is a bigger piece of work than this was.
+
+### Why a timer at all
+
+Therapists watch the clock constantly, and being *seen* to watch it has a clinical cost —
+which is what the clock-behind-the-client's-head and the phone-face-down-on-the-table are
+both working around. A tap on the wrist is the version that costs the client nothing, and it
+is the one thing in this whole product that a phone genuinely cannot do.
+
+### The two rules, both from the same fact
+
+**watchOS suspends the app the moment the wrist drops** — a second or two after the therapist
+stops looking at it, and then for the next forty-nine minutes.
+
+1. **The end date is the state. Nothing counts down.** Every number on screen derives from
+   `Date()` against `endsAt`, and the digits themselves are drawn by `Text(timerInterval:)` /
+   `ProgressView(timerInterval:)`, which keep counting without the app being scheduled to
+   redraw — including in the dimmed Always On state. A decrementing counter would have stopped
+   with the app and looked perfectly healthy doing it.
+2. **The taps are scheduled with the system, not fired by us.** A `Timer` in a suspended app
+   does not fire, and the tap *is* the feature. Both cues are `UNTimeIntervalNotificationTrigger`
+   local notifications, handed over when Start is pressed and withdrawn on Stop.
+
+The `Timer`s that do exist (`armFlips`) only flip the screen from counting down to counting
+up. They are allowed to be late or to never fire, because `refresh()` recomputes everything
+from the dates when the app next wakes.
+
+Two consequences worth knowing before changing anything here:
+
+- **`AppDelegate` exists solely to present a notification while the app is frontmost.** watchOS
+  suppresses that by default, so without it the therapist *looking at the timer* is the one
+  person who gets no tap at ten minutes — exactly backwards. It plays the haptic itself and
+  returns `[.banner]` rather than `[.sound]`, so there is no second tap to collide with.
+- **A refusal has to be visible.** Permission is asked for at the first Start, which is where
+  it makes sense — but a timer without its taps is just a clock, and the watch already has one.
+  `cuesBlocked` puts a line on the screen rather than letting someone trust a cue that will
+  never come. Worth pressing Start once before a real client rather than during one.
+
+Theatre mode is the setting to be in during a session: screen dark, watch silent, haptics
+still delivered. The settings screen says so.
+
+### The session length is on the watch, not in `S`
+
+`docs/watchos-companion-ideas.md` proposed a `settings.sessionMins` on the phone as part of
+this stage. It was left out, because with no sync the phone cannot tell the watch anything —
+it would have been a setting in the web app that changed nothing anywhere, which is the kind
+of thing that quietly rots. Length and warning offset live in the watch's own `UserDefaults`.
+When stage 2 lands and the phone can push, that is the moment for the phone to become the
+source of the number.
+
+### How it is wired into the project, and what asserts it
+
+`scripts/add-watch-target.mjs` adds the target, idempotently, and runs from `npm run sync` for
+the same reason `add-native-plugin.mjs` does: `npx cap add ios` regenerates `ios/` from
+Capacitor's template, which knows nothing about anything we wrote. The failure it prevents is
+a quiet one — a regenerated project builds and ships an iPhone app with nothing on the wrist.
+
+Three details in that script are load-bearing:
+
+- **`addTarget`'s build dependency is a silent no-op on a single-target project.** The `xcode`
+  library only registers it if the `PBXTargetDependency` and `PBXContainerItemProxy` sections
+  already exist, and a project with one target has neither. The script seeds both and then
+  asserts the dependency landed; without it the watch app is embedded without being built
+  first, which is a build-order bug that will not reproduce on a clean machine.
+- **The target type is `watch2_app` but the product type is corrected to a plain application.**
+  `watch2_app` is what gets the right embed phase (a copy into `$(CONTENTS_FOLDER_PATH)/Watch`);
+  its product type is the old watchOS 2 one, and this is a single-target watch app.
+- **`CURRENT_PROJECT_VERSION` and `MARKETING_VERSION` are written out literally** rather than
+  inherited, because `scripts/release-ios.mjs` bumps them with a global regex over the pbxproj.
+  A watch app whose build number has drifted from its host app is rejected at upload, and
+  inheriting would have left nothing there for the bump to find.
+
+`npm run check` asserts the target is present, that all four Swift files are actually compiled
+by it, that the embed phase and the dependency exist, and that the watch's
+`WKCompanionAppBundleIdentifier` still matches `capacitor.config.json`'s `appId` — change the
+app id and the watch app stops installing, with the reason in a device log rather than a build
+error.
+
+The app icon is the same 1024 master as the iPhone app, installed by `install-assets.mjs` and
+gitignored like the others. The accent colour is `#5C7A6D`, the brand sage — deliberately the
+header's darker value rather than the icon's `#6A8B7C`, because the Start button puts white
+text on it and `#6A8B7C` would be 3.75:1. Same rule as the header gradient in CLAUDE.md.
+
+### Not built, not run
+
+Written on a machine with no Xcode and no Swift toolchain, so **none of this has been
+compiled**. The project file round-trips through the `xcode` parser and the drift checks pass;
+that is all that has been proven. Before it goes anywhere:
+
+- build the App scheme in Xcode and let it create the watch scheme,
+- run it in the watch simulator: start, background, relaunch mid-session, confirm the
+  countdown is still right; confirm both notifications arrive,
+- register `uk.co.charlottebloortherapy.groundwork.watchkitapp` — CI signs with
+  `-allowProvisioningUpdates`, which can create it, but the first archive is the moment to
+  find out it cannot,
+- then the only test that matters: wear it through a real fifty minutes and see whether the
+  tap at ten-minutes-left lands where it should.
+
 ## The look, and where it stops
 
 GroundWork Notes has no design system to copy: twelve SwiftUI view files contain thirteen styling

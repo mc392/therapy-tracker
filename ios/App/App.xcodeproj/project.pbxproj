@@ -17,6 +17,13 @@
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		6FB7794003174A7C89089B66 /* GroundWorkNativePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67337F91789B4426BA87A545 /* GroundWorkNativePlugin.swift */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
+		75DF1066776D4A38B2C950AA /* GroundWorkWatch.app in Copy Files */ = {isa = PBXBuildFile; fileRef = 12C6811CD65F445A89A8CD86 /* GroundWorkWatch.app */; };
+		A1D2FCBF585F447EBC5DF9E5 /* GroundWorkWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7606EBD4B454AB4869CA35E /* GroundWorkWatchApp.swift */; };
+		3E9072A76C324EE1B1056915 /* SessionTimer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A661229931B9451898F2DC36 /* SessionTimer.swift */; };
+		B6CDE267B7924B88A5C92E1C /* TimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B55E98BD143941A9B9FF745A /* TimerView.swift */; };
+		DAB22BA8814E44FD9E61299B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E972105B64914890AA74C7B0 /* SettingsView.swift */; };
+		F651EC3DDF7E4EAC9B159B3F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 159A93FD43DC40D0A099A998 /* Assets.xcassets */; };
+		30F01D08F9A948139B55DCB1 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = AAEDFFC48CEF4061B59DD245 /* Info.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,6 +39,13 @@
 		67337F91789B4426BA87A545 /* GroundWorkNativePlugin.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; path = GroundWorkNativePlugin.swift; sourceTree = "<group>"; };
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		12C6811CD65F445A89A8CD86 /* GroundWorkWatch.app */ = {isa = PBXFileReference; name = "GroundWorkWatch.app"; path = "GroundWorkWatch.app"; sourceTree = BUILT_PRODUCTS_DIR; fileEncoding = undefined; lastKnownFileType = undefined; explicitFileType = "wrapper.application"; includeInIndex = 0; };
+		C7606EBD4B454AB4869CA35E /* GroundWorkWatchApp.swift */ = {isa = PBXFileReference; name = "GroundWorkWatchApp.swift"; path = "GroundWorkWatch/GroundWorkWatchApp.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
+		A661229931B9451898F2DC36 /* SessionTimer.swift */ = {isa = PBXFileReference; name = "SessionTimer.swift"; path = "GroundWorkWatch/SessionTimer.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
+		B55E98BD143941A9B9FF745A /* TimerView.swift */ = {isa = PBXFileReference; name = "TimerView.swift"; path = "GroundWorkWatch/TimerView.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
+		E972105B64914890AA74C7B0 /* SettingsView.swift */ = {isa = PBXFileReference; name = "SettingsView.swift"; path = "GroundWorkWatch/SettingsView.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
+		159A93FD43DC40D0A099A998 /* Assets.xcassets */ = {isa = PBXFileReference; name = "Assets.xcassets"; path = "GroundWorkWatch/Assets.xcassets"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = folder.assetcatalog; explicitFileType = undefined; includeInIndex = 0; };
+		AAEDFFC48CEF4061B59DD245 /* Info.plist */ = {isa = PBXFileReference; name = "Info.plist"; path = "GroundWorkWatch/Info.plist"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = text.plist.xml; explicitFileType = undefined; includeInIndex = 0; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -40,6 +54,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C89E9F83BA2F46E292475911 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -52,6 +73,7 @@
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
 				504EC3051FED79650016851F /* Products */,
+				6CC20F127E90405EB487434B /* GroundWorkWatch */,
 			);
 			sourceTree = "<group>";
 		};
@@ -59,6 +81,7 @@
 			isa = PBXGroup;
 			children = (
 				504EC3041FED79650016851F /* App.app */,
+				12C6811CD65F445A89A8CD86 /* GroundWorkWatch.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -80,6 +103,19 @@
 			path = App;
 			sourceTree = "<group>";
 		};
+		6CC20F127E90405EB487434B /* GroundWorkWatch */ = {
+			isa = PBXGroup;
+			children = (
+				C7606EBD4B454AB4869CA35E /* GroundWorkWatchApp.swift */,
+				A661229931B9451898F2DC36 /* SessionTimer.swift */,
+				B55E98BD143941A9B9FF745A /* TimerView.swift */,
+				E972105B64914890AA74C7B0 /* SettingsView.swift */,
+				159A93FD43DC40D0A099A998 /* Assets.xcassets */,
+				AAEDFFC48CEF4061B59DD245 /* Info.plist */,
+			);
+			name = GroundWorkWatch;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -90,10 +126,12 @@
 				504EC3001FED79650016851F /* Sources */,
 				504EC3011FED79650016851F /* Frameworks */,
 				504EC3021FED79650016851F /* Resources */,
+				9BC1E770520A41A7AFA525BD /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A93835FD0A114C9387AC52C9 /* PBXTargetDependency */,
 			);
 			name = App;
 			packageProductDependencies = (
@@ -102,6 +140,23 @@
 			productName = App;
 			productReference = 504EC3041FED79650016851F /* App.app */;
 			productType = "com.apple.product-type.application";
+		};
+		A138E366E60C431BA0E1E935 /* "GroundWorkWatch" */ = {
+			isa = PBXNativeTarget;
+			name = "GroundWorkWatch";
+			productName = "GroundWorkWatch";
+			productReference = 12C6811CD65F445A89A8CD86;
+			productType = "com.apple.product-type.application";
+			buildConfigurationList = 47BD0E5A7E8C4D18925072D9;
+			buildPhases = (
+				45BDF8F59802468E96F10255 /* Sources */,
+				C89E9F83BA2F46E292475911 /* Frameworks */,
+				8C906550994A4ED6A09DF0C9 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
 		};
 /* End PBXNativeTarget section */
 
@@ -136,6 +191,7 @@
 			projectRoot = "";
 			targets = (
 				504EC3031FED79650016851F /* App */,
+				A138E366E60C431BA0E1E935 /* "GroundWorkWatch" */,
 			);
 		};
 /* End PBXProject section */
@@ -154,6 +210,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		8C906550994A4ED6A09DF0C9 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F651EC3DDF7E4EAC9B159B3F /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -164,6 +228,17 @@
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				6FB7794003174A7C89089B66 /* GroundWorkNativePlugin.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		45BDF8F59802468E96F10255 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1D2FCBF585F447EBC5DF9E5 /* GroundWorkWatchApp.swift in Sources */,
+				3E9072A76C324EE1B1056915 /* SessionTimer.swift in Sources */,
+				B6CDE267B7924B88A5C92E1C /* TimerView.swift in Sources */,
+				DAB22BA8814E44FD9E61299B /* SettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -344,6 +419,58 @@
 			};
 			name = Release;
 		};
+		86CE5987C708429B9CB39777 /* Debug */ = {
+			name = Debug;
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				INFOPLIST_FILE = GroundWorkWatch/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = uk.co.charlottebloortherapy.groundwork.watchkitapp;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = L8B6623MNM;
+				GENERATE_INFOPLIST_FILE = NO;
+				MARKETING_VERSION = 1.0;
+				SDKROOT = watchos;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 9.0;
+			};
+		};
+		825F5D58269748DE938526CD /* Release */ = {
+			name = Release;
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				INFOPLIST_FILE = GroundWorkWatch/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = uk.co.charlottebloortherapy.groundwork.watchkitapp;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = L8B6623MNM;
+				GENERATE_INFOPLIST_FILE = NO;
+				MARKETING_VERSION = 1.0;
+				SDKROOT = watchos;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 9.0;
+			};
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -365,6 +492,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		47BD0E5A7E8C4D18925072D9 /* Build configuration list for PBXNativeTarget "GroundWorkWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				86CE5987C708429B9CB39777 /* Debug */,
+				825F5D58269748DE938526CD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -381,6 +517,38 @@
 			productName = "CapApp-SPM";
 		};
 /* End XCSwiftPackageProductDependency section */
+
+/* Begin PBXTargetDependency section */
+		A93835FD0A114C9387AC52C9 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A138E366E60C431BA0E1E935 /* "GroundWorkWatch" */;
+			targetProxy = 0FCD1E89FCAE4B4882AA74A4 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXContainerItemProxy section */
+		0FCD1E89FCAE4B4882AA74A4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A138E366E60C431BA0E1E935;
+			remoteInfo = "GroundWorkWatch";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		9BC1E770520A41A7AFA525BD /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				75DF1066776D4A38B2C950AA /* "GroundWorkWatch.app" in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			name = "Embed Watch Content";
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+		};
+/* End PBXCopyFilesBuildPhase section */
 	};
 	rootObject = 504EC2FC1FED79650016851F /* Project object */;
 }

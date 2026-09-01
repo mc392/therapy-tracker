@@ -98,6 +98,15 @@ which is a safe way to find out you forgot.
 
 ## What still needs a human
 
+- **The watch app's bundle identifier**, on the first archive that includes it.
+  `uk.co.charlottebloortherapy.groundwork.watchkitapp` has to exist in the developer
+  account. CI archives with `-allowProvisioningUpdates` and an App Store Connect key, which
+  is normally enough to create it on the spot — but the first build carrying the watch app
+  is the moment to find out it is not, so watch that run rather than assuming it.
+  The build number needs no attention: the archive step passes `CURRENT_PROJECT_VERSION`
+  on the command line, which applies to every target at once, and `npm run release` bumps
+  both targets by regex. A watch app whose build number differs from its host is rejected
+  at upload.
 - **Export compliance.** First upload asks whether the app uses encryption. GroundWork
   encrypts backups with WebCrypto, which is standard cryptography, so the honest answer
   is the exemption for standard encryption — answer it in App Store Connect once and it
