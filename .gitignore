@@ -22,3 +22,7 @@ ios/App/App/public/
 ios/App/App/Assets.xcassets/Splash.imageset/*.png
 ios/App/App/Assets.xcassets/AppIcon.appiconset/*.png
 ios/App/GroundWorkWatch/Assets.xcassets/AppIcon.appiconset/*.png
+
+# GroundWork Plus licence signing key, if anyone writes one into the tree.
+# The real one lives outside the repo (see scripts/issue-licence.mjs).
+licence-key.json

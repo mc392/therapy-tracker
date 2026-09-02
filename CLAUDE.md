@@ -432,6 +432,49 @@ No new gating layer — this only decides which existing `feat()` flags start of
 - **`accreditation` and `peer` are excluded from the simple preset** — `stepCPD` asks about both directly, and an answered question beats a default. Peer is never offered by a milestone: whether someone attends peer supervision is a fact about their practice, not something a session count can infer. `startSetup` unticks `peer` for a fresh install only (normalize leaves it absent = on, so existing installs keep it).
 - `revealCheck()` runs from `commit()` **after** the write, never before — an accepted nudge commits again and must not interleave with the save that triggered it. One offer per save; the key goes into `shown` whether accepted or declined, so nothing is ever asked twice.
 
+## GroundWork Plus — the paywall (added Sept 2026)
+
+An annual subscription. Sold on iOS via StoreKit; **the web build is ungated** — Phase 1 keeps the
+PWA free as the shopfront, because a lock with no way to buy behind it is a broken feature. Full
+design and the decisions behind it in **`docs/monetisation.md`**.
+
+Three rules the code depends on. Breaking any of them is silent.
+
+- **The gate never touches the data plane.** Logging, receipts, and every import/export/backup
+  path stay free permanently — a paywall must never sit between a therapist and her own records
+  (also UK GDPR portability). `check-drift.mjs` asserts `commit()`, `exportJSON()` and
+  `importJSON()` never call `plusLocked()`.
+- **`plusLocked()` is not `feat()`.** `feat(k)` is a preference the user set; `plusLocked(k)` is a
+  billing state. Overloading `feat` would drop paid tabs out of `visibleTabs()` entirely, leaving
+  nothing to sell from, and tangle the two axes so subscribing would have to guess which flags to
+  restore. **A paid tab still appears and still opens** — its view renders `plusLockHTML()` instead
+  of its content.
+- **The gate stays out of the engine.** `tyNet`, `taxLiability`, `mtdQuarters`, `mtdExport` and
+  `ledgerBetween` are pure and ungated — `tests/tax-tests.js` calls them directly. Gate the
+  *button*, never the function. `check-drift.mjs` asserts this too; a tax test failing because of
+  the paywall means it has been put in the wrong layer.
+
+Gated: `tax`, `finances`, `mtd`, `trends`, `accreditation`, `notesSync`, `palettes` (`PLUS_FEATURES`).
+Free: everything else, including `receipts`, the spreadsheet import (it is the switching-cost
+remover — gate it and nobody ever reaches the paywall) and encrypted/automatic backups.
+
+- **`tt_plus` in localStorage, never in `S`** — same rule as `tt_lock`. `S` travels in backups, so
+  an entitlement in it would ride a `.json` onto another phone. `plusActive()` is **synchronous**
+  (called from render paths), and every failure path **fails open**: an unreadable date, a thrown
+  call or a stale check never locks anyone out. `PLUS_EXPIRY_GRACE_DAYS` (7) covers a renewal that
+  could not be verified yet.
+- **`window.GWPlusNative` is the only seam to StoreKit.** Shared code never calls Capacitor
+  directly. The native block only ever *refreshes* the cache; `applyPlus(r, allowClear)` takes
+  `allowClear:false` from `purchase()` so a cancelled purchase is not read as a lapse, and it only
+  clears a cache StoreKit owns — a granted licence is not StoreKit's to revoke.
+- **Gifts and comps go through Apple's offer codes on iOS** (`plusRedeem` → the code redemption
+  sheet), not home-grown keys. Signed licences (`scripts/issue-licence.mjs`, ECDSA P-256) are for
+  the web and anything Apple cannot reach. `PLUS_PUBKEY` is `null` until `--keygen` runs, and the
+  redemption UI is hidden while it is — **the private key must never enter this repo**. There is no
+  revocation; expiry is the only lever.
+- **Testing locked states in a browser:** `localStorage.tt_plus_gate = "on"`. It can only switch the
+  gate *on*, never unlock.
+
 ## Gamification (S.game)
 - **Streak**: any `commit()` call marks the current ISO week as active via `gameTouch()`.
 - **Home view**: streak flame animation, goal progress rings, records badges.

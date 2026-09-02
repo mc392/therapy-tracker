@@ -1,6 +1,7 @@
 import Foundation
 import Capacitor
 import LocalAuthentication
+import StoreKit
 import UIKit
 import WebKit
 
@@ -13,6 +14,10 @@ import WebKit
 ///  * **Face ID / Touch ID** — the PWA has no app lock at all. Client records are
 ///    special-category data under UK GDPR, and the device passcode is the only thing
 ///    standing in front of them today.
+///  * **GroundWork Plus (StoreKit 2)** — the auto-renewing subscription, plus restore and
+///    Apple's own offer-code redemption sheet, which is how comps and gifts are granted on
+///    iOS (see `docs/monetisation.md` §6.2). The web layer caches the result in `tt_plus`
+///    and never asks StoreKit on a render path.
 ///  * **HTML → PDF → share sheet** — `window.print()` is a no-op in WKWebView, so the
 ///    hidden-iframe receipt flow in `printReceipt()` silently does nothing on iOS.
 ///    Rendering the same markup to a real PDF and handing it to `UIActivityViewController`
@@ -27,8 +32,120 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "biometricAvailable", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "authenticate", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "sharePDF", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "sharePDF", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "plusProduct", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "plusStatus", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "plusPurchase", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "plusRestore", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "plusRedeem", returnType: CAPPluginReturnPromise)
     ]
+
+    // MARK: - GroundWork Plus (StoreKit 2)
+
+    /// The single auto-renewable subscription. Must match the product ID created in
+    /// App Store Connect; nothing else in the app hardcodes a price or a period.
+    static let plusProductID = "uk.co.charlottebloortherapy.groundwork.plus.annual"
+
+    /// Price and period as the *store* formats them, for the paywall. Never build this
+    /// string in JS: it is per-storefront, it changes without a release, and App Review
+    /// checks the paywall against the real product.
+    @objc func plusProduct(_ call: CAPPluginCall) {
+        Task {
+            do {
+                let products = try await Product.products(for: [Self.plusProductID])
+                guard let p = products.first else {
+                    call.resolve(["found": false]); return
+                }
+                var period = ""
+                if let sub = p.subscription {
+                    let unit: String
+                    switch sub.subscriptionPeriod.unit {
+                    case .day: unit = "day"; case .week: unit = "week"
+                    case .month: unit = "month"; case .year: unit = "year"
+                    @unknown default: unit = ""
+                    }
+                    let n = sub.subscriptionPeriod.value
+                    period = n == 1 ? unit : "\(n) \(unit)s"
+                }
+                call.resolve(["found": true, "price": p.displayPrice,
+                              "period": period, "title": p.displayName])
+            } catch {
+                call.resolve(["found": false, "error": error.localizedDescription])
+            }
+        }
+    }
+
+    /// What StoreKit currently believes. `expiresAt` is the paid-through date, which is what
+    /// the web layer caches — it keeps working offline until that date passes, so a flight or
+    /// a bad signal never locks someone out of their own tax figures.
+    @objc func plusStatus(_ call: CAPPluginCall) {
+        Task { call.resolve(await Self.currentStatus()) }
+    }
+
+    private static func currentStatus() async -> [String: Any] {
+        for await result in Transaction.currentEntitlements {
+            guard case .verified(let t) = result else { continue }   // unverified: ignore, don't trust
+            guard t.productID == plusProductID else { continue }
+            if let revoked = t.revocationDate, revoked <= Date() { continue }
+            var out: [String: Any] = ["active": true, "source": "storekit"]
+            if let exp = t.expirationDate {
+                out["expiresAt"] = ISO8601DateFormatter().string(from: exp)
+            }
+            return out
+        }
+        return ["active": false, "source": "storekit"]
+    }
+
+    @objc func plusPurchase(_ call: CAPPluginCall) {
+        Task {
+            do {
+                let products = try await Product.products(for: [Self.plusProductID])
+                guard let product = products.first else {
+                    call.reject("Subscription not available"); return
+                }
+                let result = try await product.purchase()
+                switch result {
+                case .success(let verification):
+                    // Always finish, or StoreKit replays the transaction on every launch.
+                    if case .verified(let t) = verification { await t.finish() }
+                    call.resolve(await Self.currentStatus())
+                case .userCancelled:
+                    call.resolve(["active": false, "cancelled": true])
+                case .pending:
+                    // Ask to Buy / SCA: not a failure, just not finished yet.
+                    call.resolve(["active": false, "pending": true])
+                @unknown default:
+                    call.resolve(["active": false])
+                }
+            } catch {
+                call.reject(error.localizedDescription)
+            }
+        }
+    }
+
+    /// App Review rejects a non-consumable or subscription paywall with no way back to a
+    /// purchase already made, so this is not optional.
+    @objc func plusRestore(_ call: CAPPluginCall) {
+        Task {
+            do { try await AppStore.sync() } catch { /* cancelled or offline — still report below */ }
+            call.resolve(await Self.currentStatus())
+        }
+    }
+
+    /// Apple's own offer-code sheet. This is how a gift, a comp or a founding-member grant is
+    /// delivered on iOS — Apple's mechanism rather than a home-grown key, so there is no
+    /// payment-route argument to have at review and the subscription lands in the recipient's
+    /// own Apple ID subscriptions where they expect to manage it.
+    @objc func plusRedeem(_ call: CAPPluginCall) {
+        DispatchQueue.main.async { [weak self] in
+            guard let scene = self?.bridge?.viewController?.view.window?.windowScene else {
+                call.reject("No scene to present from"); return
+            }
+            SKPaymentQueue.default().presentCodeRedemptionSheet()
+            _ = scene
+            call.resolve()
+        }
+    }
 
     // MARK: - Biometrics
 
