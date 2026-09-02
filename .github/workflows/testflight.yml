@@ -25,12 +25,15 @@ concurrency:
 jobs:
   upload:
     name: Build and upload to TestFlight
-    # macos-15, not macos-14: that image's default toolchain is Xcode 15.4 (Swift 5.10), which
-    # could not compile Capacitor 8's Swift runtime. It failed in a way that reads as an API
-    # mismatch — "CAPPluginCall has no member 'reject'" and friends — but ion-ios-filesystem,
-    # which touches none of that API, failed in the same run, and that is the tell. Keep this
-    # image at or above whatever Xcode the installed Capacitor needs.
-    runs-on: macos-15
+    # The image has to clear TWO floors, and they move independently:
+    #   - Capacitor's. Xcode 15.4 on macos-14 could not compile Capacitor 8's Swift runtime,
+    #     failing as a fake API mismatch ("CAPPluginCall has no member 'reject'"). macos-15
+    #     (Xcode 16.4) compiles it fine.
+    #   - Apple's, which is the higher one and applies at UPLOAD, after a perfectly good
+    #     archive: "All iOS and iPadOS apps must be built with the iOS 26 SDK or later" — a
+    #     409 from App Store Connect, ten minutes in. macos-15's iOS 18.5 SDK is refused.
+    # So track Apple's current SDK floor here, not merely what compiles.
+    runs-on: macos-26
     timeout-minutes: 45
 
     steps:
@@ -46,11 +49,13 @@ jobs:
 
       # Printed, not assumed: the archive failure that cost a build was a toolchain the log only
       # revealed in a compiler path buried 200 lines in.
-      - name: Toolchain versions
+      - name: Select the newest Xcode, and say which
         run: |
+          ls -d /Applications/Xcode*.app
+          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
           xcodebuild -version
+          xcodebuild -showsdks | grep -i iphoneos || true
           swift --version
-          echo "Xcode path: $(xcode-select -p)"
 
       # Capacitor 8 resolves its iOS dependencies with SwiftPM, not CocoaPods — there is no
       # .xcworkspace, and the archive step below builds the .xcodeproj directly. The App
