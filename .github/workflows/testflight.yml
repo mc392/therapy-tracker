@@ -31,9 +31,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Node 22, not 20: @capacitor/cli 8 declares "engines": { "node": ">=22" } and refuses to
+      # start below it — "The Capacitor CLI requires NodeJS >=22.0.0", which killed the sync step
+      # on the first run this workflow ever had. Keep this at or above whatever Capacitor asks for.
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
 
       # Capacitor 8 resolves its iOS dependencies with SwiftPM, not CocoaPods — there is no
