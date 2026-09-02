@@ -23,6 +23,20 @@ Branch `claude/app-store-monetization-ujwihp` — built, tested in Chromium, pus
 `localStorage.tt_plus_gate = "on"` in the console, then reload. That key can only switch the
 gate *on*; it cannot unlock anything.
 
+**To unlock a TestFlight build, do step 2 — there is no shortcut and none is needed.**
+TestFlight routes StoreKit to the **sandbox**, so once the subscription exists in App Store
+Connect, tapping Subscribe on a TestFlight build costs nothing and grants a real entitlement
+through the real code path. No sandbox tester account is needed for TestFlight, and no
+test-only unlock had to be built into the app (which is why there is none to remember to
+remove before launch). Two things to know:
+
+- The product must reach at least **Ready to Submit**. One sitting in *Missing Metadata* is
+  not fetchable, and the paywall will say "Subscription unavailable right now."
+- It can take a few hours to propagate after you create it.
+- **Sandbox compresses time:** a 1-year subscription renews every hour and auto-renews 6 times
+  before stopping. Useful \u2014 it lets you exercise expiry and the 7-day offline grace without
+  waiting a year.
+
 ---
 
 ## Step 1 — Decide the price ☐
@@ -118,12 +132,18 @@ syncs the bundled copy of the web app, and prints the tag. Pushing the tag trigg
 
 ---
 
-## Step 6 — Sandbox-test on a real iPhone ☐
+## Step 6 — Buy it on TestFlight ☐
 
-- [ ] App Store Connect → **Users and Access → Sandbox → Testers** → create one
-- [ ] On the iPhone: **Settings → App Store → Sandbox Account** → sign in as that tester
-- [ ] Install from TestFlight, buy, confirm it unlocks
+TestFlight purchases are free sandbox purchases, so this is the real flow at no cost.
+
+- [ ] Install from TestFlight, tap **Subscribe**, confirm everything unlocks
 - [ ] Delete the app, reinstall, confirm **Restore purchases** brings it back
+- [ ] Cancel the purchase sheet once — it should close silently, with no error toast
+- [ ] Leave it an hour and confirm the sandbox renewal keeps it active
+
+A **separate sandbox tester account** (App Store Connect → Users and Access → Sandbox →
+Testers, then Settings → App Store → Sandbox Account on the phone) is only needed for builds
+run straight from Xcode, not for TestFlight.
 
 This catches what the simulator cannot.
 
@@ -188,7 +208,7 @@ screenshot list drafted.
 
 | Symptom | Almost certainly |
 |---|---|
-| Paywall shows no price | Product ID mismatch — check `GroundWorkNativePlugin.swift:47` against App Store Connect |
+| Paywall says "Subscription unavailable right now" | The product does not exist yet, is still in *Missing Metadata*, hasn't propagated, or the ID does not match `GroundWorkNativePlugin.swift:47` |
 | Upload rejected instantly | Duplicate build number — run `npm run release`, don't archive by hand |
 | TestFlight missing a fix you pushed | You pushed to GitHub but did not cut a build |
 | Licence field never appears | `PLUS_PUBKEY` is still `null` — that is deliberate until `--keygen` runs |
