@@ -11,10 +11,16 @@ import { resolve } from "node:path";
 
 const SRC = resolve("TherapyTracker-web/icon-ideas/groundwork");
 const CAT = resolve("ios/App/App/Assets.xcassets");
+const WATCH_CAT = resolve("ios/App/GroundWorkWatch/Assets.xcassets");
 
 /* --- App icon: one 1024 master, which is all Xcode has wanted since the single-size
        app icon landed. No embedded text, per Apple's icon guidelines. --- */
 await copyFile(`${SRC}/icon-1024.png`, `${CAT}/AppIcon.appiconset/AppIcon-512@2x.png`);
+
+/* --- Watch app icon: the same master again. watchOS takes a single 1024 too, and an app
+       icon is not optional there — a watch app without one is rejected at upload rather
+       than merely looking unfinished. --- */
+await copyFile(`${SRC}/icon-1024.png`, `${WATCH_CAT}/AppIcon.appiconset/AppIcon.png`);
 
 /* --- Launch screen: light and dark, so the native splash matches the theme the web app
        is about to render in. Without the dark variant a dark-mode user gets a white flash
@@ -52,4 +58,4 @@ await writeFile(
   ) + "\n"
 );
 
-console.log("  installed app icon + light/dark launch screen");
+console.log("  installed app icons (iOS + watch) + light/dark launch screen");

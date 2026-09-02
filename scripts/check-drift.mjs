@@ -113,10 +113,51 @@ if (existsSync("ios/App/App/capacitor.config.json")) {
     fail("GroundWorkNativePlugin is not in packageClassList — it will never reach Capacitor.Plugins; run `node scripts/register-native-plugin.mjs`");
 }
 
+/* ---- 6. The watch app is in the project, and still points at this app ----
+   Two silent failures live here. A regenerated ios/ drops the whole target, and everything
+   still builds — you just get an iPhone app with nothing on the wrist. And the watch app's
+   companion identifier is a copy of the iOS bundle id: change the appId in
+   capacitor.config.json and the watch app stops installing, with the reason buried in a
+   device log rather than in a build error. */
+const WATCH_DIR = "ios/App/GroundWorkWatch";
+const WATCH_SOURCES = [
+  "GroundWorkWatchApp.swift",
+  "SessionTimer.swift",
+  "TimerView.swift",
+  "SettingsView.swift"
+];
+for (const f of [...WATCH_SOURCES, "Info.plist"])
+  if (!existsSync(`${WATCH_DIR}/${f}`)) fail(`${WATCH_DIR}/${f} is missing`);
+
+if (existsSync("ios/App/App.xcodeproj/project.pbxproj")) {
+  const pbx = readFileSync("ios/App/App.xcodeproj/project.pbxproj", "utf8");
+  if (!pbx.includes("GroundWorkWatch")) {
+    fail("the watch target is not in the Xcode project — run `node scripts/add-watch-target.mjs`");
+  } else {
+    for (const f of WATCH_SOURCES)
+      if (!pbx.includes(`${f} in Sources`))
+        fail(`${f} is not compiled by the watch target — run \`node scripts/add-watch-target.mjs\``);
+    if (!pbx.includes("Embed Watch Content"))
+      fail("the watch app is not embedded in the iPhone app — it would never reach a wrist");
+    if (!pbx.includes("isa = PBXTargetDependency"))
+      fail("App does not depend on the watch target — it would be embedded unbuilt");
+  }
+}
+
+if (existsSync(`${WATCH_DIR}/Info.plist`)) {
+  const plist = readFileSync(`${WATCH_DIR}/Info.plist`, "utf8");
+  if (!plist.includes("<key>WKApplication</key>"))
+    fail("the watch Info.plist has no WKApplication key — watchOS would not treat it as an app");
+  if (!plist.includes(`<string>${cfg.appId}</string>`))
+    fail(
+      `the watch app's WKCompanionAppBundleIdentifier does not match capacitor.config.json's appId (${cfg.appId}) — it would not install`
+    );
+}
+
 if (problems.length) {
   console.error("\nDrift between the web app and the iOS wrapper:\n");
   for (const p of problems) console.error(`  ✗ ${p}`);
   console.error("");
   process.exit(1);
 }
-console.log(`  no drift — ${SEAMS.length} seams intact, one copy of the app`);
+console.log(`  no drift — ${SEAMS.length} seams intact, one copy of the app, watch app wired in`);

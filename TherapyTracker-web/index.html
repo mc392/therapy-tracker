@@ -271,9 +271,18 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .center{text-align:center}
 .search{position:relative;margin-bottom:12px}
 .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-.seg{display:flex;border-radius:14px;padding:4px;gap:3px;overflow:auto;
+/* ===== Sub-tab strips =====
+   `segBar()` makes these `inline-flex` so a three-chip strip does not stretch across a desktop
+   column. A shrink-to-fit box takes its *min-content* width, and with `white-space:nowrap` chips
+   that is the full width of every label added up — wider than a phone, so Tax's five chips ran
+   off the right edge of the screen instead of scrolling inside the pill. `max-width:100%` is what
+   holds it to its container; the `overflow:auto` above was already there and only ever worked
+   once the box had a width to overflow. Any new `.seg` variant has to keep the cap. */
+.seg{display:flex;max-width:100%;border-radius:14px;padding:4px;gap:3px;overflow:auto;
+  overscroll-behavior-x:contain;scrollbar-width:none;
   background:color-mix(in srgb,var(--soft) 72%,transparent);border:1px solid var(--hair);
   -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.seg::-webkit-scrollbar{display:none}   /* the part-visible next chip is the affordance */
 .seg button{border:0;background:transparent;padding:8px 13px;border-radius:9px;font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap;cursor:pointer}
 .seg button.on{background:var(--card);color:var(--brand-dark);box-shadow:0 1px 2px var(--ring),0 2px 8px -4px var(--ring)}
 /* ===== use-of-home year strip =====
@@ -2079,11 +2088,28 @@ function segBar(id,segs,active){
   return '<div class="seg mb" id="'+id+'" style="display:inline-flex">'+
     segs.map(x=>'<button data-seg="'+esc(x[0])+'" class="'+(x[0]===active?"on":"")+'">'+esc(x[1])+'</button>').join("")+'</div>';
 }
+/* Bring the selected chip into view. A strip wider than the screen scrolls, and after a re-render
+   it is back at scrollLeft 0 — so the segment you are actually on can sit off the right edge with
+   nothing to say so. Same timing as scrollChart(): the bar is built before its view is attached,
+   so it has no width yet, and the rAF covers a visible tab while the timer covers a hidden or
+   backgrounded one where rAF may never fire. Never scrollIntoView() — that scrolls the page too. */
+function segScroll(bar){
+  if(!bar)return;
+  const put=()=>{
+    const b=bar.querySelector("button.on"); if(!b||!bar.clientWidth)return;
+    const pad=16, left=b.offsetLeft-pad, right=b.offsetLeft+b.offsetWidth+pad-bar.clientWidth;
+    if(bar.scrollLeft>left)bar.scrollLeft=Math.max(0,left);
+    else if(bar.scrollLeft<right)bar.scrollLeft=right;
+  };
+  put(); requestAnimationFrame(put); setTimeout(put,0);
+}
 function wireSegBar(v,id,tab,route){
   const bar=v.querySelector("#"+id); if(!bar)return;
+  segScroll(bar);
   bar.querySelectorAll("button").forEach(b=>b.onclick=()=>{
     setSeg(tab,b.dataset.seg);
     bar.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+    segScroll(bar);
     route();});
 }
 
@@ -2542,8 +2568,9 @@ VIEWS.sessions=function(){
       attachSwipe(list,()=>renderRows());
     };
     body.querySelector("#sq").oninput=e=>{sessFilter.q=e.target.value;renderRows()};
-    body.querySelector("#seg").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{sessFilter.seg=bt.dataset.s;
-      body.querySelector("#seg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));renderRows()});
+    const sbar=body.querySelector("#seg"); segScroll(sbar);
+    sbar.querySelectorAll("button").forEach(bt=>bt.onclick=()=>{sessFilter.seg=bt.dataset.s;
+      sbar.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));segScroll(sbar);renderRows()});
     renderRows();
   }
   function renderUnpaid(container,rows,refresh){

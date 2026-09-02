@@ -79,11 +79,25 @@ gitignored, so a fresh clone has nothing to build.
 
 ## One-time setup for the automated upload
 
-`testflight.yml` needs an App Store Connect API key. In App Store Connect → Users and
-Access → Integrations → App Store Connect API, create a **Team key** with the **App
-Manager** role, and download the `.p8` (you get exactly one chance to download it).
+`testflight.yml` needs an App Store Connect API key.
 
-Then in GitHub → Settings → Secrets and variables → Actions, add three repository secrets:
+1. App Store Connect → **Users and Access** → **Integrations** (older accounts label this
+   tab **Keys**) → **App Store Connect API** → **Team Keys**. A *team* key, not an
+   individual one.
+2. **+** → name it something like `GitHub Actions TestFlight`.
+3. Access: **Admin**. **Not App Manager**, which this document said until a real build
+   proved otherwise: App Manager can upload a build, but it cannot create the *iOS
+   Distribution certificate* that the export step needs, and CI has no certificate of its
+   own the way your Mac's Keychain does. The failure is `exportArchive Cloud signing
+   permission error` alongside `No signing certificate "iOS Distribution" found`, ten
+   minutes in, after a perfectly good archive.
+4. **Download API Key** → `AuthKey_<KEYID>.p8`. **One download, ever.** Keep it outside the
+   repo; if it is lost, revoke the key and make another.
+
+Off that page you need three values. Add them in GitHub → the repository's **Settings** →
+**Secrets and variables** → **Actions** → **New repository secret** — the *Secrets* tab,
+not *Variables*, and repository secrets, not environment ones, because the job declares no
+environment and would not see those:
 
 | Secret | Where it comes from |
 |---|---|
@@ -91,13 +105,50 @@ Then in GitHub → Settings → Secrets and variables → Actions, add three rep
 | `APP_STORE_CONNECT_ISSUER_ID` | the Issuer ID shown above the key list (same for every key) |
 | `APP_STORE_CONNECT_PRIVATE_KEY` | the entire contents of the `.p8`, including the BEGIN/END lines |
 
-Until those exist the workflow will fail at the upload step, having built successfully —
-which is a safe way to find out you forgot.
+For the third, `cat ~/Downloads/AuthKey_*.p8 | pbcopy` is the least error-prone route —
+the `-----BEGIN`/`-----END` lines are part of the key, and it takes no quotes around it.
+
+Missing secrets fail in the first seconds rather than wasting a runner: the workflow checks
+`KEY_ID` and `PRIVATE_KEY` itself and stops. **It does not check `ISSUER_ID`**, so forget
+that one and the run sails past and dies at the archive instead.
+
+## What the runner has to match
+
+Two versions in `testflight.yml` are not decoration, and both were found the hard way on
+the first runs this pipeline ever had:
+
+- **`node-version` must satisfy the Capacitor CLI's `engines`** — 22 or above for Capacitor
+  8. Below it, `npm ci` merely warns and the sync step dies with `[fatal] The Capacitor CLI
+  requires NodeJS >=22.0.0`. That step is the one that rebuilds the bundled copy of the web
+  app, so a build that skips it is precisely the stale bundle this pipeline exists to
+  prevent.
+- **`runs-on` must carry an Xcode new enough for the installed Capacitor.** `macos-14`
+  gives Xcode 15.4, which cannot compile Capacitor 8's Swift runtime; `macos-15` can. The
+  failure does not say so — it reads as an API mismatch (`CAPPluginCall has no member
+  'reject'`, `PluginConfig has no member 'getString'`, `incorrect argument label (have
+  'fromHex:', expected 'argb:')`) and sends you hunting for a plugin version that is not
+  actually wrong. The tell is `ion-ios-filesystem` failing in the same run: it touches none
+  of that API, so only the toolchain explains both. The **Toolchain versions** step prints
+  `xcodebuild -version` up front so the next one is a glance rather than an excavation.
 
 ---
 
 ## What still needs a human
 
+- **The watch app's bundle identifier**, on the first archive that includes it.
+  `uk.co.charlottebloortherapy.groundwork.watchkitapp` has to exist in the developer
+  account. CI archives with `-allowProvisioningUpdates` and an App Store Connect key, which
+  is normally enough to create it on the spot — but the first build carrying the watch app
+  is the moment to find out it is not, so watch that run rather than assuming it. It was
+  not: the export step reported `No profiles for
+  'uk.co.charlottebloortherapy.groundwork.watchkitapp' were found`. That run's key was only
+  App Manager, so it may simply have lacked the permission to register one; if an Admin key
+  still cannot, add the identifier by hand at developer.apple.com → Certificates,
+  Identifiers & Profiles → Identifiers → **+** → App IDs → App.
+  The build number needs no attention: the archive step passes `CURRENT_PROJECT_VERSION`
+  on the command line, which applies to every target at once, and `npm run release` bumps
+  both targets by regex. A watch app whose build number differs from its host is rejected
+  at upload.
 - **Export compliance.** First upload asks whether the app uses encryption. GroundWork
   encrypts backups with WebCrypto, which is standard cryptography, so the honest answer
   is the exemption for standard encryption — answer it in App Store Connect once and it
