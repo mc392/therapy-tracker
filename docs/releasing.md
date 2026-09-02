@@ -122,14 +122,29 @@ the first runs this pipeline ever had:
   requires NodeJS >=22.0.0`. That step is the one that rebuilds the bundled copy of the web
   app, so a build that skips it is precisely the stale bundle this pipeline exists to
   prevent.
-- **`runs-on` must carry an Xcode new enough for the installed Capacitor.** `macos-14`
-  gives Xcode 15.4, which cannot compile Capacitor 8's Swift runtime; `macos-15` can. The
-  failure does not say so — it reads as an API mismatch (`CAPPluginCall has no member
-  'reject'`, `PluginConfig has no member 'getString'`, `incorrect argument label (have
-  'fromHex:', expected 'argb:')`) and sends you hunting for a plugin version that is not
-  actually wrong. The tell is `ion-ios-filesystem` failing in the same run: it touches none
-  of that API, so only the toolchain explains both. The **Toolchain versions** step prints
-  `xcodebuild -version` up front so the next one is a glance rather than an excavation.
+- **`runs-on` must carry an Xcode that clears two separate floors.**
+
+  *Capacitor's*, or it will not compile: `macos-14` gives Xcode 15.4, which cannot build
+  Capacitor 8's Swift runtime. That failure does not say so — it reads as an API mismatch
+  (`CAPPluginCall has no member 'reject'`, `PluginConfig has no member 'getString'`,
+  `incorrect argument label (have 'fromHex:', expected 'argb:')`) and sends you hunting for
+  a plugin version that is not actually wrong. The tell is `ion-ios-filesystem` failing in
+  the same run: it touches none of that API, so only the toolchain explains both.
+
+  *Apple's*, or it will not upload — and this one is higher, moves on Apple's schedule
+  rather than ours, and is only enforced at the very last step, after ten minutes of
+  perfectly good archiving:
+
+  > Validation failed (409) SDK version issue. This app was built with the iOS 18.5 SDK.
+  > All iOS and iPadOS apps must be built with the iOS 26 SDK or later, included in Xcode
+  > 26 or later, in order to be uploaded to App Store Connect or submitted for
+  > distribution.
+
+  That is what retired `macos-15` here. **When a build that has always worked suddenly
+  fails at the upload step with a 409, this is the first thing to check** — Apple raises
+  the floor roughly annually, and nothing in this repo changes when they do. The job
+  selects the newest Xcode on the image and prints it, along with the iOS SDKs available,
+  before doing anything else.
 
 ---
 
