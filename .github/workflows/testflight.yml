@@ -25,7 +25,12 @@ concurrency:
 jobs:
   upload:
     name: Build and upload to TestFlight
-    runs-on: macos-14
+    # macos-15, not macos-14: that image's default toolchain is Xcode 15.4 (Swift 5.10), which
+    # could not compile Capacitor 8's Swift runtime. It failed in a way that reads as an API
+    # mismatch — "CAPPluginCall has no member 'reject'" and friends — but ion-ios-filesystem,
+    # which touches none of that API, failed in the same run, and that is the tell. Keep this
+    # image at or above whatever Xcode the installed Capacitor needs.
+    runs-on: macos-15
     timeout-minutes: 45
 
     steps:
@@ -38,6 +43,14 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+
+      # Printed, not assumed: the archive failure that cost a build was a toolchain the log only
+      # revealed in a compiler path buried 200 lines in.
+      - name: Toolchain versions
+        run: |
+          xcodebuild -version
+          swift --version
+          echo "Xcode path: $(xcode-select -p)"
 
       # Capacitor 8 resolves its iOS dependencies with SwiftPM, not CocoaPods — there is no
       # .xcworkspace, and the archive step below builds the .xcodeproj directly. The App
