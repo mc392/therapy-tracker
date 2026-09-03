@@ -276,13 +276,43 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
    column. A shrink-to-fit box takes its *min-content* width, and with `white-space:nowrap` chips
    that is the full width of every label added up — wider than a phone, so Tax's five chips ran
    off the right edge of the screen instead of scrolling inside the pill. `max-width:100%` is what
-   holds it to its container; the `overflow:auto` above was already there and only ever worked
-   once the box had a width to overflow. Any new `.seg` variant has to keep the cap. */
-.seg{display:flex;max-width:100%;border-radius:14px;padding:4px;gap:3px;overflow:auto;
-  overscroll-behavior-x:contain;scrollbar-width:none;
+   holds it to its container. Any new `.seg` variant has to keep the cap, and has to put its chips
+   inside a `.segwrap` — that is the element that scrolls and that carries the edge fade. */
+.seg{position:relative;display:flex;max-width:100%;border-radius:14px;padding:4px;
   background:color-mix(in srgb,var(--soft) 72%,transparent);border:1px solid var(--hair);
   -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
-.seg::-webkit-scrollbar{display:none}   /* the part-visible next chip is the affordance */
+/* The scroller is a child, not `.seg` itself, so the pill's own border and blurred background stay
+   crisp while only the chips inside them move and fade. `min-width:0` is what lets it be narrower
+   than its content: a flex item's automatic minimum is its content, and `overflow-x:auto` alone
+   does not override that here. */
+.segwrap{display:flex;flex:1;min-width:0;gap:3px;overflow-x:auto;
+  overscroll-behavior-x:contain;scrollbar-width:none}
+.segwrap::-webkit-scrollbar{display:none}
+/* The affordance. A part-visible next chip was doing this job, which works right up until the
+   chips happen to end flush with the edge — then nothing is clipped and a strip with more in it
+   looks complete. A mask fades the chips themselves to transparent, so it needs to know nothing
+   about the colour behind it and is correct in both themes and over any content. `.fade-l`/`.fade-r`
+   are set from the real scroll position, so each edge softens only while there is something that
+   way, and a strip that fits shows neither. */
+/* The ramp reaches ZERO 19px short of the edge and stays there, rather than only arriving at the
+   edge itself. A gradient that hits transparent exactly at the edge leaves the last 10px about a
+   third opaque, which is precisely where the chevron sits — it landed on top of live text. The flat
+   tail is the chevron's clear space. */
+.seg.fade-r .segwrap{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 42px),rgba(0,0,0,0) calc(100% - 19px));mask-image:linear-gradient(to right,#000 calc(100% - 42px),rgba(0,0,0,0) calc(100% - 19px))}
+.seg.fade-l .segwrap{-webkit-mask-image:linear-gradient(to right,rgba(0,0,0,0) 19px,#000 42px);mask-image:linear-gradient(to right,rgba(0,0,0,0) 19px,#000 42px)}
+.seg.fade-l.fade-r .segwrap{-webkit-mask-image:linear-gradient(to right,rgba(0,0,0,0) 19px,#000 42px,#000 calc(100% - 42px),rgba(0,0,0,0) calc(100% - 19px));mask-image:linear-gradient(to right,rgba(0,0,0,0) 19px,#000 42px,#000 calc(100% - 42px),rgba(0,0,0,0) calc(100% - 19px))}
+/* The fade alone is not enough on its own, and this is why the state classes live on `.seg` rather
+   than on the scroller: a mask can only fade *content*, and the fade zone can land almost entirely
+   on a chip's 13px of padding plus the 3px gap, leaving nothing to soften and no cue at all. These
+   chevrons are drawn from the pill, which is never masked, so the affordance cannot disappear —
+   and they sit in the space the fade has just cleared, so they never collide with a label. `›` is
+   the same character the tap-through links on these screens already use. */
+.seg::before,.seg::after{position:absolute;top:50%;transform:translateY(-50%);
+  font-size:17px;font-weight:700;line-height:1;color:var(--muted);
+  opacity:0;transition:opacity .15s;pointer-events:none}
+.seg::before{content:"\2039";left:7px}
+.seg::after{content:"\203A";right:7px}
+.seg.fade-l::before,.seg.fade-r::after{opacity:.8}
 .seg button{border:0;background:transparent;padding:8px 13px;border-radius:9px;font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap;cursor:pointer}
 .seg button.on{background:var(--card);color:var(--brand-dark);box-shadow:0 1px 2px var(--ring),0 2px 8px -4px var(--ring)}
 /* ===== use-of-home year strip =====
@@ -2107,24 +2137,45 @@ function setSeg(tab,seg){
 /* A segment bar from [value,label] pairs. Renders nothing when there is only one segment. */
 function segBar(id,segs,active){
   if(segs.length<2)return "";
-  return '<div class="seg mb" id="'+id+'" style="display:inline-flex">'+
-    segs.map(x=>'<button data-seg="'+esc(x[0])+'" class="'+(x[0]===active?"on":"")+'">'+esc(x[1])+'</button>').join("")+'</div>';
+  return '<div class="seg mb" id="'+id+'" style="display:inline-flex"><div class="segwrap">'+
+    segs.map(x=>'<button data-seg="'+esc(x[0])+'" class="'+(x[0]===active?"on":"")+'">'+esc(x[1])+'</button>').join("")+'</div></div>';
 }
 /* Bring the selected chip into view. A strip wider than the screen scrolls, and after a re-render
    it is back at scrollLeft 0 — so the segment you are actually on can sit off the right edge with
    nothing to say so. Same timing as scrollChart(): the bar is built before its view is attached,
    so it has no width yet, and the rAF covers a visible tab while the timer covers a hidden or
    backgrounded one where rAF may never fire. Never scrollIntoView() — that scrolls the page too. */
+/* Which edges have something beyond them. Read from the live scroll position rather than tracked,
+   so it is right after a tap, a flick, a rotation or a re-render without any of them telling us. */
+function segFades(sc){
+  if(!sc||!sc.classList.contains("segwrap"))return;
+  const bar=sc.parentElement; if(!bar)return;
+  const max=sc.scrollWidth-sc.clientWidth;
+  bar.classList.toggle("fade-l", sc.scrollLeft>2);
+  bar.classList.toggle("fade-r", sc.scrollLeft<max-2);
+}
+function segScroller(bar){
+  return !bar?null:bar.classList&&bar.classList.contains("segwrap")?bar:bar.querySelector(".segwrap");
+}
 function segScroll(bar){
-  if(!bar)return;
+  const sc=segScroller(bar); if(!sc)return;
+  /* The chip has to clear the fade and the chevron, not merely the edge, or the segment you are on
+     is the one rendered half-transparent under an arrow. */
   const put=()=>{
-    const b=bar.querySelector("button.on"); if(!b||!bar.clientWidth)return;
-    const pad=16, left=b.offsetLeft-pad, right=b.offsetLeft+b.offsetWidth+pad-bar.clientWidth;
-    if(bar.scrollLeft>left)bar.scrollLeft=Math.max(0,left);
-    else if(bar.scrollLeft<right)bar.scrollLeft=right;
+    segFades(sc);
+    const b=sc.querySelector("button.on"); if(!b||!sc.clientWidth)return;
+    const pad=44, left=b.offsetLeft-pad, right=b.offsetLeft+b.offsetWidth+pad-sc.clientWidth;
+    if(sc.scrollLeft>left)sc.scrollLeft=Math.max(0,left);
+    else if(sc.scrollLeft<right)sc.scrollLeft=right;
+    segFades(sc);
   };
+  if(!sc.dataset.fadeWired){sc.dataset.fadeWired="1";
+    sc.addEventListener("scroll",()=>segFades(sc),{passive:true});}
   put(); requestAnimationFrame(put); setTimeout(put,0);
 }
+/* One listener for every strip on the page, rather than one per strip that would outlive its
+   element: a rotation or a resized window changes what fits, and nothing else would notice. */
+addEventListener("resize",()=>document.querySelectorAll(".segwrap").forEach(segFades),{passive:true});
 function wireSegBar(v,id,tab,route){
   const bar=v.querySelector("#"+id); if(!bar)return;
   segScroll(bar);
@@ -2533,7 +2584,7 @@ VIEWS.sessions=function(){
   const body=v.querySelector("#sbody");
   function renderList(){
     body.innerHTML='<div class="search"><input id="sq" placeholder="Search client, location, notes…" value="'+esc(sessFilter.q)+'"></div>'+
-      '<div class="seg" id="seg">'+(function(){var od=S.sessions.filter(x=>derive(x).overdue).length;return ["upcoming","unpaid","incomplete","all"].map(s=>'<button data-s="'+s+'" class="'+(sessFilter.seg===s?"on":"")+'">'+s[0].toUpperCase()+s.slice(1)+(s==="unpaid"&&od?' <span class="badge">'+od+'</span>':"")+'</button>').join("");})()+'</div>'+
+      '<div class="seg" id="seg"><div class="segwrap">'+(function(){var od=S.sessions.filter(x=>derive(x).overdue).length;return ["upcoming","unpaid","incomplete","all"].map(s=>'<button data-s="'+s+'" class="'+(sessFilter.seg===s?"on":"")+'">'+s[0].toUpperCase()+s.slice(1)+(s==="unpaid"&&od?' <span class="badge">'+od+'</span>':"")+'</button>').join("");})()+'</div></div>'+
       '<div id="slist" class="card" style="padding:4px 12px"></div>';
     const renderRows=()=>{
       const t=today();let rows=S.sessions.map(s=>({s,d:derive(s)}));
