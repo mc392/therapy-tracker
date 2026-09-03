@@ -74,7 +74,17 @@ Suggested five, in order:
 > Private, offline records for a therapy practice — sessions, clients, rooms, supervision
 > and tax. Nothing leaves your phone.
 
-**Description** (first three lines are what people actually read):
+**Description** — App Store tab → the version → **Description** (4000 chars). This is the only
+field the subscription block belongs in. Not Promotional Text (170 chars, and editable without
+review, so required disclosure does not belong there), not What's New, and not the
+subscription's own localised description, which is a short line describing the subscription
+itself.
+
+Paid features are marked **(Plus)** in the bullets. Apple does flag descriptions that advertise
+features without saying they need a purchase, and it is also just honest — drop the markers if
+you would rather, but then expect the question at review.
+
+(first three lines are what people actually read):
 > GroundWork keeps the admin side of a therapy practice in one place: sessions, clients,
 > room costs, supervision hours and a running estimate of what you will owe HMRC.
 >
@@ -85,13 +95,27 @@ Suggested five, in order:
 > • See at a glance what is unpaid, what needs notes, and when supervision is due
 > • Room costs per session or as monthly rent, with history kept when rates change
 > • Receipts and statements for clients as PDFs, printed or shared straight from the app
-> • Supervision and CPD hours tracked against the 1:6 ratio
-> • A UK tax estimate that updates as you work, with your business costs counted in
+> • Supervision and CPD hours tracked against the 1:6 ratio, with accreditation totals (Plus)
+> • A UK tax estimate that updates as you work, with your business costs counted in (Plus)
+> • Quarterly figures for Making Tax Digital (Plus)
+> • Retention and attendance trends across your practice (Plus)
 > • Automatic on-device backups kept in your iPhone's own backup, plus encrypted backups you can export yourself
 >
 > GroundWork records attendance and money. It is not a clinical record and holds no session
 > notes — keep those where you keep them now. Tax figures are estimates to help you plan,
 > not advice, and the app cannot file for you.
+>
+> Logging sessions, clients, rooms, supervision, receipts and every backup and export are
+> free and always will be. GroundWork Plus adds the year-end work: tax, business costs,
+> the MTD quarters, trends, accreditation hours, notes sync and extra colour schemes.
+>
+> GroundWork Plus is an auto-renewing annual subscription, £29.99/year.
+> Payment is charged to your Apple ID at confirmation of purchase.
+> It renews automatically unless cancelled at least 24 hours before the end
+> of the current period. Manage or cancel in your Apple ID account settings.
+>
+> Terms of Use: https://mc392.github.io/therapy-tracker/terms.html
+> Privacy Policy: https://mc392.github.io/therapy-tracker/privacy.html
 
 **Keywords** (100 chars, comma-separated, no spaces):
 > therapist,therapy,counsellor,counselling,practice,private practice,sessions,supervision,invoice,tax
@@ -112,20 +136,13 @@ Suggested five, in order:
 
 App Store Connect has **no Terms of Use URL field** — only Privacy Policy has one. Guideline
 3.1.2 wants functional links to both in the binary (the paywall has them) and in the store
-metadata, which means the Description. Paste this at the end of it:
+metadata, which means the app **Description** — the field on the version page, not the
+subscription's own short localised description.
 
-```
-GroundWork Plus is an auto-renewing annual subscription.
-Payment is charged to your Apple ID at confirmation of purchase.
-It renews automatically unless cancelled at least 24 hours before the end
-of the current period. Manage or cancel in your Apple ID account settings.
-
-Terms of Use: https://mc392.github.io/therapy-tracker/terms.html
-Privacy Policy: https://mc392.github.io/therapy-tracker/privacy.html
-```
+It is already folded into the Description draft above, so there is nothing separate to paste.
 
 Leave **License Agreement** on Apple's Standard EULA; a custom one is entered as text, not a
-URL, and the link above is what the guideline asks for.
+URL, and the link in the Description is what the guideline asks for.
 
 ## Subscription image
 
