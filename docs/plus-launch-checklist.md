@@ -119,16 +119,40 @@ Check each of these:
 
 ## Step 5 — Cut a TestFlight build ☐
 
+**Two routes. Neither needs a Mac.**
+
+### A. From the Actions tab (no local checkout at all)
+
+`testflight.yml` has a `workflow_dispatch` trigger, and the workflow does everything itself:
+`npm ci`, `npm run check`, **`npm run sync`** (so the bundled copy of the web app is rebuilt in
+CI, never whatever a local sync left behind), then archive, export and upload. It passes
+`CURRENT_PROJECT_VERSION` to `xcodebuild` on the command line, which overrides the number in the
+project for every target — the watch app included, so the two cannot drift apart.
+
+- [ ] GitHub → **Actions → TestFlight → Run workflow**
+- [ ] Pick the branch — **any branch, not just `main`**, so a fix can reach TestFlight before
+      it is merged
+- [ ] **Type a build number** higher than the last one Apple accepted. Left blank it uses the
+      workflow's run number, which is monotonic but has no idea what a tag-driven build already
+      used, so it can collide — and Apple rejects a duplicate outright.
+
+### B. `npm run release` (needs a local checkout)
+
 ```bash
 npm run release
 git push && git push --tags
 ```
 
-That is the whole thing: it refuses a dirty tree, runs the checks, bumps the build number,
-syncs the bundled copy of the web app, and prints the tag. Pushing the tag triggers the upload.
+Does the same, plus the things a repo should remember: it refuses a dirty tree, **commits** the
+bumped build number so a build is identifiable later, sets `MARKETING_VERSION` with
+`--version 1.1`, and tags. Pushing the tag triggers the same workflow.
 
-> ⚠️ **Pushing to GitHub updates the website, not the iPhone app.** Only `npm run release`
-> moves the app. It is very easy to confirm a fix on the live site and assume TestFlight has it.
+Use **A** for a quick fix you want on a phone now; **B** when cutting a release you will want to
+find again.
+
+> ⚠️ **Pushing to GitHub updates the website, not the iPhone app.** A push alone never builds —
+> it takes a tag or a manual run. It is very easy to confirm a fix on the live site and assume
+> TestFlight has it.
 
 ---
 
@@ -209,7 +233,7 @@ screenshot list drafted.
 | Symptom | Almost certainly |
 |---|---|
 | Paywall says "Subscription unavailable right now" | The product does not exist yet, is still in *Missing Metadata*, hasn't propagated, or the ID does not match `GroundWorkNativePlugin.swift:47` |
-| Upload rejected instantly | Duplicate build number — run `npm run release`, don't archive by hand |
+| Upload rejected instantly | Duplicate build number — type an explicit one on a manual run, or use `npm run release` |
 | TestFlight missing a fix you pushed | You pushed to GitHub but did not cut a build |
 | Licence field never appears | `PLUS_PUBKEY` is still `null` — that is deliberate until `--keygen` runs |
 | A tax test fails | The paywall has been put inside the engine. `npm run check` should have caught it |
