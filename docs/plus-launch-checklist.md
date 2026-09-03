@@ -39,20 +39,20 @@ remove before launch). Two things to know:
 
 ---
 
-## Step 1 — Decide the price ☐
+## Step 1 — Decide the price ☑
 
-Blocks everything else, because the price is fixed when the product is created.
+**£29.99 / year.** Decided Sept 2026.
 
-A UK therapist pays an accountant roughly £300–600/year for self-assessment. Anchoring there,
-**£30–40/year** is comfortable. Suggested start: **£39.99/year**.
+The anchor was what a UK therapist pays an accountant for self-assessment, roughly £300–600 a
+year; £29.99 sits comfortably under a tenth of that, which is an easy yes rather than a
+deliberation. It is a notch below the £30–40 originally floated — worth knowing that raising
+it later means handling existing subscribers explicitly, so treat this as the floor rather
+than an opening bid.
 
-Pricing low is harder to undo than pricing high — raising a subscription price later means
-handling existing subscribers explicitly.
-
-**Also decide:** free trial? A 1-month trial that spans January is worth more than a discount.
-
-- [ ] Price chosen: ................
-- [ ] Trial: yes / no
+- [x] Price: **£29.99 / year**
+- [ ] **Trial — still open.** A 1-month free trial spanning January is worth more than a
+      discount, because that is when the tax features prove themselves. Set it as an
+      *Introductory Offer → Free → 1 month* in step 2 if you want it.
 
 ---
 
@@ -65,7 +65,7 @@ App Store Connect → **Apps** → GroundWork → **Subscriptions**
   - **Reference name:** `GroundWork Plus Annual`
   - **Product ID:** `uk.co.charlottebloortherapy.groundwork.plus.annual`
   - **Duration:** 1 Year
-  - **Price:** from step 1
+  - **Price:** **£29.99 / year**
 - [ ] Add a **Localization** — display name and description. Required; review rejects without it.
 - [ ] If offering a trial: **Introductory Offer** → Free → 1 month
 - [ ] Add the **subscription image** — 1024×1024, for offer-code redemption, win-back offers
@@ -117,6 +117,34 @@ Privacy Policy   https://mc392.github.io/therapy-tracker/privacy.html
 Terms of Use     https://mc392.github.io/therapy-tracker/terms.html
 Support URL      https://mc392.github.io/therapy-tracker/
 ```
+
+---
+
+## Why can't TestFlight see the subscription?
+
+The paywall saying **"Subscription unavailable right now"** means `Product.products(for:)` came
+back empty. The subscription does **not** need to be submitted or approved to be testable — it
+needs to be *Ready to Submit*, and the paid agreement has to be active. Work these in order:
+
+1. **Paid Applications agreement is active.** Business → *Agreements, Tax, and Banking*: accept
+   it and complete **bank details and tax forms**. Until it is fully active, every product
+   returns empty **with no error of any kind** — the app simply sees nothing. This is the most
+   common cause and the least obvious, because nothing about it looks related to the app.
+2. **The subscription group has its own localised display name.** The reference name is not
+   enough.
+3. **The subscription is complete** — reference name, product ID, duration, localisation,
+   review screenshot, and a **price for the territory your Apple ID is in**. A price set in
+   only some territories gives nothing in the others.
+4. **Product ID matches exactly** — `GroundWorkNativePlugin.swift:47` against App Store Connect.
+5. **Propagation.** Minutes usually, sometimes hours. Nothing to do but re-check.
+
+Not required, despite how it feels: submitting the subscription, approval, submitting an app
+version, or a sandbox tester account. (TestFlight routes to sandbox by itself; a sandbox
+account is only for builds run from Xcode.) The "first in-app purchase must be submitted with
+an app version" rule is about **going live**, not about testing.
+
+**No rebuild is needed at any point here** — the product is fetched at runtime, so the build
+already on your phone starts working the moment App Store Connect is right.
 
 ---
 
