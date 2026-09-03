@@ -9842,18 +9842,70 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
   }
 
   /* ================= Policy links =================
-     privacy.html and terms.html are relative, and target="_blank" on a capacitor:// URL
-     opens nothing — Safari cannot load the app's own scheme. On native they go to the
-     hosted copies instead, which are the same two pages the App Store listing has to point
-     at anyway. Delegated, so it covers every link in the app rather than a list of them. */
+     terms.html and privacy.html ship inside the app bundle (webDir copies the whole
+     TherapyTracker-web/ folder), so they're readable with no network. target="_blank" on a
+     capacitor:// URL opens nothing — Safari cannot load the app's own scheme — but a plain
+     relative fetch() of a bundled file works fine, same origin as index.html itself. So
+     instead of leaving the app for Safari (which would land on the hosted GitHub Pages copy,
+     a page that looks like the web app but isn't signed in and holds none of this phone's
+     data — confusing for someone who has never used the web build), the page is fetched,
+     its `.wrap` content lifted out, and shown in the existing bottom sheet. Delegated, so it
+     covers every link in the app rather than a list of them. SITE is only a last-resort
+     fallback if the bundled file can't be read. */
   const SITE = "https://mc392.github.io/therapy-tracker/";
+  const LEGAL_FILE = {terms:"terms.html", privacy:"privacy.html"};
+  const LEGAL_TITLE = {terms:"Terms of Service", privacy:"Privacy Policy"};
+  const LEGAL_CSS =
+    '<style>'+
+    '.legalDoc{font-size:14.5px;line-height:1.55;color:var(--ink)}'+
+    '.legalDoc h1{font-size:19px;margin:0 0 4px}'+
+    '.legalDoc .updated{color:var(--muted);font-size:13px;margin:0 0 18px}'+
+    '.legalDoc h2{font-size:15px;margin:22px 0 8px;color:var(--brand-dark)}'+
+    '.legalDoc p,.legalDoc li{font-size:14.5px;color:var(--ink)}'+
+    '.legalDoc ul{padding-left:18px;margin:8px 0}'+
+    '.legalDoc .card{margin:14px 0}'+
+    '.legalDoc .callout{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:16px 0}'+
+    '.legalDoc .callout p{margin:0}'+
+    '.legalDoc .callout strong{color:var(--brand-dark)}'+
+    '.legalDoc footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);color:var(--muted);font-size:12.5px}'+
+    '</style>';
+
+  async function openLegalSheet(kind, anchor){
+    const file = LEGAL_FILE[kind];
+    if(!file) return;
+    try{
+      const res = await fetch("./"+file);
+      if(!res.ok) throw new Error("status "+res.status);
+      const doc = new DOMParser().parseFromString(await res.text(), "text/html");
+      const wrap = doc.querySelector(".wrap");
+      if(!wrap) throw new Error("no .wrap");
+      const back = wrap.querySelector("a.back");
+      if(back) back.remove();
+      const box = el('<div class="legalDoc">'+LEGAL_CSS+wrap.innerHTML+'</div>');
+      box.querySelectorAll('a[href]').forEach(a=>{
+        const lm = (a.getAttribute("href")||"").match(/^(?:\.\/)?(privacy|terms)\.html(#[\w-]*)?$/);
+        if(!lm) return;
+        a.removeAttribute("target"); a.removeAttribute("rel");
+        a.href = "javascript:void(0)";
+        a.onclick = ev2 => { ev2.preventDefault(); openLegalSheet(lm[1], lm[2]); };
+      });
+      openSheet(LEGAL_TITLE[kind], box);
+      if(anchor){
+        const t = box.querySelector(anchor);
+        if(t) setTimeout(()=>t.scrollIntoView({block:"start"}), 30);
+      }
+    }catch(e){
+      console.error("Legal doc load failed", e);
+      window.open(SITE + file + (anchor||""), "_system");
+    }
+  }
   document.addEventListener("click", ev => {
     const a = ev.target && ev.target.closest && ev.target.closest("a[href]");
     if(!a) return;
     const m = a.getAttribute("href").match(/^(?:\.\/)?(privacy|terms)\.html(#[\w-]*)?$/);
     if(!m) return;
     ev.preventDefault();
-    window.open(SITE + m[1] + ".html" + (m[2]||""), "_system");
+    openLegalSheet(m[1], m[2]);
   }, true);
 
   /* ================= Settings ================= */
