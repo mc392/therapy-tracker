@@ -73,10 +73,22 @@ App Store Connect → **Apps** → GroundWork → **Subscriptions**
       `TherapyTracker-web/icon-ideas/groundwork/subscription-plus-1024.png`
       Regenerate with `node scripts/render-subscription-image.mjs`; the `.html` beside it is
       the source. Opaque, square, no rounded corners — Apple masks its own.
-- [ ] Add the **review screenshot** — the *App Review Information* one: an ordinary iPhone
-      screenshot of the paywall, so a reviewer can see where the purchase is offered.
-      Customers never see it. Upload whatever you have now and replace it once the price
-      renders — but never a build whose paywall reads "Subscription unavailable right now".
+- [ ] Add the **review screenshot** — the *App Review Information* one, so a reviewer can see
+      where the purchase is offered. Customers never see it.
+      `TherapyTracker-web/icon-ideas/groundwork/paywall-review-screenshot.png`
+
+> **The catch-22, and how it breaks.** App Store Connect wants this screenshot before the
+> subscription can leave *Missing Metadata*, and StoreKit cannot fetch a product that is still
+> in *Missing Metadata* — so a TestFlight paywall can only ever say "Subscription unavailable
+> right now", which is the one image you must not give a reviewer.
+>
+> `node scripts/render-paywall-screenshot.mjs --price "£39.99"` breaks it with no Mac and no
+> live product: it loads the real `index.html`, forces the gate on, stubs **only** the store,
+> opens the shipping `openPlusSheet()` and captures it at 1320×2868 (iPhone 6.9"). Every pixel
+> but the price is the real app.
+>
+> The price is a placeholder. Re-run with the real `--price` once step 2 is saved, and swap in
+> a genuine device screenshot before you submit for review.
 
 > ⚠️ The product ID must match **exactly**. It is hardcoded at
 > `ios/App/App/GroundWorkNativePlugin.swift:47`. A mismatch shows an empty price on the paywall
