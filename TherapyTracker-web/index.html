@@ -1512,31 +1512,53 @@ function openPlusSheet(reason){
   const q=s=>b.querySelector(s);
   /* The store owns the price and the period; ask for it rather than shipping a number that
      goes stale or is wrong in another storefront. */
-  if(nat&&!active&&nat.products)nat.products().then(p=>{
-    if(!p||!p.price)return; _plusPrice=p.price+(p.period?" / "+p.period:"");
-    const el2=q("#plPrice"); if(el2)el2.textContent=_plusPrice;
-    const bb=q("#plBuy"); if(bb)bb.textContent="Subscribe \u2014 "+_plusPrice;
-  }).catch(()=>{const el2=q("#plPrice");if(el2)el2.textContent="";});
+  /* A product that does not come back is a REAL state and has to be reported: it means the
+     subscription does not exist in App Store Connect yet, or the store cannot be reached. The
+     silent `return` this used to do left "Checking the price\u2026" on screen for ever, and left
+     Subscribe live so it could only fail. */
+  const priceUnavailable=()=>{
+    const el2=q("#plPrice"); if(el2)el2.textContent="Subscription unavailable right now.";
+    const bb=q("#plBuy"); if(bb){bb.disabled=true;bb.textContent="Subscribe";}
+  };
+  if(nat&&!active){
+    if(!nat.products)priceUnavailable();
+    else nat.products().then(p=>{
+      if(!p||!p.price)return priceUnavailable();
+      _plusPrice=p.price+(p.period?" / "+p.period:"");
+      const el2=q("#plPrice"); if(el2)el2.textContent=_plusPrice;
+      const bb=q("#plBuy"); if(bb)bb.textContent="Subscribe \u2014 "+_plusPrice;
+    }).catch(priceUnavailable);
+  }
 
-  const done=async(ok,msg)=>{
-    if(!ok)return;
+  const done=(msg)=>{
     closeSheet(); toast(msg||PLUS_NAME+" is active"); Sfx.complete();
     renderTabs(); go(curTab(),{keepScroll:true});
   };
-  const run=async(btn,fn,msg)=>{
+  /* One helper, but the failure message belongs to the BUTTON. This used to say "Nothing to
+     restore" whatever had been pressed, so a purchase that failed because the product does not
+     exist told the reader something both wrong and baffling. */
+  const run=async(btn,fn,okMsg,failMsg)=>{
     if(!btn)return; const t=btn.textContent; btn.disabled=true; btn.textContent="\u2026";
-    let ok=false; try{ok=await fn();}catch(e){ok=false;}
+    let r={}; try{r=(await fn())||{};}catch(e){r={};}
     btn.disabled=false; btn.textContent=t;
-    if(ok)done(true,msg); else {toast("Nothing to restore");Sfx.error();}
+    if(r.ok)return done(okMsg);
+    /* Changing your mind is not an error and earns no toast at all. Ask to Buy and SCA are not
+       failures either \u2014 they simply have not finished, and saying "couldn\u2019t complete that
+       purchase" to a teenager waiting on a parent's approval would be a lie. */
+    if(r.cancelled)return;
+    if(r.pending)return toast("Waiting for approval \u2014 nothing has been charged");
+    toast(failMsg); Sfx.error();
   };
-  if(q("#plBuy"))q("#plBuy").onclick=()=>run(q("#plBuy"),()=>nat.purchase(),PLUS_NAME+" is active \u2014 thank you");
-  if(q("#plRestore"))q("#plRestore").onclick=()=>run(q("#plRestore"),()=>nat.restore());
+  if(q("#plBuy"))q("#plBuy").onclick=()=>run(q("#plBuy"),()=>nat.purchase(),
+    PLUS_NAME+" is active \u2014 thank you","Couldn\u2019t complete that purchase");
+  if(q("#plRestore"))q("#plRestore").onclick=()=>run(q("#plRestore"),()=>nat.restore(),
+    null,"Nothing to restore");
   if(q("#plRedeem"))q("#plRedeem").onclick=()=>{if(nat.redeem)nat.redeem();};
   if(q("#plManage"))q("#plManage").onclick=()=>{if(nat&&nat.manage)nat.manage();else toast("Manage it where you bought it");};
   if(q("#plKeyGo"))q("#plKeyGo").onclick=async()=>{
     const btn=q("#plKeyGo"); btn.disabled=true;
     const ok=await plusRedeemLicence(q("#plKey").value); btn.disabled=false;
-    if(ok)done(true,"Licence accepted"); else {toast("That licence key wasn\u2019t valid");Sfx.error();}
+    if(ok)done("Licence accepted"); else {toast("That licence key wasn\u2019t valid");Sfx.error();}
   };
   openSheet(active?PLUS_NAME:"Unlock "+PLUS_NAME,b);
 }
@@ -9498,8 +9520,17 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
   if(GW && GW.plusStatus){
     window.GWPlusNative = {
       products: async () => { try{ const p = await GW.plusProduct(); return (p && p.found) ? p : null; }catch(e){ return null; } },
-      purchase: async () => { try{ return applyPlus(await GW.plusPurchase(), false); }catch(e){ return plusActive(); } },
-      restore:  async () => { try{ return applyPlus(await GW.plusRestore(),  true ); }catch(e){ return plusActive(); } },
+      /* {ok, cancelled, pending} rather than a bare boolean: the sheet has to tell a real
+         failure apart from someone changing their mind, and from Ask to Buy still waiting. */
+      purchase: async () => {
+        try{ const r = (await GW.plusPurchase()) || {};
+             return { ok: applyPlus(r, false), cancelled: !!r.cancelled, pending: !!r.pending }; }
+        catch(e){ return { ok: plusActive() }; }
+      },
+      restore:  async () => {
+        try{ return { ok: applyPlus(await GW.plusRestore(), true) }; }
+        catch(e){ return { ok: plusActive() }; }
+      },
       redeem:   () => { try{ GW.plusRedeem(); }catch(e){} },
       manage:   () => { try{ window.open("itms-apps://apps.apple.com/account/subscriptions","_system"); }catch(e){} }
     };
