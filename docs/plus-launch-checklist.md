@@ -68,7 +68,15 @@ App Store Connect → **Apps** → GroundWork → **Subscriptions**
   - **Price:** from step 1
 - [ ] Add a **Localization** — display name and description. Required; review rejects without it.
 - [ ] If offering a trial: **Introductory Offer** → Free → 1 month
-- [ ] Add the **review screenshot** — you will have this after step 4, so come back for it
+- [ ] Add the **subscription image** — 1024×1024, for offer-code redemption, win-back offers
+      and the product page if App Store Promotion is on:
+      `TherapyTracker-web/icon-ideas/groundwork/subscription-plus-1024.png`
+      Regenerate with `node scripts/render-subscription-image.mjs`; the `.html` beside it is
+      the source. Opaque, square, no rounded corners — Apple masks its own.
+- [ ] Add the **review screenshot** — the *App Review Information* one: an ordinary iPhone
+      screenshot of the paywall, so a reviewer can see where the purchase is offered.
+      Customers never see it. Upload whatever you have now and replace it once the price
+      renders — but never a build whose paywall reads "Subscription unavailable right now".
 
 > ⚠️ The product ID must match **exactly**. It is hardcoded at
 > `ios/App/App/GroundWorkNativePlugin.swift:47`. A mismatch shows an empty price on the paywall
@@ -76,15 +84,27 @@ App Store Connect → **Apps** → GroundWork → **Subscriptions**
 
 ---
 
-## Step 3 — Add the two required URLs ☐
+## Step 3 — Privacy Policy and Terms of Use ☐
 
-An auto-renewable subscription will not pass review without both. App Store Connect →
-**App Information**:
+**There is no "Terms of Use URL" field in App Store Connect** — only Privacy Policy has one.
+Guideline 3.1.2 wants functional links to both in the app binary *and* in the store metadata.
+The binary half is already done: on iOS the paywall's two links open the bundled copies in a
+sheet rather than leaving for Safari.
 
-- [ ] **Privacy Policy URL:** `https://<your-pages-url>/privacy.html`
-- [ ] **Terms of Use (EULA):** `https://<your-pages-url>/terms.html`
+- [ ] **App Information → Privacy Policy URL:**
+      `https://mc392.github.io/therapy-tracker/privacy.html`
+- [ ] **App Store → your version → Description** — paste the subscription block; this is where
+      the Terms of Use link actually lives. Drafted in `docs/app-store-listing.md`.
+- [ ] **App Information → License Agreement** — leave it on Apple's Standard EULA. A custom one
+      is entered as *text*, not a URL, and the description link covers the requirement.
 
-Both already deploy to Pages, and the paywall already links to them.
+The URLs, for pasting:
+
+```
+Privacy Policy   https://mc392.github.io/therapy-tracker/privacy.html
+Terms of Use     https://mc392.github.io/therapy-tracker/terms.html
+Support URL      https://mc392.github.io/therapy-tracker/
+```
 
 ---
 

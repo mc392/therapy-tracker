@@ -107,3 +107,36 @@ Suggested five, in order:
 - Run one TestFlight build first (roadmap step 9). The wrapper has only been exercised in
   the simulator; Face ID, notification delivery and AirPrint all want real hardware.
 - Take screenshots from demo data. Never from Charlotte's own records.
+
+## Subscription block for the app Description
+
+App Store Connect has **no Terms of Use URL field** — only Privacy Policy has one. Guideline
+3.1.2 wants functional links to both in the binary (the paywall has them) and in the store
+metadata, which means the Description. Paste this at the end of it:
+
+```
+GroundWork Plus is an auto-renewing annual subscription.
+Payment is charged to your Apple ID at confirmation of purchase.
+It renews automatically unless cancelled at least 24 hours before the end
+of the current period. Manage or cancel in your Apple ID account settings.
+
+Terms of Use: https://mc392.github.io/therapy-tracker/terms.html
+Privacy Policy: https://mc392.github.io/therapy-tracker/privacy.html
+```
+
+Leave **License Agreement** on Apple's Standard EULA; a custom one is entered as text, not a
+URL, and the link above is what the guideline asks for.
+
+## Subscription image
+
+`TherapyTracker-web/icon-ideas/groundwork/subscription-plus-1024.png` — 1024×1024, opaque, no
+rounded corners (Apple masks its own). Used for offer-code redemption, win-back offers, and the
+product page if App Store Promotion is enabled.
+
+Regenerate with `node scripts/render-subscription-image.mjs`; the `.html` beside it is the
+source, and it reuses the same SVG geometry as the app's launch screen so the mark cannot drift
+from the one shipping in `index.html`. Colours are sampled from `icon-1024.png` rather than
+guessed: `#6B8B7C` → `#3C4F44`, bars at 55% / 78% / 100% white.
+
+It carries **no text** on purpose: Apple shows the subscription's name and description beside
+the image, so a word here would be redundant and could not be localised.
