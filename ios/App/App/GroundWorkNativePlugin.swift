@@ -37,7 +37,8 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "plusStatus", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "plusPurchase", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "plusRestore", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "plusRedeem", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "plusRedeem", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "plusManage", returnType: CAPPluginReturnPromise)
     ]
 
     // MARK: - GroundWork Plus (StoreKit 2)
@@ -144,6 +145,25 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
             SKPaymentQueue.default().presentCodeRedemptionSheet()
             _ = scene
             call.resolve()
+        }
+    }
+
+    /// Apple's native subscription-management sheet, scoped to whichever App Store
+    /// environment this build is running under — sandbox for TestFlight and Xcode builds,
+    /// production once live. The `itms-apps://apps.apple.com/account/subscriptions` link the
+    /// web layer used before only ever opens the production list, where a TestFlight
+    /// subscription can never appear.
+    @objc func plusManage(_ call: CAPPluginCall) {
+        Task { @MainActor [weak self] in
+            guard let scene = self?.bridge?.viewController?.view.window?.windowScene else {
+                call.reject("No scene to present from"); return
+            }
+            do {
+                try await AppStore.showManageSubscriptions(in: scene)
+                call.resolve()
+            } catch {
+                call.reject(error.localizedDescription)
+            }
         }
     }
 

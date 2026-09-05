@@ -10865,7 +10865,13 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
         catch(e){ return { ok: plusActive() }; }
       },
       redeem:   () => { try{ GW.plusRedeem(); }catch(e){} },
-      manage:   () => { try{ window.open("itms-apps://apps.apple.com/account/subscriptions","_system"); }catch(e){} }
+      /* Native sheet is scoped to this build's own App Store environment (sandbox under
+         TestFlight, production once live) — the itms-apps link only ever opens the real
+         subscriptions list, where a sandbox subscription can never appear. */
+      manage:   async () => {
+        try{ await GW.plusManage(); }
+        catch(e){ try{ window.open("itms-apps://apps.apple.com/account/subscriptions","_system"); }catch(e2){} }
+      }
     };
     const refreshPlus = async () => {
       /* Offline is not a lapse: a thrown call leaves the cache exactly as it was. */
