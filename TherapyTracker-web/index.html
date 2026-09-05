@@ -249,7 +249,39 @@ input:not([type=checkbox]):not([type=radio]):focus,select:focus,textarea:focus{o
 /* Date and time controls are drawn by the platform and size themselves from their own text.
    WebKit gives them a large intrinsic minimum, so the generous 14px side padding that suits a
    text box is what pushes the digits under the picker glyph. Trim it for these two only. */
-input[type=date],input[type=time]{padding-left:10px;padding-right:10px;min-width:0;max-width:100%}
+/* `appearance:none` is the load-bearing line, not a cosmetic one. While these keep their native
+   appearance, iOS WebKit sizes them from their own content and adds the padding and border on
+   TOP of the author `width` — `box-sizing:border-box` is ignored for them — so a 177px column
+   held a 199px control and the Time field sat over the Date field's right edge and ran off the
+   screen. Chrome honoured the width and looked perfect throughout. Turning the native appearance
+   off makes them ordinary boxes that obey width; `min-height` puts back the height WebKit used
+   to supply, and the two `-webkit-` shims restore the value's own layout inside the box, which
+   otherwise collapses to zero height on iOS. Verified by measuring, not by eye. */
+/* Written to match the base selector's shape on purpose. That rule is
+   `input:not([type=checkbox]):not([type=radio])`, which outranks a plain `input[type=date]` — the
+   earlier short form of this override was losing to it and the trimmed padding never applied at
+   all. Check the computed value, not the source order, if you touch this. */
+input:not([type=checkbox]):not([type=radio])[type=date],
+input:not([type=checkbox]):not([type=radio])[type=time]{padding:10px;min-width:0;max-width:100%;
+  -webkit-appearance:none;appearance:none;box-sizing:border-box;min-height:45px}
+input[type=date]::-webkit-date-and-time-value,
+input[type=time]::-webkit-date-and-time-value{text-align:left}
+input[type=date]::-webkit-datetime-edit,
+input[type=time]::-webkit-datetime-edit{padding:0}
+/* A date beside a time does not want an even split: "22 May 2026" needs the room and "15:29"
+   does not, and an even split made the Time box look like a mistake. Selected with :has() so the
+   two forms that pair them (a session, a client's usual slot) pick it up with no extra markup.
+   Below ~348px viewport there is not room for both, so the pair stacks — the same escape the
+   auto-fit base rule gives every other pair. */
+.field2:has(input[type=time]){grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
+@media (max-width:348px){.field2:has(input[type=time]){grid-template-columns:minmax(0,1fr)}}
+/* One pulse, then nothing. A permanent highlight on an arrived-at card would still be there the
+   next time the reader scrolls past it, meaning something it no longer means. */
+@keyframes cardflash{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--brand) 60%,transparent)}
+  70%{box-shadow:0 0 0 9px color-mix(in srgb,var(--brand) 0%,transparent)}
+  100%{box-shadow:0 0 0 0 transparent}}
+.flash{animation:cardflash 1.5s ease-out 1}
+@media (prefers-reduced-motion:reduce){.flash{animation:none;outline:2px solid var(--brand);outline-offset:2px}}
 .chip{display:inline-block;padding:3.5px 11px;border-radius:20px;font-size:12px;font-weight:650}
 .chip.y{background:color-mix(in srgb,var(--good) 22%,transparent);color:var(--good)}
 .chip.n{background:color-mix(in srgb,var(--bad) 22%,transparent);color:var(--bad)}
@@ -466,12 +498,29 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
 .legend .lgi i.dash{width:18px;height:0;border-top:2px dashed var(--muted);border-radius:0}
 .grphead{background:var(--soft);color:var(--brand-dark);font-weight:700;font-size:12px;padding:8px 10px;border-radius:8px;margin:12px 0 2px}
 .rawscroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+/* The Trends headline strip. Scrolls sideways rather than wrapping: three tiles that wrap become
+   a three-row block on a narrow phone, which is the opposite of a glance. The scroller is
+   .rawscroll's, per the rule that only an element that genuinely needs a horizontal axis gets
+   one — never the sheet or the page. */
+.trhead{display:flex;gap:10px;padding:2px 2px 12px}
+.trtile{flex:0 0 auto;min-width:134px;text-align:left;cursor:pointer;font-family:inherit;
+  border:1px solid var(--line);border-radius:16px;padding:11px 13px;
+  background:linear-gradient(150deg,color-mix(in srgb,var(--brand) 14%,var(--card)),var(--card));
+  display:flex;flex-direction:column;gap:1px;transition:transform .12s ease}
+.trtile:active{transform:scale(.97)}
+.trtile .tre{font-size:15px;line-height:1}
+.trtile .trv{font-size:21px;font-weight:750;color:var(--ink);line-height:1.15;margin-top:3px;font-variant-numeric:tabular-nums}
+.trtile .trl{font-size:12px;color:var(--muted)}
+.trtile .trs{font-size:11px;font-weight:700;color:var(--brand-dark);margin-top:5px;letter-spacing:.02em}
 #rtable{font-size:12px;white-space:nowrap;min-width:100%}
 #rtable th{cursor:pointer;position:sticky;top:0;background:var(--card);user-select:none}
 #rtable td,#rtable th{padding:7px 9px}
 #colsBox{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px 10px}
 .colchk{display:flex;align-items:center;gap:7px;font-size:13.5px;color:var(--ink);font-weight:500}
 .colchk input[type=checkbox]{width:18px;height:18px;flex:none;margin:0;accent-color:var(--brand)}
+/* One tickable line per outstanding room fee, in the settle sheet. */
+.rdrow{padding:9px 2px;border-bottom:1px solid var(--line)}
+.rdrow:last-child{border-bottom:0}
 optgroup{font-size:12px;color:var(--muted)} optgroup option{font-size:16px;color:var(--ink)}
 .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--brand);color:#fff;
   padding:11px 18px;border-radius:24px;font-size:14px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.3)}
@@ -1621,7 +1670,7 @@ function plusStatusLine(){
 const PLUS_SELL=[
   ["Tax","Estimates, the pot, payments on account and what HMRC actually assessed \u2014 kept current as the rates change each April."],
   ["Costs & other income","What the practice costs you, taken off the profit the tax is worked out from."],
-  ["Quarterly (MTD)","Your four quarters, reconciled to the same figures, ready to file."],
+  ["Making Tax Digital","Your four quarters, reconciled to the same figures, ready to file."],
   ["Trends","Retention, attendance against the frequency you agreed, and what missed sessions cost."],
   ["Accreditation hours","Clinical and supervision hours and the 1:6 ratio, for Form 3A."],
   ["GroundWork Notes sync","Sends each client's cadence to the notes app so it knows what still needs writing up."],
@@ -2163,8 +2212,23 @@ function go(tab,opts){
   if(keep!=null)window.scrollTo(0,Math.min(keep,Math.max(0,document.body.scrollHeight-window.innerHeight)));
   else window.scrollTo(0,0);
   paintFab();
+  if(opts.focus)focusCard(opts.focus);
   try{updateBackupBanner();updateSaveBanner();}catch(e){}
   try{coachMaybeTip(tab);}catch(e){}
+}
+/* A prompt that says "room fees are due" and then lands the reader at the top of a long money
+   screen has not actually taken them anywhere. `go(tab,{focus:"id"})` brings the named card into
+   view and flashes it once, so the eye lands on the thing the prompt was about.
+   Same timing as scrollChart() and the segment bar: rAF for a visible tab, a timer as well for a
+   backgrounded one where rAF may never fire, and the section may be drawn a beat after the view
+   is attached. Both attempts are harmless — the second finds the flash already running. */
+function focusCard(id){
+  const run=()=>{const n=document.getElementById(id); if(!n)return true;
+    n.scrollIntoView({behavior:"smooth",block:"center"});
+    n.classList.remove("flash"); void n.offsetWidth; n.classList.add("flash");
+    setTimeout(()=>n.classList.remove("flash"),1800); return true;};
+  requestAnimationFrame(()=>{run();});
+  setTimeout(run,120);
 }
 $("#fab").onclick=()=>sessionForm(null);
 /* ============ VIEWS ============ */
@@ -2223,7 +2287,7 @@ VIEWS.home=function(){
      shape, which is the whole point of it. */
   const heatCard=der.some(x=>{const d=parseD(x.s.date);return d&&d<=t;})
     ? '<div class="card"><div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Your year</h2><span class="small muted">last 12 months</span></div>'+
-      '<p class="small muted" style="margin:4px 0 10px">One square per day, one column per week — the darker the square, the more sessions that day.</p>'+
+      '<p class="small muted" style="margin:4px 0 10px">One square per day, one column per week.</p>'+
       yearHeatmapHTML()+'</div>'
     : '';
   v.innerHTML=(S.sessions.length?"":'<div class="hint" style="font-size:14px">👋 <b>Nothing logged yet.</b> Tap <b>＋ New session</b> below to start, or open <b>⚙ Settings → Restore from backup</b> to load a <b>.json</b> backup from another device. Need a refresher? <span class="taxlink" id="hTour">Take the guided tour ›</span></div>')+
@@ -3521,6 +3585,46 @@ function anaCPD(){
    Shared shapes so twenty analytics cards look like one screen rather than twenty. Each card is
    a heading, an info dot, and the figures — the explanation lives behind the dot, which is the
    only reason this many cards fit on a phone at all. */
+/* ---- the Trends headline strip ----
+   One real figure from each of the three sections you are NOT reading, at the top of the one you
+   are. It is navigation as much as decoration: four sections are easy to forget are there, and a
+   section named with a number out of this practice is a better invitation than a word.
+   Same contract as every other analytic — nothing is invented. A section whose headline is not
+   ready yet is simply left out, and if none of the three has one the strip does not render. */
+function trendsHeadFig(seg){
+  try{
+    if(seg==="clients"){const d=anaDrifting();
+      if(d&&d.rows.length)return {fig:String(d.rows.length),lab:"drifting away",e:"\ud83c\udf31"};
+      /* Nobody drifting is the good case, and it should not leave the section unnamed. Distinct
+         people actually seen in the last twelve months — not the all-time count the section's own
+         KPI shows, so the two are not the same fact printed twice. */
+      const t=today(), from=addYears(t,-1);
+      const seen=new Set(anaDer().filter(x=>x.dt>from&&x.dt<=t&&!isCancelled(x.s))
+        .map(x=>(x.s.client||"").toLowerCase()).filter(Boolean));
+      if(!seen.size)return null;
+      return {fig:String(seen.size),lab:"seen this year",e:"\ud83c\udf31"};}
+    if(seg==="money"){const f=anaFloor();
+      if(!f.ready)return null;
+      return {fig:gbp(f.median),lab:"typical month",e:"\ud83d\udcb7"};}
+    if(seg==="time"){const h=anaHourlyRate();
+      if(!h.ready)return null;
+      return {fig:gbp(h.rate),lab:"an hour, all in",e:"\u23f1\ufe0f"};}
+    if(seg==="you"){const c=anaCPD();
+      if(!c.ready)return null;
+      return {fig:c.total+(c.total===1?" hr":" hrs"),lab:"CPD this year",e:"\ud83c\udf93"};}
+  }catch(e){console.error("Trends headline",seg,e);}
+  return null;
+}
+function trendsHeadline(active){
+  const tiles=TREND_SEGS.filter(x=>x[0]!==active).map(x=>{
+    const f=trendsHeadFig(x[0]); if(!f)return "";
+    return '<button type="button" class="trtile" data-jump="'+esc(x[0])+'">'+
+      '<span class="tre">'+f.e+'</span>'+
+      '<span class="trv">'+f.fig+'</span>'+
+      '<span class="trl">'+esc(f.lab)+'</span>'+
+      '<span class="trs">'+esc(x[1])+' \u203a</span></button>';}).filter(Boolean);
+  return tiles.length?'<div class="trhead rawscroll">'+tiles.join("")+'</div>':"";
+}
 function anaCard(title,infoKey,inner,opt){
   opt=opt||{};
   return '<div class="card'+(opt.cls?" "+opt.cls:"")+'">'+cardHead(title,infoKey,opt.right)+
@@ -3793,10 +3897,13 @@ function trendsYouHTML(){
 
 VIEWS.practice=function(){
   const v=el('<div class="view active"></div>');
+  /* Trends sits last. The first three are places you go to DO something — add a client, check a
+     room, log supervision — and Trends is where you go to read. Putting the reading between two
+     of the doing screens meant scrolling past it on the way to Rooms every time. */
   const segs=[["clients","Clients"]];
-  if(feat("trends"))segs.push(["trends","Trends"]);
   segs.push(["rooms","Rooms"]);
   if(feat("supervision"))segs.push(["supervision","Supervision"]);
+  if(feat("trends"))segs.push(["trends","Trends"]);
   if(pracTab==="supervision"&&!feat("supervision"))pracTab="clients";
   if(pracTab==="trends"&&!feat("trends"))pracTab="clients";
   v.innerHTML=segBar("crtab",segs,pracTab)+'<div id="crbody"></div>';
@@ -4097,7 +4204,8 @@ VIEWS.practice=function(){
                   : trendSeg==="time"  ? {html:trendsTimeHTML(),folds:{}}
                   : trendSeg==="you"   ? {html:trendsYouHTML(),folds:{}}
                   : clientsSection();
-      host.innerHTML=built.html;
+      host.innerHTML=trendsHeadline(trendSeg)+built.html;
+      host.querySelectorAll("[data-jump]").forEach(b=>b.onclick=()=>pick(b.dataset.jump));
       host.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>{
         const c=S.clients.find(x=>x._id===li.dataset.id); if(c)clientForm(c);});
       host.querySelectorAll(".list-item[data-code]").forEach(li=>li.onclick=()=>{
@@ -4111,16 +4219,17 @@ VIEWS.practice=function(){
     };
     wireInfo(body);
     const bar=body.querySelector("#trseg");
+    /* One way in to changing section, used by the segment bar and by the headline tiles.
+       Redraws only the section, never the whole tab: a full go() would throw the reader back to
+       the top of Practice every time they moved between the four. */
+    function pick(seg){
+      if(seg===trendSeg)return;
+      trendSeg=seg;
+      if(bar){bar.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x.dataset.seg===trendSeg));segScroll(bar);}
+      draw(); host.scrollIntoView({block:"start"});
+    }
     if(bar){
-      bar.querySelectorAll("button").forEach(b=>b.onclick=()=>{
-        if(b.dataset.seg===trendSeg)return;
-        trendSeg=b.dataset.seg;
-        bar.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x.dataset.seg===trendSeg));
-        segScroll(bar);
-        /* Redraw only the section, never the whole tab: a full go() would throw the reader back
-           to the top of Practice every time they moved between the four. */
-        draw(); host.scrollIntoView({block:"start"});
-      });
+      bar.querySelectorAll("button").forEach(b=>b.onclick=()=>pick(b.dataset.seg));
       segScroll(bar);
     }
     draw();
@@ -4587,6 +4696,7 @@ function taxRegionCardHTML(){
       '<button data-r="scotland" class="'+(r==="scotland"?"on":"")+'">Scotland</button></div>'+
     '<p class="prev">Applies to <b>'+esc(ty)+'</b> and every later year.</p>'+
     (changed?'<div class="acc-work">'+hist.map(y=>'<div>'+esc(y)+' onwards \u2014 <b>'+(m[y]==="scotland"?"Scotland":"England, Wales or NI")+'</b></div>').join("")+'</div>':'')+
+    '<p class="small muted mt">Moved in an earlier year? <span class="taxlink" id="setRegYears">Set it against that year \u203a</span> \u2014 this control only ever moves '+esc(ty)+' onwards.</p>'+
     '</div>';
 }
 function wireTaxRegion(host){
@@ -4597,6 +4707,8 @@ function wireTaxRegion(host){
     await commit("Income tax region from "+curTaxYear()+": "+b.dataset.r);
     toast(b.dataset.r==="scotland"?"Scottish rates from "+curTaxYear():"UK rates from "+curTaxYear());
     go("settings",{keepScroll:true});});
+  const yl=host.querySelector("#setRegYears");
+  if(yl)yl.onclick=()=>go("tax",{seg:"allowances"});
 }
 function taxRates(ty){const sy=parseInt(ty.slice(0,4));
   const r={pa:12570,basicTop:50270,higherTop:125140,c4lpl:12570,c4upl:50270,c4upper:0.02};
@@ -5512,6 +5624,10 @@ infoDef("admin-mins","Admin per session",
 infoDef("full-week","A full week for you",
   '<p class="small">Not the most sessions you could physically fit in — the number that a good, busy, sustainable week holds. Only you know it.</p>'+
   '<p class="small"><b>Leave it blank</b> and Trends uses the busiest week you have actually worked in the last six months instead, and says so. That is a fact rather than a target, which is the safer default.</p>');
+infoDef("admin-comment","Admin comments",
+  '<p class="small">Practical reminders only \u2014 <b>nothing clinical</b>. "Invoice goes to her employer", "moved from Tuesday", "parking code 4821".</p>'+
+  '<p class="small">Unlike the notes tick above it, <b>this text does appear on screen and in exports</b>: one line under the session in the list, and a column in the spreadsheet exports. Write it as though someone else will read it, because they might.</p>'+
+  '<p class="small muted">It is cleared if you ever anonymise a client, because free text can name people.</p>');
 infoDef("referral-source","How they found you",
   '<p class="small">Optional, and free text — whatever words you would use. "Word of mouth", "Counselling Directory", a colleague’s name.</p>'+
   '<p class="small">Fill it in and <b>Practice › Trends › Clients</b> can tell you which sources bring people who stay, rather than just who enquires. It is the one thing in the app that can change what you do about finding clients.</p>'+
@@ -5660,7 +5776,8 @@ VIEWS.money=function(){
       g.n++;g.amt+=x.d.roomRate||0;const d=parseD(x.s.date);if(!g.min||d<g.min)g.min=d;if(!g.max||d>g.max)g.max=d;});
     const roomRows=Object.keys(roomGrp).map(k=>{const g=roomGrp[k];
       const rng=g.min?(fmtDM(g.min)+(g.max&&+g.max!==+g.min?" – "+fmtDM(g.max):"")):"";
-      return '<tr><td>'+esc(k)+'</td><td class="num">'+g.n+'</td><td>'+rng+'</td><td class="num">'+gbp(g.amt)+'</td></tr>';}).join("");
+      return '<tr><td>'+esc(k)+'</td><td class="num">'+g.n+'</td><td>'+rng+'</td><td class="num">'+gbp(g.amt)+'</td>'+
+        '<td class="num"><button class="btn sm sec" data-settle="'+esc(k)+'">Settle</button></td></tr>';}).join("");
     const fc=incomeForecast();
     const fcCard='<div class="card"><h2>This month &amp; year at a glance</h2>'+
       '<div class="kpis mt">'+
@@ -5680,8 +5797,9 @@ VIEWS.money=function(){
       '<div class="small muted mt" style="font-weight:600">Clients seen per '+statGran+'</div><div id="chCli"></div></div>'+
       '<div class="card"><h2>Last 12 months</h2><table><thead><tr><th>Month</th><th class="num">Sess</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Open</th></tr></thead><tbody>'+mTable+'</tbody></table></div>'+
       '<div class="card"><h2>Outstanding by client</h2>'+(byClient.length?'<table><thead><tr><th>Client</th><th class="num">Sessions</th><th class="num">Amount</th></tr></thead><tbody>'+byClient.map(x=>'<tr><td>'+esc(x.code)+'</td><td class="num">'+x.n+'</td><td class="num">'+gbp(x.amt)+'</td></tr>').join("")+'</tbody></table>':'<p class="muted small">Nothing outstanding 🎉</p>')+'</div>'+
-      '<div class="card"><h2>Room payments due</h2>'+(roomRows?'<table><thead><tr><th>Room</th><th class="num">Sessions</th><th>Dates</th><th class="num">Total</th></tr></thead><tbody>'+roomRows+'</tbody></table>':'<p class="muted small">No room payments outstanding.</p>')+
+      '<div class="card" id="roomDueCard"><h2>Room payments due</h2>'+(roomRows?'<div class="rawscroll"><table><thead><tr><th>Room</th><th class="num">Sessions</th><th>Dates</th><th class="num">Total</th><th></th></tr></thead><tbody>'+roomRows+'</tbody></table></div>':'<p class="muted small">No room payments outstanding.</p>')+
         (S.rooms.some(r=>roomBilling(r)==="monthly")?'<p class="small muted" style="margin-top:8px">Rooms on a monthly rent aren’t listed here — their rent is counted in <b>Costs &amp; income</b>, not per session.</p>':'')+'</div>';
+    body.querySelectorAll("[data-settle]").forEach(b=>b.onclick=()=>roomDueSheet(b.dataset.settle));
     let sel=null;
     /* Redrawing replaces the .svgwrap, which resets its horizontal scroll — so tapping a bar used
        to fling the chart back to the oldest period, hiding the very breakdown it just opened.
@@ -5756,7 +5874,7 @@ VIEWS.tax=function(){
      track to owe, what should be in the pot and when money next leaves; everything else on this
      tab is a job with a season, and taxMoments is what raises those when their season arrives.
      Nothing was removed from the other segments — every existing go("tax",{seg:...}) still lands. */
-  const segs=[["now","Now"],["estimate","Estimate"],["payments","Pot & payments"],["allowances","Per year"],["mtd","Quarterly (MTD)"]];
+  const segs=[["now","Now"],["estimate","Estimate"],["payments","Pot & payments"],["allowances","Per year"],["mtd","Making Tax Digital"]];
   v.innerHTML=segBar("taxseg",segs,taxSeg)+'<div id="taxbody"></div>';
   const body=v.querySelector("#taxbody");
   if(taxSeg!=="estimate"){
@@ -6903,6 +7021,29 @@ function drawAllowances(host){
       ? '<p class="small muted mt"><span class="taxlink" id="slClr">Clear '+esc(ty)+'\u2019s own setting and carry the earlier year forward again \u203a</span></p>'
       : '')+
     '</div>';
+  /* ===== Where you pay income tax, per year =====
+     The engine has always read this by year (`taxRegionFor(ty)`), but the only control that wrote
+     it was in Settings and it always wrote `curTaxYear()` — so someone who moved to or from
+     Scotland two years ago had no way to say so, and every earlier year was silently re-assessed
+     under today's bands. This is that control, on the year strip that already governs the rest of
+     this screen. Same shape and same carry-forward as the student loan card above. */
+  const regInf=yearValue("taxRegionYears",ty,"rUK"), regKey=regInf.v==="scotland"?"scotland":"rUK";
+  const regOwn=yearMap("taxRegionYears")[ty]!=null;
+  const regName=k=>k==="scotland"?"Scotland":"England, Wales or NI";
+  const regCard='<div class="card">'+cardHead("Where you pay income tax","tax-region")+
+    '<p class="small muted">Scotland sets its own income tax bands. Everything else \u2014 the personal allowance, both classes of National Insurance \u2014 is the same wherever you live.</p>'+
+    '<div class="vmsg'+(regKey==="scotland"?" ok":"")+'">'+(regKey==="scotland"?"\ud83c\udff4 ":"")+
+      '<b>'+esc(ty)+'</b> is worked out at <b>'+(regKey==="scotland"?"Scottish rates":"the rates for England, Wales and Northern Ireland")+'</b>.'+
+      (regInf.inherited?' <b>Carried forward from '+esc(regInf.from)+'</b>, so it has no setting of its own yet.':'')+'</div>'+
+    '<label style="margin-top:12px">Where you lived in '+esc(ty)+'</label>'+
+    '<div class="seg" id="alRegSeg" style="display:inline-flex">'+
+      '<button data-r="rUK" class="'+(regKey==="rUK"?"on":"")+'">England, Wales or NI</button>'+
+      '<button data-r="scotland" class="'+(regKey==="scotland"?"on":"")+'">Scotland</button></div>'+
+    '<p class="prev">Changing this sets '+esc(ty)+' and every later year. Earlier years keep the bands they were actually assessed under \u2014 which is the point: a move does not reach backwards.</p>'+
+    (regOwn&&regInf.from===ty
+      ? '<p class="small muted mt"><span class="taxlink" id="regClr">Clear '+esc(ty)+'\u2019s own setting and carry the earlier year forward again \u203a</span></p>'
+      : '')+
+    '</div>';
   /* Only during the April window the seasonal card uses, so this is never a permanent button
      for a job that is only worth doing once a year. */
   const reviewRow=newYearWindowOpen()
@@ -6915,7 +7056,7 @@ function drawAllowances(host){
     yearStrip+
     (status.filed?'<div class="vmsg warn" style="margin-top:10px">\ud83d\uddc4 You have marked <b>'+esc(ty)+'</b> as filed. Changing anything below changes figures you have already submitted \u2014 if this is a correction, keep a note of what you changed and why.</div>':'')+
     '</div>';
-  host.innerHTML=yearCard+slCard+'<div class="card"><h2>Use of home</h2>'+
+  host.innerHTML=yearCard+regCard+slCard+'<div class="card"><h2>Use of home</h2>'+
     '<p class="small muted">If you see clients or do your admin at home, part of running that home is a business cost. HMRC lets you work it out two ways, and you can pick a different one each tax year.</p>'+
     (applied.method&&applied.method!=="none"
       ? '<div class="vmsg ok">\ud83d\udd12 <b>'+esc(applied.method==="simplified"?"Simplified":"Actual costs")+'</b> is what '+esc(ty)+' uses \u2014 '+money(uohMonthlyFor(applied))+' a month, '+money(yearAmt)+' for the year. It is already in your costs and tax estimate.'+
@@ -6940,6 +7081,18 @@ function drawAllowances(host){
     '</div>';
   const arv=host.querySelector("#alReview");
   if(arv)arv.onclick=()=>startNewYearFlow(curTaxYear());
+  const rseg=host.querySelector("#alRegSeg");
+  if(rseg)rseg.querySelectorAll("button").forEach(b=>b.onclick=async()=>{
+    if(b.dataset.r===taxRegionFor(ty))return;
+    setYearValue("taxRegionYears",ty,b.dataset.r,"taxRegion");
+    await commit("Income tax region from "+ty+": "+b.dataset.r);
+    toast(regName(b.dataset.r)+" from "+ty);
+    go("tax",{keepScroll:true});});
+  const rclr=host.querySelector("#regClr");
+  if(rclr)rclr.onclick=async()=>{
+    delete yearMap("taxRegionYears")[ty];
+    await commit("Cleared the income tax region setting for "+ty);
+    go("tax",{keepScroll:true});};
   const slx=host.querySelector("#slSel");
   if(slx)slx.onchange=async()=>{
     setYearValue("studentLoanYears",ty,slx.value,"studentLoan");
@@ -7042,6 +7195,7 @@ function drawAllowances(host){
     if(fl.checked)f[ty]=true; else delete f[ty];
     await commit((fl.checked?"Marked ":"Unmarked ")+ty+" as filed");
     go("tax",{keepScroll:true});};
+  wireInfo(host);
   drawMethod();
 }
 
@@ -7834,10 +7988,8 @@ function sessionForm(s,o){
      </div>
      <p class="small muted" id="f_rpNote" style="display:none"></p>
      <label class="colchk" style="margin-top:16px"><input type="checkbox" id="f_notes"${notesDone(m)?" checked":""}> My notes for this session are written up</label>
-     <p class="small muted">Just a tick. Your actual clinical record stays wherever you already keep it — this app never holds one, which is what makes an export or a statement from here safe to hand over.</p>
-     <label>Admin comment <span class="muted small">(optional)</span></label>
+     <label>Admin comment <span class="muted small">(optional)</span> ${infoDot("admin-comment","About admin comments")}</label>
      <textarea id="f_admin" rows="2" placeholder="e.g. “invoice goes to her employer”, “moved from Tuesday”">${esc(m.adminNote||"")}</textarea>
-     <p class="small muted">Practical reminders only — <b>nothing clinical</b>. This one does appear in exports and on screen.</p>
      <label style="margin-top:14px">Did it go ahead?</label>
      <select id="f_attend">${opts2([["","Yes — attended"],["late","Late cancellation"],["dna","Did not attend (DNA)"]],attendVal(m))}</select>
      <div id="f_cxWrap" style="display:none">
@@ -7933,6 +8085,8 @@ function sessionForm(s,o){
     g("#f_cxPct").addEventListener("input",()=>{delete g("#f_cxPct").dataset.auto;});
     g("#f_cxPct").addEventListener("change",()=>{sync();paintCancel();});
     paintCancel();
+    /* draw() rebuilds the whole form, so the info dots are re-wired on every pass, not once. */
+    wireInfo(body);
     ["#f_date","#f_loc","#f_paid","#f_rp"].forEach(id=>g(id).addEventListener("change",()=>{sync();paintRoomPaid();paintCancel();}));
     g("#save").onclick=async()=>{sync();
       if(!m.client){toast("Choose a client");Sfx.error();return}
@@ -8030,6 +8184,7 @@ function clientForm(c){
        ". Used to suggest the next session, and shared with GroundWork Notes.";
   };
   paintSlot();
+  wireInfo(body);
   ["#c_freq","#c_uday","#c_utime"].forEach(sel=>{const n=body.querySelector(sel);if(n)n.onchange=paintSlot;});
   const sdr=body.querySelector("#setDefRate");
   if(sdr)sdr.onclick=()=>{const v=prompt("Default starting rate for new clients (£) — leave blank for none:",defaultRate()==null?"":defaultRate());if(v==null)return;
@@ -8142,6 +8297,58 @@ function peerForm(p){
    in to the session form, and every session it created still had to be opened and corrected. */
 function curTab(){return cur;}
 
+/* ===== Settling per-session room fees =====
+   "Room fees due" used to be a read-only table at the bottom of Money, and the Home prompt that
+   raised it dropped the reader at the top of that screen with nothing to press. The only place a
+   per-session fee could actually be ticked off was one session at a time, or the Incomplete
+   worklist — which never sees a session whose room fee is recorded as "N", because answering the
+   question makes the session complete.
+   Writes exactly what the session form and the bulk editor write (`roomPaid`/`roomPaidDate`) so
+   every downstream reader — derive(), the SA103 boxes, the MTD quarters — is untouched. */
+function roomDueSheet(loc){
+  const td=isoD(today());
+  const rows=S.sessions.map(x=>({s:x,d:derive(x)}))
+    .filter(x=>x.d.roomDue==="Y"&&(x.s.location||"?")===loc)
+    .sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
+  if(!rows.length){toast("Nothing outstanding for "+loc);return;}
+  const body=el('<div></div>');
+  const stage={}; rows.forEach(x=>stage[x.s._id]=true);
+  const total=()=>rows.reduce((a,x)=>a+(stage[x.s._id]?(x.d.roomRate||0):0),0);
+  body.innerHTML='<p class="small muted">These sessions carried a room fee that has fallen due and has not been marked paid. Untick any you have not settled yet.</p>'+
+    '<label>Paid on</label><input type="date" id="rdDate" value="'+esc(td)+'">'+
+    '<div class="row mt" style="gap:8px"><button class="btn sm sec" id="rdAll">Tick all</button><button class="btn sm sec" id="rdNone">Untick all</button></div>'+
+    '<div id="rdRows" class="mt"></div>'+
+    '<button class="btn full mt savebig" id="rdSave"></button>';
+  const rw=body.querySelector("#rdRows");
+  const paint=()=>{
+    rw.innerHTML=rows.map(x=>'<label class="colchk rdrow"><input type="checkbox" data-id="'+x.s._id+'"'+(stage[x.s._id]?" checked":"")+'>'+
+      '<span><b>'+esc(x.s.client||"—")+'</b> · '+fmtDshort(x.s.date)+
+      (x.s.room&&x.s.room!=="-"?' · room '+esc(x.s.room):'')+
+      ' <span class="muted">'+gbp(x.d.roomRate||0)+'</span></span></label>').join("");
+    rw.querySelectorAll("input").forEach(i=>i.onchange=()=>{stage[i.dataset.id]=i.checked;upd();});
+  };
+  const btn=body.querySelector("#rdSave");
+  const upd=()=>{const n=rows.filter(x=>stage[x.s._id]).length;
+    btn.textContent=n?("Mark "+n+" paid · "+gbp(total())):"Nothing ticked";
+    btn.classList.toggle("ready",n>0);};
+  paint();upd();
+  body.querySelector("#rdAll").onclick=()=>{rows.forEach(x=>stage[x.s._id]=true);paint();upd();};
+  body.querySelector("#rdNone").onclick=()=>{rows.forEach(x=>stage[x.s._id]=false);paint();upd();};
+  btn.onclick=async()=>{
+    const when=body.querySelector("#rdDate").value||td;
+    const picked=rows.filter(x=>stage[x.s._id]);
+    if(!picked.length){toast("Tick something first");Sfx.error();return;}
+    let amt=0;
+    picked.forEach(x=>{const ss=S.sessions.find(z=>z._id===x.s._id);if(!ss)return;
+      ss.roomPaid="Y"; ss.roomPaidDate=when; amt+=x.d.roomRate||0;});
+    const ok=await commit("Marked "+picked.length+" room fee"+(picked.length===1?"":"s")+" paid at "+loc);
+    closeSheet();
+    if(ok!==false){toast(gbp(amt)+" marked paid");Sfx.tick();}
+    go("money",{keepScroll:true});
+  };
+  openSheet("Room fees · "+loc,body);
+}
+
 /* ============ Attention feed (Home) ============ */
 function attentionItems(){
   const der=S.sessions.map(s=>({s,d:derive(s)}));
@@ -8157,7 +8364,7 @@ function attentionItems(){
   const rd=der.filter(x=>x.d.roomDue==="Y");
   if(rd.length){const amt=rd.reduce((a,x)=>a+(x.d.roomRate||0),0);
     items.push({cls:"warn",e:gi("rooms"),msg:"<b>Room fees due</b> · "+gbp(amt)+" across "+rd.length+" session"+(rd.length===1?"":"s"),
-      sub:"",btn:"Review",act:()=>go("money")});}
+      sub:"tap to tick them off",btn:"Settle",act:()=>go("money",{seg:"overview",focus:"roomDueCard"})});}
   const sups=(S.supervision||[]).filter(s=>s.date&&parseD(s.date)<=t).sort((a,b)=>parseD(b.date)-parseD(a.date));
   if(sups.length){const days=Math.floor((t-parseD(sups[0].date))/86400000);
     if(days>35)items.push({cls:"acc",e:gi("supervision"),msg:"<b>Supervision due</b> · last was "+days+" days ago",
@@ -10090,7 +10297,7 @@ function whatsNewSteps(){
       ["\ud83c\udff4","Scotland, student loans, pension","All three change the number. Set them once under <b>Your tax situation</b> and the estimate follows. Pension contributions now get higher-rate relief properly."],
       ["\ud83e\udd1d","Class 2 when profits are low","Under the Small Profits Threshold it is not due \u2014 but paying it voluntarily keeps the year counting towards your State Pension. The app offers it rather than quietly leaving it out."]
     ])});
-  st.push({emoji:"\ud83e\uddfe", h:"Ready for Making Tax Digital", sub:"In <b>Tax \u203a Quarterly (MTD)</b>.",
+  st.push({emoji:"\ud83e\uddfe", h:"Ready for Making Tax Digital", sub:"In <b>Tax \u203a Making Tax Digital</b>.",
     html:ovPoints([
       ["\ud83d\udcc5","Your four quarters","6 Apr\u20135 Jul, 6 Jul\u20135 Oct, 6 Oct\u20135 Jan, 6 Jan\u20135 Apr, each totalled and reconciled to your year."],
       ["\ud83d\udce6","Totals by tax-return box","Every cost mapped to its SA103 box, exportable as a file."],
