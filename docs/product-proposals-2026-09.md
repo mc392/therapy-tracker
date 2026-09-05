@@ -1,34 +1,52 @@
 # Product proposals — September 2026
 
-Four open questions raised in the September feedback round. Two are answered here as
-recommendations to decide on; one records what shipped alongside this document; one is a
-commercial proposal that would need a decision before any code.
+Four open questions raised in the September feedback round.
 
-Nothing in this file is implemented except where it says **shipped**.
+**Three of the four are now built** (§1 analytics, §2 colour schemes, §3 the Trends peek). §4 —
+selling seats to training courses — is still a proposal and would need a decision, and an answer
+from Apple, before any code. Each section says at its head what actually happened; where the
+original reasoning is still worth having it is kept below the outcome rather than rewritten.
 
 Companion to `docs/monetisation.md`, which remains the decision record for the paywall itself.
 Where the two disagree, monetisation.md wins until this one is promoted.
 
 ---
 
-## 1. More trends and business analytics — and a tier that isn't UK-specific
+## 1. More trends and business analytics — **shipped**, except two
+
+All of §1.1–§1.5 is built and live behind **Practice › Trends**, apart from two items the author
+declined: **income concentration** (§1.1 #1) and **committed vs speculative** (§1.1 #3). The
+numbering below is kept as written so the two gaps stay visible rather than being tidied away.
+
+**What shipped:** twenty analytics as pure `ana*` functions, in four sections — Clients, Money,
+Time, You — each section built only when opened. Every card is a heading, an info dot and the
+figures; a card that cannot say anything yet says what it is waiting for instead of drawing an
+empty chart. Three settings were added to feed them (`sessionMins`, `adminMinsPerSession`,
+`fullWeekSessions`) plus an optional `source` on a client. Mechanics are in CLAUDE.md
+§ *Practice analytics*.
+
+**The tier split below is still a proposal** — nothing about pricing or geography has changed
+yet. What has changed is that the analytics now exist to sell.
+
 
 ### The problem with the current shape
 
-`PLUS_FEATURES` is `tax · finances · mtd · trends · accreditation · notesSync · palettes`.
-Four of those seven are UK tax machinery. That makes GroundWork Plus, in practice, **a UK tax
-product with some analytics attached** — which is fine for Charlotte and useless for a therapist
-in Dublin, Toronto or Auckland running exactly the same practice with exactly the same problems.
+*(As it stood before this work.)* `PLUS_FEATURES` was
+`tax · finances · mtd · trends · accreditation · notesSync · palettes`. Four of those seven were
+UK tax machinery. That made GroundWork Plus, in practice, **a UK tax product with some analytics
+attached** — fine for Charlotte and useless for a therapist in Dublin, Toronto or Auckland
+running exactly the same practice with exactly the same problems.
 
-Trends today is four cards: a retention funnel, attendance against agreed frequency, missed
-sessions, and how long clients stay. All good, none of them the reason anyone pays.
+Trends was four cards: a retention funnel, attendance against agreed frequency, missed sessions,
+and how long clients stay. All good, none of them the reason anyone pays. It is now twenty, which
+is what makes the split below worth considering at all.
 
 ### The proposal: split the tier in two
 
 | Tier | Contents | Market |
 |---|---|---|
 | **Free** | Logging, clients, rooms, supervision, receipts, spreadsheet import, every backup and export, the retention funnel | Everyone, everywhere |
-| **Insights** | Everything in §1.1–§1.5 below | **Worldwide** — no tax content, no jurisdiction |
+| **Insights** | Everything in §1.1–§1.5 below — all now built | **Worldwide** — no tax content, no jurisdiction |
 | **Plus** | Insights **+** Tax, Costs & income, MTD | UK only |
 
 That gives the "layer below tax" the feedback asked for, and it is the layer that can be sold in
@@ -36,8 +54,8 @@ any English-speaking country without a single line of new rules code. The recurr
 argument in monetisation.md §1 (HMRC changes every April) justifies **Plus**; Insights has to
 justify itself on depth instead, which is what the list below is for.
 
-**Everything proposed below is computed from data the app already holds**, with two marked
-exceptions that need one new field each. No new sync, no server, no new permissions.
+**Everything below is computed from data the app already holds**, with the marked exceptions that
+needed one new field each (all since added). No new sync, no server, no new permissions.
 
 ### 1.1 Will the money keep coming? — income stability
 
@@ -109,18 +127,32 @@ amount of revenue analysis.
 19. **CPD trajectory.** On track or behind for the annual target, with a projected year-end
     figure rather than a bare running total.
 
-### If only three get built
+### The demo, now that they exist
 
-**11 (drifting away)**, **1 (income concentration)** and **5 (effective hourly rate)**. Each is
-a single number or a short list, each is computed from data already held, and each tells a
-therapist something they did not know and would act on. That is the demo.
+**11 (drifting away)**, **5 (effective hourly rate)** and **16 (fee erosion)**. Each is a single
+number or a short list, each tells a therapist something they did not know, and each is
+immediately actionable. Drifting away in particular is the one that justifies the section on its
+own: it is a list of people to text this afternoon rather than a picture to admire.
+
+*(Income concentration would have been in this three. It was declined; if that is ever revisited,
+`anaSources()` already does the per-client revenue grouping it would need.)*
 
 ---
 
-## 2. Colour schemes: one-off unlock per colour?
+## 2. Colour schemes — **removed**
 
-**Recommendation: no — and go further. Make every palette free, and take `palettes` out of
-`PLUS_FEATURES` entirely.**
+The recommendation below was to make palettes free and drop them from the tier. The decision
+taken went one step further: **colour schemes are switched off entirely.** Sage is the only
+scheme, the picker is gone from Settings and from the setup wizard, and `palettes` is out of
+`PLUS_FEATURES`.
+
+Nothing was deleted. `PALETTES_ENABLED=false` is the entire switch — the palette data, the
+`html[data-palette]` CSS, the picker markup and the wizard step are all still in the file and
+still work. `settings.palette` is deliberately never cleared, so anyone who had chosen Ocean gets
+Ocean back the moment the flag flips. The original reasoning follows, unchanged.
+
+**Recommendation (as written): no — and go further. Make every palette free, and take `palettes`
+out of `PLUS_FEATURES` entirely.**
 
 The reasoning:
 
@@ -146,12 +178,14 @@ much more defensible story than *analytics, tax, and also some colours*.
 purchase that unlocks *all* palettes — a single product, a single flag, no matrix, and framed as
 a tip rather than a gate. Only worth building if there is evidence people ask for it.
 
-*Cost to implement the recommendation: delete `"palettes"` from `PLUS_FEATURES` and drop the
-`free` flag test in `paletteLocked()`. Roughly ten minutes.*
+*What was actually done: `PALETTES_ENABLED=false`, `applyPalette()` forced to sage, the
+pre-paint head script hard-coded to sage, the picker and wizard step guarded, and `"palettes"`
+removed from `PLUS_FEATURES`. The tier's own feature list now advertises practice analytics in
+that slot instead.*
 
 ---
 
-## 3. A sneak peek at Trends — **shipped**
+## 3. A sneak peek at Trends — **shipped**, then widened
 
 Trends previously replaced its whole view with `plusLockHTML()`: a paragraph describing four
 charts nobody had seen. That is a poor advert and a slightly insulting one, because the data
@@ -167,6 +201,12 @@ What now happens under the gate:
   cost, and the average episode length so far. A practice with nothing missed sees "£0" and a
   sentence saying so, rather than an invented number.
 - One CTA at the bottom.
+
+**Updated with the analytics work.** The peek now names all four sections rather than three
+cards, each with a real figure from this practice: how many clients are drifting, what missed
+sessions have cost, the effective hourly rate, and how many weeks were actually worked. A
+practice with nothing to report on one of them gets a sentence saying so rather than an invented
+number. The button reads *See all twenty*.
 
 The principle, for reuse elsewhere: **show the cheapest real section, and quantify the rest
 using the reader's own data.** Never describe a locked feature in the abstract.

@@ -8,7 +8,7 @@
 <meta name="theme-color" id="tcMeta" content="#6A8B7C"/>
 <title>GroundWork</title>
 <script>(function(){var d=document.documentElement;try{var t=localStorage.getItem('tt_theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';}d.setAttribute('data-theme',t);
-d.setAttribute('data-palette',localStorage.getItem('tt_palette')||'sage');
+d.setAttribute('data-palette','sage'); /* colour schemes are off — see PALETTES_ENABLED. Was: localStorage.getItem('tt_palette')||'sage' */
 var n=localStorage.getItem('tt_practice');if(n)d.style.setProperty('--appname',JSON.stringify('⬡ '+n));
 }catch(e){d.setAttribute('data-theme','light');d.setAttribute('data-palette','sage');}})();</script>
 <style>
@@ -398,6 +398,20 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
 .sheet-head h2{flex:1;margin:0;font-size:17px;text-transform:none;color:var(--ink)}
 .sheet-inner h3{font-size:14px;margin:0 0 4px;color:var(--brand-dark)}
 .taxlink{color:var(--brand);font-weight:700;cursor:pointer;border-bottom:1px dashed var(--brand)}
+/* Circled-i. Deliberately small and quiet — it must read as "there is more if you want it",
+   never as a warning or a required step. 22px is under the 44px tap target guidance, so the
+   padding-box is padded out with a transparent ring rather than making the circle bigger. */
+.idot{display:inline-grid;place-items:center;width:18px;height:18px;flex:none;border-radius:50%;
+  border:1.4px solid color-mix(in srgb,var(--muted) 55%,transparent);background:transparent;
+  color:var(--muted);font:italic 700 11px/1 Georgia,"Times New Roman",serif;cursor:pointer;
+  padding:0;vertical-align:middle;position:relative;transform:translateY(-1px)}
+.idot::after{content:"";position:absolute;inset:-11px}
+.idot:hover,.idot:focus-visible{border-color:var(--brand);color:var(--brand);outline:none}
+.idot:active{background:color-mix(in srgb,var(--brand) 14%,transparent)}
+/* Heading row that carries an info dot, and optionally a control on the right. */
+.chead{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  margin:0 0 8px}
+.chead h2{margin:0;display:flex;align-items:center;gap:7px}
 .x{font-size:22px;color:var(--muted);background:none;border:0;cursor:pointer;padding:4px 8px}
 .suggest{font-size:11px;color:var(--accent-ink);font-weight:700;margin-left:6px}
 .hint{background:color-mix(in srgb,var(--brand) 10%,transparent);border:1px solid color-mix(in srgb,var(--brand) 24%,transparent);border-radius:14px;padding:10px 12px;font-size:13px;color:var(--brand-dark);margin:10px 0}
@@ -880,6 +894,28 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
   font-variant-numeric:tabular-nums;line-height:1.35}
 .peekh{font-size:13.5px;font-weight:700;color:var(--ink);line-height:1.35}
 .peeks{font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.45}
+/* ---- Trends ---- */
+.trendintro{display:flex;align-items:center;gap:6px;margin:-4px 0 12px}
+/* A card that is waiting for more history says so in a sentence. Deliberately not styled as a
+   warning: nothing is wrong, there just is not enough yet. */
+.anawait{display:flex;gap:9px;align-items:flex-start;padding:12px 13px;border-radius:12px;
+  background:color-mix(in srgb,var(--muted) 9%,transparent);color:var(--muted);
+  font-size:13px;line-height:1.5}
+.anawait svg{width:16px;height:16px;flex:none;margin-top:1px;fill:none;stroke:currentColor;stroke-width:1.8}
+/* The drifting-away card is the one thing in Trends that is a to-do list rather than a picture. */
+.driftcard{border:1px solid color-mix(in srgb,var(--accent) 55%,transparent)}
+/* Not scoped to .funnel: anaBarRow() puts these outside one. A slot that only holds 6 in 10
+   should not be painted in the same confident green as one that holds every time. */
+.fbar>i.warnbar{background:linear-gradient(90deg,var(--warn),var(--bad))}
+/* Funnel bars are reused for proportion rows outside the funnel, where they need their own
+   transition and spacing rather than inheriting the funnel's animation-on-mount. */
+.card>.fr{margin:9px 0}
+.card>.fr .ftop{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;
+  margin-bottom:4px;color:var(--muted)}
+.card>.fr .ftop b{color:var(--ink)}
+.card>.fr .fbar{height:14px;border-radius:7px;background:var(--soft);overflow:hidden}
+.card>.fr .fbar>i{display:block;height:100%;border-radius:7px;
+  background:linear-gradient(90deg,var(--brand),var(--hi))}
 .palopt.locked{opacity:.55}
 .palopt .paltag{font-size:10px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:1px 5px;margin-left:2px;vertical-align:1px;white-space:nowrap}
 /* feature toggles */
@@ -1475,7 +1511,21 @@ function paintThemeColor(){try{const m=document.getElementById("tcMeta");if(!m)r
   const cs=getComputedStyle(document.documentElement);
   m.setAttribute("content",(curTheme()==="dark"?cs.getPropertyValue("--bg"):cs.getPropertyValue("--brand")).trim()||"#5C7A6D");}catch(e){}}
 
-/* ---- colour schemes ---- */
+/* ---- colour schemes ----
+   TURNED OFF (Sep 2026). Everything below is kept, working and untouched — the palette data, the
+   `html[data-palette="…"]` CSS blocks near the top of this file, the picker markup in Settings and
+   the wizard step. Only this one flag stands between them and being live again.
+
+   Why it went: nobody chose GroundWork for its colours, and gating them behind the subscription
+   made the most visible thing in the app also the pettiest thing to charge for. Removing them
+   outright rather than merely making them free keeps the tier honest (Trends and the tax engine)
+   and takes a decision off the setup wizard that nobody needs to make on day one.
+
+   TO RESTORE: set PALETTES_ENABLED to true. That is the whole change — the picker reappears in
+   Settings › App preferences, the wizard step comes back, and anyone who had picked a scheme
+   before it was switched off gets it back, because `settings.palette` was never cleared. If it
+   should also become a paid feature again, add "palettes" back to PLUS_FEATURES. */
+const PALETTES_ENABLED=false;
 const PALETTES=[
   {k:"sage",  n:"Sage",   d:"Calm green (original)", c:["#5C7A6D","#9A8C9E","#EDF1EF"], p:["#5C7A6D","#46594F"], free:true},
   {k:"ocean", n:"Ocean",  d:"Cool coastal blue",     c:["#3D6E8E","#7E93B8","#E8EFF4"], p:["#3D6E8E","#2C5169"]},
@@ -1486,7 +1536,13 @@ const PALETTES=[
 ];
 function curPalette(){const p=document.documentElement.getAttribute("data-palette")||"sage";
   return PALETTES.some(x=>x.k===p)?p:"sage";}
-function applyPalette(k){if(!PALETTES.some(p=>p.k===k))k="sage";
+function applyPalette(k){
+  /* Sage is not "the default" here, it is the only one — and forcing it rather than skipping the
+     call matters: an install that had picked Ocean must be repainted, not left on it. The stored
+     `settings.palette` is deliberately NOT overwritten, so switching PALETTES_ENABLED back on
+     restores everyone's own choice. */
+  if(!PALETTES_ENABLED)k="sage";
+  if(!PALETTES.some(p=>p.k===k))k="sage";
   document.documentElement.setAttribute("data-palette",k);
   try{localStorage.setItem("tt_palette",k);}catch(e){}
   paintThemeColor();}
@@ -1514,7 +1570,9 @@ function paletteSwatch(p){return '<span class="pswatch"><i style="background:'+p
 const PLUS_NAME="GroundWork Plus";
 /* Keys the gate understands. Most are also feat() keys; "mtd", "notesSync" and "palettes" are
    not features anyone can switch off, only things that can be locked. */
-const PLUS_FEATURES=["tax","finances","mtd","trends","accreditation","notesSync","palettes"];
+/* "palettes" was here until Sep 2026. Colour schemes are switched off entirely now
+   (see PALETTES_ENABLED), so gating them would gate something nobody can reach. */
+const PLUS_FEATURES=["tax","finances","mtd","trends","accreditation","notesSync"];
 const PLUS_KEY="tt_plus";
 /* Grace past the paid-through date. A renewal we could not verify — offline, or StoreKit not
    yet caught up — must not lock someone out of their own tax figures on the morning it lands. */
@@ -1567,7 +1625,7 @@ const PLUS_SELL=[
   ["Trends","Retention, attendance against the frequency you agreed, and what missed sessions cost."],
   ["Accreditation hours","Clinical and supervision hours and the 1:6 ratio, for Form 3A."],
   ["GroundWork Notes sync","Sends each client's cadence to the notes app so it knows what still needs writing up."],
-  ["Colour schemes","Five more palettes beyond Sage."]
+  ["Practice analytics","Twenty more views of your own records \u2014 who stays, what an hour is really worth, how full your weeks are."]
 ];
 const PLUS_REASONS={
   tax:"Tax is part of "+PLUS_NAME, finances:"Costs & other income is part of "+PLUS_NAME,
@@ -2218,6 +2276,11 @@ let calY=null,calM=null,statGran="month",taxMode="proj",thMode="net",supTab="log
 /* Which segment each merged tab is showing. Module-level like the others, so a redraw
    (go(tab,{keepScroll:true})) lands the reader back where they were. */
 let pracTab="clients", moneySeg="overview", taxSeg="now";
+/* Which of the four Trends sections is open. Module-level like the others, so a redraw lands the
+   reader back where they were. Clients first: it is the section that answers the question most
+   people opened Trends to ask. */
+const TREND_SEGS=[["clients","Clients"],["money","Money"],["time","Time"],["you","You"]];
+let trendSeg="clients";
 function setSeg(tab,seg){
   if(tab==="practice"&&["clients","trends","rooms","supervision"].indexOf(seg)>=0)pracTab=seg;
   else if(tab==="money"&&["overview","costs","table"].indexOf(seg)>=0)moneySeg=seg;
@@ -2943,6 +3006,791 @@ function supervisionPanel(){
 
 /* Practice - the clinical side in one place: who you see, where you see them, and the
    supervision and CPD behind it. Merged from the old Clients and Supervision tabs. */
+/* ============================================================
+   Practice analytics — the Trends engine
+   ============================================================
+   Every function here is PURE: it reads S and today(), returns a plain object, and writes
+   nothing. That is what lets the Trends view rebuild any card without a commit, and what lets
+   these be called from a console or a test the way the tax engine can be.
+
+   Three rules they all follow, because a wrong figure here is worse than no figure:
+
+   1. **Never invent a trend from nothing.** Each returns `ready:false` with a `need` string
+      saying what is missing when there is too little history. The view prints that sentence
+      instead of a chart. Twenty-four weeks of zero is not a seasonal pattern.
+   2. **Cancellations are not attendance.** `isCancelled()` sessions are excluded wherever the
+      question is "did I see someone" (hours, capacity, load, episode length) and included
+      wherever it is "what did this earn" (revenue, fee erosion) — because a charged late
+      cancellation is real money.
+   3. **Only whole periods.** A month or week still in progress is dropped from any average,
+      or every figure would sag towards the end of the current month and recover on the 1st.
+
+   None of this is gated. `plusLocked("trends")` decides what the VIEW renders; the engine is
+   as free to call as tyNet(), for the same reason (docs/monetisation.md §2.2).
+*/
+const ANA_MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+/* Default session length. A therapy hour is 50 minutes almost everywhere, and it is only ever
+   used to turn a session count into an hours figure — never to schedule anything. */
+function sessionMins(){const v=+(settings().sessionMins);return v>0?v:50;}
+function adminMinsPerSession(){const v=settings().adminMinsPerSession;return (v==null||isNaN(+v))?15:Math.max(0,+v);}
+/* null when the therapist has never said what a full week looks like for them. Deliberately not
+   defaulted: guessing someone's capacity and then telling them they are at 43% of it is worse
+   than asking. anaCapacity() falls back to an *implied* full week and says so. */
+function fullWeekSessions(){const v=+(settings().fullWeekSessions);return v>0?v:null;}
+
+/* ---- shared shaping helpers ---- */
+function anaDer(){return S.sessions.map(s=>({s,d:derive(s),dt:parseD(s.date)})).filter(x=>x.dt);}
+function anaPast(rows,t){t=t||today();return rows.filter(x=>x.dt<=t);}
+function anaMedian(arr){
+  const a=arr.filter(x=>x!=null&&!isNaN(x)).slice().sort((x,y)=>x-y);
+  if(!a.length)return null;
+  const m=Math.floor(a.length/2);
+  return a.length%2?a[m]:(a[m-1]+a[m])/2;
+}
+function anaMonthKey(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");}
+/* The first day of the month `back` months before the CURRENT month. */
+function anaMonthStart(t,back){return new Date(t.getFullYear(),t.getMonth()-back,1);}
+/* Revenue and session counts per completed calendar month, oldest first. `n` counts every
+   logged session (a charged cancellation is revenue); `attended` counts only ones that happened. */
+function anaMonthlySeries(months){
+  const t=today(), rows=anaPast(anaDer(),t), out=[];
+  for(let i=months;i>=1;i--){                              /* i=1 is LAST month; the current one is never complete */
+    const from=anaMonthStart(t,i), to=anaMonthStart(t,i-1);
+    const inM=rows.filter(x=>x.dt>=from&&x.dt<to);
+    out.push({from,to,key:anaMonthKey(from),
+      l:ANA_MONTHS[from.getMonth()]+(from.getMonth()===0||i===months?" ’"+String(from.getFullYear()).slice(2):""),
+      month:from.getMonth(),year:from.getFullYear(),
+      revenue:Math.round(inM.reduce((a,x)=>a+(x.d.rate||0),0)),
+      full:Math.round(inM.reduce((a,x)=>a+(x.d.fullRate||0),0)),
+      n:inM.length, attended:inM.filter(x=>!isCancelled(x.s)).length});
+  }
+  return out;
+}
+/* How much history is there, in whole months, from the first logged session to now. */
+function anaHistoryMonths(){
+  const rows=anaDer(); if(!rows.length)return 0;
+  const first=rows.reduce((m,x)=>(!m||x.dt<m)?x.dt:m,null), t=today();
+  return (t.getFullYear()-first.getFullYear())*12+(t.getMonth()-first.getMonth());
+}
+
+/* ============ 1.1 · Will the money keep coming? ============ */
+
+/* SEASONALITY — each calendar month against your own average month.
+   Needs two years, because one August tells you about one August. Months are indexed to 100:
+   118 means that month typically runs 18% above your average. */
+function anaSeasonality(){
+  const have=anaHistoryMonths();
+  if(have<24){
+    /* "about 0 years so far" is a silly thing to say to someone who has just installed the app. */
+    const yrs=Math.max(0,Math.round(have/12*10)/10);
+    return {ready:false,need:"Two full years of sessions before a month can be called typical. "+
+      (have<2?"You are just starting out — this one fills in as you go."
+       :"You have about "+yrs+" year"+(yrs===1?"":"s")+" so far.")};
+  }
+  const months=anaMonthlySeries(Math.min(have,60));
+  const overall=months.reduce((a,m)=>a+m.revenue,0)/Math.max(1,months.length);
+  if(!(overall>0))return {ready:false,need:"Some revenue to compare months against."};
+  const by=[];
+  for(let m=0;m<12;m++){
+    const hits=months.filter(x=>x.month===m);
+    if(!hits.length){by.push({m,name:ANA_MONTHS[m],idx:null,avg:null,years:0});continue;}
+    const avg=hits.reduce((a,x)=>a+x.revenue,0)/hits.length;
+    by.push({m,name:ANA_MONTHS[m],idx:Math.round(avg/overall*100),avg:Math.round(avg),years:hits.length});
+  }
+  const rated=by.filter(x=>x.idx!=null);
+  const low=rated.slice().sort((a,b)=>a.idx-b.idx)[0]||null;
+  const high=rated.slice().sort((a,b)=>b.idx-a.idx)[0]||null;
+  return {ready:true,months:by,overall:Math.round(overall),low,high,span:months.length};
+}
+
+/* YOUR FLOOR — worst, best and typical month over the last twelve complete ones.
+   The spread between worst and typical is the honest measure of how volatile the practice is,
+   and it is the number to hold a buffer against. */
+function anaFloor(){
+  const months=anaMonthlySeries(12);
+  const done=months.filter(m=>m.n>0);
+  if(done.length<4)return {ready:false,need:"Four months of sessions. You have "+done.length+"."};
+  const vals=months.map(m=>m.revenue);
+  const worst=months.slice().sort((a,b)=>a.revenue-b.revenue)[0];
+  const best=months.slice().sort((a,b)=>b.revenue-a.revenue)[0];
+  const med=anaMedian(vals);
+  return {ready:true,months,worst,best,median:Math.round(med),
+    spread:med>0?Math.round((med-worst.revenue)/med*100):0};
+}
+
+/* ============ 1.2 · What is an hour actually worth? ============ */
+
+/* EFFECTIVE HOURLY RATE — the figure almost nobody self-employed works out.
+   Revenue over the last twelve months divided by every hour the practice actually took:
+   the sessions themselves, the admin around them, and supervision. It is always lower than the
+   headline fee, and the gap is the point. */
+function anaHourlyRate(){
+  const t=today(), from=addYears(t,-1);
+  const rows=anaDer().filter(x=>x.dt>from&&x.dt<=t);
+  if(rows.length<10)return {ready:false,need:"Ten sessions in the last year. You have "+rows.length+"."};
+  const attended=rows.filter(x=>!isCancelled(x.s));
+  const revenue=rows.reduce((a,x)=>a+(x.d.rate||0),0);
+  const clinicalH=attended.length*sessionMins()/60;
+  /* Admin is charged on every session logged: a cancellation still costs you the rearranging. */
+  const adminH=rows.length*adminMinsPerSession()/60;
+  const inWin=d=>{const x=d?parseD(d):null;return x&&x>from&&x<=t;};
+  const supH=(S.supervision||[]).filter(s=>inWin(s.date)).length*1
+    +(S.peerSupervision||[]).reduce((a,p)=>a+(inWin(p.date)?(+p.hours||0):0),0);
+  const hours=clinicalH+adminH+supH;
+  const headline=attended.length?revenue/attended.length:0;
+  return {ready:true,revenue:Math.round(revenue),hours:Math.round(hours*10)/10,
+    clinicalH:Math.round(clinicalH*10)/10,adminH:Math.round(adminH*10)/10,supH:Math.round(supH*10)/10,
+    rate:hours>0?Math.round(revenue/hours*100)/100:0,
+    perSession:Math.round(headline*100)/100,sessions:rows.length,attended:attended.length};
+}
+
+/* CAPACITY — sessions a week against a full week.
+   When no full week has been declared, the busiest week in the window stands in for one and the
+   view says so. That is honest (you have demonstrably done it) and it avoids inventing a target. */
+function anaCapacity(){
+  const t=today(), weeks=26, cur=weekMonday(t), out=[];
+  const rows=anaPast(anaDer(),t).filter(x=>!isCancelled(x.s));
+  for(let i=weeks;i>=1;i--){                                /* i=1 is LAST week; this week is incomplete */
+    const ws=addDays(cur,-7*i), we=addDays(ws,7);
+    out.push({ws,l:ws.toLocaleDateString("en-GB",{day:"2-digit",month:"short"}),
+      n:rows.filter(x=>x.dt>=ws&&x.dt<we).length});
+  }
+  const worked=out.filter(w=>w.n>0);
+  if(worked.length<6)return {ready:false,need:"Six weeks with sessions in them. You have "+worked.length+"."};
+  const avg=worked.reduce((a,w)=>a+w.n,0)/worked.length;
+  const busiest=Math.max(...out.map(w=>w.n));
+  const declared=fullWeekSessions();
+  const full=declared||busiest;
+  return {ready:true,weeks:out,avg:Math.round(avg*10)/10,busiest,full,declared:!!declared,
+    pct:full>0?Math.round(avg/full*100):0,
+    spare:Math.max(0,Math.round((full-avg)*10)/10)};
+}
+
+/* SLOT RELIABILITY — which day-and-time slots actually hold.
+   A slot that is booked ten times and missed four is not a slot that works, and the fix is
+   usually to stop offering it rather than to chase the client. */
+function anaSlots(){
+  const t=today(), from=addDays(t,-183);
+  const rows=anaDer().filter(x=>x.dt>=from&&x.dt<=t&&x.s.time);
+  const by={};
+  rows.forEach(x=>{
+    const day=x.dt.getDay(), hh=String(x.s.time).slice(0,2);
+    const k=day+"|"+hh;
+    const g=by[k]||(by[k]={day,hh,n:0,attended:0,missed:0});
+    g.n++; if(isCancelled(x.s))g.missed++; else g.attended++;
+  });
+  const slots=Object.keys(by).map(k=>by[k]).filter(g=>g.n>=3)
+    .map(g=>Object.assign(g,{pct:Math.round(g.attended/g.n*100),
+      /* SLOT_DAYS holds lowercase keys for the schedule matcher, not display text — the
+         readable name is in SLOT_DAY_NAMES, keyed by those. */
+      label:SLOT_DAY_NAMES[SLOT_DAYS[g.day]]+" "+g.hh+":00"}))
+    .sort((a,b)=>b.n-a.n||b.pct-a.pct);
+  if(slots.length<2)return {ready:false,need:"A few repeated slots. Log six months of sessions and the pattern appears."};
+  const weak=slots.filter(s=>s.pct<80).sort((a,b)=>a.pct-b.pct);
+  return {ready:true,slots,weak,total:rows.length};
+}
+
+/* WEEKS ACTUALLY WORKED — sole traders price as though they work 48 weeks a year.
+   Almost nobody does, and the difference is the whole argument for a higher fee. */
+function anaWeeksWorked(){
+  const t=today(), cur=weekMonday(t), rows=anaPast(anaDer(),t).filter(x=>!isCancelled(x.s));
+  if(rows.length<20)return {ready:false,need:"Twenty sessions. You have "+rows.length+"."};
+  const first=rows.reduce((m,x)=>(!m||x.dt<m)?x.dt:m,null);
+  const span=Math.min(52,Math.max(1,Math.round((cur-weekMonday(first))/(7*86400000))));
+  let worked=0,run=0,longest=0,gapFrom=null,longestFrom=null;
+  for(let i=span;i>=1;i--){
+    const ws=addDays(cur,-7*i), we=addDays(ws,7);
+    if(rows.some(x=>x.dt>=ws&&x.dt<we)){worked++;run=0;gapFrom=null;}
+    else{if(!run)gapFrom=ws;run++;if(run>longest){longest=run;longestFrom=gapFrom;}}
+  }
+  return {ready:true,worked,span,off:span-worked,longestBreak:longest,longestFrom,
+    partial:span<52,pct:Math.round(worked/span*100)};
+}
+
+/* ============ 1.3 · Is the work getting stickier? ============ */
+
+/* COHORT RETENTION — of the clients who started in each quarter, how many were still coming
+   4, 8, 12 and 24 weeks later.
+   The funnel says where clients are NOW; this says whether the work you are taking on is
+   holding better than it used to, which is a different and more useful question. A cohort is
+   only shown against a milestone it has actually had time to reach. */
+const ANA_COHORT_MARKS=[4,8,12,24];
+function anaCohorts(){
+  const t=today();
+  const firsts={},lasts={};
+  anaPast(anaDer(),t).filter(x=>!isCancelled(x.s)).forEach(x=>{
+    const k=(x.s.client||"").toLowerCase(); if(!k)return;
+    if(!firsts[k]||x.dt<firsts[k])firsts[k]=x.dt;
+    if(!lasts[k]||x.dt>lasts[k])lasts[k]=x.dt;
+  });
+  const codes=Object.keys(firsts);
+  if(codes.length<6)return {ready:false,need:"Six clients with a first session. You have "+codes.length+"."};
+  const groups={};
+  codes.forEach(k=>{
+    const f=firsts[k], q=Math.floor(f.getMonth()/3);
+    const key=f.getFullYear()+"Q"+(q+1);
+    const g=groups[key]||(groups[key]={key,label:"Q"+(q+1)+" ’"+String(f.getFullYear()).slice(2),
+      start:new Date(f.getFullYear(),q*3,1),members:[]});
+    g.members.push({k,first:f,last:lasts[k]});
+  });
+  const cohorts=Object.keys(groups).map(k=>groups[k]).sort((a,b)=>a.start-b.start)
+    .map(g=>{
+      const marks=ANA_COHORT_MARKS.map(w=>{
+        /* Only ask a milestone of a cohort old enough to have reached it — otherwise a cohort
+           that started last month reads as 0% retention at 24 weeks, which is a lie. */
+        const ripe=g.members.filter(m=>(t-m.first)/86400000>=w*7);
+        if(ripe.length<2)return {w,pct:null,n:ripe.length};
+        const kept=ripe.filter(m=>(m.last-m.first)/86400000>=w*7).length;
+        return {w,pct:Math.round(kept/ripe.length*100),n:ripe.length,kept};
+      });
+      return {key:g.key,label:g.label,n:g.members.length,marks};
+    });
+  const shown=cohorts.filter(c=>c.marks.some(m=>m.pct!=null));
+  if(shown.length<2)return {ready:false,need:"Two quarters of clients with a few months behind them."};
+  return {ready:true,cohorts:shown,marks:ANA_COHORT_MARKS};
+}
+
+/* EPISODE LENGTH — how many sessions a completed piece of work runs to, and whether that is
+   changing. Only FINISHED work counts: someone you are seeing this week has an episode length
+   that has not happened yet, and counting it drags every average down. */
+function anaEpisodes(){
+  const t=today();
+  const byClient={};
+  anaPast(anaDer(),t).filter(x=>!isCancelled(x.s)).forEach(x=>{
+    const k=(x.s.client||"").toLowerCase(); if(!k)return;
+    const g=byClient[k]||(byClient[k]={n:0,first:null,last:null});
+    g.n++; if(!g.first||x.dt<g.first)g.first=x.dt; if(!g.last||x.dt>g.last)g.last=x.dt;
+  });
+  const eps=[];
+  S.clients.forEach(c=>{
+    const g=byClient[(c.code||"").toLowerCase()]; if(!g||!g.n)return;
+    const fd=freqDays(c), gap=(t-g.last)/86400000;
+    const finished=catOf(c.status)==="Finished"||gap>=3*fd;
+    if(!finished)return;
+    eps.push({code:c.code,n:g.n,start:g.first,end:g.last,year:g.first.getFullYear()});
+  });
+  if(eps.length<4)return {ready:false,need:"Four completed pieces of work. You have "+eps.length+" — this fills in as clients finish."};
+  const years={};
+  eps.forEach(e=>{(years[e.year]||(years[e.year]=[])).push(e.n);});
+  const byYear=Object.keys(years).sort().map(y=>({y,median:anaMedian(years[y]),n:years[y].length}));
+  return {ready:true,median:anaMedian(eps.map(e=>e.n)),n:eps.length,byYear,
+    longest:eps.slice().sort((a,b)=>b.n-a.n)[0]||null,
+    ongoing:S.clients.filter(c=>{const g=byClient[(c.code||"").toLowerCase()];
+      return g&&g.n&&catOf(c.status)!=="Finished"&&(t-g.last)/86400000<3*freqDays(c);}).length};
+}
+
+/* DRIFTING AWAY — a list to act on, not a chart to look at.
+   Anyone still marked as current whose gap has run past 1.5x their own usual interval and who
+   has nothing in the diary. 1.5x rather than 2x deliberately: at two intervals a weekly client
+   has already been gone a fortnight and the conversation is harder. */
+const ANA_DRIFT_FACTOR=1.5;
+function anaDrifting(){
+  const t=today(), rows=anaDer();
+  const out=[];
+  S.clients.forEach(c=>{
+    if(catOf(c.status)==="Finished")return;
+    const code=(c.code||"").toLowerCase(); if(!code)return;
+    const mine=rows.filter(x=>(x.s.client||"").toLowerCase()===code);
+    const past=mine.filter(x=>x.dt<=t&&!isCancelled(x.s));
+    if(!past.length)return;
+    if(mine.some(x=>x.dt>t))return;                         /* something is booked — not drifting */
+    const last=past.reduce((m,x)=>(!m||x.dt>m)?x.dt:m,null);
+    const fd=freqDays(c), gap=Math.round((t-last)/86400000);
+    if(gap<=fd*ANA_DRIFT_FACTOR)return;
+    out.push({c,last,gap,fd,overdue:Math.round(gap-fd),
+      missed:mine.filter(x=>isCancelled(x.s)&&x.dt>addDays(last,-fd*3)).length,
+      ratio:Math.round(gap/fd*10)/10});
+  });
+  return {ready:true,rows:out.sort((a,b)=>b.ratio-a.ratio)};
+}
+
+/* WHERE CLIENTS COME FROM — the only analytic here that changes what you DO about marketing.
+   Needs the optional `source` field on a client; clients without one are counted separately
+   rather than lumped into a fake "Other", because "we never asked" is a different fact from
+   "they found us themselves". */
+function anaSources(){
+  const t=today(), counts={},revenue={},lasts={},firsts={};
+  anaPast(anaDer(),t).forEach(x=>{
+    const k=(x.s.client||"").toLowerCase(); if(!k)return;
+    if(!isCancelled(x.s))counts[k]=(counts[k]||0)+1;
+    revenue[k]=(revenue[k]||0)+(x.d.rate||0);
+    if(!lasts[k]||x.dt>lasts[k])lasts[k]=x.dt;
+    if(!firsts[k]||x.dt<firsts[k])firsts[k]=x.dt;
+  });
+  const withSrc=S.clients.filter(c=>(c.source||"").trim());
+  if(withSrc.length<3)return {ready:false,unset:S.clients.length-withSrc.length,
+    need:"Three clients with a referral source on them. Open a client and set <b>How they found you</b>."};
+  const by={};
+  S.clients.forEach(c=>{
+    const src=(c.source||"").trim(); if(!src)return;
+    const k=(c.code||"").toLowerCase(), n=counts[k]||0;
+    const g=by[src]||(by[src]={src,n:0,sessions:[],revenue:0,current:0});
+    g.n++; g.sessions.push(n); g.revenue+=revenue[k]||0;
+    if(trendsIsCurrent(c,lasts[k]))g.current++;
+  });
+  const rows=Object.keys(by).map(k=>by[k]).map(g=>({
+    src:g.src,n:g.n,median:anaMedian(g.sessions)||0,revenue:Math.round(g.revenue),
+    current:g.current,stick:Math.round(g.current/g.n*100)}))
+    .sort((a,b)=>b.revenue-a.revenue);
+  return {ready:true,rows,unset:S.clients.length-withSrc.length};
+}
+
+/* ============ 1.4 · Am I being paid? ============ */
+
+/* DAYS TO PAYMENT — how long money takes to arrive, and whether that is getting worse.
+   Dated on the SESSION, not the payment: a session in March paid in June belongs to March's
+   figure, or a slow month would look fine simply because nothing had landed yet. */
+function anaDaysToPay(){
+  const months=18, t=today(), series=[], all=[];
+  const rows=anaPast(anaDer(),t).filter(x=>x.s.paidDate&&parseD(x.s.paidDate));
+  if(rows.length<8)return {ready:false,need:"Eight paid sessions with a payment date. You have "+rows.length+"."};
+  for(let i=months;i>=1;i--){
+    const from=anaMonthStart(t,i), to=anaMonthStart(t,i-1);
+    const inM=rows.filter(x=>x.dt>=from&&x.dt<to)
+      .map(x=>Math.max(0,Math.round((parseD(x.s.paidDate)-x.dt)/86400000)));
+    series.push({l:ANA_MONTHS[from.getMonth()],from,v:inM.length?Math.round(inM.reduce((a,b)=>a+b,0)/inM.length):null,n:inM.length});
+    inM.forEach(d=>all.push(d));
+  }
+  const rated=series.filter(s=>s.v!=null);
+  const recent=rated.slice(-6), older=rated.slice(0,6);
+  const mean=a=>a.length?Math.round(a.reduce((x,y)=>x+y.v,0)/a.length):null;
+  return {ready:true,series,avg:Math.round(anaMedian(all)),mean:Math.round(all.reduce((a,b)=>a+b,0)/all.length),
+    recentAvg:mean(recent),olderAvg:mean(older),n:all.length,
+    worst:Math.max(...all),over30:all.filter(d=>d>30).length};
+}
+
+/* WHO PAYS LATE — the per-client version, because "31 days on average" is made of people. */
+function anaLatePayers(){
+  const t=today(), by={};
+  anaPast(anaDer(),t).forEach(x=>{
+    const k=(x.s.client||"").toLowerCase(); if(!k)return;
+    const g=by[k]||(by[k]={code:x.s.client,days:[],unpaid:0,owed:0});
+    if(x.s.paidDate&&parseD(x.s.paidDate))g.days.push(Math.max(0,Math.round((parseD(x.s.paidDate)-x.dt)/86400000)));
+    else if(x.d.overdue){g.unpaid++;g.owed+=x.d.rate||0;}
+  });
+  const rows=Object.keys(by).map(k=>by[k]).filter(g=>g.days.length>=2||g.unpaid)
+    .map(g=>({code:g.code,n:g.days.length,avg:g.days.length?Math.round(anaMedian(g.days)):null,
+      over30:g.days.filter(d=>d>30).length,unpaid:g.unpaid,owed:Math.round(g.owed)}))
+    .sort((a,b)=>(b.owed-a.owed)||((b.avg||0)-(a.avg||0)));
+  if(!rows.length)return {ready:false,need:"A few paid sessions with dates on them."};
+  return {ready:true,rows,slow:rows.filter(r=>(r.avg||0)>30||r.unpaid)};
+}
+
+/* COST RATIO — what share of turnover the practice costs to run, this year against last.
+   Business reporting, not tax reporting: no bands, no allowances, no jurisdiction. */
+function anaCostRatio(){
+  if(!feat("finances"))return {ready:false,need:"Costs &amp; other income is switched off, so there is nothing to compare turnover against."};
+  const t=today(), y1from=addYears(t,-1), y2from=addYears(t,-2);
+  const der=anaPast(anaDer(),t);
+  const rev=(from,to)=>der.filter(x=>x.dt>from&&x.dt<=to).reduce((a,x)=>a+(x.d.rate||0),0);
+  const period=(from,to)=>{
+    const led=ledgerBetween(from,to,{toDate:true});
+    const income=rev(from,to)+led.otherIncome;
+    const costs=led.expenses+led.roomRent+led.useOfHome;
+    return {income:Math.round(income),costs:Math.round(costs),
+      ratio:income>0?Math.round(costs/income*100):null,led};
+  };
+  const now=period(y1from,t), prev=period(y2from,y1from);
+  if(!now.income)return {ready:false,need:"Some income in the last twelve months."};
+  if(!now.costs)return {ready:false,need:"At least one business cost logged. Add them in <b>Money › Costs &amp; income</b>."};
+  const cats={};
+  (S.expenses||[]).forEach(x=>{
+    moneyOccurrences(x,y1from,t).forEach(o=>{
+      const key=x.cat||"other";
+      cats[key]=(cats[key]||0)+o.amount;});});
+  if(now.led.roomRent)cats.roomhire=(cats.roomhire||0)+now.led.roomRent;
+  if(now.led.useOfHome)cats.useofhome=(cats.useofhome||0)+now.led.useOfHome;
+  const catName=k=>{const c=(EXP_CATS||[]).find(x=>x.k===k);return c?c.n:"Other";};
+  const byCat=Object.keys(cats).map(k=>({k,n:catName(k),amt:Math.round(cats[k]),
+    pct:now.income>0?Math.round(cats[k]/now.income*1000)/10:0}))
+    .filter(c=>c.amt>0).sort((a,b)=>b.amt-a.amt);
+  return {ready:true,now,prev,byCat,
+    delta:(prev.ratio!=null&&now.ratio!=null)?now.ratio-prev.ratio:null,
+    takeHome:Math.round(now.income-now.costs)};
+}
+
+/* FEE EROSION — the fee you actually average against the fee you think you charge.
+   Reduced cancellation charges, clients still on an old rate and a shifting mix all pull the
+   effective figure below the headline, and a practice can raise its headline rate while its
+   real average falls. Nothing else in the app would show that. */
+function anaFeeErosion(){
+  const months=anaMonthlySeries(18).filter(m=>m.n>0);
+  if(months.length<6)return {ready:false,need:"Six months with sessions in them. You have "+months.length+"."};
+  const series=months.map(m=>({l:m.l,from:m.from,
+    eff:Math.round(m.revenue/m.n*100)/100, head:Math.round(m.full/m.n*100)/100, n:m.n}));
+  const half=Math.floor(series.length/2);
+  const mean=a=>a.length?a.reduce((x,y)=>x+y.eff,0)/a.length:0;
+  const firstH=mean(series.slice(0,half)), lastH=mean(series.slice(-half));
+  const last=series[series.length-1];
+  return {ready:true,series,
+    eff:last.eff,head:last.head,
+    gap:Math.round((last.head-last.eff)*100)/100,
+    gapPct:last.head>0?Math.round((last.head-last.eff)/last.head*100):0,
+    change:Math.round((lastH-firstH)*100)/100,
+    changePct:firstH>0?Math.round((lastH-firstH)/firstH*100):0};
+}
+
+/* ============ 1.5 · Am I all right? ============ */
+
+/* SUPERVISION CADENCE — clinical hours per supervision hour, by quarter.
+   Plotted rather than totalled because the number that matters is whether it is slipping. The
+   1:6 guideline is drawn on the chart; this is NOT the accreditation ratio (that is Form 3A in
+   Supervision › Insights and counts different things) — this is the everyday version. */
+const ANA_SUP_TARGET=6;
+function anaSupervisionCadence(){
+  if(!feat("supervision"))return {ready:false,need:"Supervision is switched off."};
+  const t=today(), qs=[], rows=anaPast(anaDer(),t).filter(x=>!isCancelled(x.s));
+  const sup=(S.supervision||[]).map(s=>parseD(s.date)).filter(Boolean).sort((a,b)=>a-b);
+  if(sup.length<3)return {ready:false,need:"Three supervision sessions. You have "+sup.length+"."};
+  for(let i=7;i>=0;i--){
+    const qStart=new Date(t.getFullYear(),t.getMonth()-i*3-2,1);
+    const qEnd=new Date(qStart.getFullYear(),qStart.getMonth()+3,1);
+    if(qStart>t)continue;
+    const clin=rows.filter(x=>x.dt>=qStart&&x.dt<qEnd).length*sessionMins()/60;
+    const sh=sup.filter(d=>d>=qStart&&d<qEnd).length;
+    qs.push({l:ANA_MONTHS[qStart.getMonth()]+" ’"+String(qStart.getFullYear()).slice(2),
+      clinical:Math.round(clin*10)/10,sup:sh,
+      ratio:sh>0?Math.round(clin/sh*10)/10:null,partial:qEnd>t});
+  }
+  let longest=0,longestAt=null;
+  for(let i=1;i<sup.length;i++){const g=Math.round((sup[i]-sup[i-1])/86400000);
+    if(g>longest){longest=g;longestAt=sup[i-1];}}
+  const sinceLast=Math.round((t-sup[sup.length-1])/86400000);
+  const rated=qs.filter(q=>q.ratio!=null&&!q.partial);
+  return {ready:true,quarters:qs,longestGap:longest,longestAt,sinceLast,last:sup[sup.length-1],
+    target:ANA_SUP_TARGET,
+    current:rated.length?rated[rated.length-1].ratio:null,
+    over:rated.filter(q=>q.ratio>ANA_SUP_TARGET).length};
+}
+
+/* LOAD — the burnout signals that fall straight out of a diary.
+   Heavy days (five or more), and back-to-back runs: sessions starting within a session-length
+   plus a short turnaround of each other, with no real break between them. */
+const ANA_HEAVY_DAY=5;
+const ANA_RUN_MIN=3;
+const ANA_TURNAROUND=15;
+function anaLoad(){
+  const t=today(), from=addYears(t,-1);
+  const rows=anaDer().filter(x=>x.dt>from&&x.dt<=t&&!isCancelled(x.s));
+  if(rows.length<20)return {ready:false,need:"Twenty sessions in the last year. You have "+rows.length+"."};
+  const days={};
+  rows.forEach(x=>{const k=isoD(x.dt);(days[k]||(days[k]=[])).push(x);});
+  const keys=Object.keys(days).sort();
+  const heavy=[],runs=[];
+  const gapMax=sessionMins()+ANA_TURNAROUND;
+  keys.forEach(k=>{
+    const list=days[k].slice().sort((a,b)=>String(a.s.time||"").localeCompare(String(b.s.time||"")));
+    if(list.length>=ANA_HEAVY_DAY)heavy.push({date:list[0].dt,n:list.length});
+    let run=1,best=1;
+    for(let i=1;i<list.length;i++){
+      const p=String(list[i-1].s.time||""), c=String(list[i].s.time||"");
+      if(!p||!c){run=1;continue;}
+      const mins=x=>(+x.slice(0,2))*60+(+x.slice(3,5));
+      const d=mins(c)-mins(p);
+      if(d>0&&d<=gapMax)run++;else run=1;
+      if(run>best)best=run;
+    }
+    if(best>=ANA_RUN_MIN)runs.push({date:list[0].dt,len:best});
+  });
+  const perDay=keys.map(k=>days[k].length);
+  return {ready:true,heavy:heavy.sort((a,b)=>b.n-a.n),runs:runs.sort((a,b)=>b.len-a.len),
+    daysWorked:keys.length,busiest:Math.max(...perDay),
+    avgPerDay:Math.round(perDay.reduce((a,b)=>a+b,0)/perDay.length*10)/10,
+    heavyDays:heavy.length,runDays:runs.length,heavyThreshold:ANA_HEAVY_DAY,runMin:ANA_RUN_MIN};
+}
+
+/* CPD TRAJECTORY — on track or behind, rather than a bare running total.
+   The pace comes from the last 90 days, not from the whole year: someone who did twenty hours
+   last spring and nothing since is not "two-thirds of the way there", they have stopped. */
+function anaCPD(){
+  if(!feat("supervision"))return {ready:false,need:"Supervision is switched off, so there are no CPD hours to count."};
+  const c=cpdYearHours(), target=cpdTarget(), t=today(), from=addDays(t,-90);
+  const inWin=d=>{const x=d?parseD(d):null;return x&&x>from&&x<=t;};
+  const recent=(S.supervision||[]).filter(s=>inWin(s.date)).length
+    +(feat("peer")?(S.peerSupervision||[]).reduce((a,p)=>a+(inWin(p.date)?(+p.hours||0):0),0):0);
+  const pace=recent/90*365;                                  /* hours a year at the current rate */
+  return {ready:true,total:Math.round(c.total*10)/10,target,
+    sup:c.sup,peer:c.peer,
+    pace:Math.round(pace*10)/10,recent:Math.round(recent*10)/10,
+    onTrack:pace>=target,
+    shortfall:Math.max(0,Math.round((target-pace)*10)/10),
+    pct:Math.max(0,Math.min(100,Math.round(c.total/target*100)))};
+}
+
+/* ============ Trends rendering helpers ============
+   Shared shapes so twenty analytics cards look like one screen rather than twenty. Each card is
+   a heading, an info dot, and the figures — the explanation lives behind the dot, which is the
+   only reason this many cards fit on a phone at all. */
+function anaCard(title,infoKey,inner,opt){
+  opt=opt||{};
+  return '<div class="card'+(opt.cls?" "+opt.cls:"")+'">'+cardHead(title,infoKey,opt.right)+
+    (opt.lead?'<p class="small muted" style="margin:-4px 0 10px">'+opt.lead+'</p>':'')+inner+'</div>';
+}
+/* A card that cannot say anything yet says exactly what it is waiting for. Never an empty chart:
+   a blank axis reads as "broken", a sentence reads as "not yet". */
+function anaWaiting(title,infoKey,need){
+  return anaCard(title,infoKey,'<div class="anawait">'+gi("clock")+'<span>'+need+'</span></div>');
+}
+function anaKpis(items){
+  return '<div class="kpis mb">'+items.filter(Boolean).map(x=>
+    '<div class="kpi'+(x[2]?" "+x[2]:"")+'"><div class="v">'+x[0]+'</div><div class="l">'+x[1]+'</div></div>').join("")+'</div>';
+}
+/* Bars against a reference line — "100 = your average month", "6 = the supervision guideline".
+   One chart, because both questions are the same question: how far off the line is each bar? */
+function anaRefChart(data,ref,opt){
+  opt=opt||{};
+  const pts=data.filter(d=>d.v!=null);
+  if(pts.length<2)return '<p class="muted small">Not enough to chart yet.</p>';
+  const h=170,padT=20,padB=34,padL=10,padR=34,step=Math.max(30,Math.min(52,Math.round(300/data.length)));
+  const W=Math.max(280,padL+data.length*step+padR),innerH=h-padT-padB;
+  const max=Math.max(ref*1.25,...pts.map(d=>d.v))||1;
+  const yOf=v=>padT+innerH-innerH*Math.min(v,max)/max;
+  const refY=yOf(ref);
+  const bw=Math.min(26,step-8);
+  const bars=data.map((d,i)=>{
+    const x=padL+i*step+(step-bw)/2;
+    if(d.v==null)return '<text x="'+(x+bw/2)+'" y="'+(padT+innerH-4)+'" text-anchor="middle" font-size="9" fill="var(--muted)">–</text>';
+    const y=yOf(d.v),bh=Math.max(2,padT+innerH-y);
+    const over=opt.invert?(d.v<ref):(d.v>=ref);
+    return '<rect x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+bh.toFixed(1)+'" rx="3" fill="'+(over?"var(--brand)":"var(--warn)")+'"></rect>'+
+      '<text x="'+(x+bw/2)+'" y="'+(y-4).toFixed(1)+'" text-anchor="middle" font-size="9" font-weight="700" fill="var(--muted)">'+esc(String(opt.fmt?opt.fmt(d.v):d.v))+'</text>';
+  }).join("");
+  const labs=data.map((d,i)=>'<text x="'+(padL+i*step+step/2)+'" y="'+(h-padB+15)+'" text-anchor="middle" font-size="9" fill="var(--muted)">'+esc(d.l)+'</text>').join("");
+  return '<div class="svgwrap"><svg viewBox="0 0 '+W+' '+h+'" width="'+W+'" height="'+h+'">'+
+    '<line x1="'+padL+'" y1="'+refY.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+refY.toFixed(1)+'" stroke="var(--muted)" stroke-dasharray="3 4" opacity=".7"></line>'+
+    '<text x="'+(W-padR+3)+'" y="'+(refY+3).toFixed(1)+'" font-size="9" fill="var(--muted)">'+esc(opt.refLabel||String(ref))+'</text>'+
+    bars+labs+'</svg></div>';
+}
+/* Two lines on one axis, for "what you would have billed" against "what you did". */
+function anaGapChart(data){
+  if(data.length<2)return '<p class="muted small">Not enough to chart yet.</p>';
+  const h=160,padT=18,padB=30,padL=12,padR=52,step=Math.max(26,Math.min(48,Math.round(300/data.length)));
+  const W=Math.max(280,padL+(data.length-1)*step+padR),innerH=h-padT-padB;
+  const max=Math.max(1,...data.map(d=>Math.max(d.head,d.eff)))*1.1;
+  const yOf=v=>padT+innerH-innerH*v/max;
+  const path=k=>data.map((d,i)=>(i?"L":"M")+(padL+i*step)+" "+yOf(d[k]).toFixed(1)).join(" ");
+  const band='M'+data.map((d,i)=>(padL+i*step)+" "+yOf(d.head).toFixed(1)).join(" L")+
+    ' L'+data.slice().reverse().map((d,i)=>(padL+(data.length-1-i)*step)+" "+yOf(d.eff).toFixed(1)).join(" L")+' Z';
+  const last=data[data.length-1],lx=padL+(data.length-1)*step;
+  const every=Math.ceil(data.length/6);
+  const labs=data.map((d,i)=>(i%every===0||i===data.length-1)?'<text x="'+(padL+i*step)+'" y="'+(h-padB+15)+'" text-anchor="middle" font-size="9" fill="var(--muted)">'+esc(d.l)+'</text>':"").join("");
+  return '<div class="svgwrap"><svg viewBox="0 0 '+W+' '+h+'" width="'+W+'" height="'+h+'">'+
+    '<path d="'+band+'" fill="color-mix(in srgb,var(--bad) 16%,transparent)"></path>'+
+    '<path d="'+path("head")+'" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-dasharray="3 3"></path>'+
+    '<path d="'+path("eff")+'" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linejoin="round"></path>'+
+    '<circle cx="'+lx+'" cy="'+yOf(last.eff).toFixed(1)+'" r="3.4" fill="var(--brand)" stroke="var(--card)" stroke-width="1.4"></circle>'+
+    '<text x="'+(lx+6)+'" y="'+(yOf(last.eff)+3).toFixed(1)+'" font-size="10" font-weight="700" fill="var(--brand-dark)">'+esc(gbp(last.eff))+'</text>'+
+    '<text x="'+(lx+6)+'" y="'+(yOf(last.head)+3).toFixed(1)+'" font-size="9" fill="var(--muted)">'+esc(gbp(last.head))+'</text>'+
+    labs+'</svg></div>';
+}
+/* A labelled proportion bar — used for category shares and anything else that is "x of y". */
+function anaBarRow(label,valueText,pct,cls){
+  return '<div class="fr"><div class="ftop"><span>'+label+'</span><span>'+valueText+'</span></div>'+
+    '<div class="fbar"><i class="'+(cls||"")+'" style="width:'+Math.max(0,Math.min(100,pct))+'%"></i></div></div>';
+}
+
+/* ============ Trends sections ============
+   Four questions, one per section, because twenty cards on one scroll is not a screen anybody
+   reads. Each returns HTML; the wiring that makes rows tappable is done once by the caller.
+   Sections are built only when opened — anaCohorts() and clientAttendance() across a whole
+   client list are not cheap, and nobody looks at all four at once. */
+
+/* ---- MONEY: what arrives, when, and what it costs to run ---- */
+function trendsMoneyHTML(){
+  let out="";
+  const seas=anaSeasonality();
+  out+= seas.ready
+    ? anaCard("Seasonality","ana-seasonality",
+        anaRefChart(seas.months.map(m=>({l:m.name,v:m.idx})),100,{refLabel:"100"})+
+        '<p class="small muted" style="margin:8px 0 0">100 is your average month ('+gbp(seas.overall)+'). '+
+          (seas.high&&seas.low?'<b>'+esc(seas.high.name)+'</b> typically runs '+Math.abs(seas.high.idx-100)+'% '+(seas.high.idx>=100?"above":"below")+' it; <b>'+esc(seas.low.name)+'</b> '+Math.abs(seas.low.idx-100)+'% '+(seas.low.idx>=100?"above":"below")+'.':'')+'</p>',
+        {lead:"Each month against your own average, from "+Math.round(seas.span/12*10)/10+" years of history."})
+    : anaWaiting("Seasonality","ana-seasonality",seas.need);
+
+  const fl=anaFloor();
+  out+= fl.ready
+    ? anaCard("Your floor","ana-floor",
+        anaKpis([[gbp(fl.worst.revenue),"Worst month · "+esc(fl.worst.l),"bad"],
+                 [gbp(fl.median),"Typical month"],
+                 [gbp(fl.best.revenue),"Best month · "+esc(fl.best.l),"good"]])+
+        chartBars(fl.months.map(m=>({l:m.l,v:m.revenue})),true)+
+        '<p class="small muted" style="margin:8px 0 0">Your worst month ran <b>'+fl.spread+'% below</b> typical. That gap is what a buffer is for.</p>',
+        {lead:"The last twelve complete months, before costs and before tax."})
+    : anaWaiting("Your floor","ana-floor",fl.need);
+
+  const fe=anaFeeErosion();
+  out+= fe.ready
+    ? anaCard("Fee erosion","ana-erosion",
+        anaKpis([[gbp(fe.eff),"Average fee actually billed"],
+                 [gbp(fe.head),"If everything billed in full"],
+                 [(fe.gap>0?"−":"")+gbp(Math.abs(fe.gap)),"The gap · "+fe.gapPct+"%",fe.gap>0?"bad":""]])+
+        anaGapChart(fe.series)+
+        '<p class="small muted" style="margin:8px 0 0">Over these '+fe.series.length+' months your effective fee '+
+          (fe.change>0?'rose by <b>'+gbp(fe.change)+'</b> ('+fe.changePct+'%)':fe.change<0?'<b>fell</b> by '+gbp(Math.abs(fe.change))+' ('+Math.abs(fe.changePct)+'%)':'held steady')+'.</p>',
+        {lead:"Solid line is what you billed. Dashed is what full fees would have come to."})
+    : anaWaiting("Fee erosion","ana-erosion",fe.need);
+
+  const dtp=anaDaysToPay();
+  out+= dtp.ready
+    ? anaCard("Days to payment","ana-dtp",
+        anaKpis([[dtp.avg+"d","Typical wait"],
+                 [dtp.recentAvg!=null?dtp.recentAvg+"d":"—","Last 6 months",(dtp.recentAvg!=null&&dtp.olderAvg!=null&&dtp.recentAvg>dtp.olderAvg+3)?"bad":""],
+                 [dtp.over30,"Payments over 30 days"]])+
+        chartLine(dtp.series.filter(x=>x.v!=null).map(x=>({l:x.l,v:x.v})))+
+        (dtp.recentAvg!=null&&dtp.olderAvg!=null
+          ? '<p class="small muted" style="margin:8px 0 0">'+(dtp.recentAvg>dtp.olderAvg
+              ? 'Money is arriving <b>'+(dtp.recentAvg-dtp.olderAvg)+' days slower</b> than a year ago.'
+              : dtp.recentAvg<dtp.olderAvg
+              ? 'Money is arriving <b>'+(dtp.olderAvg-dtp.recentAvg)+' days faster</b> than a year ago.'
+              : 'Steady against a year ago.')+'</p>':""),
+        {lead:"From the session happening to the money landing."})
+    : anaWaiting("Days to payment","ana-dtp",dtp.need);
+
+  const lp=anaLatePayers();
+  out+= lp.ready
+    ? anaCard("Who pays late","ana-late",
+        (lp.rows.length
+          ? lp.rows.slice(0,12).map(r=>'<div class="list-item" data-code="'+esc(r.code)+'"><div class="li-main">'+
+              '<div class="li-title">'+esc(r.code)+' '+(r.avg!=null?'<span class="chip '+(r.avg>30?"n":r.avg>14?"f":"y")+'">'+r.avg+'d</span>':'')+'</div>'+
+              '<div class="li-sub">'+(r.n?plural(r.n,"payment")+' · typically '+r.avg+' days':'nothing settled yet')+
+                (r.over30?' · '+r.over30+' over 30d':'')+'</div></div>'+
+              '<div class="li-right">'+(r.owed?'<b style="color:var(--bad)">'+gbp(r.owed)+'</b>':'<span class="small muted">up to date</span>')+'</div></div>').join("")
+          : '<p class="muted small">Everyone is up to date.</p>'),
+        {lead:"Sorted by what is outstanding, then by how long they take."})
+    : anaWaiting("Who pays late","ana-late",lp.need);
+
+  const cr=anaCostRatio();
+  out+= cr.ready
+    ? anaCard("What the practice costs to run","ana-costratio",
+        anaKpis([[cr.now.ratio+"%","Of turnover, last 12 months",cr.now.ratio>50?"bad":""],
+                 [cr.delta==null?"—":(cr.delta>0?"+":"")+cr.delta+" pts","vs the year before",cr.delta==null?"":(cr.delta>0?"bad":"good")],
+                 [gbp(cr.takeHome),"Left before tax","good"]])+
+        '<div class="grp-h" style="margin-top:6px">Where it goes</div>'+
+        cr.byCat.slice(0,8).map(c=>anaBarRow(esc(c.n),gbp(c.amt)+' · '+c.pct+'%',
+          cr.byCat[0].amt?Math.round(c.amt/cr.byCat[0].amt*100):0)).join(""),
+        {lead:"Of every pound that came in, how much left again before tax."})
+    : anaWaiting("What the practice costs to run","ana-costratio",cr.need);
+  return out;
+}
+
+/* ---- TIME: what an hour is worth, and how full the weeks are ---- */
+function trendsTimeHTML(){
+  let out="";
+  const hr=anaHourlyRate();
+  out+= hr.ready
+    ? anaCard("Effective hourly rate","ana-hourly",
+        anaKpis([[gbp(hr.rate),"Per hour, all in","good"],
+                 [gbp(hr.perSession),"Average fee per session"],
+                 [hr.hours+"h","Hours the year took"]])+
+        '<div class="grp-h">Where the hours went</div>'+
+        anaBarRow("In session",hr.clinicalH+"h",hr.hours?hr.clinicalH/hr.hours*100:0)+
+        anaBarRow("Admin around sessions",hr.adminH+"h",hr.hours?hr.adminH/hr.hours*100:0)+
+        anaBarRow("Supervision",hr.supH+"h",hr.hours?hr.supH/hr.hours*100:0)+
+        '<p class="small muted" style="margin:10px 0 0">'+gbp(hr.revenue)+' billed across '+plural(hr.sessions,"session")+
+          '. Your fee is spread over <b>'+hr.hours+' hours</b>, not '+hr.attended+
+          ' — which is why this sits below '+gbp(hr.perSession)+'.</p>'+
+        '<p class="prev">Session length and admin time come from <b>Settings › Your practice › Your working week</b>.</p>',
+        {lead:"Everything billed in the last year, over every hour it actually took."})
+    : anaWaiting("Effective hourly rate","ana-hourly",hr.need);
+
+  const cap=anaCapacity();
+  out+= cap.ready
+    ? anaCard("How full your weeks are","ana-capacity",
+        anaKpis([[cap.avg,"Sessions a week, typically"],
+                 [cap.pct+"%","Of a full week",cap.pct>=90?"bad":cap.pct>=60?"good":""],
+                 [cap.spare,"Spare, on an average week"]])+
+        sparkline(cap.weeks.map(w=>w.n))+
+        '<p class="small muted" style="margin:6px 0 0">Last 26 weeks. '+
+          (cap.declared
+            ? 'Measured against the <b>'+cap.full+' sessions</b> you called a full week.'
+            : 'You have not said what a full week looks like for you, so this uses your busiest week — <b>'+cap.full+' sessions</b> — as the yardstick. '+infoLink("full-week","Set your own"))+'</p>',
+        {lead:"Average sessions a week against a full one."})
+    : anaWaiting("How full your weeks are","ana-capacity",cap.need);
+
+  const sl=anaSlots();
+  out+= sl.ready
+    ? anaCard("Slot reliability","ana-slots",
+        sl.slots.slice(0,10).map(s=>anaBarRow(
+          '<b>'+esc(s.label)+'</b> <span class="muted">· '+plural(s.n,"booking")+'</span>',
+          s.pct+'% went ahead'+(s.missed?' · '+s.missed+' missed':''),
+          s.pct, s.pct<70?"warnbar":"")).join("")+
+        (sl.weak.length
+          ? '<p class="small muted" style="margin:10px 0 0"><b>'+esc(sl.weak[0].label)+'</b> is your least reliable slot at '+sl.weak[0].pct+'%. Usually the answer is to stop offering it rather than to keep chasing whoever is in it.</p>'
+          : '<p class="small muted" style="margin:10px 0 0">Every regular slot holds above 80%. That is unusually good.</p>'),
+        {lead:"Slots used at least three times in the last six months."})
+    : anaWaiting("Slot reliability","ana-slots",sl.need);
+
+  const ww=anaWeeksWorked();
+  out+= ww.ready
+    ? anaCard("Weeks actually worked","ana-weeks",
+        anaKpis([[ww.worked,"Weeks with sessions"],
+                 [ww.off,"Weeks off"],
+                 [ww.longestBreak,"Longest break, in weeks"]])+
+        anaBarRow("Worked",ww.worked+" of "+ww.span+" weeks",ww.pct)+
+        '<p class="small muted" style="margin:10px 0 0">'+
+          (ww.partial?'You have '+ww.span+' weeks of history so far. ':'Over the last year. ')+
+          'Sole traders usually price as though they work 46 to 48 weeks — you worked <b>'+ww.worked+'</b>.'+
+          (ww.longestFrom?' The longest quiet spell started '+fmtDM(ww.longestFrom)+'.':'')+'</p>',
+        {lead:"Weeks with at least one session in them."})
+    : anaWaiting("Weeks actually worked","ana-weeks",ww.need);
+  return out;
+}
+
+/* ---- YOU: the practitioner, not the practice ---- */
+function trendsYouHTML(){
+  let out="";
+  const sc=anaSupervisionCadence();
+  out+= sc.ready
+    ? anaCard("Supervision cadence","ana-supcadence",
+        anaKpis([[sc.current==null?"—":sc.current+":1","Clinical hrs per supervision",(sc.current!=null&&sc.current>sc.target)?"bad":"good"],
+                 [sc.sinceLast+"d","Since your last one",sc.sinceLast>42?"bad":""],
+                 [sc.longestGap+"d","Longest gap ever"]])+
+        anaRefChart(sc.quarters.map(q=>({l:q.l,v:q.ratio})),sc.target,{refLabel:"1:6",invert:true,fmt:v=>v+":1"})+
+        '<p class="small muted" style="margin:8px 0 0">Bars <b>below</b> the line are comfortable; above it means more clinical hours per supervision than the 1:6 guideline. '+
+          (sc.over?'<b>'+plural(sc.over,"quarter")+'</b> ran over.':'No quarter has run over.')+'</p>',
+        {lead:"Clinical hours for every hour of supervision, by quarter."})
+    : anaWaiting("Supervision cadence","ana-supcadence",sc.need);
+
+  const ld=anaLoad();
+  out+= ld.ready
+    ? anaCard("Your load","ana-load",
+        anaKpis([[ld.avgPerDay,"Sessions on a working day"],
+                 [ld.heavyDays,ld.heavyThreshold+"+ session days",ld.heavyDays>20?"bad":""],
+                 [ld.runDays,"Days with a back-to-back run",ld.runDays>20?"bad":""],
+                 [ld.busiest,"Busiest single day"]])+
+        (ld.heavy.length
+          ? '<div class="grp-h">Heaviest days</div>'+ld.heavy.slice(0,5).map(h=>
+              '<div class="list-item"><div class="li-main"><div class="li-title">'+fmtDMY(h.date)+'</div>'+
+              '<div class="li-sub">'+plural(h.n,"session")+' in one day</div></div>'+
+              '<div class="li-right"><span class="chip '+(h.n>=7?"n":"f")+'">'+h.n+'</span></div></div>').join("")
+          : '<p class="small muted">No day in the last year had '+ld.heavyThreshold+' or more sessions.</p>')+
+        '<p class="small muted" style="margin:10px 0 0">'+plural(ld.daysWorked,"working day")+' in the last year'+
+          (ld.runs.length?', and '+plural(ld.runDays,"day")+' where '+ld.runMin+' or more ran back to back with no real gap.':'.')+'</p>',
+        {lead:"What the diary already knows about how hard the year has been."})
+    : anaWaiting("Your load","ana-load",ld.need);
+
+  const cp=anaCPD();
+  out+= cp.ready
+    ? anaCard("CPD trajectory","ana-cpd",
+        anaKpis([[cp.total,"Hours in 12 months",cp.total>=cp.target?"good":""],
+                 [cp.pace,"Hours a year at your current pace",cp.onTrack?"good":"bad"],
+                 [cp.target,"Your target"]])+
+        anaBarRow("Logged against target",cp.total+" of "+cp.target+" hrs",cp.pct)+
+        /* Four states, not two: whether the last twelve months cleared the target and whether the
+           current pace would clear it again are separate questions, and the awkward one — target
+           met, pace since dropped — is exactly the case a running total hides. */
+        (cp.total>=cp.target
+          ? (cp.onTrack
+            ? '<div class="vmsg ok" style="margin-top:10px">✓ '+cp.total+' hours logged, and at the pace of the last 90 days you would clear '+cp.pace+' again next year.</div>'
+            : '<div class="vmsg warn" style="margin-top:10px">✓ '+cp.total+' hours logged — your target is met. But the last 90 days work out at only <b>'+cp.pace+' hours a year</b>, so on current form next year would fall '+cp.shortfall+' short.</div>')
+          : (cp.onTrack
+            ? '<div class="vmsg ok" style="margin-top:10px">'+cp.total+' hours so far, but the last 90 days run at <b>'+cp.pace+' a year</b> — keep that up and you clear '+cp.target+'.</div>'
+            : '<div class="vmsg warn" style="margin-top:10px">'+cp.total+' of '+cp.target+' hours, and the last 90 days work out at <b>'+cp.pace+' a year</b> — '+cp.shortfall+' short. A running total would still look fine here; the pace is the part that has slipped.</div>')),
+        {lead:"Not just the total — the rate you are currently going at."})
+    : anaWaiting("CPD trajectory","ana-cpd",cp.need);
+  return out;
+}
+
 VIEWS.practice=function(){
   const v=el('<div class="view active"></div>');
   const segs=[["clients","Clients"]];
@@ -2999,6 +3847,10 @@ VIEWS.practice=function(){
     };
     body.querySelector("#addR").onclick=()=>roomForm(null); r();
   }
+  /* ---- Trends ----
+     Twenty analytics, four sections, one screen's worth at a time. The section is built when it
+     is opened rather than up front: clientAttendance() across a whole client list and
+     anaCohorts() are both real work, and nobody reads all four at once. */
   function renderMetrics(){
     const locked=plusLocked("trends");
     const counts=clientSessionCounts();
@@ -3009,174 +3861,269 @@ VIEWS.practice=function(){
     const tiers=[{t:1,l:"In therapy",d:"1+ sessions",e:"🌱"},{t:6,l:"Building",d:"6+ sessions",e:"🌿"},{t:12,l:"Established",d:"12+ sessions",e:"🌳"},{t:20,l:"Long-term",d:"20+ sessions",e:"🌲"}];
     const rows=tiers.map(tr=>{const n=withSess.filter(x=>x.n>=tr.t).length;const pct=base?Math.round(n/base*100):0;const w=Math.round(n/max*100);
       return '<div class="fr"><div class="ftop"><span>'+tr.e+' <b>'+tr.l+'</b> · '+tr.d+'</span><span>'+n+' '+(n===1?'client':'clients')+(tr.t>1&&base?' · '+pct+'%':'')+'</span></div><div class="fbar"><i data-w="'+w+'" style="width:0"></i></div></div>';}).join("");
+    const funnelCard='<div class="card">'+cardHead("Client retention funnel","ana-funnel")+
+      '<p class="small muted" style="margin:-4px 0 10px">How your clients progress over time, by number of sessions.</p>'+
+      '<div class="funnel">'+rows+'</div></div>';
     /* ---- the sneak peek ----
-       A hard lock on Trends showed a paragraph describing charts nobody had seen, which is a poor
-       advert and a slightly insulting one: the data is the therapist's own. So the retention
-       funnel — the headline, and the cheapest of the four to build — renders in full, on real
-       numbers, and the rest is named honestly underneath with the one figure that says whether it
-       is worth anything to this practice.
-       Everything below this branch stays exactly as it was; the lock is a return, not a mode. */
+       A hard lock showed a paragraph describing charts nobody had seen, which is a poor advert
+       and a slightly insulting one: the data is the therapist's own. So the retention funnel —
+       the headline, and the cheapest to build — renders in full on real numbers, and the four
+       sections behind the gate are named with one real figure each from THIS practice.
+       The lock is a return, not a mode: everything below it is untouched. */
     if(locked){
       const t0=today();
-      const missed=S.sessions.filter(s=>isCancelled(s)&&parseD(s.date)&&parseD(s.date)<=t0);
-      const lostPeek=missed.reduce((a,s)=>{const d=derive(s);return a+Math.max(0,(d.fullRate||0)-(d.rate||0));},0);
-      const longTerm=withSess.filter(x=>x.n>=20).length;
+      const missedPk=S.sessions.filter(s=>isCancelled(s)&&parseD(s.date)&&parseD(s.date)<=t0);
+      const lostPeek=missedPk.reduce((a,s)=>{const d=derive(s);return a+Math.max(0,(d.fullRate||0)-(d.rate||0));},0);
       const totalPeek=withSess.reduce((a,x)=>a+x.n,0);
       const avgPeek=base?Math.round(totalPeek/base*10)/10:0;
+      const hrPk=anaHourlyRate(), capPk=anaCapacity(), wwPk=anaWeeksWorked(), drPk=anaDrifting();
       const peek=(head,fig,sub)=>'<div class="peekrow"><div class="peekfig">'+fig+'</div>'+
         '<div><div class="peekh">'+head+'</div><div class="peeks">'+sub+'</div></div></div>';
       body.innerHTML=
-        '<div class="card"><h2>Client retention funnel</h2>'+
-          '<p class="small muted" style="margin:0 0 10px">How your clients progress over time, by number of sessions. This one is yours to keep.</p>'+
-          '<div class="funnel">'+rows+'</div></div>'+
+        funnelCard.replace('</div></div>','</div><p class="small muted" style="margin:10px 0 0">This one is yours to keep.</p></div>')+
         '<div class="card plusgate peek"><div class="plmark">'+gi("trends")+'</div>'+
-          '<h2>Three more, from the same records</h2>'+
-          '<p class="small muted">Nothing to set up and nothing to enter — these are worked out from the sessions you have already logged. Here is what each one currently has to say.</p>'+
+          '<h2>Twenty more, from the same records</h2>'+
+          '<p class="small muted">Nothing to set up and nothing to enter — all of it is worked out from sessions you have already logged. Here is what four of them currently say about your practice.</p>'+
           '<div class="mt">'+
-            peek("Attendance vs the frequency you agreed",base?(base+" rated"):"—",
-              base?("A percentage for each of your "+base+" client"+(base===1?"":"s")+": who is turning up as often as they agreed, who has quietly halved, and who is on a break rather than gone."):"Turns each client's agreed frequency into a percentage actually attended.")+
-            peek("What missed sessions cost you",lostPeek>0?gbp(Math.round(lostPeek)):(missed.length?"£0":"—"),
-              missed.length?(missed.length+" missed session"+(missed.length===1?"":"s")+" so far, and the fee you chose not to charge on them."):"Nothing missed yet — this fills in as it happens.")+
-            peek("How long clients stay",longTerm?(longTerm+" long-term"):(avgPeek?avgPeek+" avg":"—"),
-              avgPeek?("An average of "+avgPeek+" sessions per client so far, and who sits at the far end of that."):"Average length of work, and who your longest-standing clients are.")+
+            peek("Clients · who stays and who drifts",
+              drPk.rows.length?plural(drPk.rows.length,"client"):(base?base+" tracked":"—"),
+              drPk.rows.length
+                ? drPk.rows.length+" you have not seen in a while with nothing booked, plus retention by cohort, how long work runs, and where clients come from."
+                : "Nobody is drifting right now. Also: retention by cohort, how long work runs, and which referral sources bring people who stay.")+
+            peek("Money · what arrives and what it costs",
+              lostPeek>0?gbp(Math.round(lostPeek)):(avgPeek?avgPeek+" avg":"—"),
+              missedPk.length
+                ? "in fees you chose not to charge on "+plural(missedPk.length,"missed session")+". Also: seasonality, your worst month, fee erosion and days to payment."
+                : "Seasonality, your worst and best month, fee erosion, days to payment and what the practice costs to run.")+
+            peek("Time · what an hour is really worth",
+              hrPk.ready?gbp(hrPk.rate):"—",
+              hrPk.ready
+                ? "an hour once admin and supervision are counted, against "+gbp(hrPk.perSession)+" a session. Also: how full your weeks are and which slots hold."
+                : "Your effective hourly rate, how full your weeks are, which slots reliably hold, and how many weeks you actually worked.")+
+            peek("You · supervision, load and CPD",
+              wwPk.ready?wwPk.worked+" wks":(capPk.ready?capPk.avg+"/wk":"—"),
+              wwPk.ready
+                ? "worked in the last year, not the 48 most people price for. Also: supervision cadence, heavy days and your CPD pace."
+                : "Supervision cadence against 1:6, heavy days and back-to-back runs, and whether your CPD pace clears your target.")+
           '</div>'+
-          '<button class="btn full mt" data-plus="trends">See all four · '+PLUS_NAME+'</button>'+
+          '<button class="btn full mt" data-plus="trends">See all twenty · '+PLUS_NAME+'</button>'+
         '</div>';
-      plusWireLocks(body);
+      plusWireLocks(body); wireInfo(body);
       requestAnimationFrame(()=>body.querySelectorAll(".funnel .fbar>i").forEach(i=>{i.style.width=(+i.dataset.w)+"%";}));
       return;
     }
-    const deep=withSess.filter(x=>x.n>=20).sort((a,b)=>b.n-a.n);
-    const deepLi=x=>'<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+'</div><div class="li-sub">'+esc(x.c.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>';
-    const deepAged=deep.filter(x=>!trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()]));
-    const deepFold=deepAged.length>=AGED_MIN;
-    const deepCur=deepFold?deep.filter(x=>trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()])):deep;
-    const deepOld=deepFold?deepAged:[];
-    const deepOldSessions=deepOld.reduce((s,x)=>s+x.n,0);
-    const totalSessions=withSess.reduce((a,x)=>a+x.n,0);
-    const avg=base?Math.round(totalSessions/base*10)/10:0;
 
-    /* ---- missed sessions: late cancellations and DNAs ----
-       `lost` is the fee that never arrived: full fee less what was actually charged, summed over
-       every missed session. It is the number that answers "what is this costing me?", and it
-       moves when the charging policy changes -- which is the point of being able to set one. */
-    const t=today();
-    const missed=S.sessions.filter(isCancelled);
-    const totalLC=missed.length;
-    const totalDNA=missed.filter(isDNA).length;
-    const lcPct=S.sessions.length?Math.round(totalLC/S.sessions.length*1000)/10:0;
-    let lost=0,charged=0;
-    missed.forEach(s=>{const d=derive(s);lost+=Math.max(0,(d.fullRate||0)-(d.rate||0));charged+=(d.rate||0);});
-    const byClient={};
-    S.sessions.forEach(s=>{const k=(s.client||"").toLowerCase();if(!k)return;
-      const e=byClient[k]||(byClient[k]={code:s.client,total:0,lc:0,dna:0,lost:0,recent:0,prev:0,last:null});
-      e.total++;
-      if(isCancelled(s)){e.lc++;if(isDNA(s))e.dna++;
-        const dv=derive(s);e.lost+=Math.max(0,(dv.fullRate||0)-(dv.rate||0));
-        const d=parseD(s.date);if(d){if(!e.last||d>e.last)e.last=d;
-          const days=(t-d)/86400000;if(days<=90)e.recent++;else if(days<=180)e.prev++;}}});
-    const lcClients=Object.values(byClient).filter(e=>e.lc>0).sort((a,b)=>b.lc-a.lc||b.total-a.total);
-    const affected=lcClients.length;
-    let recent90=0,prev90=0;
-    missed.forEach(s=>{const d=parseD(s.date);if(!d)return;const days=(t-d)/86400000;if(days<=90)recent90++;else if(days<=180)prev90++;});
-    /* a year's worth of the last 90 days, so the annual cost of the current rate is visible */
-    let lost90=0;
-    missed.forEach(s=>{const d=parseD(s.date);if(!d||(t-d)/86400000>90)return;
-      const dv=derive(s);lost90+=Math.max(0,(dv.fullRate||0)-(dv.rate||0));});
-    const projLost=Math.round(lost90*(365/90));
-    const trendChip=(r,p)=>r>p?'<span class="chip n">↑ rising</span>':r<p?'<span class="chip y">↓ falling</span>':'<span class="chip na">→ steady</span>';
-    const pctOf=e=>e.total?Math.round(e.lc/e.total*1000)/10:0;
-    const rateChip=e=>{const p=pctOf(e);return '<span class="chip '+(p>=15?'n':p>=5?'f':'s')+'">'+p+'%</span>';};
-    const lcLi=e=>{const cl=S.clients.find(c=>(c.code||"").toLowerCase()===(e.code||"").toLowerCase());
-      return '<div class="list-item"'+(cl?' data-id="'+cl._id+'"':'')+'><div class="li-main"><div class="li-title">'+esc(e.code)+' '+rateChip(e)+'</div><div class="li-sub">'+e.lc+' of '+e.total+' sessions'+(e.dna?' · '+e.dna+' DNA':'')+(e.lost>0?' · '+gbp(Math.round(e.lost))+' not charged':'')+(e.last?' · last '+fmtDMY(e.last):'')+'</div></div><div class="li-right">'+trendChip(e.recent,e.prev)+'</div></div>';};
-    const lcOf=e=>S.clients.find(c=>(c.code||"").toLowerCase()===(e.code||"").toLowerCase());
-    const lcAged=lcClients.filter(e=>!trendsIsCurrent(lcOf(e),lastSeen[(e.code||"").toLowerCase()]));
-    const lcFold=lcAged.length>=AGED_MIN;
-    const lcCur=lcFold?lcClients.filter(e=>trendsIsCurrent(lcOf(e),lastSeen[(e.code||"").toLowerCase()])):lcClients;
-    const lcOld=lcFold?lcAged:[];
-    const lcOldMissed=lcOld.reduce((s,e)=>s+e.lc,0), lcOldLost=lcOld.reduce((s,e)=>s+e.lost,0);
-    infoDef("missed-sessions-detail","About this trend",
-      (projLost>0?'<p class="small">At the last 90 days’ rate that is about <b>'+gbp(projLost)+' a year</b> in fees you don’t charge.</p>':'')+
-      '<p class="small">The per-client % is each client’s share of their own sessions.</p>');
-    const lcCard='<div class="card"><h2>Missed sessions</h2>'+
-      '<div class="kpis mb">'+
-        '<div class="kpi"><div class="v">'+totalLC+'</div><div class="l">Missed'+(totalDNA?' · '+totalDNA+' DNA':'')+'</div></div>'+
-        '<div class="kpi"><div class="v">'+lcPct+'%</div><div class="l">Of all sessions</div></div>'+
-        '<div class="kpi'+(lost>0?' bad':'')+'"><div class="v">'+gbp(Math.round(lost))+'</div><div class="l">Fees not charged</div></div>'+
-        '<div class="kpi"><div class="v">'+gbp(Math.round(charged))+'</div><div class="l">Charged anyway</div></div>'+
-        '<div class="kpi"><div class="v">'+affected+'</div><div class="l">Clients affected</div></div>'+
-        '<div class="kpi"><div class="v">'+recent90+'</div><div class="l">In the last 90 days</div></div>'+
-      '</div>'+
-      '<p class="small muted" style="margin:0 0 6px">Trend '+trendChip(recent90,prev90)+' — '+recent90+' in the last 90 days vs '+prev90+' in the previous 90. '+infoLink("missed-sessions-detail")+'</p>'+
-      (lcClients.length?lcCur.map(lcLi).join("")+
-          (lcOld.length?agedFold("lc","Finished & long inactive · "+plural(lcOld.length,"client"),
-            plural(lcOldMissed,"missed session")+(lcOldLost>0?' · '+gbp(Math.round(lcOldLost))+' not charged':'')):"")
-        :'<p class="muted small">No missed sessions recorded yet.</p>')+'</div>';
+    /* ---- CLIENTS section ----
+       Returns {html, folds}: the folded blocks are built on first open, not now (see agedFold). */
+    function clientsSection(){
+      const t=today();
+      const deep=withSess.filter(x=>x.n>=20).sort((a,b)=>b.n-a.n);
+      const deepLi=x=>'<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+'</div><div class="li-sub">'+esc(x.c.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>';
+      const deepAged=deep.filter(x=>!trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()]));
+      const deepFold=deepAged.length>=AGED_MIN;
+      const deepCur=deepFold?deep.filter(x=>trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()])):deep;
+      const deepOld=deepFold?deepAged:[];
+      const deepOldSessions=deepOld.reduce((s,x)=>s+x.n,0);
+      const totalSessions=withSess.reduce((a,x)=>a+x.n,0);
+      const avg=base?Math.round(totalSessions/base*10)/10:0;
 
-    /* ---- attendance ---- */
-    const attRows=S.clients.map(c=>({c,a:clientAttendance(c)})).filter(x=>x.a&&x.a.n>=2);
-    const attPctChip=p=>'<span class="chip '+(p>=85?'s':p>=65?'f':'n')+'">'+p+'%</span>';
-    const fmtRange=(a,b)=>fmtDM(a)+'–'+fmtDM(b);
-    const pauseNote=a=>{const parts=[];
-      if(a.pauses.length)parts.push(a.pauses.length+' pause'+(a.pauses.length>1?'s':'')+' (excluded): '+a.pauses.map(p=>fmtRange(p.from,p.to)).join(', '));
-      if(a.currentPause)parts.push('on a pause since '+fmtDM(a.currentPause.from)+' ('+a.currentPause.days+'d)');
-      return parts.length?'<div class="li-sub" style="color:var(--accent-ink)">⏸ '+esc(parts.join(' · '))+'</div>':'';};
-    const attAvg=attRows.length?Math.round(attRows.reduce((s,x)=>s+x.a.pct,0)/attRows.length):0;
-    const attSorted=attRows.slice().sort((a,b)=>a.a.pct-b.a.pct||b.a.n-a.a.n);
-    const attLi=x=>{const a=x.a;
-      return '<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+' '+attPctChip(a.pct)+'</div><div class="li-sub">'+a.attended+' of '+a.expected+' expected · '+esc(x.c.frequency||"")+'</div>'+pauseNote(a)+'</div><div class="li-right"><span class="small muted">since '+fmtDM(a.first)+'</span></div></div>';};
-    const grpAvg=arr=>arr.length?Math.round(arr.reduce((s,x)=>s+x.a.pct,0)/arr.length):0;
-    /* current clients stay listed and keep their Ongoing / other grouping; the rest fold away,
-       but only once there are enough of them to be worth folding (see AGED_MIN) */
-    const attAged=attSorted.filter(x=>!trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()]));
-    const attFold=attAged.length>=AGED_MIN;
-    const attCur=attFold?attSorted.filter(x=>trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()])):attSorted;
-    const attOld=attFold?attAged:[];
-    const attOngoing=attCur.filter(x=>(x.c.status||"")==="Ongoing");
-    const attOther=attCur.filter(x=>(x.c.status||"")!=="Ongoing");
-    const attSection=(title,arr)=>arr.length?'<div class="grp-h">'+title+' <span class="muted" style="font-weight:600">· '+arr.length+' client'+(arr.length>1?'s':'')+' · avg '+grpAvg(arr)+'%</span></div>'+arr.map(attLi).join(""):"";
-    const attOldSessions=attOld.reduce((s,x)=>s+x.a.n,0);
-    const attSeries=rollingAttendanceSeries(attRows);   /* the chart keeps everyone — it is history */
-    const attCard='<div class="card"><h2>Attendance</h2>'+
-      '<p class="small muted" style="margin:0 0 8px">How regularly each client attends vs their expected frequency, since their first session. '+infoLink("attendance-mechanics")+'</p>'+
-      '<div class="kpis mb">'+
-        '<div class="kpi"><div class="v">'+attAvg+'%</div><div class="l">Avg attendance</div></div>'+
-        '<div class="kpi"><div class="v">'+attRows.length+'</div><div class="l">Clients tracked</div></div>'+
-      '</div>'+
-      (attRows.length?'<p class="small muted" style="margin:0 0 2px">3-month rolling attendance rate across all tracked clients.</p>'+chartAttendance(attSeries):"")+
-      (attSorted.length?attSection('Ongoing',attOngoing)+attSection('Paused',attOther)+
-          (attOld.length?agedFold("att","Finished & long inactive · "+plural(attOld.length,"client"),
-            'avg '+grpAvg(attOld)+'% attendance · '+plural(attOldSessions,"session")+' between them'):"")
-        :'<p class="muted small">Need at least two sessions per client to measure attendance.</p>')+'</div>';
-    /* ---- ongoing clients on a current pause: prompt to review status ---- */
-    const review=attRows.filter(x=>x.a.currentPause);
-    const reviewCard=review.length?'<div class="card" style="border:1px solid var(--accent)"><h2>⏸ Review status</h2>'+
-      '<p class="small muted" style="margin:0 0 6px">These clients are marked <b>Ongoing</b> but haven’t had a session in 3× their usual interval or more. Consider updating them to <b>Paused</b> or <b>Finished</b>.</p>'+
-      review.sort((a,b)=>b.a.currentPause.days-a.a.currentPause.days).map(x=>'<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+' <span class="chip f">'+x.a.currentPause.days+'d gap</span></div><div class="li-sub">Last session '+fmtDMY(x.a.last)+' · '+esc(x.c.frequency||"")+'</div></div><div class="li-right"><span class="small muted">tap to update ›</span></div></div>').join("")+'</div>':'';
+      /* ---- attendance ---- */
+      const attRows=S.clients.map(c=>({c,a:clientAttendance(c)})).filter(x=>x.a&&x.a.n>=2);
+      const attPctChip=p=>'<span class="chip '+(p>=85?'s':p>=65?'f':'n')+'">'+p+'%</span>';
+      const fmtRange=(a,b)=>fmtDM(a)+'–'+fmtDM(b);
+      const pauseNote=a=>{const parts=[];
+        if(a.pauses.length)parts.push(a.pauses.length+' pause'+(a.pauses.length>1?'s':'')+' (excluded): '+a.pauses.map(p=>fmtRange(p.from,p.to)).join(', '));
+        if(a.currentPause)parts.push('on a pause since '+fmtDM(a.currentPause.from)+' ('+a.currentPause.days+'d)');
+        return parts.length?'<div class="li-sub" style="color:var(--accent-ink)">⏸ '+esc(parts.join(' · '))+'</div>':'';};
+      const attAvg=attRows.length?Math.round(attRows.reduce((s,x)=>s+x.a.pct,0)/attRows.length):0;
+      const attSorted=attRows.slice().sort((a,b)=>a.a.pct-b.a.pct||b.a.n-a.a.n);
+      const attLi=x=>{const a=x.a;
+        return '<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+' '+attPctChip(a.pct)+'</div><div class="li-sub">'+a.attended+' of '+a.expected+' expected · '+esc(x.c.frequency||"")+'</div>'+pauseNote(a)+'</div><div class="li-right"><span class="small muted">since '+fmtDM(a.first)+'</span></div></div>';};
+      const grpAvg=arr=>arr.length?Math.round(arr.reduce((s,x)=>s+x.a.pct,0)/arr.length):0;
+      const attAged=attSorted.filter(x=>!trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()]));
+      const attFold=attAged.length>=AGED_MIN;
+      const attCur=attFold?attSorted.filter(x=>trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()])):attSorted;
+      const attOld=attFold?attAged:[];
+      const attOngoing=attCur.filter(x=>(x.c.status||"")==="Ongoing");
+      const attOther=attCur.filter(x=>(x.c.status||"")!=="Ongoing");
+      const attSection=(title,arr)=>arr.length?'<div class="grp-h">'+title+' <span class="muted" style="font-weight:600">· '+arr.length+' client'+(arr.length>1?'s':'')+' · avg '+grpAvg(arr)+'%</span></div>'+arr.map(attLi).join(""):"";
+      const attOldSessions=attOld.reduce((s,x)=>s+x.a.n,0);
+      const attSeries=rollingAttendanceSeries(attRows);   /* the chart keeps everyone — it is history */
+      const attCard='<div class="card">'+cardHead("Attendance","attendance-mechanics")+
+        anaKpis([[attAvg+"%","Avg attendance"],[attRows.length,"Clients tracked"]])+
+        (attRows.length?'<p class="small muted" style="margin:0 0 2px">3-month rolling attendance rate across all tracked clients.</p>'+chartAttendance(attSeries):"")+
+        (attSorted.length?attSection('Ongoing',attOngoing)+attSection('Paused',attOther)+
+            (attOld.length?agedFold("att","Finished & long inactive · "+plural(attOld.length,"client"),
+              'avg '+grpAvg(attOld)+'% attendance · '+plural(attOldSessions,"session")+' between them'):"")
+          :'<p class="muted small">Need at least two sessions per client to measure attendance.</p>')+'</div>';
+      /* ---- ongoing clients on a current pause: prompt to review status ---- */
+      const review=attRows.filter(x=>x.a.currentPause);
+      const reviewCard=review.length?'<div class="card" style="border:1px solid var(--accent)"><h2>⏸ Review status</h2>'+
+        '<p class="small muted" style="margin:0 0 6px">These clients are marked <b>Ongoing</b> but haven’t had a session in 3× their usual interval or more. Consider updating them to <b>Paused</b> or <b>Finished</b>.</p>'+
+        review.sort((a,b)=>b.a.currentPause.days-a.a.currentPause.days).map(x=>'<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+' <span class="chip f">'+x.a.currentPause.days+'d gap</span></div><div class="li-sub">Last session '+fmtDMY(x.a.last)+' · '+esc(x.c.frequency||"")+'</div></div><div class="li-right"><span class="small muted">tap to update ›</span></div></div>').join("")+'</div>':'';
 
-    const foldedTotal=attOld.length+lcOld.length+deepOld.length;
-    body.innerHTML=(foldedTotal?'<p class="small muted" style="margin:-2px 0 10px">Lists below show clients you are currently seeing. Anyone finished, or not seen for over a year, is folded into a ⌄ summary row — they still count in every total and chart, they are just out of the way. Tap one to see them.</p>':'')+
-      '<div class="card"><h2>Client retention funnel</h2><p class="small muted" style="margin:0 0 10px">How clients progress over time, by number of sessions.</p><div class="funnel">'+rows+'</div></div>'+
-      '<div class="kpis mb">'+
-        '<div class="kpi"><div class="v">'+base+'</div><div class="l">Clients seen</div></div>'+
-        '<div class="kpi"><div class="v">'+avg+'</div><div class="l">Avg sessions / client</div></div>'+
-      '</div>'+
-      reviewCard+
-      attCard+
-      lcCard+
-      (deep.length?'<div class="card"><h2>Long-term clients</h2><p class="small muted" style="margin:0 0 6px">Clients seen for 20+ sessions.</p>'+
-        deepCur.map(deepLi).join("")+
-        (deepOld.length?agedFold("deep","Finished & long inactive · "+plural(deepOld.length,"client"),
-          plural(deepOldSessions,"session")+' between them'):"")+'</div>':'');
-    body.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>clientForm(S.clients.find(c=>c._id===li.dataset.id)));
-    /* folded rows are built the first time each block is opened, not now */
-    wireAgedFolds(body,{
-      att:()=>attOld.map(attLi).join(""),
-      lc:()=>lcOld.map(lcLi).join(""),
-      deep:()=>deepOld.map(deepLi).join("")
-    });
+      /* ---- drifting away: the one card here that is a list of people to contact ---- */
+      const dr=anaDrifting();
+      const driftCard=dr.rows.length
+        ? anaCard("Drifting away","ana-drifting",
+            dr.rows.slice(0,12).map(r=>'<div class="list-item" data-id="'+r.c._id+'"><div class="li-main">'+
+              '<div class="li-title">'+esc(r.c.code)+' <span class="chip '+(r.ratio>=3?"n":"f")+'">'+r.ratio+'× their gap</span></div>'+
+              '<div class="li-sub">Last seen '+fmtDMY(r.last)+' · '+r.gap+' days ago · '+esc(r.c.frequency||"")+
+                (r.missed?' · '+plural(r.missed,"recent miss"):'')+'</div></div>'+
+              '<div class="li-right"><span class="small muted">nothing booked</span></div></div>').join(""),
+            {cls:"driftcard",lead:plural(dr.rows.length,"client")+" you have not marked as finished, with no next session in the diary."})
+        : anaCard("Drifting away","ana-drifting",
+            '<div class="allclear"><span class="ace">'+gi("done")+'</span>Everyone current has a next session booked or was seen recently</div>');
+
+      const co=anaCohorts();
+      const cohortCard=co.ready
+        ? anaCard("Cohort retention","ana-cohorts",
+            '<div class="rawscroll"><table><thead><tr><th>Started</th><th class="num">Clients</th>'+
+              co.marks.map(w=>'<th class="num">'+w+' wk</th>').join("")+'</tr></thead><tbody>'+
+            co.cohorts.map(c=>'<tr><td><b>'+esc(c.label)+'</b></td><td class="num">'+c.n+'</td>'+
+              c.marks.map(m=>'<td class="num">'+(m.pct==null?'<span class="muted">–</span>':
+                '<span class="chip '+(m.pct>=70?"y":m.pct>=40?"f":"n")+'">'+m.pct+'%</span>')+'</td>').join("")+
+              '</tr>').join("")+'</tbody></table></div>'+
+            '<p class="small muted" style="margin:8px 0 0">Read across a row: of the clients who started then, how many were still coming that many weeks later. A dash means that group has not been going long enough to say.</p>',
+            {lead:"Whether the work you take on is holding better than it used to."})
+        : anaWaiting("Cohort retention","ana-cohorts",co.need);
+
+      const ep=anaEpisodes();
+      const epCard=ep.ready
+        ? anaCard("How long clients stay","ana-episodes",
+            anaKpis([[ep.median,"Sessions, typical finished piece of work"],
+                     [ep.n,"Completed pieces of work"],
+                     [ep.ongoing,"Still in progress"]])+
+            (ep.byYear.length>1
+              ? chartBars(ep.byYear.map(y=>({l:y.y,v:y.median})),false)+
+                '<p class="small muted" style="margin:8px 0 0">Median sessions by the year the work started. '+
+                  (ep.byYear.length>1&&ep.byYear[ep.byYear.length-1].median>ep.byYear[0].median
+                    ? 'Your work is running <b>longer</b> than it used to.'
+                    : ep.byYear[ep.byYear.length-1].median<ep.byYear[0].median
+                    ? 'Your work is running <b>shorter</b> than it used to.'
+                    : 'Steady over the years.')+'</p>'
+              : '')+
+            (ep.longest?'<p class="small muted" style="margin:8px 0 0">Longest completed: <b>'+esc(ep.longest.code)+'</b>, '+plural(ep.longest.n,"session")+'.</p>':''),
+            {lead:"Only finished work counts — a client you are still seeing has not finished yet."})
+        : anaWaiting("How long clients stay","ana-episodes",ep.need);
+
+      const src=anaSources();
+      const srcCard=src.ready
+        ? anaCard("Where clients come from","ana-sources",
+            '<div class="rawscroll"><table><thead><tr><th>Source</th><th class="num">Clients</th><th class="num">Median sess</th><th class="num">Still current</th><th class="num">Billed</th></tr></thead><tbody>'+
+            src.rows.map(r=>'<tr><td>'+esc(r.src)+'</td><td class="num">'+r.n+'</td><td class="num"><b>'+r.median+'</b></td>'+
+              '<td class="num">'+r.stick+'%</td><td class="num">'+gbp(r.revenue)+'</td></tr>').join("")+
+            '</tbody></table></div>'+
+            (src.unset?'<p class="small muted" style="margin:8px 0 0">'+plural(src.unset,"client")+' ha'+(src.unset===1?'s':'ve')+' no source set, so they are not counted here.</p>':'')+
+            '<p class="small muted" style="margin:6px 0 0">The column that matters is <b>median sessions</b>, not how many enquired.</p>',
+            {lead:"Grouped by what you typed in “How they found you”."})
+        : anaWaiting("Where clients come from","ana-sources",src.need);
+
+      const foldedTotal=attOld.length+deepOld.length;
+      const html=(foldedTotal?'<p class="small muted" style="margin:-2px 0 10px">Lists here show clients you are currently seeing. Anyone finished, or not seen for over a year, folds into a ⌄ summary row — they still count in every total and chart. Tap one to see them.</p>':'')+
+        funnelCard+
+        anaKpis([[base,"Clients seen"],[avg,"Avg sessions / client"]])+
+        driftCard+reviewCard+attCard+cohortCard+epCard+srcCard+
+        (deep.length?'<div class="card"><h2>Long-term clients</h2><p class="small muted" style="margin:0 0 6px">Clients seen for 20+ sessions.</p>'+
+          deepCur.map(deepLi).join("")+
+          (deepOld.length?agedFold("deep","Finished & long inactive · "+plural(deepOld.length,"client"),
+            plural(deepOldSessions,"session")+' between them'):"")+'</div>':'');
+      return {html,folds:{att:()=>attOld.map(attLi).join(""),deep:()=>deepOld.map(deepLi).join("")},funnel:true};
+    }
+
+    /* ---- MONEY section: the analytics engine, plus the missed-sessions card whose whole point
+       is what those sessions cost ---- */
+    function moneySection(){
+      const t=today();
+      const missed=S.sessions.filter(isCancelled);
+      const totalLC=missed.length;
+      const totalDNA=missed.filter(isDNA).length;
+      const lcPct=S.sessions.length?Math.round(totalLC/S.sessions.length*1000)/10:0;
+      let lost=0,charged=0;
+      missed.forEach(s=>{const d=derive(s);lost+=Math.max(0,(d.fullRate||0)-(d.rate||0));charged+=(d.rate||0);});
+      const byClient={};
+      S.sessions.forEach(s=>{const k=(s.client||"").toLowerCase();if(!k)return;
+        const e=byClient[k]||(byClient[k]={code:s.client,total:0,lc:0,dna:0,lost:0,recent:0,prev:0,last:null});
+        e.total++;
+        if(isCancelled(s)){e.lc++;if(isDNA(s))e.dna++;
+          const dv=derive(s);e.lost+=Math.max(0,(dv.fullRate||0)-(dv.rate||0));
+          const d=parseD(s.date);if(d){if(!e.last||d>e.last)e.last=d;
+            const days=(t-d)/86400000;if(days<=90)e.recent++;else if(days<=180)e.prev++;}}});
+      const lcClients=Object.values(byClient).filter(e=>e.lc>0).sort((a,b)=>b.lc-a.lc||b.total-a.total);
+      const affected=lcClients.length;
+      let recent90=0,prev90=0;
+      missed.forEach(s=>{const d=parseD(s.date);if(!d)return;const days=(t-d)/86400000;if(days<=90)recent90++;else if(days<=180)prev90++;});
+      let lost90=0;
+      missed.forEach(s=>{const d=parseD(s.date);if(!d||(t-d)/86400000>90)return;
+        const dv=derive(s);lost90+=Math.max(0,(dv.fullRate||0)-(dv.rate||0));});
+      const projLost=Math.round(lost90*(365/90));
+      const trendChip=(r,p)=>r>p?'<span class="chip n">↑ rising</span>':r<p?'<span class="chip y">↓ falling</span>':'<span class="chip na">→ steady</span>';
+      const pctOf=e=>e.total?Math.round(e.lc/e.total*1000)/10:0;
+      const rateChip=e=>{const p=pctOf(e);return '<span class="chip '+(p>=15?'n':p>=5?'f':'s')+'">'+p+'%</span>';};
+      const lcLi=e=>{const cl=S.clients.find(c=>(c.code||"").toLowerCase()===(e.code||"").toLowerCase());
+        return '<div class="list-item"'+(cl?' data-id="'+cl._id+'"':'')+'><div class="li-main"><div class="li-title">'+esc(e.code)+' '+rateChip(e)+'</div><div class="li-sub">'+e.lc+' of '+e.total+' sessions'+(e.dna?' · '+e.dna+' DNA':'')+(e.lost>0?' · '+gbp(Math.round(e.lost))+' not charged':'')+(e.last?' · last '+fmtDMY(e.last):'')+'</div></div><div class="li-right">'+trendChip(e.recent,e.prev)+'</div></div>';};
+      const lcOf=e=>S.clients.find(c=>(c.code||"").toLowerCase()===(e.code||"").toLowerCase());
+      const lcAged=lcClients.filter(e=>!trendsIsCurrent(lcOf(e),lastSeen[(e.code||"").toLowerCase()]));
+      const lcFold=lcAged.length>=AGED_MIN;
+      const lcCur=lcFold?lcClients.filter(e=>trendsIsCurrent(lcOf(e),lastSeen[(e.code||"").toLowerCase()])):lcClients;
+      const lcOld=lcFold?lcAged:[];
+      const lcOldMissed=lcOld.reduce((s,e)=>s+e.lc,0), lcOldLost=lcOld.reduce((s,e)=>s+e.lost,0);
+      infoDef("missed-sessions-detail","Missed sessions",
+        (projLost>0?'<p class="small">At the last 90 days’ rate that is about <b>'+gbp(projLost)+' a year</b> in fees you don’t charge.</p>':'')+
+        '<p class="small">The per-client % is each client’s share of their own sessions.</p>'+
+        '<p class="small">“Fees not charged” is the full fee less what you actually billed, across every missed session. It moves when you change your cancellation policy — which is the point of having one.</p>');
+      const lcCard='<div class="card">'+cardHead("Missed sessions","missed-sessions-detail")+
+        anaKpis([[totalLC,"Missed"+(totalDNA?' · '+totalDNA+' DNA':'')],
+                 [lcPct+"%","Of all sessions"],
+                 [gbp(Math.round(lost)),"Fees not charged",lost>0?"bad":""],
+                 [gbp(Math.round(charged)),"Charged anyway"],
+                 [affected,"Clients affected"],
+                 [recent90,"In the last 90 days"]])+
+        '<p class="small muted" style="margin:0 0 6px">Trend '+trendChip(recent90,prev90)+' — '+recent90+' in the last 90 days vs '+prev90+' in the previous 90.</p>'+
+        (lcClients.length?lcCur.map(lcLi).join("")+
+            (lcOld.length?agedFold("lc","Finished & long inactive · "+plural(lcOld.length,"client"),
+              plural(lcOldMissed,"missed session")+(lcOldLost>0?' · '+gbp(Math.round(lcOldLost))+' not charged':'')):"")
+          :'<p class="muted small">No missed sessions recorded yet.</p>')+'</div>';
+      return {html:trendsMoneyHTML()+lcCard,folds:{lc:()=>lcOld.map(lcLi).join("")}};
+    }
+
+    /* ---- the sub-nav, and lazy section rendering ---- */
+    body.innerHTML=segBar("trseg",TREND_SEGS,trendSeg)+
+      '<p class="small muted trendintro">Worked out from what you have already logged. '+infoDot("trends-sections","How Trends is organised")+'</p>'+
+      '<div id="trbody"></div>';
+    const host=body.querySelector("#trbody");
+    const draw=()=>{
+      const built = trendSeg==="money" ? moneySection()
+                  : trendSeg==="time"  ? {html:trendsTimeHTML(),folds:{}}
+                  : trendSeg==="you"   ? {html:trendsYouHTML(),folds:{}}
+                  : clientsSection();
+      host.innerHTML=built.html;
+      host.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>{
+        const c=S.clients.find(x=>x._id===li.dataset.id); if(c)clientForm(c);});
+      host.querySelectorAll(".list-item[data-code]").forEach(li=>li.onclick=()=>{
+        const c=S.clients.find(x=>(x.code||"").toLowerCase()===(li.dataset.code||"").toLowerCase());
+        if(c)clientForm(c);});
+      /* folded rows are built the first time each block is opened, not now */
+      wireAgedFolds(host,built.folds);
+      wireInfo(host);
+      host.querySelectorAll(".svgwrap,.hmgrid").forEach(w=>scrollChart(w,null));
+      if(built.funnel)requestAnimationFrame(()=>host.querySelectorAll(".funnel .fbar>i").forEach(i=>{i.style.width=(+i.dataset.w)+"%";}));
+    };
     wireInfo(body);
-    requestAnimationFrame(()=>body.querySelectorAll(".funnel .fbar>i").forEach(i=>{i.style.width=(+i.dataset.w)+"%";}));
+    const bar=body.querySelector("#trseg");
+    if(bar){
+      bar.querySelectorAll("button").forEach(b=>b.onclick=()=>{
+        if(b.dataset.seg===trendSeg)return;
+        trendSeg=b.dataset.seg;
+        bar.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x.dataset.seg===trendSeg));
+        segScroll(bar);
+        /* Redraw only the section, never the whole tab: a full go() would throw the reader back
+           to the top of Practice every time they moved between the four. */
+        draw(); host.scrollIntoView({block:"start"});
+      });
+      segScroll(bar);
+    }
+    draw();
   }
   /* Supervision keeps its own inner Log / Peer / Insights bar - mounted whole rather than
      rebuilt, so peer supervision, CPD and accreditation all come across unchanged. */
@@ -3634,12 +4581,11 @@ function taxRegionCardHTML(){
   const ty=curTaxYear(), m=yearMap("taxRegionYears");
   const r=taxRegionFor(ty), hist=Object.keys(m).sort();
   const changed=hist.length>1||(hist.length===1&&m[hist[0]]==="scotland");
-  return '<div class="card"><h2>Where you pay income tax</h2>'+
-    '<p class="small muted">Scotland sets its own income tax bands, so the estimate is simply wrong without this. National Insurance, Class 4 and student loan repayments are the same everywhere in the UK.</p>'+
+  return '<div class="card">'+cardHead("Where you pay income tax","tax-region")+
     '<div class="seg" id="setRegSeg" style="display:inline-flex">'+
       '<button data-r="rUK" class="'+(r==="rUK"?"on":"")+'">England, Wales or NI</button>'+
       '<button data-r="scotland" class="'+(r==="scotland"?"on":"")+'">Scotland</button></div>'+
-    '<p class="prev">Applies to <b>'+esc(ty)+'</b> and every later year. Earlier tax years keep the bands they were assessed under, so moving never rewrites a return you have already filed.</p>'+
+    '<p class="prev">Applies to <b>'+esc(ty)+'</b> and every later year.</p>'+
     (changed?'<div class="acc-work">'+hist.map(y=>'<div>'+esc(y)+' onwards \u2014 <b>'+(m[y]==="scotland"?"Scotland":"England, Wales or NI")+'</b></div>').join("")+'</div>':'')+
     '</div>';
 }
@@ -4368,6 +5314,16 @@ function taxDetailsSheet(y){const tx=taxForYear(y);const body=el('<div></div>');
 const INFO={};
 function infoDef(k,title,html){INFO[k]={title,html};}
 function infoLink(k,label){return '<span class="taxlink info" data-info="'+k+'">'+(label||"Find out more")+' \u203a</span>';}
+/* The same topic as a small circled i, for when the explanation would otherwise cost a
+   paragraph of screen. Sits inline beside a card heading or a label; `wireInfo()` picks it up
+   through the same [data-info] selector, so nothing else has to know the difference.
+   Rule of thumb: if the reader needs the sentence EVERY time, leave it on the screen. If they
+   need it once and then never again, it belongs behind one of these. */
+function infoDot(k,aria){return '<button type="button" class="idot" data-info="'+k+'" aria-label="'+esc(aria||"What is this?")+'" title="'+esc(aria||"What is this?")+'">i</button>';}
+/* A card heading with the explanation folded into an icon beside it. */
+function cardHead(title,infoKey,right){
+  return '<div class="chead"><h2>'+esc(title)+(infoKey?' '+infoDot(infoKey,"About "+title):'')+'</h2>'+(right||"")+'</div>';
+}
 function wireInfo(host){(host||document).querySelectorAll("[data-info]").forEach(n=>n.onclick=ev=>{
   ev.stopPropagation();const i=INFO[n.dataset.info];if(!i)return;
   const b=el('<div></div>');b.innerHTML=i.html;wireInfo(b);openSheet(i.title,b);});}
@@ -4457,12 +5413,12 @@ infoDef("backups-explained","Backups: which is which",
    honours it stay together. */
 function basisCardHTML(){
   return '<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
-      '<h2 style="margin:0">How your figures are counted</h2>'+
+      '<h2 style="margin:0">How your figures are counted '+infoDot("tax-basis","How your figures are counted")+'</h2>'+
       '<div class="seg" id="basisSeg" style="display:inline-flex"><button data-b="cash" class="'+(taxBasis()==="cash"?"on":"")+'">Cash</button>'+
         '<button data-b="accruals" class="'+(taxBasis()==="accruals"?"on":"")+'">Accruals</button></div></div>'+
     '<p class="small muted mt">'+basisNote()+'</p>'+
     (taxBasis()==="cash"?'<p class="small muted">Sessions you have not been paid for yet are not in these totals \u2014 they arrive in the year the money does.</p>':'')+
-    '<p class="prev">This changes every money and tax figure in the app, so it belongs with your other business decisions rather than on the screen showing the numbers.</p>'+
+
     '</div>';
 }
 /* `after` is how the host redraws itself \u2014 the basis changes figures on whatever screen is open. */
@@ -4477,6 +5433,173 @@ function wireBasisCard(host,after){
 infoDef("encrypted-backup-detail","How encrypted backup works",
   '<p class="small">The file is unreadable without the passphrase \u2014 safe to keep in iCloud, Drive or email.</p>'+
   '<p class="small">On desktop Chrome/Edge you can also pick a file that backups <b>auto-save to silently</b> after every change.</p>');
+
+/* ---- Trends & working-week topics ----
+   Each of these is a paragraph that used to be a candidate for the screen itself. Behind an
+   info dot they cost nothing until someone wants them, which is what lets a Trends card be
+   a heading, a number and a chart. */
+infoDef("tax-basis","Cash or accruals",
+  '<p class="small">Two ways of deciding <b>which year</b> a session or a cost belongs to.</p>'+
+  '<div class="acc-work"><div><b>Cash</b> — counted when the money actually moves. HMRC’s default for sole traders since 2024/25, and the simpler of the two by a distance.</div>'+
+  '<div><b>Accruals</b> — counted when the work was done or the bill was raised, whether or not anyone has paid yet.</div></div>'+
+  '<p class="small mt">On cash, sessions you have not been paid for are not in your totals at all — they arrive in the year the money does. That is usually what a small practice wants, and it is what the app assumes unless you say otherwise.</p>'+
+  '<p class="small">It changes <b>every</b> money and tax figure in the app, which is why it sits here with your other business decisions rather than on the screen showing the numbers.</p>'+
+  '<p class="small muted">If an accountant already files you on one basis, match it. Switching back and forth between years is exactly the thing that makes a return hard to defend.</p>');
+infoDef("tax-region","Where you pay income tax",
+  '<p class="small">Scotland sets its own income tax bands. Get this wrong and the estimate is simply wrong — there is no partial credit.</p>'+
+  '<p class="small">National Insurance, Class 4 and student loan repayments are the same everywhere in the UK, so only the income tax part changes.</p>'+
+  '<p class="small"><b>It applies from the tax year you set it in, forwards.</b> Earlier years keep the bands they were actually assessed under, so moving across the border never rewrites a return you have already filed.</p>');
+infoDef("cancel-rules","How the notice periods work",
+  '<p class="small">One line per notice period you honour. They are read <b>from most notice to least</b>, and a cancellation is charged by the first line it qualifies for.</p>'+
+  '<div class="acc-work"><div>at least <b>48</b> hrs → <b>0</b>%</div><div>at least <b>24</b> hrs → <b>50</b>%</div><div class="muted">…anything less, or no date recorded → <b>100%</b></div></div>'+
+  '<p class="small mt">If a cancellation reaches none of your lines — or you never recorded when it was called off — the <b>full fee</b> is drafted. To set a lower floor, add a line at 0 hours.</p>'+
+  '<p class="small muted">Whatever it works out to is only a starting figure. Change it on the session itself for that one session.</p>');
+infoDef("privacy-removal","Anonymising and erasing",
+  '<p class="small">For when a client asks you to erase their data, or before you pass this device on. Both routes are permanent and both make you type a phrase before anything happens.</p>'+
+  '<div class="acc-work"><div><b>Anonymise</b> — the code becomes “Client 001” and any free text is cleared, but every date, fee, payment and attendance stays. Your tax figures do not move by a penny.</div>'+
+  '<div><b>Erase</b> — the client, their sessions and their fee history go. Supervision entries stay, with their name stripped out, because those are your own CPD record.</div></div>'+
+  '<p class="small mt"><b>Neither is for tidying up.</b> To stop seeing someone in your day-to-day lists, set their status to <b>Finished</b> instead — nothing is lost and it is reversible.</p>');
+infoDef("guided-tour","The guided tour",
+  '<p class="small">Eight short stops that dim the screen and point at the real thing, rather than describing it over the top of it. What each tab is for, how to log a session, and where your backups live.</p>'+
+  '<p class="small"><b>It changes nothing</b> and you can leave at any point.</p>');
+infoDef("screen-tips","Tips on new screens",
+  '<p class="small">The first time you open a screen, the app points out the two or three things worth knowing about it. Then never again.</p>'+
+  '<p class="small">Which ones you have seen travels with your backups, so moving to a new phone does not replay everything you have already read.</p>');
+infoDef("rerun-setup","Re-running setup",
+  '<p class="small">Walks through practice name, appearance, features and defaults again, and <b>overwrites</b> them with your new answers.</p>'+
+  '<p class="small"><b>Your clients, sessions and payments are never touched.</b> This is settings only. If sessions already exist it skips the rooms step, so it cannot disturb your fee history either.</p>');
+infoDef("practice-details","Practice details",
+  '<p class="small">Your practice name appears in the app header and at the top of anything you print — receipts, statements, the lot.</p>'+
+  '<p class="small">The strapline is receipts only. Leave it blank if you would rather not have one.</p>'+
+  '<p class="small muted">Neither is sent anywhere. This is a label on your own copy.</p>');
+infoDef("cancellations","Cancellations & DNAs",
+  '<p class="small">Two different things, charged differently:</p>'+
+  '<div class="acc-work"><div><b>A cancellation</b> — called off in advance. What you charge depends on how much notice you got.</div>'+
+  '<div><b>A DNA</b> — simply did not come. One rate, no notice periods.</div></div>'+
+  '<p class="small mt">Add a line for each notice period you honour. They are read <b>longest notice first</b>, and a cancellation is charged by the first line it qualifies for. Notice that clears none of them — or notice you never recorded — charges the full fee.</p>'+
+  '<p class="small">That direction is deliberate: a draft that is too high gets corrected on the spot, one that is too low is a fee quietly written off. If you want a lower floor, add a line at 0 hours.</p>'+
+  '<p class="small">Whatever the rule works out to is only ever a <b>starting figure</b> — you can change it on any individual session.</p>');
+infoDef("features","Switching features off",
+  '<p class="small">Everything here is a preference, not a purchase. Switch something off and it disappears from the app; switch it back on and it is exactly as you left it.</p>'+
+  '<p class="small"><b>Nothing is ever deleted.</b> Turning off Supervision does not remove a single supervision entry — the screen simply stops appearing until you want it again.</p>'+
+  '<p class="small muted">Some features depend on others: Peer supervision needs Supervision, and Costs &amp; other income needs Money. Switching off a parent hides its children too.</p>');
+infoDef("notes-sync","GroundWork Notes sync",
+  '<p class="small">If you write your clinical notes in the companion app, this hands it one thing: <b>how often you see each client, and when</b>. That is enough for it to work out which sessions still need writing up, on whichever device you write them on.</p>'+
+  '<p class="small"><b>What goes over:</b> client codes, status, cadence, usual day and time, and the date of the first session.</p>'+
+  '<p class="small"><b>What does not:</b> names, fees, payments, attendance, and anything clinical. Nothing at all comes back the other way — whether your notes are done stays a tick in this app.</p>'+
+  '<p class="small muted">On a computer running Chrome or Edge you pick the file once and every later sync overwrites it silently. On an iPhone it goes through the share sheet. Everywhere else it downloads.</p>');
+infoDef("sheet-import","Importing from a spreadsheet",
+  '<p class="small">For arriving with history already in Excel, Numbers or Google Sheets. Paste your rows or pick a <b>.csv</b>, match your columns to the app’s fields, and check the preview before anything is written.</p>'+
+  '<p class="small"><b>It adds, it never replaces.</b> Your existing clients and sessions are untouched — unlike restoring a backup, which swaps everything out. Clients and rooms your rows mention are created for you.</p>'+
+  '<p class="small">Fees become dated history rather than one flat number, so a £60 session imported from before a rise to £65 still counts as £60 — which is what your tax figures are built on.</p>'+
+  '<p class="small muted">Nothing is saved until the final button, and one Undo reverses the whole import.</p>');
+infoDef("backup-reminders","Backup reminders",
+  '<p class="small">A banner appears once either limit is reached, and clears the moment you export. It counts from your last <b>real backup</b> — an automatic copy on this device does not reset it, on purpose.</p>'+
+  '<p class="small muted">Lower numbers mean more nagging. Most people settle around 7 days or 20 changes.</p>');
+infoDef("data-health","Data health",
+  '<p class="small">Reads every session and flags what looks wrong: two clients booked at the same time, a duplicate session number, a payment dated before the session it pays for, a room fee that does not match the room.</p>'+
+  '<p class="small">It changes nothing. Every result is a link to the session so you can judge it yourself — some will be perfectly fine and you can ignore them.</p>');
+infoDef("working-week","Your working week",
+  '<p class="small">Sessions are counted; hours are not. These three numbers are what turn one into the other, and they are used <b>only</b> in Trends — nothing about your fees, tax or records changes.</p>'+
+  '<div class="acc-work"><div><b>Session length</b> — the therapy hour you actually work. 50 minutes almost everywhere.</div>'+
+  '<div><b>Admin per session</b> — notes, invoicing, emails, rearranging.</div>'+
+  '<div><b>A full week</b> — how many sessions a busy-but-sustainable week holds for you.</div></div>'+
+  '<p class="small mt">Nothing here is scheduling. The app never books anything, and it will not tell you that you are working too much — it just shows you the arithmetic.</p>');
+infoDef("admin-mins","Admin per session",
+  '<p class="small">The unpaid time each session actually costs you: writing it up, invoicing, the email rearranging it, the five minutes before and after.</p>'+
+  '<p class="small">It is the single biggest reason an effective hourly rate comes out below the headline fee, and leaving it at zero produces a flattering number rather than a true one.</p>'+
+  '<p class="small muted">Fifteen minutes is the default. Most people who actually time it find they were optimistic.</p>');
+infoDef("full-week","A full week for you",
+  '<p class="small">Not the most sessions you could physically fit in — the number that a good, busy, sustainable week holds. Only you know it.</p>'+
+  '<p class="small"><b>Leave it blank</b> and Trends uses the busiest week you have actually worked in the last six months instead, and says so. That is a fact rather than a target, which is the safer default.</p>');
+infoDef("referral-source","How they found you",
+  '<p class="small">Optional, and free text — whatever words you would use. "Word of mouth", "Counselling Directory", a colleague’s name.</p>'+
+  '<p class="small">Fill it in and <b>Practice › Trends › Clients</b> can tell you which sources bring people who stay, rather than just who enquires. It is the one thing in the app that can change what you do about finding clients.</p>'+
+  '<p class="small muted">It is cleared if you ever anonymise a client, because free text can name people.</p>');
+
+infoDef("ana-funnel","The retention funnel",
+  '<p class="small">Every client you have ever seen, counted at four depths. A client at 12 sessions is counted in all three bands below 12 as well — it is a funnel, not four separate groups.</p>'+
+  '<p class="small">The percentages are of everyone who ever started. A practice where most people stop after one or two sessions and one where most reach twelve are doing very different work, and this is the quickest way to see which yours is.</p>'+
+  '<p class="small muted">It says nothing about <i>when</i> — a client who finished four years ago counts the same as one you saw yesterday. Cohort retention is the version with time in it.</p>');
+infoDef("ana-seasonality","Seasonality",
+  '<p class="small">Each calendar month set against your own average month, indexed to 100. <b>118</b> means that month typically runs 18% above your average; <b>76</b> means 24% below.</p>'+
+  '<p class="small">It needs two full years before it says anything, because one August tells you about one August rather than about Augusts.</p>'+
+  '<p class="small">What it is for: planning a break, deciding when a fee rise will land softly, and knowing which lean month is normal rather than a warning.</p>');
+infoDef("ana-floor","Your floor",
+  '<p class="small">The worst, best and typical month of the last twelve complete ones — before tax and before costs.</p>'+
+  '<p class="small">The gap between <b>worst</b> and <b>typical</b> is the honest measure of how much this practice moves about, and it is the figure to size a buffer against. A practice whose worst month is 15% below typical needs a very different cushion from one that halves.</p>');
+infoDef("ana-hourly","Effective hourly rate",
+  '<p class="small">Everything you billed in the last year, divided by every hour the practice actually took.</p>'+
+  '<div class="acc-work"><div>the sessions themselves (session length × sessions that happened)</div>'+
+  '<div>+ admin around every session logged, cancellations included</div>'+
+  '<div>+ supervision and peer supervision</div>'+
+  '<div><b>= the hours your fee is really spread across</b></div></div>'+
+  '<p class="small mt">It comes out well below the headline fee for everyone. That is not a problem to fix, it is the number to use when deciding whether a rate still works — and the one to remember when comparing yourself with an employed salary.</p>'+
+  '<p class="small muted">It does not count the unpaid hours no diary sees: CPD reading, accounts, your website. The real figure is lower still.</p>');
+infoDef("ana-capacity","How full your weeks are",
+  '<p class="small">Average sessions a week over the last six months, against a full week.</p>'+
+  '<p class="small">If you have told the app what a full week looks like for you (<b>Settings › Your practice</b>), that is what it measures against. If you have not, it uses the <b>busiest week you actually worked</b> — a fact rather than a target, and it says which it used.</p>'+
+  '<p class="small">Running consistently near full is the moment to raise fees rather than take more on. Running well under it, with the diary open, is a marketing question rather than a pricing one.</p>');
+infoDef("ana-slots","Slot reliability",
+  '<p class="small">Every day-and-hour you have used at least three times in the last six months, and how often those sessions actually went ahead.</p>'+
+  '<p class="small">A slot that is booked ten times and missed four is not a slot that works. Usually the fix is to stop offering it — late Friday and the first hour of Monday are the usual suspects — rather than to keep chasing whoever is in it.</p>'+
+  '<p class="small muted">Cancellations and DNAs both count as missed here, whatever you charged for them.</p>');
+infoDef("ana-weeks","Weeks actually worked",
+  '<p class="small">How many weeks in the last year had at least one session in them.</p>'+
+  '<p class="small">Sole traders price as though they work 46 to 48 weeks. Almost nobody does, once illness, holidays, quiet spells and Christmas are counted — and the difference between the year you priced for and the year you worked is a large part of why a practice can feel busy and still be tight.</p>');
+infoDef("ana-cohorts","Cohort retention",
+  '<p class="small">Take everyone who started with you in a given quarter, and ask what proportion were still coming 4, 8, 12 and 24 weeks later.</p>'+
+  '<p class="small">The retention funnel says where your clients are <i>now</i>. This says whether the work you are <b>taking on</b> is holding better than it used to — which is a different question, and the one that tells you whether a change to how you assess or contract is working.</p>'+
+  '<p class="small muted">A quarter only appears against a milestone it has had time to reach, so recent cohorts show fewer columns rather than a misleading nought.</p>');
+infoDef("ana-episodes","How long clients stay",
+  '<p class="small">The number of sessions a completed piece of work runs to, and whether that is changing year on year.</p>'+
+  '<p class="small"><b>Only finished work counts.</b> A client you are seeing this week has a length that has not happened yet, and counting them drags the average down towards nothing. Work counts as finished when the client’s status says so, or when the gap has run past three of their usual intervals.</p>'+
+  '<p class="small">The median is used rather than the mean, so one eight-year client does not move the answer.</p>');
+infoDef("ana-drifting","Drifting away",
+  '<p class="small">Clients you have not marked as finished, whose gap has run past <b>one and a half times</b> their own usual interval, and who have nothing booked.</p>'+
+  '<p class="small">One and a half rather than two on purpose: at two intervals a weekly client has already been gone a fortnight, and the conversation is much harder than it would have been a week ago.</p>'+
+  '<p class="small">This is a list to act on, not a statistic. Some will be holidays you know about. The value is in the two you had lost track of.</p>');
+infoDef("ana-sources","Where clients come from",
+  '<p class="small">Grouped by whatever you typed in <b>How they found you</b> on each client.</p>'+
+  '<p class="small">The column that matters is not how many enquired — it is the <b>median sessions</b> and how many are <b>still current</b>. A directory that sends ten people who each come twice is worth much less than a colleague who sends two who each stay a year, and enquiry counts alone say the opposite.</p>'+
+  '<p class="small muted">Clients with nothing filled in are counted separately rather than lumped into "Other": never asked is a different fact from found us themselves.</p>');
+infoDef("ana-dtp","Days to payment",
+  '<p class="small">The gap between a session happening and the money arriving, averaged by month.</p>'+
+  '<p class="small">Dated on the <b>session</b>, not the payment. A March session paid in June belongs to March’s figure — dating it to June would make a slow month look fine simply because nothing had landed yet.</p>'+
+  '<p class="small">The median is used, so one client who took nine months does not swamp the month they were in. A number that is creeping up is usually an invoicing habit rather than a client problem.</p>');
+infoDef("ana-late","Who pays late",
+  '<p class="small">The per-client version of days-to-payment, because "31 days on average" is made of people.</p>'+
+  '<p class="small">Sorted by what is actually outstanding first, then by how slowly they pay. <b>Over 30 days</b> counts how many of their payments took longer than a month.</p>'+
+  '<p class="small muted">Nothing here changes a fee or sends anything. It is for deciding who to ask for payment up front.</p>');
+infoDef("ana-costratio","What the practice costs to run",
+  '<p class="small">Costs as a share of everything that came in, over the last twelve months, against the twelve before that.</p>'+
+  '<p class="small">This is <b>business</b> reporting, not tax: no bands, no allowances, nothing jurisdiction-specific. It answers "of every pound that arrives, how much leaves again before I see it".</p>'+
+  '<p class="small">A ratio drifting upward while income is flat is the early warning. The category list underneath says which line did it.</p>');
+infoDef("ana-erosion","Fee erosion",
+  '<p class="small">Two numbers per month: what you <b>would</b> have billed at full fee, and what you <b>actually</b> billed.</p>'+
+  '<p class="small">The gap is made of reduced cancellation charges, clients still on an older rate, and a mix that has shifted towards your cheaper work. None of it is visible in a headline rate.</p>'+
+  '<p class="small">A practice can raise its advertised fee and watch its real average fall at the same time. This is the only place in the app that would show you that.</p>');
+infoDef("ana-supcadence","Supervision cadence",
+  '<p class="small">Clinical hours for every hour of supervision, by quarter, against the 1:6 guideline.</p>'+
+  '<p class="small"><b>This is not the accreditation ratio.</b> Form 3A, in Supervision › Insights, counts different things over a different window for a different purpose. This is the everyday version: is the gap between supervision quietly widening?</p>'+
+  '<p class="small">The longest gap is often the more useful figure. An average can look fine across a quarter in which you went nine weeks without.</p>');
+infoDef("ana-load","Your load",
+  '<p class="small">Two things a diary already knows, and neither is on any other screen.</p>'+
+  '<div class="acc-work"><div><b>Heavy days</b> — five or more sessions in one day.</div>'+
+  '<div><b>Back-to-back runs</b> — three or more sessions with no real gap between them.</div></div>'+
+  '<p class="small mt">Both are recognised markers for the kind of tiredness that arrives slowly. Neither is a rule, and one heavy week is nothing; a pattern of them is worth noticing before someone else notices it for you.</p>'+
+  '<p class="small muted">Cancelled sessions are not counted — a day that emptied out was not a heavy day.</p>');
+infoDef("ana-cpd","CPD trajectory",
+  '<p class="small">Your rolling twelve-month total against your target, plus the <b>pace</b> you are currently going at.</p>'+
+  '<p class="small">Pace comes from the last 90 days, annualised — not from the whole year. Someone who did twenty hours last spring and nothing since is not two-thirds of the way there; they have stopped, and a running total would hide that until it was too late to fix.</p>');
+infoDef("trends-sections","How Trends is organised",
+  '<p class="small">Four questions, one per section.</p>'+
+  '<div class="acc-work"><div><b>Clients</b> — who stays, who drifts, and where they came from.</div>'+
+  '<div><b>Money</b> — what arrives, when, and what it costs to run.</div>'+
+  '<div><b>Time</b> — what an hour is worth and how full your weeks are.</div>'+
+  '<div><b>You</b> — supervision, load and CPD.</div></div>'+
+  '<p class="small mt">Everything is worked out from sessions you have already logged. Nothing here is entered twice, and nothing leaves the device.</p>'+
+  '<p class="small muted">Cards say what they need rather than showing an empty chart, so a new practice sees them fill in one at a time.</p>');
 
 /* ===== Monthly take-home & pension =====
    Both of these return **null when the therapist has never set one**, which is deliberately not
@@ -5944,7 +7067,7 @@ function wireCancelRules(v){
         '<button class="rmx" data-x="'+i+'" title="Remove">✕</button>'+
       '</div>').join("")
       :'<p class="small muted">No notice periods set — a late cancellation will be charged in full.</p>';
-    host.innerHTML+='<p class="small muted mt">Lines are ordered from most notice to least. A cancellation is charged by the first line it qualifies for. If it doesn’t reach any of them — or you didn’t record a cancellation date — you charge the <b>full fee</b>.</p>';
+    host.innerHTML+='<p class="small muted mt">Read from most notice to least. '+infoDot("cancel-rules","How the notice periods work")+'</p>';
     host.querySelectorAll(".cxrow").forEach(row=>{
       const i=+row.dataset.i;
       row.querySelectorAll("[data-f]").forEach(inp=>inp.onchange=async()=>{
@@ -5959,6 +7082,9 @@ function wireCancelRules(v){
       const tgt=sorted[i]; if(!tgt)return;
       rules().window=rules().window.filter(x=>x!==tgt);
       await save("Removed a cancellation notice period"); draw();});
+    /* draw() replaces this block's markup, taking the info dot's click handler with it — so the
+       dot has to be re-wired here rather than only by VIEWS.settings' single pass. */
+    wireInfo(host);
   };
   const add=v.querySelector("#cxAdd");
   if(add)add.onclick=async()=>{rules().window.push({hoursBefore:48,chargePct:50});
@@ -6096,15 +7222,24 @@ VIEWS.settings=function(){
   const v=el('<div class="view active"></div>');
   v.innerHTML=`
    <details class="sgrp" data-g="business"><summary><span class="sgt">Your practice</span><span class="sgs">Decisions about the business: name, charging policy and how your figures are counted</span></summary><div class="sgb">
-   <div class="card"><h2>Practice details</h2>
-     <p class="small muted">Shown in the app header and at the top of printed receipts and statements.</p>
+   <div class="card">${cardHead("Practice details","practice-details")}
      <label>Practice name</label><input id="setName" maxlength="60" value="${esc(practiceName())}">
      <label>Strapline <span class="muted">(receipts only)</span></label><input id="setTag" maxlength="70" value="${esc(practiceTagline())}">
      <button class="btn full mt" id="setNameSave">Save practice details</button>
    </div>
-   <div class="card"><h2>Cancellations &amp; DNAs</h2>
-     <p class="small muted">What a client is charged when a session is missed. The rule fills in the charge when you log one — you can always override it for a single session.</p>
-     <div class="vmsg warn mt">${gi("clock")} This is your policy <b>from now on</b>. Sessions you have already logged keep the charge they were given, so changing this never rewrites what a client was billed.</div>
+   <div class="card">${cardHead("Your working week","working-week")}
+     <p class="small muted" style="margin:-2px 0 0">Turns session counts into hours, for <b>Practice › Trends</b>. Nothing else uses them.</p>
+     <div class="field2">
+       <div><label>Session length (mins)</label><input type="number" min="10" max="180" step="5" id="setSessMins" value="${esc(sessionMins())}"></div>
+       <div><label>Admin per session (mins) ${infoDot("admin-mins","Admin per session")}</label><input type="number" min="0" max="120" step="5" id="setAdminMins" value="${esc(adminMinsPerSession())}"></div>
+     </div>
+     <label>A full week for you ${infoDot("full-week","A full week for you")}</label>
+     <input type="number" min="1" max="60" step="1" id="setFullWeek" placeholder="Leave blank and we&rsquo;ll use your busiest week" value="${fullWeekSessions()==null?"":esc(fullWeekSessions())}">
+     <button class="btn full mt" id="setWeekSave">Save working week</button>
+   </div>
+   <div class="card">${cardHead("Cancellations & DNAs","cancellations")}
+     <p class="small muted" style="margin:-2px 0 0">What a client is charged when a session is missed.</p>
+     <div class="vmsg warn mt">${gi("clock")} This is your policy <b>from now on</b>. Sessions you have already logged keep the charge they were given.</div>
      <div class="grp-h">Cancelled with notice</div>
      <div id="cxRules"></div>
      <button class="btn sec sm mt" id="cxAdd">＋ Add a notice period</button>
@@ -6119,36 +7254,35 @@ VIEWS.settings=function(){
    <details class="sgrp" data-g="app"><summary><span class="sgt">App preferences</span><span class="sgs">How the app looks and sounds, and which parts of it you use</span></summary><div class="sgb">
    ${plusSettingsCardHTML()}
    <div class="card"><h2>Appearance &amp; sound</h2>
-     <p class="small muted">Colour scheme, light/dark and sound effects. Stored on this device; the scheme also travels with your backups.</p>
-     <label>Colour scheme</label>
+     <p class="small muted">${PALETTES_ENABLED?"Colour scheme, light/dark":"Light or dark"} and sound effects. Stored on this device.</p>
+     ${PALETTES_ENABLED?`<label>Colour scheme</label>
      <div class="palgrid" id="setPalMain">${PALETTES.filter(p=>p.free).map(p=>paletteOptionHTML(p,p.k===curPalette())).join("")}</div>
      <details class="dz" id="setPalMore"${PALETTES.some(p=>!p.free&&p.k===curPalette())?" open":""}><summary>More colour schemes (${PALETTES.filter(p=>!p.free).length})</summary>
        <div class="palgrid mt" id="setPal">${PALETTES.filter(p=>!p.free).map(p=>paletteOptionHTML(p,p.k===curPalette())).join("")}</div>
-     </details>
-     <label style="margin-top:16px">Light or dark</label>
+     </details>`:``}
+     <label${PALETTES_ENABLED?' style="margin-top:16px"':''}>Light or dark</label>
      <div class="seg" id="setThemeSeg" style="display:inline-flex">${["light","dark","auto"].map(t=>'<button data-t="'+t+'" class="'+(themePref()===t?"on":"")+'">'+(t==="light"?"☀ Light":t==="dark"?"☾ Dark":"⚙ Match device")+'</button>').join("")}</div>
      <div class="mt">
        <button class="btn sec" id="setSound"></button>
      </div>
    </div>
-   <div class="card"><h2>Features</h2>
-     <p class="small muted">Switch off anything you don’t use — it disappears from the app. Nothing is deleted, and you can switch it back on any time.</p>
+   <div class="card">${cardHead("Features","features")}
+     <p class="small muted" style="margin:-2px 0 0">Switch off anything you don’t use. Nothing is deleted.</p>
      <div class="mt" id="setAdvanced"></div>
      <div class="mt" id="setFeat"></div>
    </div>
    </div></details>
    <details class="sgrp" data-g="data"><summary><span class="sgt">Data &amp; backup</span><span class="sgs">Backups, storage, import, undo and health checks</span></summary><div class="sgb">
-   <div class="card"><h2>Backup &amp; restore</h2>
-     <p class="small muted">Your data lives on this device. A <b>backup</b> is one <b>.json</b> file holding everything — every session, client, room, payment and setting — and restoring it puts the app back exactly as it was. Keep one somewhere that is <b>not</b> this device.</p>
-     <p class="small muted">GroundWork works on one device at a time: restore a backup to move your records, don’t run two copies side by side. ${infoLink("backups-explained","What counts as a backup")}</p>
+   <div class="card">${cardHead("Backup & restore","backups-explained")}
+     <p class="small muted" style="margin:-2px 0 0">One <b>.json</b> file with everything in it. Keep one somewhere that is <b>not</b> this device.</p>
      <div class="row mt" style="flex-wrap:wrap;gap:8px">
        <button class="btn" id="expJ">⤓ Export backup (.json)</button>
        <button class="btn ghost" id="impB">⤒ Restore from backup</button>
        <input type="file" id="impF" accept=".json,application/json" style="display:none">
      </div>
    </div>
-   <div class="card"><h2>Spreadsheet exports</h2>
-     <p class="small muted">Extracts for a spreadsheet or your accountant. <b>These are not backups</b> — they cannot be restored, and none of them contains everything. ${infoLink("backups-explained")}</p>
+   <div class="card">${cardHead("Spreadsheet exports","backups-explained")}
+     <p class="small muted" style="margin:-2px 0 0">For a spreadsheet or your accountant. <b>Not backups</b> — they cannot be restored.</p>
      <details class="dz"><summary>Export a .csv</summary>
        <div class="row mt" style="flex-wrap:wrap;gap:8px">
          <button class="btn sec" id="expC">⤓ Sessions (.csv)</button>
@@ -6157,16 +7291,15 @@ VIEWS.settings=function(){
        </div>
      </details>
    </div>
-   <div class="card"><h2>GroundWork Notes</h2>
-     <p class="small muted">If you write your clinical notes in <b>GroundWork Notes</b>, this sends over how often you see each client and when — so that app can work out which sessions still need writing up, on whichever device you write them on.</p>
-     <p class="small muted"><b>Client codes and appointment times only.</b> No names, no fees, and nothing clinical ever comes back the other way — whether your notes are done stays a tick in this app.</p>
+   <div class="card">${cardHead("GroundWork Notes","notes-sync")}
+     <p class="small muted" style="margin:-2px 0 0">Sends the companion notes app how often you see each client. <b>Client codes and times only</b> — no names, no fees, nothing clinical.</p>
      <div class="row mt" style="flex-wrap:wrap;gap:8px">
        <button class="btn" id="rosterSync">↻ Sync schedules</button>
      </div>
      <p class="small muted mt" id="rosterState"></p>
    </div>
-   <div class="card"><h2>Import from a spreadsheet</h2>
-     <p class="small muted">Moving over from Excel, Numbers or Google Sheets? Paste your rows or pick a <b>.csv</b> and match your columns to the app’s fields. Your existing data is <b>kept</b> — this only adds to it, and one Undo reverses the whole import.</p>
+   <div class="card">${cardHead("Import from a spreadsheet","sheet-import")}
+     <p class="small muted" style="margin:-2px 0 0">Arriving from Excel, Numbers or Sheets? This <b>adds</b> to what you have — it never replaces it.</p>
      <button class="btn sec full mt" id="impSheet">📥 Import old sessions…</button>
    </div>
    <div class="card"><h2>Storage on this device</h2>
@@ -6174,9 +7307,8 @@ VIEWS.settings=function(){
      <p class="small muted" id="stHint"></p>
      <button class="btn sec mt" id="stAsk" style="display:none">Ask the browser to protect it</button>
    </div>
-   <div class="card"><h2>Encrypted backup 🔐</h2>
-     <p class="small muted">Protect backups with a passphrase (AES-256). ${infoLink("encrypted-backup-detail")} <b>If you forget the passphrase, encrypted backups cannot be opened.</b></p>
-     <p class="small muted"><b>Choose auto-save file</b> (Chrome and Edge on a computer) picks one file that the app then rewrites silently after every change. Handy, but it is one file on one machine — it is not a substitute for exporting a backup you keep elsewhere. ${infoLink("backups-explained")}</p>
+   <div class="card">${cardHead("Encrypted backup 🔐","encrypted-backup-detail")}
+     <p class="small muted" style="margin:-2px 0 0">Protect backups with a passphrase (AES-256). <b>Forget it and they cannot be opened.</b></p>
      <p class="small" id="encStatus" style="font-weight:600"></p>
      <div class="row mt" style="flex-wrap:wrap;gap:8px">
        <button class="btn sec" id="encSet"></button>
@@ -6185,9 +7317,8 @@ VIEWS.settings=function(){
        <button class="btn ghost" id="encOff" style="display:none">Turn off</button>
      </div>
    </div>
-   <div class="card"><h2>Backup reminders</h2>
+   <div class="card">${cardHead("Backup reminders","backup-reminders")}
      <p class="small muted" id="bkStatus"></p>
-     <p class="small muted">A banner reminds you to back up once either limit below is reached, and clears when you do.</p>
      <div class="field2">
        <div><label>Remind after (days)</label><input type="number" min="1" id="setBkDays"></div>
        <div><label>…or after (changes)</label><input type="number" min="1" id="setBkActs"></div>
@@ -6198,33 +7329,32 @@ VIEWS.settings=function(){
        <button class="btn ghost" id="snapB">View restore points</button></div>
      <div id="auditWrap" class="mt"></div>
    </div>
-   <div class="card"><h2>Data health</h2>
-     <p class="small muted">Scan every session for possible issues — time clashes, duplicate numbers, payment-date slips, room/rate mismatches and more.</p>
+   <div class="card">${cardHead("Data health","data-health")}
+     <p class="small muted" style="margin:-2px 0 0">Scan every session for things that look wrong. It changes nothing.</p>
      <button class="btn sec" id="checkData">Check data</button>
      <div id="dhResults" class="mt"></div>
    </div>
    </div></details>
    <details class="sgrp" data-g="records"><summary><span class="sgt">Records &amp; privacy</span><span class="sgs">How long you keep records, and how to remove them</span></summary><div class="sgb">
    ${retentionCardHTML()}
-   <div class="card"><h2>Privacy &amp; removal</h2>
-     <p class="small muted">Tools for anonymising or deleting client information — for example when a client asks you to erase their data, or before you replace this device.</p>
+   <div class="card">${cardHead("Privacy & removal","privacy-removal")}
+     <p class="small muted" style="margin:-2px 0 0">Anonymising or deleting client information. Permanent.</p>
      <details class="dz"><summary>Show data removal tools</summary>
-       <p class="small muted" style="margin-top:6px">These actions are permanent and are not what you want for day-to-day tidying up. To stop seeing a client, set their status to <b>Finished</b> instead.</p>
+       <p class="small muted" style="margin-top:6px">Not what you want for day-to-day tidying up — set a client’s status to <b>Finished</b> instead.</p>
        <button class="btn ghost full mt" id="setDanger" style="color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent)">⚠️ Open data removal tools…</button>
      </details>
    </div>
    </div></details>
    <details class="sgrp" data-g="help"><summary><span class="sgt">Setup &amp; help</span><span class="sgs">The tour, what’s new, and re-running setup</span></summary><div class="sgb">
-   <div class="card"><h2>Setup &amp; help</h2>
-     <p class="small muted">The guided tour points at things on the screen itself rather than describing them over the top — eight short stops on what each tab does, how to log a session and how your data is saved. It changes nothing.</p>
-     <p class="small muted"><b>A reminder on notes:</b> a session has a <i>tick</i> for whether your notes are written up, and an <b>admin comment</b> for practical reminders. Neither is the place for anything clinical — keep that wherever you normally do. It’s what makes exports and receipts from here safe to hand over.</p>
+   <div class="card">${cardHead("Setup & help","guided-tour")}
      <button class="btn sec full" id="setTour">🧭 Replay the guided tour</button>
      <button class="btn sec full mt" id="setNew">✨ What’s new in this update</button>
-     <div class="grp-h" style="margin-top:18px">Tips on new screens</div>
-     <p class="small muted" style="margin:0 0 8px">The first time you open a screen, the app points out the two or three things worth knowing about it, then never again. <span id="tipsSeen"></span></p>
+     <div class="grp-h" style="margin-top:18px">Tips on new screens ${infoDot("screen-tips","Tips on new screens")}</div>
+     <p class="small muted" style="margin:0 0 8px"><span id="tipsSeen"></span></p>
      <label class="colchk"><input type="checkbox" id="tipsOn"> Show tips on screens I haven’t opened before</label>
      <button class="btn sec full mt" id="tipsReset">↻ Show all the tips again</button>
-     <p class="small muted mt" style="margin-bottom:6px">Re-running first-time setup walks through practice name, colours, features and defaults again — and <b>overwrites</b> them. Your clients, sessions and payments are untouched.</p>
+     <div class="grp-h" style="margin-top:18px">Start again ${infoDot("rerun-setup","Re-running setup")}</div>
+     <p class="small muted" style="margin:0 0 8px">Re-runs first-time setup and <b>overwrites</b> your settings. Clients, sessions and payments are untouched.</p>
      <button class="btn ghost full" id="setRerun" style="color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent)">↻ Re-run first-time setup…</button>
    </div>
    </div></details>
@@ -6262,6 +7392,20 @@ VIEWS.settings=function(){
   /* Changing the basis re-renders Settings in place — the card has to redraw to show the new
      selection, and `keepScroll` is what stops the section folding shut under the reader. */
   wireBasisCard(v,()=>go("settings",{keepScroll:true}));
+  const wkSave=v.querySelector("#setWeekSave");
+  if(wkSave)wkSave.onclick=async()=>{
+    const num=(sel,lo,hi)=>{const el=v.querySelector(sel);const raw=String(el.value).trim();
+      if(raw==="")return null;const x=Math.round(+raw);return isNaN(x)?null:Math.max(lo,Math.min(hi,x));};
+    const sm=num("#setSessMins",10,180), am=num("#setAdminMins",0,120), fw=num("#setFullWeek",1,60);
+    if(sm==null){toast("Session length is needed");Sfx.error();return;}
+    const sg=settings();
+    sg.sessionMins=sm;
+    sg.adminMinsPerSession=(am==null?15:am);
+    /* Blank is a real answer here — it means "I have not decided", and anaCapacity() then uses
+       the busiest week actually worked and says so. Storing 0 would read as a full week of none. */
+    if(fw==null)delete sg.fullWeekSessions; else sg.fullWeekSessions=fw;
+    await commit("Working week: "+sm+" min sessions, "+sg.adminMinsPerSession+" min admin"+(fw?", full week "+fw:""));
+    toast("Saved");go("settings",{keepScroll:true});};
   v.querySelector("#setNameSave").onclick=async()=>{
     const n=v.querySelector("#setName").value.trim(),t=v.querySelector("#setTag").value.trim();
     if(!n){toast("Enter a practice name");Sfx.error();return;}
@@ -6830,6 +7974,18 @@ function repeatPicker(){
 }
 
 /* ============ Client form + rate change ============ */
+/* Referral sources are free text on purpose — every practice names them differently, and a
+   fixed list would be wrong for most of them. The datalist offers back whatever this practice
+   has already typed, which is what keeps "Word of mouth" and "word of mouth" from becoming two
+   rows in the analytics without forcing anyone into a taxonomy. */
+function sourceSuggestions(){
+  const seen=new Map();
+  (S.clients||[]).forEach(c=>{const v=(c.source||"").trim(); if(!v)return;
+    const k=v.toLowerCase(); if(!seen.has(k))seen.set(k,v);});
+  const common=["Word of mouth","Existing client","Counselling Directory","Psychology Today","BACP directory","Google","Website","GP referral","EAP / employer","Insurer","Supervisor","Local advert"];
+  common.forEach(v=>{const k=v.toLowerCase(); if(!seen.has(k))seen.set(k,v);});
+  return [...seen.values()];
+}
 function clientForm(c){
   const isNew=!c; const m=c?clone(c):{_id:uid(),code:"",status:"Ongoing",frequency:"Weekly",insurance:"N",notes:"",created:isoD(today())};
   const statuses=[...new Set(S.clientCategories.map(x=>x.status).concat(["Ongoing","Paused","Finished"]))];
@@ -6847,7 +8003,10 @@ function clientForm(c){
     ${isNew?`<label>Starting rate (£)</label><input type="number" min="0" id="c_rate" placeholder="What you charge this client" value="${defaultRate()==null?"":esc(defaultRate())}"><div class="prev" style="margin-top:5px"><span class="taxlink" id="setDefRate">${defaultRate()==null?"Set a default for new clients ›":"Update default (£"+esc(defaultRate())+") ›"}</span></div>`:
       `<div class="hint">Current rate: <b>${gbp(rateNow)}</b> <button class="btn sm" id="chRate" style="float:right">Change rate</button></div>
        <div id="histWrap"></div>`}
-    <div class="field2"><div><label>Insurance?</label><select id="c_ins">${opts(["N","Y"],m.insurance||"N")}</select></div><div></div></div>
+    <div class="field2"><div><label>Insurance?</label><select id="c_ins">${opts(["N","Y"],m.insurance||"N")}</select></div>
+      <div><label>How they found you ${infoDot("referral-source","How they found you")}</label>
+        <input id="c_src" list="c_srcList" maxlength="40" placeholder="Optional" value="${esc(m.source||"")}">
+        <datalist id="c_srcList">${sourceSuggestions().map(x=>'<option value="'+esc(x)+'"></option>').join("")}</datalist></div></div>
     <label>Notes</label><textarea id="c_notes" rows="2" placeholder="Admin reminders only — e.g. “invoices via employer”">${esc(m.notes||"")}</textarea>
     <p class="small muted">Practical reminders about working with this client. Not a clinical record — this app doesn’t hold one.</p>
     <button class="btn full mt" id="cSave">Save client</button>
@@ -6879,7 +8038,7 @@ function clientForm(c){
     setDefaultRate(n);const inp=body.querySelector("#c_rate");if(inp)inp.value=n;sdr.textContent="Update default (£"+n+") ›";toast("Default set to "+gbp(n));};
   body.querySelector("#cSave").onclick=async()=>{
     m.code=body.querySelector("#c_code").value.trim();m.status=body.querySelector("#c_status").value;
-    m.frequency=body.querySelector("#c_freq").value;m.insurance=body.querySelector("#c_ins").value;m.notes=body.querySelector("#c_notes").value;
+    m.frequency=body.querySelector("#c_freq").value;m.insurance=body.querySelector("#c_ins").value;m.notes=body.querySelector("#c_notes").value;m.source=(body.querySelector("#c_src").value||"").trim();
     m.usualDay=body.querySelector("#c_uday").value;m.usualTime=body.querySelector("#c_utime").value;
     if(!m.code){toast("Enter a code");return}
     const cat=S.clientCategories.find(x=>x.status===m.status);m.category=cat?cat.category:m.status;
@@ -8436,9 +9595,9 @@ function stepLook(w){return{emoji:gi("look"), h:"Pick a look",
     /* Goes through paletteOptionHTML so the wizard shows exactly the locks Settings shows. It
        used to render PALETTES itself and ignore locking, which handed every paid scheme out
        free on first run \u2014 the one path that bypassed the gate completely. */
-    host.innerHTML='<label>Colour scheme</label><div class="palgrid" id="spPal">'+
-        PALETTES.map(p=>paletteOptionHTML(p,p.k===w.palette)).join("")+'</div>'+
-      '<label style="margin-top:18px">Light or dark</label>'+
+    host.innerHTML=(PALETTES_ENABLED?'<label>Colour scheme</label><div class="palgrid" id="spPal">'+
+        PALETTES.map(p=>paletteOptionHTML(p,p.k===w.palette)).join("")+'</div>':'')+
+      '<label'+(PALETTES_ENABLED?' style="margin-top:18px"':'')+'>Light or dark</label>'+
       '<div class="seg" id="spTheme" style="display:inline-flex">'+
         ["light","dark","auto"].map(t=>'<button data-t="'+t+'" class="'+(w.theme===t?"on":"")+'">'+
           (t==="light"?"☀ Light":t==="dark"?"☾ Dark":"⚙ Match device")+'</button>').join("")+'</div>'+
@@ -8636,7 +9795,7 @@ function stepDone(w){return{emoji:gi("done"), h:"That’s you set up",
     const offList=FEATURES.filter(f=>!featureOn(w,f.k)).map(f=>f.n);
     host.innerHTML='<div class="setsum">'+
       '<div><span>Practice</span><b>'+esc(w.name||"—")+'</b></div>'+
-      '<div><span>Colour scheme</span><b>'+pal.n+' · '+(w.theme==="auto"?"match device":w.theme)+'</b></div>'+
+      (PALETTES_ENABLED?'<div><span>Colour scheme</span><b>'+pal.n+' · '+(w.theme==="auto"?"match device":w.theme)+'</b></div>':'<div><span>Appearance</span><b>'+(w.theme==="auto"?"match device":w.theme)+'</b></div>')+
       '<div><span>Locations</span><b>'+esc((w.rooms||[]).map(r=>r.loc).filter(Boolean).join(", ")||"—")+'</b></div>'+
       '<div><span>Default fee</span><b>'+(w.rate==null||w.rate===""?"not set":gbp(w.rate))+'</b></div>'+
       '<div><span>Backup reminder</span><b>'+w.bkDays+' days / '+w.bkActs+' changes</b></div>'+
@@ -9266,7 +10425,7 @@ async function anonymiseClients(codes){
   const set=new Set(codes.map(c=>String(c).toLowerCase()));
   const map=dzPseudonyms(codes);
   S.clients.forEach(c=>{const lc=(c.code||"").toLowerCase();if(!set.has(lc))return;
-    c.code=map[lc];c.notes="";});
+    c.code=map[lc];c.notes="";c.source="";});
   S.sessions.forEach(s=>{const lc=(s.client||"").toLowerCase();if(!set.has(lc))return;
     s.lateCancel=isLateCancel(s);                                 // capture before the notes text goes
     s.client=map[lc];
@@ -10108,13 +11267,9 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
           '<p class="prev">How long you can leave GroundWork before it asks again.</p>'
         : '<div class="vmsg warn mt">'+gi("lock")+' This iPhone has no passcode or Face ID set up, so the app lock is unavailable. Add one in the iPhone’s own Settings.</div>')+
       '</div>'+
-      '<div class="card"><h2>Automatic backup</h2>'+
-        '<p class="small muted">GroundWork keeps its own copy of your records in this app’s folder in the '+
-        '<b>Files</b> app, rewritten every time you change something. It never asks and never interrupts.</p>'+
-        '<div class="vmsg warn mt">'+gi("warning")+' <b>It is on this iPhone.</b> It will get you out of a '+
-        'deleted client or a restore you regret, but not out of a lost or broken phone. Keep taking a real '+
-        '<b>Export backup (.json)</b> somewhere else as well — that is why the reminder still appears.</div>'+
-        '<p class="small muted mt">'+infoLink("backups-explained","How the three kinds of backup differ")+'</p>'+
+      '<div class="card">'+cardHead("Automatic backup","backups-explained")+
+        '<p class="small muted" style="margin:-2px 0 0">A copy kept in this app’s folder in the <b>Files</b> app, rewritten on every change.</p>'+
+        '<div class="vmsg warn mt">'+gi("warning")+' <b>It is on this iPhone.</b> No help if the phone is lost or broken — keep exporting a real backup somewhere else too.</div>'+
         '<p class="small mt" id="natBkStatus" style="font-weight:600"></p>'+
         '<p class="prev" id="natBkHint"></p>'+
         '<button class="btn sec mt" id="natBkNow">Back up now</button>'+

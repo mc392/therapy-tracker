@@ -292,6 +292,13 @@ The session "Notes done?" box was one free-text field doing two unrelated jobs: 
 - `go(tab,{keepScroll:true})` re-renders without throwing the reader to the top. Use it for anything redrawing the screen the user is already on (segment toggles, saving from a sheet); plain `go(tab)` is for real navigation.
 - `scrollChart(wrap,keep)` positions a horizontally-scrolling chart. Charts are built **before their view is attached**, so it has no width at draw time — hence the rAF *and* the `setTimeout(...,0)`. Redraws pass the old `scrollLeft`, so tapping a bar no longer flings the chart back to the oldest period.
 
+### Explanations behind an info icon
+`infoDef(key,title,html)` registers a topic; **`infoLink(k,label)`** is the text link and **`infoDot(k,aria)`** the small circled *i*. `cardHead(title,key,right)` is a card heading with the dot already in it. Both resolve through the same `[data-info]` selector, so `wireInfo(host)` picks up either.
+
+**The rule for choosing:** if the reader needs the sentence *every* time, leave it on screen. If they need it once and then never again, it goes behind a dot. That is what makes twenty analytics cards fit on a phone, and it is why Settings is now headings and controls rather than headings, controls and three paragraphs.
+
+**A block that redraws itself must call `wireInfo` again** — `wireCancelRules`'s `draw()` replaces its own markup and would otherwise leave a dead dot behind. `VIEWS.settings` only wires once, at build.
+
 ### Settings layout
 Six collapsible `<details class="sgrp">` groups (**business / app** / data / records / help / about), plus **device** on native. Every card lives inside a group — don't add loose cards to the settings view.
 - **`business` ("Your practice") and `app` ("App preferences") are a deliberate split** (Sep 2026), replacing a single `practice` group that mixed the two. A decision about the *business* — the practice name, the cancellation policy, the tax basis, the tax region — is made once, has consequences, and is nothing like choosing a colour scheme or switching a tab off. `go("settings",{openGroup:"business"})` opens one group on arrival; it is applied **after** the reset that folds everything away, or it would be wiped by it.
@@ -451,6 +458,30 @@ Five lists grow with the practice — Practice › Clients, Practice › Trends 
 - **Aggregates never lose the folded records**: KPIs, the funnel, the rolling attendance chart and every total still count everyone. Only the individual rows fold.
 - Sessions › Unpaid and › Incomplete stay whole — they are worklists to clear, not history to browse.
 
+## Practice analytics — the Trends engine (Sep 2026)
+Twenty analytics live behind **Practice › Trends**, computed by a block of **pure functions** (`ana*`) that read `S` and `today()`, return a plain object and write nothing. Same contract as the tax engine: callable from a console, never gated (`plusLocked("trends")` decides what the *view* renders, not what the engine computes).
+
+Three rules every one of them follows — a wrong figure here is worse than no figure:
+- **Never invent a trend from nothing.** Each returns `{ready:false, need:"<what is missing>"}` and the view prints that sentence instead of a chart (`anaWaiting`). Twenty-four weeks of zero is not a seasonal pattern.
+- **Cancellations are not attendance.** `isCancelled()` sessions are excluded wherever the question is "did I see someone" (hours, capacity, load, episode length) and included wherever it is "what did this earn" (revenue, fee erosion) — a charged late cancellation is real money.
+- **Only whole periods.** `anaMonthlySeries(n)` starts at *last* month; a month still running would drag every average down and recover on the 1st.
+
+### The four sections
+`TREND_SEGS` / `trendSeg`, with its own segment bar inside the view. **Sections are built only when opened** — `clientAttendance()` across a whole client list and `anaCohorts()` are both real work, and changing section redraws `#trbody` only, never `go()`, so the reader is not thrown to the top of Practice.
+- **Clients** — retention funnel, drifting away, review status, attendance, cohort retention, episode length, referral sources, long-term.
+- **Money** — seasonality, your floor, fee erosion, days to payment, who pays late, cost ratio, missed sessions.
+- **Time** — effective hourly rate, capacity, slot reliability, weeks actually worked.
+- **You** — supervision cadence, load, CPD trajectory.
+
+### Things that will bite
+- **`anaEpisodes()` counts only FINISHED work.** A client still being seen has a length that has not happened yet; including them drags the median towards nothing.
+- **`anaCohorts()` only asks a milestone of a cohort old enough to have reached it** (`ripe`), or a cohort that started last month reads as 0% retention at 24 weeks — a lie, not a gap.
+- **`anaDaysToPay()` dates on the SESSION, not the payment.** A March session paid in June belongs to March, or a slow month looks fine simply because nothing has landed yet.
+- **`SLOT_DAYS` holds lowercase matcher keys, not display text** — `anaSlots()` renders through `SLOT_DAY_NAMES` or every row says "sun".
+- **`anaCPD()` reports pace from the last 90 days, not the running total**, and the card has **four** states: the awkward one (target met, pace since dropped) is exactly what a running total hides.
+- Three settings feed it and nothing else: `settings.sessionMins` (50), `adminMinsPerSession` (15) and `fullWeekSessions` (**deliberately unset** — `anaCapacity()` falls back to the busiest week actually worked and says so, rather than inventing a target).
+- **`client.source`** is free text with a datalist (`sourceSuggestions()`), not an enum — every practice names its sources differently. `anonymiseClients()` clears it.
+
 ## Cancellations & DNAs (added Aug 2026)
 Two kinds of missed session, and the charge is **stamped on the session**, never derived live from the policy.
 - `settings.cancelRules = {window:[{hoursBefore,chargePct}], dnaChargePct}`. `cancelPolicy()` sorts windows **longest notice first** and `cancelPolicyPct(kind,hrs)` returns the first one the notice clears. Notice that clears no rule — and notice that was never recorded (`hrs==null`) — charges the **full fee**. That direction is deliberate: a draft that is too high gets corrected on the spot, one that is too low is a fee quietly written off. A therapist wanting a lower floor adds a rule at 0 hours.
@@ -492,10 +523,10 @@ Three rules the code depends on. Breaking any of them is silent.
   *button*, never the function. `check-drift.mjs` asserts this too; a tax test failing because of
   the paywall means it has been put in the wrong layer.
 
-Gated: `tax`, `finances`, `mtd`, `trends`, `accreditation`, `notesSync`, `palettes` (`PLUS_FEATURES`).
+Gated: `tax`, `finances`, `mtd`, `trends`, `accreditation`, `notesSync` (`PLUS_FEATURES`). **`palettes` was dropped in Sep 2026** when colour schemes were switched off entirely — see Setup wizard § Palettes.
 
 - **Trends is a sneak peek, not a wall** (Sep 2026). `renderMetrics()` computes the retention funnel first and only then branches on `plusLocked("trends")`: under the gate the funnel renders **in full on real numbers**, and the other three sections are named underneath with **one real figure each from this practice** (`.peekrow` / `.peekfig`). The old behaviour — `plusLockHTML()` describing four charts nobody had seen — was a poor advert for data that belongs to the reader. The lock is a `return` partway through the function, not a mode: everything below it is untouched. **Deliberately not extended to Tax** — a partial tax figure is a wrong tax figure, and `taxAcked()` exists to stop people acting on numbers they were not walked through.
-- Whether palettes should stay in the tier at all is argued in `docs/product-proposals-2026-09.md` §2 (recommendation: drop them).
+- Palettes were dropped from the tier and from the app in Sep 2026; the reasoning is `docs/product-proposals-2026-09.md` §2.
 Free: everything else, including `receipts`, the spreadsheet import (it is the switching-cost
 remover — gate it and nobody ever reaches the paywall) and encrypted/automatic backups.
 
@@ -539,7 +570,7 @@ The tour used to be eight full-screen `.ov` cards describing controls the reader
 - **Feature flags**: `feat(key)` gates tabs (`TABS[].ft`), gamification (`celebrate`, `Confetti.burst`), attention feed, receipts, accreditation, `peer` (peer supervision, dep: supervision) and `finances` (costs & other income, dep: income). Off = hidden, never deleted.
 - **Removed Sep 2026: the quick-add command bar** (`parseQuickLog` / `quickLogBuild` / `mountQuickLog`, the `quickadd` flag and its reveal step). It was a second, less capable route into the session form — every session it created still had to be opened and corrected. A stored `features.quickadd` on an existing install is now inert; don't reintroduce the key.
 - **Retention step**: `stepRetention()` sits between money and backup, and its `validate()` refuses blanks or anything outside 1–50 years — a retention period nobody chose is a compliance decision made by a default.
-- **Palettes**: `PALETTES` + `html[data-palette]` CSS blocks. `applyPalette()` mirrors to `localStorage('tt_palette')` so the head script applies it before first paint. `paintThemeColor()` keeps `#tcMeta` in sync.
+- **Palettes: switched OFF (Sep 2026), code kept.** `PALETTES_ENABLED=false` is the whole switch. The `PALETTES` data, the `html[data-palette]` CSS blocks, `paletteOptionHTML()`, the Settings picker and the wizard step are all still here and still work — flip the flag to bring them back. `applyPalette()` **forces `"sage"`** while it is off (forcing, not skipping: an install that had picked Ocean must be repainted), and the pre-paint head script is hard-coded to sage so a stored choice cannot flash before JS runs. **`settings.palette` is deliberately never cleared**, so restoring the flag restores everyone's own choice. Removed from `PLUS_FEATURES` at the same time — gating something nobody can reach is worse than not selling it.
 - **Branding**: `practiceName()` / `practiceTagline()` feed the header pill, `--appname` (desktop sidebar title), `document.title` and printed receipts. `applySettings()` re-applies everything after load, import or rollback.
 
 ## UI structure
