@@ -166,6 +166,17 @@ PWA as well. Don't regress either:
 - **`.field2>*` and the controls carry `min-width:0`.** Grid items default to `min-width:auto`,
   and WebKit's intrinsic minimum for `input[type=date]`/`[type=time]` is far larger than Blink's,
   so the Time column ran off the right edge in the session form.
+- **`.field2` is `repeat(auto-fit,minmax(150px,1fr))`, not `1fr 1fr`** (Sep 2026). `min-width:0`
+  stops a date field overflowing its column but cannot stop it being *squeezed* — two of them
+  plus the gap do not fit on a 320px phone, and the digits end up under the picker glyph. Below
+  that width the pair now stacks. `input[type=date]`/`[type=time]` also carry trimmed side
+  padding (10px, not 14px), because those controls are drawn by the platform and size themselves
+  from their own text.
+- **`.sheet-inner` uses `overflow-y:auto; overflow-x:hidden`, never the `overflow:auto`
+  shorthand.** The shorthand gives the sheet a horizontal scroll axis, and a single over-wide
+  child then lets the whole form be dragged left and right under the thumb — it reads as the
+  sheet wobbling while you type. Content that genuinely has to scroll sideways (`.rawscroll`,
+  `.svgwrap`, `.hmgrid`) carries its own scroller and is unaffected.
 
 ## Service worker cache strategy
 `sw.js` uses **network-first for HTML** (`req.mode === "navigate"`) — every page load fetches a fresh `index.html` from the network, so updates land on next open without needing a cache bump.
@@ -231,7 +242,8 @@ Key functions:
 - **`tyNet()` and `tyIncome()` are memoised** (`tyMemo`, cleared in `go()`, `commit()` and `normalize()`). Each walks every session and runs `ledgerBetween` twice; the Payments screen asks for several years at once and each year's schedule reaches into the year either side, so uncached the call count grows quadratically with history. Anything that mutates `S` outside those three entry points must call `tyMemoClear()`.
 
 ### Schema versioning
-`SCHEMA_VERSION` (currently `6`) is stamped on `S.meta.schemaVersion` and on every backup envelope. Unstamped data is treated as v1.
+`SCHEMA_VERSION` (currently `7`) is stamped on `S.meta.schemaVersion` and on every backup envelope. Unstamped data is treated as v1.
+- **v7 (Sep 2026)** split the old free-text "Notes done?" box into a boolean tick and a separate `adminNote`. A v7 backup can hold "invoice goes to her employer" in `adminNote`; a v6 build has no such field and would drop every one of those comments, then save the loss back. See **Notes vs admin comments** below.
 - **v6 (Aug 2026)** dated the whole-practice tax settings to a tax year (`studentLoanYears`, `taxRegionYears`) and added the record of what HMRC actually assessed (`taxYears`), what has been paid (`taxPaid`) and the pot's own settings (`taxPot`). A v6 backup can say "Plan 2 until 2025-26, none after" and "HMRC assessed 2025-26 at £4,310"; a v5 build has neither field, so it would apply one loan plan to every year and show its own estimate in place of the real assessment.
 - **v5 (Aug 2026)** stamped a cancellation charge percentage on every missed session and added `settings.cancelRules` + `settings.reveal`. A v5 backup can hold a session charged at 50%; a v4 build has no such field and would bill it in full.
 - **v4 (Aug 2026)** gave every cost and income row a category *key* mapping to an SA103 box, migrated from the old free-text label (which is kept). Added `settings.taxBasis`, `useOfHome`, `taxRegion`, `studentLoan`, `class2Voluntary`.
@@ -254,7 +266,24 @@ Key functions:
 - Paid rows stay in the list for a fortnight **after being ticked** (not after falling due), or settling an old overdue charge would make the row vanish mid-tap with no undo.
 
 ### Room billing and the session form
-A room on monthly rent has no per-session room fee to settle, so `derive()` returns `roomPaidNA` and the session form hides the room-paid controls entirely (`paintRoomPaid`). `missingReasons()` and `derive().complete` both honour it, so those sessions never show up as incomplete for a question that doesn't apply to them.
+`derive().roomPaidNA` is the single answer to "is there a per-session room fee to settle here?", and it is **false only when there genuinely is one**. Three cases make it true:
+- no room record for the location at all;
+- the room is on a monthly rent (settled once a month in Costs & income);
+- **the room charged £0 per session on that session's date** — "At home", or any room in a practice that bills monthly. Added Sep 2026; before it, a therapist working from home was asked "room paid?" on every session she ever logged and every one of them sat in the Incomplete worklist until she answered a question that had no answer.
+
+It uses the **dated** rate (`effRoomRate(loc, s.date)`), never the room's rate today: a room that charged £15 when the session happened still has that £15 to account for however it bills now.
+
+`missingReasons()`, `derive().complete`, the Incomplete worklist and the session form (`paintRoomPaid`) all read it, so those sessions never show up as incomplete for a question that doesn't apply. `paintRoomPaid` also **stamps `roomPaid="n/a"` as it hides the controls** — hiding alone would leave the dropdown unanswered and the session incomplete forever. The select stays in the DOM so `sync()` keeps reading it exactly as it always has.
+
+`anyPerUseRoom()` answers the practice-wide version ("do I ever pay for a room by the session?") and only picks the wording for the explanatory note.
+
+### Notes vs admin comments (v7, Sep 2026)
+The session "Notes done?" box was one free-text field doing two unrelated jobs: a tick that the write-up was finished, and — for anyone who used it that way — a scratchpad. Now:
+- **`s.notes` is still a STRING**, and is deliberately not a boolean. Every backup ever written holds a string there, `derive().complete` reads it, and `isLateCancel()` still matches the historical `"Y (late cancellation)"` convention in it. The form now only ever writes `"Y"` or `""`. **`notesDone(s)` is the one place that decides what counts as written up** — use it, don't re-test the string.
+- **`s.adminNote`** is the free-text field, labelled in the UI as practical-only. It appears in the session list (`.adminline`, one line, CSS-truncated), is searchable, and is in both exports.
+- **The migration is gated on `meta.adminNoteSplit`** and moves anything that was not simply `"Y"` across rather than dropping it. Order matters twice: it stamps `s.lateCancel` from `isLateCancel(s)` **before** the text moves, and it sits after `cancelChargeBackfill`, which calls `isLateCancel` itself. Moving it earlier silently un-cancels historical sessions.
+- `anonymiseClients()` clears `adminNote` — it is free text a human wrote and may name people.
+- The spreadsheet importer splits a sheet's "Notes" column the same way, and still reads the **raw** column for `impLateCancel`.
 
 ### CPD vs accreditation (added Aug 2026)
 `mountCPD()` is the card everyone sees: supervision + peer hours over a rolling 12 months against `settings.cpdTarget`. `mountAccreditation()` (Form 3A, the 1:6 ratio) is gated behind the `accreditation` feature, which `normalize()` defaults **off for new installs and on for anyone who already has data** — pulling it from someone mid-accreditation would lose them the screen they keep records for. `stepCPD()` asks in setup.
@@ -264,7 +293,10 @@ A room on monthly rent has no per-session room fee to settle, so `derive()` retu
 - `scrollChart(wrap,keep)` positions a horizontally-scrolling chart. Charts are built **before their view is attached**, so it has no width at draw time — hence the rAF *and* the `setTimeout(...,0)`. Redraws pass the old `scrollLeft`, so tapping a bar no longer flings the chart back to the oldest period.
 
 ### Settings layout
-Five collapsible `<details class="sgrp">` groups (practice / data / records / help / about). Every card lives inside a group — don't add loose cards to the settings view.
+Six collapsible `<details class="sgrp">` groups (**business / app** / data / records / help / about), plus **device** on native. Every card lives inside a group — don't add loose cards to the settings view.
+- **`business` ("Your practice") and `app` ("App preferences") are a deliberate split** (Sep 2026), replacing a single `practice` group that mixed the two. A decision about the *business* — the practice name, the cancellation policy, the tax basis, the tax region — is made once, has consequences, and is nothing like choosing a colour scheme or switching a tab off. `go("settings",{openGroup:"business"})` opens one group on arrival; it is applied **after** the reset that folds everything away, or it would be wiped by it.
+- **How your figures are counted** (cash vs accruals) moved here from Tax › Estimate: `basisCardHTML()` / `wireBasisCard(host,after)` live beside the tax engine, and Tax now only states which basis is in force with a link back. It is a business decision, not a view toggle to flick between while reading an estimate.
+- **Data & backup separates the backup from the extracts.** "Backup & restore" holds only the `.json` export and Restore; the three CSVs sit in a second, collapsed "Spreadsheet exports" card that says in as many words that they are **not** backups and cannot be restored. The `backups-explained` info topic is the one place all three kinds (export / automatic / CSV) are compared, and it is linked from the backup card, the CSV card, the encrypted-backup card and the native automatic-backup card.
 - **Everything starts collapsed on each fresh entry.** `_setGrpOpen` holds open state in memory only and `go()` clears it whenever Settings is entered without `keepScroll`. It must survive a `keepScroll` redraw — saving a setting re-renders the view, and without this the section being worked in folds shut underneath the user. Not persisted to localStorage: a section left open last week is not one you want reopened today.
 
 ## Tabs (restructured Aug 2026)
@@ -273,6 +305,11 @@ Five collapsible `<details class="sgrp">` groups (practice / data / records / he
 - **Money** — Overview / Costs & income / Table.
 - **Tax** — Now / Estimate / Pot & payments / Per year / Quarterly (MTD). **Now** is the default (`taxSeg`) and the only screen most of the year: the standing disclaimer, any live seasonal moments, then three numbers — on track to owe (`taxLiability`), keep in your pot (`taxPot`), next payment (`nextTaxPayment`) — each tapping through to the screen that owns its detail. It **summarises, never replaces**: the pot *summary* card moved off Estimate onto it, so **Estimate** now carries the take-home, the basis and the by-year table, while everything about paying — the buffer, the balance, every due date, and what HMRC actually assessed — still lives on **Pot & payments**, so no figure appears twice with two different explanations behind it. **Per year** is "things set per tax year" (renamed from "Allowances" in T6 — student loan and region aren't allowances): one year strip at the top governs every card below it (`taxYearStripStatus`), then student loan, then use of home. Region is *not* here — it moved to Settings.
 - The old `income` feature flag became `money` + `tax`; `normalize()` carries `income:false` across to both rather than switching a hidden tab back on.
+
+### Home (revised Sep 2026)
+- **Four KPIs: billed this tax year · sessions this tax year · outstanding now › · sessions next 7 days ›.** "Received" was dropped: sitting beside "Billed" it answered one question twice, and what was actually missing — the gap — was already the Outstanding tile. The replacement counts **attended** sessions (`isCancelled` excluded) and names the distinct clients behind them, which nothing else on Home said.
+- **The year heatmap (`yearHeatmapHTML`) moved here from Money › Overview.** "How busy have I been" is a Home question — nobody opens the money tab to find out whether they took August off. It needs `scrollChart(v.querySelector(".hmgrid"),null)` after render for the same reason the charts do: it is built before the view is attached, so it has no width at draw time, and without it the reader lands on the same date last year.
+- The "Quick add" card is now "Log something" and holds only the three buttons.
 
 ## UK tax engine (Aug 2026)
 - **Basis.** `settings.taxBasis` defaults to **cash** — HMRC's default for sole traders since 2024/25. `tyNet()` counts a session in the year its `paidDate` falls; `ledgerBetween()` counts a cost when `paidCharges` says it was settled. **Where no payment date is recorded, cash falls back to the due date** — strict cash would let an untidied tick-list wipe every cost off the return, which is a far worse failure than being slightly early.
@@ -328,7 +365,8 @@ Onboarding path for a therapist arriving with history in Excel. `impOpen()` driv
 Rules that must not regress:
 - **Merge, never replace.** `importJSON()` is a whole-state replace and is for *backups only*. `impCommit()` appends to `S.sessions` and auto-creates the clients/rooms the rows reference. Nothing is written until the final button.
 - **`impPlan()` is pure** — builds the whole plan without touching `S`, so the preview is exactly what will happen.
-- **Fees become dated history, not a flat field.** Sessions have no `rate`; `derive()` reads `effRate(client,date)`. `impCommit()` walks rows oldest-first and pushes `rateHistory` / `roomRateHistory` entries only where the fee differs from what's already effective at that date. The first entry for a brand-new client/room is stamped `2000-01-01` so earlier sessions still resolve. **A £60 session imported before a rise to £65 must still derive £60** — that's the tax figures.
+- **Fees become dated history, not a flat field.** Sessions have no `rate`; `derive()` reads `effRate(client,date)`. `impCommit()` walks rows oldest-first and pushes `rateHistory` / `roomRateHistory` entries only where the fee differs from what's already effective at that date. The first entry for a brand-new client/room is stamped **`RATE_EPOCH`** (`"2000-01-01"`) so earlier sessions still resolve. **A £60 session imported before a rise to £65 must still derive £60** — that's the tax figures.
+- **`RATE_EPOCH` is a floor, not an event.** The import, the room seeder and the setup wizard all stamp it, and reading it as a real date is what put *"since 01 Jan 2000"* at the top of every imported client's profile. `clientAddedDate()` filters it out and takes the earliest of the remaining rate history and the client's own first session. Anything new that reads `effectiveFrom` as a date a human chose has to filter it too.
 - **Dedupe key is `client|date|time`** (`impKey`). `onDupe:"skip"` leaves the app's version; `"update"` overwrites in place by `_id` — so re-importing a corrected file never duplicates.
 - **Date ambiguity is resolved per column, not per row.** `impDateScan()` takes the whole column: any row with a first number >12 settles day-first vs month-first; nothing conclusive defaults to UK DMY and *says so*. Conflicts (both readings forced) are flagged red. The user can override, and the banner shows a worked example (`"03/04/2026" → 03 Apr 2026`) that updates live. Excel serials, named months and 2-digit years are handled in `impDateParts()`.
 - **Late cancellation** is set at import from either the mapped column *or* `/late cancellation/i` in notes — `normalize()`'s backfill is one-time and gated by `meta.lateCancelBackfill`, so it will never see imported rows.
@@ -426,7 +464,7 @@ Two kinds of missed session, and the charge is **stamped on the session**, never
 No new gating layer — this only decides which existing `feat()` flags start off for a brand-new install.
 - `settings.reveal = {mode:"simple"|"all", shown:[]}`. `normalize()` defaults `mode` to **"all"**; only `stepDepth` ever sets `"simple"`, and it is only offered when `!rerun && no sessions && no clients`. Hiding tabs from someone already using them is the one outcome this must never produce.
 - `REVEAL_CORE` is what stays on: **`supervision`, `money`, `attention`** — who am I seeing next, and who owes me money. `attention` is core because overdue payments are worth knowing about from week one; `gamify` and `receipts` were moved out of it because rings, medals and a statement button answer neither question on day one. `REVEAL_STEPS` is the ordered list of what gets offered back and what earns it. A step's `keys` may hold **more than one flag**: `tax` and `finances` are revealed together at 10 sessions, because an estimate that ignores what the practice costs you is one nobody should set money aside against. `shown` is keyed on `keys[0]`.
-- Schedule (ordered by threshold): **5** sessions *and at least one paid* → Receipts & statements · **10** → Tax + Costs & other income · **15** → Streaks & celebrations · **20** → Trends · **25** → Quick-add · **40** → Table view.
+- Schedule (ordered by threshold): **5** sessions *and at least one paid* → Receipts & statements · **10** → Tax + Costs & other income · **15** → Streaks & celebrations · **20** → Trends · **40** → Table view.
 - Home gates two extras on its own, in **every** mode: the revenue sparkline needs 10 sessions (24 weeks of £0 is not a trend) and the longstanding-clients card needs a client at 6+ sessions. Neither is a `feat()` flag, so neither is ever offered — they simply appear.
 - `trends` is a feature flag (a segment inside Practice, not a tab). Absent = on, so existing installs and "show everything" keep it; only the simple preset switches it off.
 - **`accreditation` and `peer` are excluded from the simple preset** — `stepCPD` asks about both directly, and an answered question beats a default. Peer is never offered by a milestone: whether someone attends peer supervision is a fact about their practice, not something a session count can infer. `startSetup` unticks `peer` for a fresh install only (normalize leaves it absent = on, so existing installs keep it).
@@ -455,6 +493,9 @@ Three rules the code depends on. Breaking any of them is silent.
   the paywall means it has been put in the wrong layer.
 
 Gated: `tax`, `finances`, `mtd`, `trends`, `accreditation`, `notesSync`, `palettes` (`PLUS_FEATURES`).
+
+- **Trends is a sneak peek, not a wall** (Sep 2026). `renderMetrics()` computes the retention funnel first and only then branches on `plusLocked("trends")`: under the gate the funnel renders **in full on real numbers**, and the other three sections are named underneath with **one real figure each from this practice** (`.peekrow` / `.peekfig`). The old behaviour — `plusLockHTML()` describing four charts nobody had seen — was a poor advert for data that belongs to the reader. The lock is a `return` partway through the function, not a mode: everything below it is untouched. **Deliberately not extended to Tax** — a partial tax figure is a wrong tax figure, and `taxAcked()` exists to stop people acting on numbers they were not walked through.
+- Whether palettes should stay in the tier at all is argued in `docs/product-proposals-2026-09.md` §2 (recommendation: drop them).
 Free: everything else, including `receipts`, the spreadsheet import (it is the switching-cost
 remover — gate it and nobody ever reaches the paywall) and encrypted/automatic backups.
 
@@ -495,7 +536,8 @@ The tour used to be eight full-screen `.ov` cards describing controls the reader
 - **Flow engine**: `flowStart/flowGo/flowNext/flowClose` drive a full-screen `.ov` overlay (z-index 45 — above the tab bar, below `#sheet`) from an array of step objects `{emoji,h,sub,html,mount,validate,onLeave}`. Shared by setup and the tour.
 - **Tour**: `startTour()` — now on-page coach marks, not the `.ov` flow. Eight stops on day-one essentials; per-screen depth lives in `TIPS`. Read-only, replayable from Settings › Setup & help, where the tips can also be switched off or reset.
 - **Re-run**: `confirmRerunSetup()` — warning sheet requiring the user to type `RESET SETUP`. Skips the rooms step once sessions exist.
-- **Feature flags**: `feat(key)` gates tabs (`TABS[].ft`), gamification (`celebrate`, `Confetti.burst`), quick-add, attention feed, receipts, accreditation, `peer` (peer supervision, dep: supervision) and `finances` (costs & other income, dep: income). Off = hidden, never deleted.
+- **Feature flags**: `feat(key)` gates tabs (`TABS[].ft`), gamification (`celebrate`, `Confetti.burst`), attention feed, receipts, accreditation, `peer` (peer supervision, dep: supervision) and `finances` (costs & other income, dep: income). Off = hidden, never deleted.
+- **Removed Sep 2026: the quick-add command bar** (`parseQuickLog` / `quickLogBuild` / `mountQuickLog`, the `quickadd` flag and its reveal step). It was a second, less capable route into the session form — every session it created still had to be opened and corrected. A stored `features.quickadd` on an existing install is now inert; don't reintroduce the key.
 - **Retention step**: `stepRetention()` sits between money and backup, and its `validate()` refuses blanks or anything outside 1–50 years — a retention period nobody chose is a compliance decision made by a default.
 - **Palettes**: `PALETTES` + `html[data-palette]` CSS blocks. `applyPalette()` mirrors to `localStorage('tt_palette')` so the head script applies it before first paint. `paintThemeColor()` keeps `#tcMeta` in sync.
 - **Branding**: `practiceName()` / `practiceTagline()` feed the header pill, `--appname` (desktop sidebar title), `document.title` and printed receipts. `applySettings()` re-applies everything after load, import or rollback.

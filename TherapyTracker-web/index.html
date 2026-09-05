@@ -241,8 +241,15 @@ input:not([type=checkbox]):not([type=radio]):focus,select:focus,textarea:focus{o
    and WebKit gives date/time inputs a much larger intrinsic minimum than Blink does, so
    without this the second column pushes the Time field off the right edge on iOS while
    looking perfect in Chrome. */
-.field2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+/* auto-fit rather than a hard `1fr 1fr`: a date and a time side by side need roughly 150px each
+   before the native control starts clipping its own digits, and two of those plus the gap do not
+   fit on a 320px phone. Below that width the pair stacks instead of overlapping. */
+.field2{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 12px}
 .field2>*{min-width:0}
+/* Date and time controls are drawn by the platform and size themselves from their own text.
+   WebKit gives them a large intrinsic minimum, so the generous 14px side padding that suits a
+   text box is what pushes the digits under the picker glyph. Trim it for these two only. */
+input[type=date],input[type=time]{padding-left:10px;padding-right:10px;min-width:0;max-width:100%}
 .chip{display:inline-block;padding:3.5px 11px;border-radius:20px;font-size:12px;font-weight:650}
 .chip.y{background:color-mix(in srgb,var(--good) 22%,transparent);color:var(--good)}
 .chip.n{background:color-mix(in srgb,var(--bad) 22%,transparent);color:var(--bad)}
@@ -256,6 +263,11 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .list-item{display:flex;gap:10px;align-items:center;padding:13px 4px;border-bottom:1px solid var(--line);cursor:pointer}
 .list-item:last-child{border-bottom:0}
 .list-item{border-radius:10px}
+/* One line, always. An admin comment can be a paragraph, and a row that grows to fit one turns
+   a scannable list into a wall — the full text is a tap away in the session itself. */
+.adminline{display:flex;align-items:center;gap:5px;margin-top:2px;font-style:italic;opacity:.85;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.adminline svg{width:12px;height:12px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8}
 .list-item:active{background:color-mix(in srgb,var(--brand) 8%,transparent)}
 /* A .list-item used as a radio — the year picker in the "After you file" flow. It has to show
    which one is chosen: the flow defaults to a year, and a default nobody can see is a default
@@ -367,8 +379,13 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
    A sticky header inside a translucent container can never match it: its own tint stacks on the
    one already painted behind it, whatever value you pick. The frosted look stays where it is
    actually seen, on `.sheet`'s blurred scrim over the page behind. */
+/* `overflow-y` only, never the `overflow:auto` shorthand. The shorthand gives the sheet a
+   horizontal scroll axis too, and any single over-wide child — a date input at its WebKit
+   intrinsic minimum, a long unbroken word — then let the whole form be dragged left and right
+   under the thumb. It reads as the sheet wobbling while you type. Wide content that genuinely
+   has to scroll (.rawscroll, .svgwrap, .hmgrid) carries its own scroller and is unaffected. */
 .sheet-inner{background:var(--bg);
-  width:100%;max-width:780px;max-height:94vh;overflow:auto;border-radius:28px 28px 0 0;
+  width:100%;max-width:780px;max-height:94vh;overflow-y:auto;overflow-x:hidden;border-radius:28px 28px 0 0;
   border-top:1px solid var(--hair);box-shadow:var(--shadow-lg);
   padding:0 18px calc(22px + env(safe-area-inset-bottom));animation:up .3s cubic-bezier(.2,.9,.25,1)}
 @keyframes up{from{transform:translateY(40px);opacity:.6}to{transform:none;opacity:1}}
@@ -723,10 +740,6 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 .cxrow .rmx{margin-left:auto}
 
 /* ===== quick-log command bar ===== */
-.qlwrap{position:relative}
-.qlchips{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;min-height:26px;align-items:center}
-.qlchips .chip{font-size:12px}
-.qlhint{font-size:11.5px;color:var(--muted);margin-top:7px}
 
 /* ===== swipeable session rows ===== */
 .swrow{position:relative;overflow:hidden;border-radius:10px}
@@ -857,6 +870,16 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 .plusgate .plfeat div{font-size:12.5px;color:var(--muted);padding:6px 0;border-top:1px solid var(--line)}
 .plusgate .plfeat b{color:var(--ink);font-weight:700}
 .plusgate input{text-align:center}
+/* The sneak peek: a locked card that still says something true about THIS practice. Left-aligned
+   inside a centred gate, because these are rows of fact rather than sales copy. */
+.plusgate.peek{text-align:left}
+.plusgate.peek h2,.plusgate.peek>.small{text-align:center}
+.plusgate.peek .plmark{margin-bottom:10px}
+.peekrow{display:flex;gap:12px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--line)}
+.peekfig{flex:none;min-width:74px;font-weight:800;font-size:15px;color:var(--brand-dark);
+  font-variant-numeric:tabular-nums;line-height:1.35}
+.peekh{font-size:13.5px;font-weight:700;color:var(--ink);line-height:1.35}
+.peeks{font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.45}
 .palopt.locked{opacity:.55}
 .palopt .paltag{font-size:10px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:1px 5px;margin-left:2px;vertical-align:1px;white-space:nowrap}
 /* feature toggles */
@@ -1026,7 +1049,7 @@ const MAX_SNAP=120;
 /* Data schema version, stamped on state and on every backup. Bump when a change would be
    misread by an older build, and add the matching step to migrate(). Data with no stamp is v1
    (everything written before versioning existed). */
-const SCHEMA_VERSION=6;
+const SCHEMA_VERSION=7;
 function stateSchemaVersion(st){const v=st&&st.meta&&+st.meta.schemaVersion;return v>0?v:1;}
 
 function clone(o){return JSON.parse(JSON.stringify(o))}
@@ -1049,7 +1072,7 @@ function normalize(st){
   st.supervision=st.supervision||[];st.rateHistory=st.rateHistory||[];st.clientCategories=st.clientCategories||[];
   ["sessions","clients","supervision","rateHistory","rooms"].forEach(k=>st[k].forEach(x=>{if(x&&!x._id)x._id=uid()}));
   if(!st.roomRateHistory||!st.roomRateHistory.length){
-    st.roomRateHistory=st.rooms.map(r=>({_id:uid(),location:r.location,effectiveFrom:"2000-01-01",rate:r.rate}));
+    st.roomRateHistory=st.rooms.map(r=>({_id:uid(),location:r.location,effectiveFrom:RATE_EPOCH,rate:r.rate}));
   }
   st.roomRateHistory.forEach(x=>{if(!x._id)x._id=uid()});
   /* practice branding + feature switches, set in first-run setup (travels with backups) */
@@ -1188,11 +1211,46 @@ function normalize(st){
     });
     st.meta.cancelChargeBackfill=true;
   }
+  /* v7: "Notes done?" was a free-text box doing two unrelated jobs — a tick that the write-up is
+     finished, and, for anyone who used it that way, a scratchpad for practical reminders. Now the
+     tick is a tick and the reminder has a field of its own whose label says, out loud, that it is
+     not for clinical content.
+     Anything that was not simply "Y" is MOVED, never dropped — that text is the therapist's own
+     and some of it is the only record of why a session was odd.
+     Order matters twice over. isLateCancel() reads this same text for the historical
+     "Y (late cancellation)" convention, so the flag is stamped here before the text goes; and
+     this block sits after cancelChargeBackfill, which calls isLateCancel itself. */
+  if(!st.meta.adminNoteSplit){
+    st.sessions.forEach(s=>{
+      if(!s)return;
+      if(isLateCancel(s))s.lateCancel=true;
+      const txt=String(s.notes==null?"":s.notes).trim();
+      if(!txt)return;                                   /* blank = not written up; leave it blank */
+      /* "Y", and "Y (late cancellation)" whose meaning is now carried by the flag above, are
+         markers rather than comments and have nothing to carry across. */
+      if(!/^y(\s*\(late cancellation\)\s*)?$/i.test(txt)){
+        /* Strip a leading "Y" only where it is unmistakably the tick and not the first letter of
+           a real word — "Y (moved)" and "Y - invoiced" lose it, "Yes, chased twice" keeps every
+           character. The paren form is matched as a pair so a comment that simply ends in ")"
+           does not quietly lose its bracket. */
+        const paren=txt.match(/^y\s*\((.+)\)$/i);
+        const keep=paren?paren[1].trim():(txt.replace(/^y\b\s*[-–—:,]\s*/i,"").trim()||txt);
+        s.adminNote=(s.adminNote?String(s.adminNote).trim()+" · ":"")+keep;
+      }
+      s.notes="Y";
+    });
+    st.meta.adminNoteSplit=true;
+  }
   /* Ordered migrations run here as the schema grows:
        if(stateSchemaVersion(st)<4){ ...upgrade...; }
      Data stamped newer than this build is left completely untouched — never downgrade it in
      place. Import refuses it outright (see validateImport); this path only guards the unlikely
      case of a newer build having written to this device's own database.
+
+     v6 → v7 splits the old free-text "Notes done?" box into a boolean tick (`notes`, now only
+     ever "Y" or "") and a separate `adminNote` for practical comments. A v7 backup can hold
+     "invoice goes to her employer" in adminNote; a v6 build has no such field, so restoring it
+     there would drop every one of those comments and then save the loss back over good data.
 
      v5 → v6 dates the whole-practice tax settings (region, student loan) to a tax year and adds
      the record of what HMRC actually asked for and what has been paid. A v6 backup can say
@@ -1364,9 +1422,15 @@ function derive(s){
   const past=d?d<t:false;
   const overdue=past&&!clientPaid;
   let roomBooked = s.room==="-"||s.location==="At home" ? "n/a" : (s.room?"Y":"N");
-  /* A room on monthly rent is settled once a month in Business costs, not session by session,
-     so its sessions carry no room-paid state at all. */
-  const roomPaidNA = !room || roomBilling(room)==="monthly";
+  /* Three ways a session can have no room fee to settle, and they all mean the same thing to
+     every screen downstream: there is no question to ask, so never chase an answer.
+       - no room record at all;
+       - the room is on a monthly rent, settled once a month in Business costs;
+       - the room charged nothing per session ON THIS DATE — "At home", or a room whose
+         per-session cost is £0 because the whole practice bills monthly.
+     The last one uses the DATED rate, not the room's rate today: a room that charged £15 back
+     when the session happened still has that £15 to account for, however it bills now. */
+  const roomPaidNA = !room || roomBilling(room)==="monthly" || !(roomRate>0);
   let roomDue="n/a";
   if(roomRate>0 && s.roomPaid!=="Y" && !roomPaidNA && d){
     const next=schedNext(roomSchedule(room),d);            /* first payment date on/after the session */
@@ -1374,7 +1438,7 @@ function derive(s){
   }
   const cl=S.clients.find(c=>(c.code||"").toLowerCase()===(s.client||"").toLowerCase());
   const status=cl?cl.status:""; const category=cl?cl.category:"";
-  const complete = (s.notes&&String(s.notes).trim()) && (roomPaidNA || (s.roomPaid&&String(s.roomPaid).trim()));
+  const complete = notesDone(s) && (roomPaidNA || (s.roomPaid&&String(s.roomPaid).trim()));
   let cancelBy=null,canCancel=false;
   if(d){ const tm=(s.time||"00:00").split(":"); const dt=new Date(d); dt.setHours(+tm[0]||0,+tm[1]||0);
     cancelBy=addDays(dt,-3); canCancel=cancelBy>new Date(); }
@@ -1843,11 +1907,22 @@ function gameShow(m,f){ f=f||{}; const g=ensureGame(); const st=computeStreak();
 
 /* ============ Longevity / funnel / sparkline helpers ============ */
 function clientSessionCounts(){const m={};S.sessions.forEach(s=>{if(isCancelled(s))return;const k=(s.client||"").toLowerCase();if(k)m[k]=(m[k]||0)+1;});return m;}
+/* The first entry in a rate history is deliberately dated far in the past so that every session,
+   however old, resolves to a fee — the spreadsheet import, the room seeder and the setup wizard
+   all stamp this same date. It is a floor, not an event, and reading it as one is what put
+   "since 01 Jan 2000" at the top of every imported client's profile. */
+const RATE_EPOCH="2000-01-01";
 function clientAddedDate(c){if(c.created)return c.created;
-  const rs=(S.rateHistory||[]).filter(r=>(r.client||"").toLowerCase()===(c.code||"").toLowerCase()).map(r=>r.effectiveFrom).filter(Boolean).sort();
-  if(rs.length)return rs[0];
+  const rs=(S.rateHistory||[]).filter(r=>(r.client||"").toLowerCase()===(c.code||"").toLowerCase())
+    .map(r=>r.effectiveFrom).filter(d=>d&&d!==RATE_EPOCH).sort();
   const ss=S.sessions.filter(s=>(s.client||"").toLowerCase()===(c.code||"").toLowerCase()).map(s=>s.date).filter(Boolean).sort();
-  return ss.length?ss[0]:null;}
+  /* Whichever came first. A rate set part-way through is not the day you met them, and a client
+     seeded by an import has sessions older than any rate entry the import wrote. */
+  const cand=[rs[0],ss[0]].filter(Boolean).sort();
+  if(cand.length)return cand[0];
+  /* Only a rate floor and no sessions: there is genuinely no date to show. Say nothing rather
+     than something false — every caller already handles null. */
+  return null;}
 function sparkline(vals,opt){opt=opt||{};const w=opt.w||300,h=opt.h||46,pad=3,n=vals.length;
   if(!n)return '<p class="muted small">Not enough data yet.</p>';
   const max=Math.max(1,...vals),min=Math.min(0,...vals),rng=(max-min)||1;
@@ -2012,6 +2087,10 @@ function go(tab,opts){
   if(!VIEWS[tab]||!tabEnabled(tab))tab="home";
   /* arriving at Settings afresh (not a keepScroll redraw) folds every section away again */
   if(tab==="settings"&&!opts.keepScroll)_setGrpOpen={};
+  /* ...unless something sent the reader here to change one particular thing. A link that says
+     "change how your figures are counted" and then lands on five folded headings has not
+     answered it. Applied AFTER the reset above, or it would be wiped by it. */
+  if(tab==="settings"&&opts.openGroup)_setGrpOpen[opts.openGroup]=true;
   const keep=opts.keepScroll?(window.scrollY||window.pageYOffset||0):null;
   cur=tab;
   try{tyMemoClear();}catch(e){}
@@ -2040,8 +2119,13 @@ VIEWS.home=function(){
   const tyRows=der.filter(x=>x.d.taxYear===ty);
   const t=today();
   const billed=tyRows.filter(x=>{const d=parseD(x.s.date);return d&&d<=t;}).reduce((a,x)=>a+(x.d.rate||0),0);
-  const received=tyRows.filter(x=>x.d.clientPaid).reduce((a,x)=>a+(x.d.rate||0),0);
   const outstanding=der.filter(x=>x.d.overdue).reduce((a,x)=>a+(x.d.rate||0),0);
+  /* "Received" used to sit beside "Billed", and between them they answered one question twice —
+     what is missing is the far more useful third number, and Outstanding was already showing it.
+     The slot now says how much work the year has actually been, which nothing else on Home did.
+     Cancellations and DNAs are excluded: they are money, not people seen. */
+  const seenRows=tyRows.filter(x=>{const d=parseD(x.s.date);return d&&d<=t&&!isCancelled(x.s);});
+  const seenClients=new Set(seenRows.map(x=>(x.s.client||"").toLowerCase()).filter(Boolean)).size;
   const upcoming=der.filter(x=>{const d=parseD(x.s.date);return d&&d>=t}).sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
   const next7=upcoming.filter(x=>parseD(x.s.date)<=addDays(t,7));
   /* ---- gamification cards ---- */
@@ -2075,30 +2159,33 @@ VIEWS.home=function(){
   /* 24 weeks of £0 with two bars in it is not a trend. Ten sessions is where the line starts
      saying something, in every mode — an established practice passes it on day one. */
   const sparkCard=S.sessions.length>=10?'<div class="card"><div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Revenue trend</h2><span class="small muted">last 24 weeks</span></div>'+sparkline(sparkVals)+'<div class="row small muted" style="justify-content:space-between;margin-top:4px"><span>'+(weekSeries[0]?"w/c "+esc(weekSeries[0].l):"")+'</span><span><b style="color:var(--brand-dark)">'+gbp(lastW?lastW.revenue:0)+'</b> this week</span></div></div>':'';
+  /* Moved here from Money › Overview. It answers "how busy have I been", which is a Home
+     question — nobody opens the money tab to find out whether they took August off. It needs
+     one past session to say anything at all, and nothing more: even a sparse year reads as a
+     shape, which is the whole point of it. */
+  const heatCard=der.some(x=>{const d=parseD(x.s.date);return d&&d<=t;})
+    ? '<div class="card"><div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Your year</h2><span class="small muted">last 12 months</span></div>'+
+      '<p class="small muted" style="margin:4px 0 10px">One square per day, one column per week — the darker the square, the more sessions that day.</p>'+
+      yearHeatmapHTML()+'</div>'
+    : '';
   v.innerHTML=(S.sessions.length?"":'<div class="hint" style="font-size:14px">👋 <b>Nothing logged yet.</b> Tap <b>＋ New session</b> below to start, or open <b>⚙ Settings → Restore from backup</b> to load a <b>.json</b> backup from another device. Need a refresher? <span class="taxlink" id="hTour">Take the guided tour ›</span></div>')+
    (S.sessions.length&&feat("attention")?'<div class="card"><h2>Needs attention</h2><div class="attn" id="attn"></div></div>':'')+`
    <div class="kpis mb" data-coach="home-kpis">
      <div class="kpi"><div class="v" data-to="${billed}" data-fmt="m">${gbp(billed)}</div><div class="l">Billed this tax year</div></div>
-     <div class="kpi good"><div class="v" data-to="${received}" data-fmt="m">${gbp(received)}</div><div class="l">Received</div></div>
+     <div class="kpi good"><div class="v" data-to="${seenRows.length}">${seenRows.length}</div><div class="l">Sessions this tax year${seenClients?` · ${seenClients} client${seenClients===1?"":"s"}`:""}</div></div>
      <div class="kpi clk ${outstanding?'bad':''}" id="kOut"><div class="v" data-to="${outstanding}" data-fmt="m">${gbp(outstanding)}</div><div class="l">Outstanding now ›</div></div>
      <div class="kpi clk" id="kNext7"><div class="v" data-to="${next7.length}">${next7.length}</div><div class="l">Sessions next 7 days ›</div></div>
    </div>`+
    sparkCard+
    goalsCard+`
-   <div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Quick add</h2></div>`+
-     (feat("quickadd")?`<div class="qlwrap mt">
-       <input id="ql" placeholder="Type it: e.g. &quot;AB tue 14:00 paid&quot; or &quot;CD yesterday online&quot;" autocomplete="off" autocapitalize="off">
-       <div class="qlchips" id="qlout"></div>
-       <button class="btn sm" id="qlGo" style="display:none">Log it</button>
-       <div class="qlhint">Client code + optional day/date, time, location, "online", "paid" — everything else fills in from their last session.</div>
-     </div>`:``)+`
-     <div class="row mt" style="flex-wrap:wrap;gap:8px">
+   <div class="card"><h2>Log something</h2>
+     <div class="row" style="flex-wrap:wrap;gap:8px">
        <button class="btn" id="qNew">＋ New session</button>
        <button class="btn sec" id="qRepeat">↻ Repeat last for…</button>`+
        (feat("supervision")?`<button class="btn sec" id="qSup">＋ Supervision</button>`:``)+`
      </div></div>
    <div class="card"><h2>Coming up</h2><div id="up"></div></div>`+
-   loyalCard+recCard;
+   heatCard+loyalCard+recCard;
   const up=v.querySelector("#up");
   if(!upcoming.length)up.innerHTML='<p class="muted small">No future sessions logged.</p>';
   else up.innerHTML=upcoming.slice(0,12).map(x=>{const d=x.d;
@@ -2115,7 +2202,9 @@ VIEWS.home=function(){
   v.querySelector("#qRepeat").onclick=()=>repeatPicker();
   const qs=v.querySelector("#qSup");if(qs)qs.onclick=()=>supervisionForm(null);
   const ht=v.querySelector("#hTour");if(ht)ht.onclick=()=>startTour();
-  if(feat("quickadd"))mountQuickLog(v);
+  /* Same treatment the charts get: built before the view is attached, so it has no width yet.
+     Land on this week rather than on the same date last year. */
+  scrollChart(v.querySelector(".hmgrid"),null);
   const attnHost=v.querySelector("#attn");if(attnHost)renderAttention(attnHost);
   const gp=v.querySelector("#goPay");if(gp)gp.onclick=()=>{sessFilter.view="list";sessFilter.seg="unpaid";go("sessions");};
   const gi=v.querySelector("#goInc");if(gi)gi.onclick=()=>{sessFilter.view="list";sessFilter.seg="incomplete";go("sessions");};
@@ -2352,8 +2441,13 @@ function cancelTag(s,d){
   return ' · '+cancelLabel(d.cancelKind)+(d.cancelPct<100?' · '+d.cancelPct+'% fee':'');
 }
 function payChip(s,d){return d.clientPaid?'<span class="chip y">paid '+fmtDM(s.paidDate)+'</span>':(d.overdue?'<span class="chip n">overdue · due '+fmtDM(s.date)+'</span>':'<span class="chip na">awaiting</span>');}
+/* The write-up tick. `s.notes` has always been a STRING — "Y", or, before the admin comment
+   existed, whatever the therapist typed in that box — and it stays one, so every backup ever
+   written still reads correctly and `derive().complete` is untouched. This is the single place
+   that decides what counts as written up; the form now only ever writes "Y" or "". */
+function notesDone(s){return !!(s&&s.notes&&String(s.notes).trim());}
 function missingReasons(s){const m=[];
-  if(!(s.notes&&String(s.notes).trim()))m.push("notes");
+  if(!notesDone(s))m.push("notes");
   if(!derive(s).roomPaidNA&&!(s.roomPaid&&String(s.roomPaid).trim()))m.push("room-paid status");
   return m;}
 /* ===== Missed sessions =====
@@ -2583,13 +2677,13 @@ VIEWS.sessions=function(){
   v.innerHTML='<div class="seg mb" id="viewseg" style="display:inline-flex"><button data-v="list" class="'+(sessFilter.view==="list"||sessFilter.view==="sup"?"on":"")+'">☰ List</button><button data-v="cal" class="'+(sessFilter.view==="cal"?"on":"")+'">▦ Calendar</button></div><div id="sbody"></div>';
   const body=v.querySelector("#sbody");
   function renderList(){
-    body.innerHTML='<div class="search"><input id="sq" placeholder="Search client, location, notes…" value="'+esc(sessFilter.q)+'"></div>'+
+    body.innerHTML='<div class="search"><input id="sq" placeholder="Search client, location, comment…" value="'+esc(sessFilter.q)+'"></div>'+
       '<div class="seg" id="seg"><div class="segwrap">'+(function(){var od=S.sessions.filter(x=>derive(x).overdue).length;return ["upcoming","unpaid","incomplete","all"].map(s=>'<button data-s="'+s+'" class="'+(sessFilter.seg===s?"on":"")+'">'+s[0].toUpperCase()+s.slice(1)+(s==="unpaid"&&od?' <span class="badge">'+od+'</span>':"")+'</button>').join("");})()+'</div></div>'+
       '<div id="slist" class="card" style="padding:4px 12px"></div>';
     const renderRows=()=>{
       const t=today();let rows=S.sessions.map(s=>({s,d:derive(s)}));
       const q=sessFilter.q.toLowerCase();
-      if(q)rows=rows.filter(x=>(x.s.client+" "+(x.s.location||"")+" "+(x.s.notes||"")+" "+(x.s.invoice||"")).toLowerCase().includes(q));
+      if(q)rows=rows.filter(x=>(x.s.client+" "+(x.s.location||"")+" "+(x.s.adminNote||"")+" "+(x.s.invoice||"")).toLowerCase().includes(q));
       const list=body.querySelector("#slist");
       if(sessFilter.seg==="unpaid"){
         rows=rows.filter(x=>x.d.overdue).sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
@@ -2608,7 +2702,10 @@ VIEWS.sessions=function(){
         if(sessFilter.seg==="incomplete"){const miss=missingReasons(x.s);
           return '<div class="list-item" data-id="'+x.s._id+'"><div class="li-main"><div class="li-title">'+esc(x.s.client)+' <span class="chip f">incomplete</span></div><div class="li-sub">'+fmtDshort(x.s.date)+' · #'+esc(x.s.num)+' · Missing: '+(miss.join(", ")||"—")+'</div></div><div class="li-right">'+gbp(d.rate)+'</div></div>';}
         const pay=payChip(x.s,d);
-        return '<div class="list-item" data-id="'+x.s._id+'"><div class="li-main"><div class="li-title">'+esc(x.s.client)+' '+pay+cancelTag(x.s,d)+'</div><div class="li-sub">'+fmtDshort(x.s.date)+' · '+esc(x.s.time||"")+' · '+esc(x.s.location||"")+' · #'+esc(x.s.num)+'</div></div><div class="li-right">'+gbp(d.rate)+'</div></div>';};
+        /* An admin comment nobody can see without opening the session is a comment nobody writes
+           twice. One line, truncated by CSS, under the date. */
+        const adm=(x.s.adminNote||"").trim();
+        return '<div class="list-item" data-id="'+x.s._id+'"><div class="li-main"><div class="li-title">'+esc(x.s.client)+' '+pay+cancelTag(x.s,d)+'</div><div class="li-sub">'+fmtDshort(x.s.date)+' · '+esc(x.s.time||"")+' · '+esc(x.s.location||"")+' · #'+esc(x.s.num)+'</div>'+(adm?'<div class="li-sub adminline">'+gi("notes")+' '+esc(adm)+'</div>':'')+'</div><div class="li-right">'+gbp(d.rate)+'</div></div>';};
       const swipeWrap=x=>{const inner=rowHTML(x);
         if(x.d.overdue&&(x.d.rate||0)>0){anySwipe=true;
           return '<div class="swrow" data-swipe="'+x.s._id+'"><div class="swunder">✓ Mark paid</div><div class="swover">'+inner+'</div></div>';}
@@ -2692,11 +2789,12 @@ VIEWS.sessions=function(){
       const chargeable=(d.roomRate||0)>0;
       stage[s._id]={notes:false,room:false,rdate:td,chargeable:chargeable};
       const notesCtl=needNotes?'<button class="tgl" data-k="notes" data-id="'+s._id+'"><span class="tbox"></span>Notes done</button>':'<span class="chip y">✓ notes</span>';
-      const roomCtl=needRoom?'<button class="tgl" data-k="room" data-id="'+s._id+'"><span class="tbox"></span>'+(chargeable?'Room paid':'No room fee')+'</button>'
-        :(d.roomPaidNA?'<span class="chip na">rent billed monthly</span>':'<span class="chip y">✓ room</span>');
-      const noteInput=needNotes?'<input class="ninp" data-id="'+s._id+'" placeholder="Y / type a note" style="display:none;flex:1;min-width:130px;padding:8px;font-size:13px">':'';
-      const rdInput=(needRoom&&chargeable)?'<input type="date" class="rinp pdate2" data-id="'+s._id+'" value="'+td+'" style="display:none">':'';
-      return '<div class="irow" data-id="'+s._id+'"><div class="itop"><div><span class="ittl">'+esc(s.client)+'</span> <span class="isub">'+fmtDshort(s.date)+' · #'+esc(s.num)+(chargeable?' · room '+gbp(d.roomRate):'')+'</span></div><div class="li-right small muted">'+gbp(d.rate)+'</div></div><div class="ctrls">'+notesCtl+roomCtl+noteInput+rdInput+'</div></div>';
+      /* Only a session that really does carry a per-session fee can be missing a room-paid answer
+         now — derive() calls every other case n/a — so there is no "No room fee" branch left. */
+      const roomCtl=needRoom?'<button class="tgl" data-k="room" data-id="'+s._id+'"><span class="tbox"></span>Room paid</button>'
+        :(d.roomPaidNA?'<span class="chip na">no room fee to settle</span>':'<span class="chip y">✓ room</span>');
+      const rdInput=needRoom?'<input type="date" class="rinp pdate2" data-id="'+s._id+'" value="'+td+'" style="display:none">':'';
+      return '<div class="irow" data-id="'+s._id+'"><div class="itop"><div><span class="ittl">'+esc(s.client)+'</span> <span class="isub">'+fmtDshort(s.date)+' · #'+esc(s.num)+(chargeable?' · room '+gbp(d.roomRate):'')+'</span></div><div class="li-right small muted">'+gbp(d.rate)+'</div></div><div class="ctrls">'+notesCtl+roomCtl+rdInput+'</div></div>';
     }).join("");
     const sbtn=container.querySelector("#saveInc");
     const count=()=>{let n=0;Object.keys(stage).forEach(id=>{if(stage[id].notes)n++;if(stage[id].room)n++;});return n;};
@@ -2704,7 +2802,6 @@ VIEWS.sessions=function(){
     function setTgl(btn,on){const id=btn.dataset.id,k=btn.dataset.k;if(stage[id][k]===on)return;stage[id][k]=on;
       btn.classList.toggle("on",on);btn.classList.remove("pop");void btn.offsetWidth;if(on)btn.classList.add("pop");
       const row=irw.querySelector('.irow[data-id="'+id+'"]');
-      if(k==="notes"){const ni=row.querySelector('.ninp');if(ni)ni.style.display=on?"block":"none";}
       if(k==="room"){const ri=row.querySelector('.rinp');if(ri)ri.style.display=on?"block":"none";}
       Sfx.pop();upd();}
     irw.querySelectorAll(".tgl").forEach(b=>b.onclick=()=>setTgl(b,!stage[b.dataset.id][b.dataset.k]));
@@ -2719,8 +2816,8 @@ VIEWS.sessions=function(){
       let nNotes=0,nRoom=0,cleared=0;
       ids.forEach(id=>{const stg=stage[id];const ss=S.sessions.find(z=>z._id===id);if(!ss)return;
         const wasComplete=derive(ss).complete;
-        if(stg.notes){const ni=irw.querySelector('.ninp[data-id="'+id+'"]');const val=(ni&&ni.value.trim())||"Y";ss.notes=val;nNotes++;}
-        if(stg.room){if(stg.chargeable){ss.roomPaid="Y";const ri=irw.querySelector('.rinp[data-id="'+id+'"]');ss.roomPaidDate=(ri&&ri.value)||stg.rdate||td;}else ss.roomPaid="n/a";nRoom++;}
+        if(stg.notes){ss.notes="Y";nNotes++;}
+        if(stg.room){ss.roomPaid="Y";const ri=irw.querySelector('.rinp[data-id="'+id+'"]');ss.roomPaidDate=(ri&&ri.value)||stg.rdate||td;nRoom++;}
         if(!wasComplete&&derive(ss).complete)cleared++;});
       const batch=nNotes+nRoom;
       const f=gameNoteBatch({cleared:cleared});
@@ -2903,12 +3000,7 @@ VIEWS.practice=function(){
     body.querySelector("#addR").onclick=()=>roomForm(null); r();
   }
   function renderMetrics(){
-    if(plusLocked("trends")){
-      body.innerHTML=plusLockHTML("trends","Trends",
-        "Who stays and who drifts, attendance against the frequency you agreed, how long clients "+
-        "stay, and what missed sessions are costing you.");
-      plusWireLocks(body); return;
-    }
+    const locked=plusLocked("trends");
     const counts=clientSessionCounts();
     const lastSeen=lastSessionDates();   /* drives the current/historical split on every list below */
     const withSess=S.clients.map(c=>({c,n:counts[c.code.toLowerCase()]||0}));
@@ -2917,6 +3009,43 @@ VIEWS.practice=function(){
     const tiers=[{t:1,l:"In therapy",d:"1+ sessions",e:"🌱"},{t:6,l:"Building",d:"6+ sessions",e:"🌿"},{t:12,l:"Established",d:"12+ sessions",e:"🌳"},{t:20,l:"Long-term",d:"20+ sessions",e:"🌲"}];
     const rows=tiers.map(tr=>{const n=withSess.filter(x=>x.n>=tr.t).length;const pct=base?Math.round(n/base*100):0;const w=Math.round(n/max*100);
       return '<div class="fr"><div class="ftop"><span>'+tr.e+' <b>'+tr.l+'</b> · '+tr.d+'</span><span>'+n+' '+(n===1?'client':'clients')+(tr.t>1&&base?' · '+pct+'%':'')+'</span></div><div class="fbar"><i data-w="'+w+'" style="width:0"></i></div></div>';}).join("");
+    /* ---- the sneak peek ----
+       A hard lock on Trends showed a paragraph describing charts nobody had seen, which is a poor
+       advert and a slightly insulting one: the data is the therapist's own. So the retention
+       funnel — the headline, and the cheapest of the four to build — renders in full, on real
+       numbers, and the rest is named honestly underneath with the one figure that says whether it
+       is worth anything to this practice.
+       Everything below this branch stays exactly as it was; the lock is a return, not a mode. */
+    if(locked){
+      const t0=today();
+      const missed=S.sessions.filter(s=>isCancelled(s)&&parseD(s.date)&&parseD(s.date)<=t0);
+      const lostPeek=missed.reduce((a,s)=>{const d=derive(s);return a+Math.max(0,(d.fullRate||0)-(d.rate||0));},0);
+      const longTerm=withSess.filter(x=>x.n>=20).length;
+      const totalPeek=withSess.reduce((a,x)=>a+x.n,0);
+      const avgPeek=base?Math.round(totalPeek/base*10)/10:0;
+      const peek=(head,fig,sub)=>'<div class="peekrow"><div class="peekfig">'+fig+'</div>'+
+        '<div><div class="peekh">'+head+'</div><div class="peeks">'+sub+'</div></div></div>';
+      body.innerHTML=
+        '<div class="card"><h2>Client retention funnel</h2>'+
+          '<p class="small muted" style="margin:0 0 10px">How your clients progress over time, by number of sessions. This one is yours to keep.</p>'+
+          '<div class="funnel">'+rows+'</div></div>'+
+        '<div class="card plusgate peek"><div class="plmark">'+gi("trends")+'</div>'+
+          '<h2>Three more, from the same records</h2>'+
+          '<p class="small muted">Nothing to set up and nothing to enter — these are worked out from the sessions you have already logged. Here is what each one currently has to say.</p>'+
+          '<div class="mt">'+
+            peek("Attendance vs the frequency you agreed",base?(base+" rated"):"—",
+              base?("A percentage for each of your "+base+" client"+(base===1?"":"s")+": who is turning up as often as they agreed, who has quietly halved, and who is on a break rather than gone."):"Turns each client's agreed frequency into a percentage actually attended.")+
+            peek("What missed sessions cost you",lostPeek>0?gbp(Math.round(lostPeek)):(missed.length?"£0":"—"),
+              missed.length?(missed.length+" missed session"+(missed.length===1?"":"s")+" so far, and the fee you chose not to charge on them."):"Nothing missed yet — this fills in as it happens.")+
+            peek("How long clients stay",longTerm?(longTerm+" long-term"):(avgPeek?avgPeek+" avg":"—"),
+              avgPeek?("An average of "+avgPeek+" sessions per client so far, and who sits at the far end of that."):"Average length of work, and who your longest-standing clients are.")+
+          '</div>'+
+          '<button class="btn full mt" data-plus="trends">See all four · '+PLUS_NAME+'</button>'+
+        '</div>';
+      plusWireLocks(body);
+      requestAnimationFrame(()=>body.querySelectorAll(".funnel .fbar>i").forEach(i=>{i.style.width=(+i.dataset.w)+"%";}));
+      return;
+    }
     const deep=withSess.filter(x=>x.n>=20).sort((a,b)=>b.n-a.n);
     const deepLi=x=>'<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+'</div><div class="li-sub">'+esc(x.c.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>';
     const deepAged=deep.filter(x=>!trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()]));
@@ -3062,6 +3191,14 @@ VIEWS.practice=function(){
    ledger charges once a month, with the per-session rate held at 0 so the same room can never
    charge twice for the same booking. Switching modes writes both steps — see roomBillingSwitch. */
 function roomBilling(rm){return (rm&&rm.billing==="monthly")?"monthly":"session";}
+/* Does this practice pay for a room per session AT ALL? A therapist working from home, or one
+   whose rooms are all on a monthly rent, never has a per-session room fee to settle — so the
+   session form drops that whole pair of controls rather than explaining itself once per session.
+   Read against today's rates: this answers "is this a thing I do", not "did this session cost". */
+function anyPerUseRoom(){
+  const iso=isoD(today());
+  return (S.rooms||[]).some(r=>r&&roomBilling(r)!=="monthly"&&effRoomRate(r.location,iso)>0);
+}
 function roomCostLabel(rm){
   const monthly=roomBilling(rm)==="monthly", iso=isoD(today());
   const unit=monthly?" / month":" / session";
@@ -4298,6 +4435,45 @@ infoDef("backup-restore-detail","What a backup contains",
   '<p class="small">Export regularly to a file you keep (iCloud/Files/email).</p>'+
   '<p class="small">The <b>.json backup is the complete copy</b> \u2014 it holds every session, supervision entry, client, room and setting. The CSVs are spreadsheet-friendly extracts.</p>'+
   '<p class="small">No export contains clinical notes \u2014 the sessions\u2019 <b>notes</b> column records whether yours were written up, nothing more.</p>');
+/* Three different things in this app are called a backup, they protect against different
+   failures, and only one of them is the one that matters. Spelling that out here rather than
+   in three separate cards is the only way a reader can compare them. */
+infoDef("backups-explained","Backups: which is which",
+  '<p class="small">Three things here look like backups. Only the first is one you can rely on.</p>'+
+  '<div class="grp-h">1 \u00b7 Export backup (.json) \u2014 the real one</div>'+
+  '<p class="small">A single file with <b>everything</b> in it. You choose where it goes: iCloud, Drive, a memory stick, an email to yourself. <b>Restore from backup</b> reads it back and the app is exactly as it was.</p>'+
+  '<p class="small"><b>This is the only copy that survives losing the device.</b> If your phone goes in the sea, this file is your practice.</p>'+
+  '<div class="grp-h">2 \u00b7 Automatic backup \u2014 convenience, not insurance</div>'+
+  '<p class="small">The app quietly saves a copy after every change, without asking. On an iPhone it goes into GroundWork\u2019s own folder in the <b>Files</b> app; on desktop Chrome or Edge it overwrites a file you picked once.</p>'+
+  '<p class="small">It is excellent for the everyday accidents \u2014 deleting the wrong client, a restore you regret, an app that will not open. It is <b>the same device</b>, though, so it is no help at all if that device is lost, stolen or broken (unless iCloud Backup happens to be sweeping that folder up for you).</p>'+
+  '<p class="small">It also never speaks. It will not nag you, and the app still asks you to take a real export on a schedule \u2014 that reminder is deliberate and is not switched off by the automatic copy existing.</p>'+
+  '<div class="grp-h">3 \u00b7 Spreadsheet exports (.csv) \u2014 not backups at all</div>'+
+  '<p class="small">Extracts for a spreadsheet or an accountant. They are readable, partial, and <b>cannot be restored</b> \u2014 there is no button that takes one back in. Nothing that only exists in a CSV can be recovered into the app.</p>'+
+  '<div class="grp-h">In short</div>'+
+  '<p class="small">Let the automatic copy do its job, and still export a real backup off this device regularly. The two are not alternatives.</p>');
+/* ---- how the figures are counted (cash vs accruals) ----
+   The card lives in Settings \u203a Your practice: it is a decision about the business that gets made
+   once, not a view toggle. Built here beside the tax engine so the wording and the engine that
+   honours it stay together. */
+function basisCardHTML(){
+  return '<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
+      '<h2 style="margin:0">How your figures are counted</h2>'+
+      '<div class="seg" id="basisSeg" style="display:inline-flex"><button data-b="cash" class="'+(taxBasis()==="cash"?"on":"")+'">Cash</button>'+
+        '<button data-b="accruals" class="'+(taxBasis()==="accruals"?"on":"")+'">Accruals</button></div></div>'+
+    '<p class="small muted mt">'+basisNote()+'</p>'+
+    (taxBasis()==="cash"?'<p class="small muted">Sessions you have not been paid for yet are not in these totals \u2014 they arrive in the year the money does.</p>':'')+
+    '<p class="prev">This changes every money and tax figure in the app, so it belongs with your other business decisions rather than on the screen showing the numbers.</p>'+
+    '</div>';
+}
+/* `after` is how the host redraws itself \u2014 the basis changes figures on whatever screen is open. */
+function wireBasisCard(host,after){
+  const bsg=host&&host.querySelector("#basisSeg"); if(!bsg)return;
+  bsg.querySelectorAll("button").forEach(b=>b.onclick=async()=>{
+    if(b.dataset.b===taxBasis())return;
+    settings().taxBasis=b.dataset.b;
+    await commit("Tax basis: "+b.dataset.b);
+    if(after)after();});
+}
 infoDef("encrypted-backup-detail","How encrypted backup works",
   '<p class="small">The file is unreadable without the passphrase \u2014 safe to keep in iCloud, Drive or email.</p>'+
   '<p class="small">On desktop Chrome/Edge you can also pick a file that backups <b>auto-save to silently</b> after every change.</p>');
@@ -4370,9 +4546,9 @@ VIEWS.money=function(){
         '<div class="kpi'+(fc.delta==null?'':(fc.delta>=0?' good':' bad'))+'"><div class="v">'+(fc.delta==null?'—':(fc.delta>=0?'+':'')+fc.delta+'%')+'</div><div class="l">vs last month ('+gbp(fc.lastM)+')</div></div>'+
         '<div class="kpi"><div class="v">'+esc(fc.busiest)+'</div><div class="l">Busiest day (6 mo)</div></div>'+
       '</div>'+
-      '<p class="small muted" style="margin:12px 0 4px">Sessions per day, last 12 months — each column is a week.</p>'+
-      yearHeatmapHTML()+
-      '<p class="small muted" style="margin:8px 0 0">Projection = billed to date + the larger of (sessions already booked this month) and (your 8-week average daily revenue × days left).</p></div>';
+      /* The year heatmap used to sit here. It is a "how busy have I been" picture, not a money
+         one, and it now opens the Home tab — see VIEWS.home's heatCard. */
+      '<p class="small muted" style="margin:12px 0 0">Projection = billed to date + the larger of (sessions already booked this month) and (your 8-week average daily revenue × days left).</p></div>';
     const series=periodSeries(statGran);
     body.innerHTML=fcCard+
       '<div class="card"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Revenue &amp; net income</h2>'+
@@ -4397,9 +4573,6 @@ VIEWS.money=function(){
     drawCombo();
     body.querySelector("#chCli").innerHTML=chartLine(series.map(d=>({l:d.l,v:d.clients,avg:d.cliAvg})));
     scrollChart(body.querySelector("#chCli .svgwrap"),null);
-    /* The heatmap scrolls too, and runs oldest-week-first like the charts, so it gets the same
-       treatment — land on this week rather than on the same date last year. */
-    scrollChart(body.querySelector(".hmgrid"),null);
     body.querySelector("#gran").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{statGran=bt.dataset.g;go("money",{keepScroll:true});});
   }
   function drawCosts(){
@@ -4478,7 +4651,10 @@ VIEWS.tax=function(){
     if(tx.status==="future"){taxCell='<td class="num">–</td>';}
     else{const val=tx.status==="complete"?tx.display:tx.display[taxMode];
       taxCell='<td class="num"><span class="taxlink" data-y="'+y+'">'+gbp(Math.round(val))+(tx.status==="inprogress"?'*':'')+'</span></td>';}
-    return '<tr><td><b>'+y+'</b></td><td class="num">'+rs.length+'</td><td class="num">'+gbp(billed)+'</td><td class="num">'+gbp(rec)+'</td><td class="num">'+(over?gbp(over):"–")+'</td><td class="num"><span class="taxlink netlink" data-y="'+y+'">'+gbp(tx.netAll)+'</span></td>'+taxCell+'</tr>';}).join("");
+    /* Tax first, then the profit it was worked out from, then the income behind that. This table
+       is read to answer "what do I owe for that year" — the working belongs to the right of the
+       answer, not four columns past it where a narrow screen has already scrolled it away. */
+    return '<tr><td><b>'+y+'</b></td>'+taxCell+'<td class="num"><span class="taxlink netlink" data-y="'+y+'">'+gbp(tx.netAll)+'</span></td><td class="num">'+gbp(billed)+'</td><td class="num">'+gbp(rec)+'</td><td class="num">'+(over?gbp(over):"–")+'</td><td class="num">'+rs.length+'</td></tr>';}).join("");
   const th=monthlyTakeHome();
   const thBasis = th.status==="inprogress"
     ? "Based on "+th.ty+"’s projected net of "+gbp(Math.round(th.annualNet))+" less "+gbp(Math.round(th.annualTax))+" tax."
@@ -4496,15 +4672,12 @@ VIEWS.tax=function(){
       '<label class="colchk"><input type="checkbox" id="c2v"'+(settings().class2Voluntary?" checked":"")+'> Pay Class 2 voluntarily</label>'+
       '<p class="small muted mt">Your profit is under \u00a3'+taxRates(curTaxYear()).spt+', so Class 2 is not due \u2014 but paying it (about \u00a3'+taxRates(curTaxYear()).class2week+' a week) keeps the year counting towards your State Pension. For a part-time practice that is usually worth it.</p></div>'
     : '';
-  const basisCard='<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
-      '<h2 style="margin:0">How your figures are counted</h2>'+
-      '<div class="seg" id="basisSeg" style="display:inline-flex"><button data-b="cash" class="'+(taxBasis()==="cash"?"on":"")+'">Cash</button>'+
-        '<button data-b="accruals" class="'+(taxBasis()==="accruals"?"on":"")+'">Accruals</button></div></div>'+
-    '<p class="small muted mt">'+basisNote()+'</p>'+
-    (taxBasis()==="cash"?'<p class="small muted">Sessions you have not been paid for yet are not in these totals \u2014 they arrive in the year the money does.</p>':'')+
-    '</div>';
-  body.innerHTML=taxDisclaimBar()+thCard+basisCard+c2Card+
-    '<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">By tax year</h2><div class="seg" id="taxmode" style="display:inline-flex"><button data-m="proj" class="'+(taxMode==="proj"?"on":"")+'">Projected</button><button data-m="todate" class="'+(taxMode==="todate"?"on":"")+'">To date</button></div></div><div class="rawscroll"><table><thead><tr><th>Year</th><th class="num">Sess</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Overdue</th><th class="num">Net</th><th class="num">Tax</th></tr></thead><tbody>'+tyTable+'</tbody></table></div><p class="small muted"><b>'+esc(basisLabel())+'.</b> Net = income less room, supervision and business costs, plus any other practice income. Tax = Income Tax + Class 4 NIC (sole trader); tap a figure for the breakdown. <b>*</b> in-progress year shown as '+(taxMode==="proj"?"a pro-rata projection":"tax on income to date")+'.</p></div>';
+  /* The basis control itself now lives in Settings \u203a Your practice: it is a decision about the
+     business, made once and then left alone for years, not a view option to flick between while
+     reading an estimate. What stays here is the one line saying which basis these figures are
+     on \u2014 that has to travel with the numbers. */
+  body.innerHTML=taxDisclaimBar()+thCard+c2Card+
+    '<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">By tax year</h2><div class="seg" id="taxmode" style="display:inline-flex"><button data-m="proj" class="'+(taxMode==="proj"?"on":"")+'">Projected</button><button data-m="todate" class="'+(taxMode==="todate"?"on":"")+'">To date</button></div></div><div class="rawscroll"><table><thead><tr><th>Year</th><th class="num">Tax</th><th class="num">Net</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Overdue</th><th class="num">Sess</th></tr></thead><tbody>'+tyTable+'</tbody></table></div><p class="small muted"><b>'+esc(basisLabel())+'.</b> Tax = Income Tax + Class 4 NIC (sole trader), worked out from Net. Net = income less room, supervision and business costs, plus any other practice income. Tap either figure for the breakdown. <b>*</b> in-progress year shown as '+(taxMode==="proj"?"a pro-rata projection":"tax on income to date")+'. <span class="taxlink" id="toBasis">Change how your figures are counted ›</span></p></div>';
   wireTaxDisclaimBar(body);
   /* [data-y] only — .taxlink is also the style for the pension link, which is not a year. */
   body.querySelectorAll(".taxlink[data-y]").forEach(elx=>elx.onclick=()=>{
@@ -4516,12 +4689,8 @@ VIEWS.tax=function(){
   if(c2v)c2v.onchange=async()=>{settings().class2Voluntary=c2v.checked;
     await commit("Voluntary Class 2: "+(c2v.checked?"on":"off"));go("tax",{keepScroll:true});};
   wireInfo(body);
-  const bsg=body.querySelector("#basisSeg");
-  if(bsg)bsg.querySelectorAll("button").forEach(b=>b.onclick=async()=>{
-    if(b.dataset.b===taxBasis())return;
-    settings().taxBasis=b.dataset.b;
-    await commit("Tax basis: "+b.dataset.b);
-    go("tax",{keepScroll:true});});
+  const tb=body.querySelector("#toBasis");
+  if(tb)tb.onclick=()=>go("settings",{openGroup:"business"});
   const tmx=body.querySelector("#taxmode");if(tmx)tmx.querySelectorAll("button").forEach(b=>b.onclick=()=>{taxMode=b.dataset.m;go("tax",{keepScroll:true});});
   /* No pension figure has been set unless the therapist set one — so the "after pension" view
      subtracts nothing and says so, rather than quietly modelling a guessed contribution. */
@@ -5806,13 +5975,13 @@ const RAWCOLS=[
  {k:"location",t:"Location"},{k:"room",t:"Room"},{k:"rate",t:"Rate",n:1,m:1},{k:"paidYN",t:"Paid"},{k:"paidDate",t:"Paid date",d:1},
  {k:"overdueYN",t:"Overdue"},{k:"roomRate",t:"Room £",n:1,m:1},{k:"roomPaid",t:"Room paid"},{k:"roomPaidDate",t:"Room paid date",d:1},{k:"roomDue",t:"Room due"},
  {k:"lateCancel",t:"Late cancel"},{k:"attend",t:"Attended"},{k:"chargePct",t:"Charge %",n:1},{k:"fullRate",t:"Full fee",n:1,m:1},
- {k:"invoice",t:"Invoice"},{k:"notes",t:"Notes"},{k:"status",t:"Status"},{k:"taxYear",t:"Tax yr"},{k:"week",t:"Wk",n:1}];
+ {k:"invoice",t:"Invoice"},{k:"notes",t:"Notes done"},{k:"adminNote",t:"Admin comment"},{k:"status",t:"Status"},{k:"taxYear",t:"Tax yr"},{k:"week",t:"Wk",n:1}];
 function recOf(s,d){return {client:s.client,num:s.num,date:s.date,time:s.time||"",mode:s.mode||"",location:s.location||"",room:s.room||"",
   rate:d.rate,paidYN:d.clientPaid?"Y":"N",paidDate:s.paidDate||"",overdueYN:d.overdue?"Y":"N",roomRate:d.roomRate,roomPaid:s.roomPaid||"",
   roomPaidDate:s.roomPaidDate||"",roomDue:d.roomDue,lateCancel:isLateCancel(s)?"Y":"",
   attend:d.cancelKind==="dna"?"DNA":d.cancelKind==="late"?"Late cancel":"Y",
   chargePct:d.cancelPct,fullRate:d.fullRate,
-  invoice:s.invoice||"",notes:s.notes||"",status:d.status||"",taxYear:d.taxYear,week:d.week};}
+  invoice:s.invoice||"",notes:notesDone(s)?"Y":"",adminNote:s.adminNote||"",status:d.status||"",taxYear:d.taxYear,week:d.week};}
 let rawF={q:"",client:"",ty:"",paid:"",loc:"",sk:"date",sd:-1,cols:null};
 let supF={q:"",sk:"date",sd:-1,cols:null};
 let rawSeg="sessions";
@@ -5926,13 +6095,28 @@ function plusSettingsCardHTML(){
 VIEWS.settings=function(){
   const v=el('<div class="view active"></div>');
   v.innerHTML=`
-   <details class="sgrp" data-g="practice"><summary><span class="sgt">Your practice</span><span class="sgs">Name, look, and which features you use</span></summary><div class="sgb">
-   <div class="card"><h2>Your practice</h2>
+   <details class="sgrp" data-g="business"><summary><span class="sgt">Your practice</span><span class="sgs">Decisions about the business: name, charging policy and how your figures are counted</span></summary><div class="sgb">
+   <div class="card"><h2>Practice details</h2>
      <p class="small muted">Shown in the app header and at the top of printed receipts and statements.</p>
      <label>Practice name</label><input id="setName" maxlength="60" value="${esc(practiceName())}">
      <label>Strapline <span class="muted">(receipts only)</span></label><input id="setTag" maxlength="70" value="${esc(practiceTagline())}">
      <button class="btn full mt" id="setNameSave">Save practice details</button>
    </div>
+   <div class="card"><h2>Cancellations &amp; DNAs</h2>
+     <p class="small muted">What a client is charged when a session is missed. The rule fills in the charge when you log one — you can always override it for a single session.</p>
+     <div class="vmsg warn mt">${gi("clock")} This is your policy <b>from now on</b>. Sessions you have already logged keep the charge they were given, so changing this never rewrites what a client was billed.</div>
+     <div class="grp-h">Cancelled with notice</div>
+     <div id="cxRules"></div>
+     <button class="btn sec sm mt" id="cxAdd">＋ Add a notice period</button>
+     <div class="grp-h" style="margin-top:16px">Did not attend</div>
+     <label>Charge when a client simply doesn’t come (%)</label>
+     <input type="number" min="0" max="100" step="5" id="cxDna">
+     <p class="prev">Set 0 if you don’t charge for these.</p>
+   </div>
+   ${feat("tax")?basisCardHTML():""}
+   ${feat("tax")?taxRegionCardHTML():""}
+   </div></details>
+   <details class="sgrp" data-g="app"><summary><span class="sgt">App preferences</span><span class="sgs">How the app looks and sounds, and which parts of it you use</span></summary><div class="sgb">
    ${plusSettingsCardHTML()}
    <div class="card"><h2>Appearance &amp; sound</h2>
      <p class="small muted">Colour scheme, light/dark and sound effects. Stored on this device; the scheme also travels with your backups.</p>
@@ -5947,18 +6131,6 @@ VIEWS.settings=function(){
        <button class="btn sec" id="setSound"></button>
      </div>
    </div>
-   <div class="card"><h2>Cancellations &amp; DNAs</h2>
-     <p class="small muted">What a client is charged when a session is missed. The rule fills in the charge when you log one — you can always override it for a single session.</p>
-     <div class="vmsg warn mt">${gi("clock")} This is your policy <b>from now on</b>. Sessions you have already logged keep the charge they were given, so changing this never rewrites what a client was billed.</div>
-     <div class="grp-h">Cancelled with notice</div>
-     <div id="cxRules"></div>
-     <button class="btn sec sm mt" id="cxAdd">＋ Add a notice period</button>
-     <div class="grp-h" style="margin-top:16px">Did not attend</div>
-     <label>Charge when a client simply doesn’t come (%)</label>
-     <input type="number" min="0" max="100" step="5" id="cxDna">
-     <p class="prev">Set 0 if you don’t charge for these.</p>
-   </div>
-   ${feat("tax")?taxRegionCardHTML():""}
    <div class="card"><h2>Features</h2>
      <p class="small muted">Switch off anything you don’t use — it disappears from the app. Nothing is deleted, and you can switch it back on any time.</p>
      <div class="mt" id="setAdvanced"></div>
@@ -5967,15 +6139,23 @@ VIEWS.settings=function(){
    </div></details>
    <details class="sgrp" data-g="data"><summary><span class="sgt">Data &amp; backup</span><span class="sgs">Backups, storage, import, undo and health checks</span></summary><div class="sgb">
    <div class="card"><h2>Backup &amp; restore</h2>
-     <p class="small muted">Your data lives on this device. GroundWork works on one device at a time — restore a backup to move your records, don’t run two copies side by side. ${infoLink("backup-restore-detail")}</p>
+     <p class="small muted">Your data lives on this device. A <b>backup</b> is one <b>.json</b> file holding everything — every session, client, room, payment and setting — and restoring it puts the app back exactly as it was. Keep one somewhere that is <b>not</b> this device.</p>
+     <p class="small muted">GroundWork works on one device at a time: restore a backup to move your records, don’t run two copies side by side. ${infoLink("backups-explained","What counts as a backup")}</p>
      <div class="row mt" style="flex-wrap:wrap;gap:8px">
        <button class="btn" id="expJ">⤓ Export backup (.json)</button>
-       <button class="btn sec" id="expC">⤓ Export sessions (.csv)</button>
-       <button class="btn sec" id="expSC">⤓ Export supervision (.csv)</button>
-       <button class="btn sec" id="expFC">⤓ Export finances (.csv)</button>
        <button class="btn ghost" id="impB">⤒ Restore from backup</button>
        <input type="file" id="impF" accept=".json,application/json" style="display:none">
      </div>
+   </div>
+   <div class="card"><h2>Spreadsheet exports</h2>
+     <p class="small muted">Extracts for a spreadsheet or your accountant. <b>These are not backups</b> — they cannot be restored, and none of them contains everything. ${infoLink("backups-explained")}</p>
+     <details class="dz"><summary>Export a .csv</summary>
+       <div class="row mt" style="flex-wrap:wrap;gap:8px">
+         <button class="btn sec" id="expC">⤓ Sessions (.csv)</button>
+         <button class="btn sec" id="expSC">⤓ Supervision (.csv)</button>
+         <button class="btn sec" id="expFC">⤓ Costs &amp; income (.csv)</button>
+       </div>
+     </details>
    </div>
    <div class="card"><h2>GroundWork Notes</h2>
      <p class="small muted">If you write your clinical notes in <b>GroundWork Notes</b>, this sends over how often you see each client and when — so that app can work out which sessions still need writing up, on whichever device you write them on.</p>
@@ -5996,6 +6176,7 @@ VIEWS.settings=function(){
    </div>
    <div class="card"><h2>Encrypted backup 🔐</h2>
      <p class="small muted">Protect backups with a passphrase (AES-256). ${infoLink("encrypted-backup-detail")} <b>If you forget the passphrase, encrypted backups cannot be opened.</b></p>
+     <p class="small muted"><b>Choose auto-save file</b> (Chrome and Edge on a computer) picks one file that the app then rewrites silently after every change. Handy, but it is one file on one machine — it is not a substitute for exporting a backup you keep elsewhere. ${infoLink("backups-explained")}</p>
      <p class="small" id="encStatus" style="font-weight:600"></p>
      <div class="row mt" style="flex-wrap:wrap;gap:8px">
        <button class="btn sec" id="encSet"></button>
@@ -6036,7 +6217,7 @@ VIEWS.settings=function(){
    <details class="sgrp" data-g="help"><summary><span class="sgt">Setup &amp; help</span><span class="sgs">The tour, what’s new, and re-running setup</span></summary><div class="sgb">
    <div class="card"><h2>Setup &amp; help</h2>
      <p class="small muted">The guided tour points at things on the screen itself rather than describing them over the top — eight short stops on what each tab does, how to log a session and how your data is saved. It changes nothing.</p>
-     <p class="small muted"><b>A reminder on notes:</b> the Notes field records <i>whether</i> your notes are written up, not the notes themselves. Keep the clinical record wherever you normally do — this app holds none, which is what keeps exports and receipts safe to hand over.</p>
+     <p class="small muted"><b>A reminder on notes:</b> a session has a <i>tick</i> for whether your notes are written up, and an <b>admin comment</b> for practical reminders. Neither is the place for anything clinical — keep that wherever you normally do. It’s what makes exports and receipts from here safe to hand over.</p>
      <button class="btn sec full" id="setTour">🧭 Replay the guided tour</button>
      <button class="btn sec full mt" id="setNew">✨ What’s new in this update</button>
      <div class="grp-h" style="margin-top:18px">Tips on new screens</div>
@@ -6078,6 +6259,9 @@ VIEWS.settings=function(){
     Sfx.error();
   };
   wireTaxRegion(v);
+  /* Changing the basis re-renders Settings in place — the card has to redraw to show the new
+     selection, and `keepScroll` is what stops the section folding shut under the reader. */
+  wireBasisCard(v,()=>go("settings",{keepScroll:true}));
   v.querySelector("#setNameSave").onclick=async()=>{
     const n=v.querySelector("#setName").value.trim(),t=v.querySelector("#setTag").value.trim();
     if(!n){toast("Enter a practice name");Sfx.error();return;}
@@ -6500,13 +6684,16 @@ function sessionForm(s,o){
      <label>Invoice #</label><input id="f_inv" value="${esc(m.invoice||"")}">
      <div id="f_rpWrap">
        <div class="field2">
-         <div><label>Room paid?</label><select id="f_rp">${opts(["","Y","N","n/a"],m.roomPaid||"")}</select></div>
-         <div><label>Room payment date</label><input type="date" id="f_rpd" value="${esc(m.roomPaidDate||"")}"></div>
+         <div><label>Room fee paid?</label><select id="f_rp">${opts(["","Y","N","n/a"],m.roomPaid||"")}</select></div>
+         <div><label>Paid on</label><input type="date" id="f_rpd" value="${esc(m.roomPaidDate||"")}"></div>
        </div>
      </div>
      <p class="small muted" id="f_rpNote" style="display:none"></p>
-     <label>Notes done?</label><input id="f_notes" value="${esc(m.notes||"")}" placeholder="Y / note">
-     <p class="small muted">A marker that your notes are written up, not the notes themselves — keep the clinical record where you normally do.</p>
+     <label class="colchk" style="margin-top:16px"><input type="checkbox" id="f_notes"${notesDone(m)?" checked":""}> My notes for this session are written up</label>
+     <p class="small muted">Just a tick. Your actual clinical record stays wherever you already keep it — this app never holds one, which is what makes an export or a statement from here safe to hand over.</p>
+     <label>Admin comment <span class="muted small">(optional)</span></label>
+     <textarea id="f_admin" rows="2" placeholder="e.g. “invoice goes to her employer”, “moved from Tuesday”">${esc(m.adminNote||"")}</textarea>
+     <p class="small muted">Practical reminders only — <b>nothing clinical</b>. This one does appear in exports and on screen.</p>
      <label style="margin-top:14px">Did it go ahead?</label>
      <select id="f_attend">${opts2([["","Yes — attended"],["late","Late cancellation"],["dna","Did not attend (DNA)"]],attendVal(m))}</select>
      <div id="f_cxWrap" style="display:none">
@@ -6522,7 +6709,12 @@ function sessionForm(s,o){
     const g=id=>body.querySelector(id);
     const sync=()=>{m.client=g("#f_client").value;m.date=g("#f_date").value;m.time=g("#f_time").value;m.mode=g("#f_mode").value;
       m.num=g("#f_num").value;m.location=g("#f_loc").value;m.room=g("#f_room").value;m.paidDate=g("#f_paid").value;
-      m.invoice=g("#f_inv").value;m.roomPaid=g("#f_rp").value;m.roomPaidDate=g("#f_rpd").value;m.notes=g("#f_notes").value;
+      m.invoice=g("#f_inv").value;m.roomPaid=g("#f_rp").value;m.roomPaidDate=g("#f_rpd").value;
+      /* `notes` stays the string it has always been so every downstream reader — derive().complete,
+         missingReasons, the raw table, older backups — is untouched. It is simply only ever "Y"
+         or "" now, because the box that used to hold prose is a tickbox. */
+      m.notes=g("#f_notes").checked?"Y":"";
+      m.adminNote=g("#f_admin").value.trim();
       /* `lateCancel` stays the flag it always was, so older builds and the notes convention still
          read correctly; `cancelKind` carries the finer distinction and `cancelCharge` the money. */
       const kind=g("#f_attend").value;
@@ -6539,14 +6731,28 @@ function sessionForm(s,o){
         if(!lockDate)m.date=sg.date;}
       draw();
       if(isNew&&code)body.querySelector("#sugHint").innerHTML='<div class="hint">✨ Pre-filled from this client’s last session — adjust anything, then Save.</div>';};
-    /* A room billed as monthly rent is settled once a month in Business costs, so asking whether
-       this session's room fee was paid is a question with no answer. Hide it and say where it went. */
+    /* Three ways this session has no room fee to settle, and in none of them is "Room fee paid?"
+       a question worth putting on the screen — a therapist working from home would answer it,
+       identically, on every session she ever logs.
+       Hiding it is not enough on its own: an unanswered dropdown would leave the session sitting
+       in the Incomplete worklist forever, so the state is stamped "n/a" as the controls go away.
+       The select stays in the DOM (hidden) precisely so sync() keeps reading it as it always has. */
     const paintRoomPaid=()=>{
-      const rm=roomFor(g("#f_loc").value), monthly=rm&&roomBilling(rm)==="monthly";
-      g("#f_rpWrap").style.display=monthly?"none":"";
-      const note=g("#f_rpNote"); note.style.display=monthly?"":"none";
-      if(monthly)note.innerHTML="🏠 <b>"+esc(rm.location)+"</b> is on a monthly rent, so there’s nothing to settle per session. "+
-        "Tick its rent off each month in <b>Revenue › Business costs</b>.";
+      const loc=g("#f_loc").value, rm=roomFor(loc);
+      const monthly=!!rm&&roomBilling(rm)==="monthly";
+      const feeToday=effRoomRate(loc,g("#f_date").value||isoD(today()));
+      const na=!rm||monthly||!(feeToday>0);
+      g("#f_rpWrap").style.display=na?"none":"";
+      const note=g("#f_rpNote"); note.style.display=na?"":"none";
+      if(!na)return;
+      const sel=g("#f_rp"), dt=g("#f_rpd");
+      if(sel.value!=="n/a")sel.value="n/a";
+      if(dt.value)dt.value="";
+      note.innerHTML = monthly
+        ? "🏠 <b>"+esc(rm.location)+"</b> is on a monthly rent, so there is nothing to settle for this session. Tick the rent off each month in <b>Money › Costs &amp; income</b>."
+        : !anyPerUseRoom()
+        ? "🏠 You don’t pay for a room by the session, so there is nothing to track here."
+        : "🏠 <b>"+esc(loc||"This location")+"</b> costs you nothing per session, so there is nothing to settle.";
     };
     paintRoomPaid();
     const refreshHint=()=>{const d=derive(m);
@@ -6772,95 +6978,9 @@ function peerForm(p){
   openSheet(isNew?"New peer supervision":"Edit peer supervision",body);
 }
 
-/* ============ Quick-log command bar (natural-language session entry) ============ */
-function parseQuickLog(text){
-  const raw=(text||"").trim(); if(!raw)return null;
-  const toks=raw.split(/\s+/);
-  const res={client:null,clientAmbig:[],date:null,time:null,mode:null,location:null,paid:false,unmatched:[]};
-  const codes=S.clients.map(c=>c.code);
-  const locs=S.rooms.map(r=>r.location);
-  const wd={mon:1,monday:1,tue:2,tues:2,tuesday:2,wed:3,weds:3,wednesday:3,thu:4,thur:4,thurs:4,thursday:4,fri:5,friday:5,sat:6,saturday:6,sun:0,sunday:0};
-  toks.forEach(tok=>{
-    const w=tok.toLowerCase().replace(/[.,;]+$/,"");
-    if(!w)return;
-    if(w==="paid"){res.paid=true;return;}
-    if(w==="online"){res.mode="Online";return;}
-    if(w==="in-person"||w==="inperson"||w==="f2f"){res.mode="In-person";return;}
-    if(w==="today"){res.date=isoD(today());return;}
-    if(w==="yesterday"){res.date=isoD(addDays(today(),-1));return;}
-    if(w==="tomorrow"){res.date=isoD(addDays(today(),1));return;}
-    if(wd[w]!=null){const t=today();let diff=wd[w]-t.getDay();
-      if(diff>3)diff-=7; if(diff<-3)diff+=7;
-      res.date=isoD(addDays(t,diff));return;}
-    let m2=w.match(/^(\d{1,2}):(\d{2})$/);
-    if(m2){res.time=String(+m2[1]).padStart(2,"0")+":"+m2[2];return;}
-    m2=w.match(/^(\d{1,2})(am|pm)$/);
-    if(m2){let h=(+m2[1])%12;if(m2[2]==="pm")h+=12;res.time=String(h).padStart(2,"0")+":00";return;}
-    m2=w.match(/^\d{4}-\d{2}-\d{2}$/);
-    if(m2&&parseD(w)){res.date=w;return;}
-    m2=w.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
-    if(m2){const t=today();let y=m2[3]?+m2[3]:t.getFullYear();if(y<100)y+=2000;
-      res.date=y+"-"+String(+m2[2]).padStart(2,"0")+"-"+String(+m2[1]).padStart(2,"0");return;}
-    if(!res.client){
-      const exact=codes.filter(c=>c.toLowerCase()===w);
-      const pref=exact.length?exact:codes.filter(c=>c.toLowerCase().startsWith(w));
-      const cand=pref.length?pref:codes.filter(c=>c.toLowerCase().includes(w));
-      if(cand.length===1){res.client=cand[0];return;}
-      if(cand.length>1){res.clientAmbig=cand.slice(0,4);return;}
-    }
-    if(!res.location){
-      const lm=locs.find(L=>{const ll=L.toLowerCase();return ll===w||ll.startsWith(w)||ll.split(/\s+/).indexOf(w)>=0;});
-      if(lm){res.location=lm;return;}
-    }
-    res.unmatched.push(tok);
-  });
-  return res;
-}
-function quickLogBuild(p){
-  const sg=suggestFor(p.client);
-  return {_id:uid(),client:p.client,num:sg.num,date:p.date||isoD(today()),time:p.time||sg.time,
-    mode:p.mode||sg.mode,location:p.location||sg.location,room:sg.room||"-",invoice:"",
-    paidDate:p.paid?isoD(today()):"",receipt:"",notes:"",roomPaid:"",roomPaidDate:"",lateCancel:false};
-}
-function mountQuickLog(host){
-  const inp=host.querySelector("#ql"),out=host.querySelector("#qlout"),btn=host.querySelector("#qlGo");
-  let cur=null,armed=false;
-  const chip=(txt,cls)=>'<span class="chip '+(cls||"s")+'">'+txt+'</span>';
-  function paint(){
-    const p=parseQuickLog(inp.value);
-    armed=false;btn.textContent="Log it";
-    if(!p){out.innerHTML='';btn.style.display="none";cur=null;return;}
-    let h="";
-    if(p.client)h+=chip("👤 "+esc(p.client),"y");
-    else if(p.clientAmbig.length)h+=chip("who? "+p.clientAmbig.map(esc).join(" / "),"n");
-    else h+=chip("client?","n");
-    const m=p.client?quickLogBuild(p):null;
-    if(m){
-      h+=chip(fmtDshort(m.date));
-      h+=chip(m.time)+chip(esc(m.mode))+chip(esc(m.location))+chip("#"+m.num,"f");
-      const r=effRate(m.client,m.date);
-      h+=chip(gbp(r));
-      h+=p.paid?chip("paid today","y"):chip("awaiting","na");
-      if(p.unmatched.length)h+=chip("ignored: "+esc(p.unmatched.join(" ")),"na");
-      cur=m;btn.style.display="inline-flex";
-    }else{cur=null;btn.style.display="none";}
-    out.innerHTML=h;
-  }
-  inp.addEventListener("input",paint);
-  inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();btn.click();}});
-  btn.onclick=async()=>{
-    if(!cur){toast("Name a client first");Sfx.error();return;}
-    const vr=validateSession(cur);
-    if(vr.errors.length){out.innerHTML='<span class="chip n">⛔ '+vr.errors[0].msg+'</span>';Sfx.error();return;}
-    if(vr.warnings.length&&!armed){armed=true;btn.textContent="Log anyway";
-      out.innerHTML='<span class="chip f">⚠️ '+vr.warnings[0].msg+'</span>';Sfx.error();return;}
-    S.sessions.push(cur);
-    await commit("Quick-logged session: "+cur.client+" "+cur.date);renderTabs();
-    const logged=cur;cur=null;inp.value="";out.innerHTML="";btn.style.display="none";
-    gameShow({batch:1,toast:logged.client+" logged ✨"},{});
-    go(curTab());
-  };
-}
+/* The quick-log command bar lived here: a one-line parser ("AB tue 14:00 paid") that
+   built a whole session from a client's last one. Removed — it was a second, less capable way
+   in to the session form, and every session it created still had to be opened and corrected. */
 function curTab(){return cur;}
 
 /* ============ Attention feed (Home) ============ */
@@ -7114,7 +7234,7 @@ function download(name,text,type){const b=new Blob([text],{type:type||"applicati
   const a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500)}
 /* Stated on the file itself, because a backup outlives the app that made it and whoever opens it
    next needs to know that a "notes" field here means "notes were done", not the notes. */
-const NOTES_SCOPE="The 'notes' field on a session records whether clinical notes were completed elsewhere. This file contains no clinical notes.";
+const NOTES_SCOPE="The 'notes' field on a session is a yes/no marker that clinical notes were completed elsewhere. 'adminNote' is a free-text practical comment written by the practitioner. This file contains no clinical notes.";
 /* The backup envelope, built in exactly one place. The plain export, the encrypted payload and
    the iOS automatic backup all take their file from here, so a field added to one can never be
    missing from another — which would only ever show up on the day someone restored. */
@@ -7371,7 +7491,7 @@ function validateImport(st){
     peer:(st.peerSupervision||[]).length,expenses:(st.expenses||[]).length,otherIncome:(st.otherIncome||[]).length}};
 }
 function exportCSV(){
-  const cols=["client","num","date","time","mode","location","room","invoice","paidDate","notes","roomPaid","rate","fullRate","attended","cancelCharge","clientPaid","overdue","roomRate","roomDue","status","taxYear","week"];
+  const cols=["client","num","date","time","mode","location","room","invoice","paidDate","notes","adminNote","roomPaid","rate","fullRate","attended","cancelCharge","clientPaid","overdue","roomRate","roomDue","status","taxYear","week"];
   const rows=[cols.join(",")];
   S.sessions.slice().sort((a,b)=>parseD(a.date)-parseD(b.date)).forEach(s=>{const d=derive(s);
     const r=cols.map(c=>{let v=(c in s)?s[c]:d[c];if(c==="clientPaid")v=d.clientPaid?"Y":"N";if(c==="overdue")v=d.overdue?"Y":"N";
@@ -7438,7 +7558,7 @@ const IMP_FIELDS=[
   {k:"paidDate",    n:"Client paid on (date)",          t:"date",  syn:["paiddate","datepaid","paidon","paymentdate","datereceived","received","settledon"]},
   {k:"paidYN",      n:"Client paid? (Y/N)",             t:"yn",    syn:["paid","paidyn","clientpaid","ispaid","paymentstatus","settled","payment"]},
   {k:"invoice",     n:"Invoice reference",              t:"text",  syn:["invoice","invoiceno","invoicenumber","invoiceref","inv"]},
-  {k:"notes",       n:"Notes",                          t:"text",  syn:["notes","note","comment","comments","details","detail","remarks"]},
+  {k:"notes",       n:"Notes / comments",               t:"text",  syn:["notes","note","comment","comments","details","detail","remarks"]},
   {k:"roomPaid",    n:"Room paid? (Y/N)",               t:"yn",    syn:["roompaid","roompaidyn","roomfeepaid","roomsettled","rentpaid"]},
   {k:"roomPaidDate",n:"Room paid on (date)",            t:"date",  syn:["roompaiddate","roomdatepaid","roompaidon"]},
   {k:"roomRate",    n:"Room cost (£)",                  t:"money", syn:["roomrate","roomcost","roomfee","roomcharge","rent"]},
@@ -7646,7 +7766,12 @@ function impPlan(rows,map,order,opt){
       /* paid-on date wins; a bare "Y" with no date means paid on the day */
       paidDate:paidOn||(paidYN==="Y"?date:""),
       receipt:"",
-      notes,
+      /* A spreadsheet's "Notes" column is prose, not a tick, so it is split on the way in exactly
+         as normalize() splits the app's own history: any text at all means the write-up was done,
+         and the text itself is kept as the admin comment. `notes` (the raw column) is still what
+         impLateCancel reads below — the historical "late cancellation" convention lives in it. */
+      notes:String(notes||"").trim()?"Y":"",
+      adminNote:/^y$/i.test(String(notes||"").trim())?"":String(notes||"").trim(),
       roomPaid,
       roomPaidDate:roomPaidOn||"",
       /* historical convention put this in the notes text; honour both (see isLateCancel) */
@@ -7701,7 +7826,7 @@ async function impCommit(plan){
   });
   plan.newRooms.forEach(r=>{
     S.rooms.push({_id:uid(),location:r.location,rate:r.rate,due:"n/a"});
-    S.roomRateHistory.push({_id:uid(),location:r.location,effectiveFrom:"2000-01-01",rate:r.rate});
+    S.roomRateHistory.push({_id:uid(),location:r.location,effectiveFrom:RATE_EPOCH,rate:r.rate});
   });
 
   /* oldest first, so each fee change is stamped from the session that first charged it */
@@ -7712,7 +7837,7 @@ async function impCommit(plan){
       const first=!S.rateHistory.some(h=>impSame(h.client,rec.client));
       if(first||Math.abs((+effRate(rec.client,rec.date)||0)-rec._rate)>0.005){
         S.rateHistory.push({_id:uid(),client:rec.client,
-          effectiveFrom:first?"2000-01-01":rec.date,rate:rec._rate});
+          effectiveFrom:first?RATE_EPOCH:rec.date,rate:rec._rate});
         touchedC.add(rec.client.toLowerCase());
       }
     }
@@ -7720,7 +7845,7 @@ async function impCommit(plan){
       const first=!S.roomRateHistory.some(h=>impSame(h.location,rec.location));
       if(first||Math.abs((+effRoomRate(rec.location,rec.date)||0)-rec._roomRate)>0.005){
         S.roomRateHistory.push({_id:uid(),location:rec.location,
-          effectiveFrom:first?"2000-01-01":rec.date,rate:rec._roomRate});
+          effectiveFrom:first?RATE_EPOCH:rec.date,rate:rec._roomRate});
         touchedR.add(rec.location.toLowerCase());
       }
     }
@@ -8068,7 +8193,6 @@ const FEATURES=[
   {k:"tax",          ic:gi("tax"), n:"Tax",                    d:"Tax-year totals, UK sole-trader tax estimates and monthly take-home."},
   {k:"raw",          ic:gi("table"), n:"Table view",             d:"A spreadsheet-style browser of every session, inside Money. Sortable columns and a column picker.",dep:"money"},
   {k:"receipts",     ic:gi("receipts"), n:"Receipts & statements",  d:"Printable statements for a client’s insurer, employer or their own records."},
-  {k:"quickadd",     ic:gi("keyboard"), n:"Quick add bar",          d:"Log a session by typing one line on Home — “AB tue 14:00 paid”."},
   {k:"attention",    ic:gi("attention"), n:"Needs attention feed",   d:"A Home list of overdue payments, missing notes and clients you haven’t seen in a while."},
   {k:"gamify",       ic:gi("gamify"), n:"Streaks & celebrations", d:"Weekly usage streak, goal rings, personal records and confetti when you clear a backlog."}
 ];
@@ -8099,9 +8223,6 @@ const REVEAL_STEPS=[
   {keys:["trends"],   when:st=>st.sessions.length>=20,
    emoji:gi("trends"), title:"Enough history to see a pattern",
    sub:"Twenty sessions is about where <b>Practice › Trends</b> starts telling you something true: who stays, who drifts, how attendance holds up against the frequency you agreed, and what missed sessions are costing."},
-  {keys:["quickadd"], when:st=>st.sessions.length>=25,
-   emoji:gi("keyboard"), title:"A faster way to log",
-   sub:"You have logged plenty by hand now. The quick-add bar takes a whole session as one line — “AB tue 14:00 paid”."},
   {keys:["raw"],      when:st=>st.sessions.length>=40&&(st.settings.features||{}).money!==false,
    emoji:gi("tabs"), title:"Every session in one table",
    sub:"Enough history to be worth browsing as a spreadsheet — sortable columns, a column picker and a filtered CSV export."}
@@ -8175,7 +8296,7 @@ function stepDepth(w){return{emoji:gi("depth"), h:"How much do you want to see?"
   },
   mount(host){
     host.innerHTML='<div class="palgrid" id="spDepth">'+
-      [["simple","🌱","Start simple","Sessions, clients, money owed and supervision. Tax, costs, trends, the table view, quick-add, statements and streaks stay out of the way, and the app offers them one at a time as you go."],
+      [["simple","🌱","Start simple","Sessions, clients, money owed and supervision. Tax, costs, trends, the table view, statements and streaks stay out of the way, and the app offers them one at a time as you go."],
        ["all","🗂","Show me everything","Every feature on from the start. Best if you are moving over from a spreadsheet you already run, or you just want to look around."]]
       .map(o=>'<button type="button" class="palopt'+(w.depth===o[0]?" on":"")+'" data-d="'+o[0]+'">'+
         '<span class="pswatch" style="font-size:22px;width:auto">'+o[1]+'</span>'+
@@ -8354,16 +8475,16 @@ function stepFeatures(w){
 /* The single most common misreading of this app: that "Notes" is where the notes go. It isn't —
    it is a done/not-done marker, and the app has no clinical record in it at all. Said once here,
    plainly, before anyone starts typing into a field expecting it to be a case note. */
-function stepNotes(w){return{emoji:gi("notes"), h:"This isn’t where your notes live",
-  sub:"An important distinction, and the reason the app can stay as simple as it is.",
+function stepNotes(w){return{emoji:gi("notes"), h:"Your notes don’t live here",
+  sub:"Worth two minutes — it’s why the app can stay this simple.",
   mount(host){
     host.innerHTML=ovPoints([
-      [gi("done"),"It tracks <i>whether</i> notes are done","The Notes field on a session is a tick — “written up” or “still outstanding”. The app chases the ones you haven’t done and counts a session as incomplete until you have."],
-      [gi("lock"),"Your actual notes stay where they are","Keep writing them wherever you already do — your notebook, encrypted files, or your case-management system. Nothing about that changes."],
-      [gi("receipts"),"So exports and receipts hold no clinical content","A statement for a client’s insurer shows dates, fees and attendance. There is nothing confidential in it beyond the client’s code."],
-      [gi("shield"),"Which keeps this app low-risk","No clinical record here means a lost phone or a shared backup file is a much smaller problem than it would otherwise be."]
+      [gi("done"),"Just a tick","Each session has a box for whether you’ve written your notes up. The app chases the ones you haven’t."],
+      [gi("lock"),"Your real notes stay where they are","Your notebook, your encrypted files, your case-management system — nothing about that changes."],
+      [gi("receipts"),"So nothing you print is confidential","A statement for an insurer shows dates, fees and attendance against a client code. That’s all there is to show."],
+      [gi("shield"),"And a lost phone is a much smaller problem","There’s no clinical record here to lose."]
     ])+
-    '<div class="ovnote">If you <i>do</i> want a short reminder on a session — “brought partner”, “moved to fortnightly” — the field takes free text. Keep it administrative.</div>';
+    '<div class="ovnote">There’s a second box for practical reminders — “invoice goes to her employer”, “moved from Tuesday”. Handy, but keep it administrative: it appears on screen and in exports.</div>';
   }};}
 /* CPD is everybody; accreditation and peer supervision are both minority needs, so both are
    asked here rather than left to be found. Peer in particular is never offered by a milestone —
@@ -8543,7 +8664,7 @@ function setupApplyRooms(w){
   const step=(arr,loc,field,amt,cur)=>{
     if(Math.abs((+cur||0)-amt)<=0.001)return;
     if(fresh)for(let i=arr.length-1;i>=0;i--)if((arr[i].location||"").toLowerCase()===loc.toLowerCase())arr.splice(i,1);
-    const rec={_id:uid(),location:loc,effectiveFrom:fresh?"2000-01-01":isoD(today())};
+    const rec={_id:uid(),location:loc,effectiveFrom:fresh?RATE_EPOCH:isoD(today())};
     rec[field]=amt; arr.push(rec);
   };
   list.forEach(r=>{
@@ -8563,8 +8684,8 @@ function setupApplyRooms(w){
       ex.rate=perSession;
     }else{
       S.rooms.push({_id:uid(),location:r.loc,rate:perSession,due:r.due,billing:r.monthly?"monthly":"session"});
-      S.roomRateHistory.push({_id:uid(),location:r.loc,effectiveFrom:"2000-01-01",rate:perSession});
-      if(r.monthly)S.roomRentHistory.push({_id:uid(),location:r.loc,effectiveFrom:"2000-01-01",amount:r.rate});
+      S.roomRateHistory.push({_id:uid(),location:r.loc,effectiveFrom:RATE_EPOCH,rate:perSession});
+      if(r.monthly)S.roomRentHistory.push({_id:uid(),location:r.loc,effectiveFrom:RATE_EPOCH,amount:r.rate});
     }
   });
   /* drop rooms the user removed — unless a session still points at them — and their now-orphaned cost history */
@@ -8970,28 +9091,27 @@ function coachPlace(animate){
 /* ---- the tour: what is worth knowing before you have used any of it ---- */
 function tourSteps(){
   const st=[];
-  st.push({emoji:gi("tour"),h:"A quick tour",tab:"home",
-    body:"Eight short stops on the screens themselves — the app dims and points at whatever is being described. <b>Nothing here changes your data</b>, and you can leave at any point."});
-  st.push({emoji:gi("tabs"),h:"The tabs",tab:"home",sel:"#tabs",
-    body:"<b>Home</b> is where you land. <b>Sessions</b> is every session and the lists to clear. <b>Practice</b> holds clients, rooms and supervision."+
-      (feat("money")||feat("tax")?" <b>Money</b> and <b>Tax</b> are the financial side.":"")+
-      "<p>Each one explains itself the first time you open it, so there is nothing to memorise here.</p>"});
+  /* Eight stops, and the rule for every one of them is: one idea, said once, in the words a
+     person would use out loud. The old copy ran to two paragraphs a stop and explained things
+     nobody had met yet — which is how a tour ends up being skipped. */
+  st.push({emoji:gi("tour"),h:"Quick look round",tab:"home",
+    body:"Eight short stops. The app dims and points at the real thing each time. <b>Nothing here changes your data</b> and you can leave whenever you like."});
+  st.push({emoji:gi("tabs"),h:"The tabs along the bottom",tab:"home",sel:"#tabs",
+    body:"<b>Home</b> is where you land. <b>Sessions</b> is everything you’ve logged. <b>Practice</b> is your clients, rooms and supervision."+
+      (feat("money")||feat("tax")?" <b>Money</b> and <b>Tax</b> are the money side.":"")+
+      " Each one introduces itself the first time you open it."});
   st.push({emoji:gi("money"),h:"Your four numbers",tab:"home",sel:'[data-coach="home-kpis"]',
-    body:"Billed and received this tax year, what is outstanding right now, and how many sessions are in the next seven days. <b>Tap the last two</b> to jump straight to that list."});
+    body:"What you’ve billed this tax year, how many sessions that was, what’s still owed, and what’s coming in the next week. <b>Tap the last two</b> to go straight to that list."});
   st.push({emoji:gi("sessionadd"),h:"Logging a session",tab:"home",sel:"#fab",
-    body:"This button, on Home and Sessions. Pick the client and the fee and their usual room fill themselves in. <p>Log ahead as well as behind — a future session shows under <b>Coming up</b> and counts towards nothing until the date passes.</p>"});
-  st.push({emoji:gi("notes"),h:"This isn’t where your notes live",
-    body:"The <b>Notes</b> field on a session is a tick — written up, or still outstanding. The app chases the ones you have not done and counts a session as incomplete until you mark it."+
-      "<p>Your actual clinical record stays wherever you already keep it. That is what makes an export or a receipt from here safe to hand over.</p>"});
-  st.push({emoji:gi("privacy"),h:"Client codes, not names",
-    body:"Store people as short codes only — <b>AB</b>, <b>JM2</b>. Your record of who each code belongs to belongs in your normal confidential notes, not in this app."+
-      "<p>A printed statement then identifies the client by code alone, so it can go to an insurer without a second thought.</p>"});
-  st.push({emoji:gi("backup"),h:"Backups live here",tab:"home",sel:"#settingsBtn",
-    body:"Settings holds <b>Export backup (.json)</b> — one file with everything in it. Keep it somewhere that is not this device."+
-      "<p>Also here: undo, restore points, a data health check, and this tour again.</p>"});
-  st.push({emoji:gi("done"),h:"That’s the lot",
-    body:"Everything else explains itself as you go: open a screen for the first time and it points out the two or three things worth knowing about it."+
-      "<p>One habit worth having — back up after each week’s catch-up. It takes five seconds and it is the whole safety net.</p>"});
+    body:"This button. Pick the client and the rest fills itself in from last time. You can log ahead too — future sessions just sit under <b>Coming up</b> until the day comes."});
+  st.push({emoji:gi("notes"),h:"Your notes don’t live here",
+    body:"There’s a tick for <i>whether</i> you’ve written them up, and that’s all. Your actual notes stay wherever you keep them — which is exactly why anything you export from here is safe to hand over."});
+  st.push({emoji:gi("privacy"),h:"Use codes, not names",
+    body:"<b>AB</b>, <b>JM2</b> — whatever you already use. Who each code belongs to stays in your confidential notes. Then a statement printed from here can go to an insurer without a second thought."});
+  st.push({emoji:gi("backup"),h:"Back it up",tab:"home",sel:"#settingsBtn",
+    body:"Settings → <b>Export backup</b> gives you one file with everything in it. Keep it somewhere that isn’t this device. Undo and restore points live in there too."});
+  st.push({emoji:gi("done"),h:"That’s it",
+    body:"The rest explains itself as you go. If you take one habit from this: export a backup after your weekly catch-up. Five seconds, and it’s the whole safety net."});
   return st;
 }
 function startTour(){
@@ -9009,47 +9129,49 @@ const TIPS=[
   {k:"sessions",tab:"sessions",
    steps:()=>[
     {emoji:gi("list"),h:"Two ways to look",sel:"#viewseg",
-     body:"<b>List</b> for working through, <b>Calendar</b> for seeing a week or month laid out."},
+     body:"<b>List</b> to work through them, <b>Calendar</b> to see a week or month laid out."},
     {emoji:gi("target"),h:"Four lists, not one",sel:"#seg",
-     body:"<b>Upcoming</b> is what is booked. <b>Unpaid</b> and <b>Incomplete</b> are worklists to clear — the badge counts what is overdue."+
-       "<p><b>All</b> is the history, newest first. Older sessions fold into one row per tax year so the list stays short; searching never folds anything away.</p>"}]},
+     body:"<b>Upcoming</b> is what’s booked. <b>Unpaid</b> and <b>Incomplete</b> are jobs to clear — the badge counts what’s overdue. <b>All</b> is everything, newest first."},
+    {emoji:gi("notes"),h:"Two boxes on a session",
+     body:"A tick for whether your notes are written up, and an <b>admin comment</b> for the practical stuff — “invoice goes to her employer”, “moved from Tuesday”. Nothing clinical in either."}]},
   {k:"practice",tab:"practice",
    steps:()=>[
-    {emoji:gi("peer"),h:"Everything clinical, in one tab",sel:"#crtab",
-     body:"<b>Clients</b> and their profiles, <b>Trends</b> for how the practice is holding up, <b>Rooms</b> and what each costs, and <b>Supervision</b> with your CPD hours."},
-    {emoji:gi("fees"),h:"Fees change from a date",
-     body:"Use <b>Change rate</b> on a client rather than editing the number. Past sessions keep the fee you actually charged them — which is what your tax figures are built on."+
-       "<p>Room costs work the same way.</p>"}]},
+    {emoji:gi("peer"),h:"Your people and places",sel:"#crtab",
+     body:"<b>Clients</b> and their profiles, <b>Trends</b> for how things are going, <b>Rooms</b> and what each costs you, <b>Supervision</b> and your CPD hours."},
+    {emoji:gi("fees"),h:"Put fee changes on a date",
+     body:"Use <b>Change rate</b> rather than editing the number. Old sessions keep the fee you actually charged — and that’s what your tax figures are built on. Rooms work the same way."}]},
   {k:"money",tab:"money",ft:"money",
    steps:()=>[
-    {emoji:gi("money"),h:"The day-to-day money",sel:"#moneyseg",
-     body:"<b>Overview</b> is what came in and what is still owed."+
-       (feat("finances")?" <b>Costs &amp; income</b> is what goes out — insurance, room rent, CPD — and any income that is not a session.":"")+
-       " <b>Table</b> is every session as a spreadsheet."+
-       "<p>Everything logged here feeds the profit your tax estimate is worked out from.</p>"}]},
+    {emoji:gi("money"),h:"What came in, what went out",sel:"#moneyseg",
+     body:"<b>Overview</b> is money in and money still owed."+
+       (feat("finances")?" <b>Costs &amp; income</b> is money out — insurance, rent, CPD.":"")+
+       " <b>Table</b> is the whole lot as a spreadsheet."}]},
   {k:"tax",tab:"tax",ft:"tax",when:()=>taxAcked(),
    steps:()=>[
     {emoji:gi("tax"),h:"Three numbers, most of the year",sel:'[data-coach="now"]',
-     body:"<b>Now</b> is the everyday answer: what you are on track to owe, what should be sitting in your pot, and when money next leaves your account. Tap any of the three for the detail behind it."+
-       "<p>The rest of this tab is jobs with a season — <b>Estimate</b> for the full working and your take-home, <b>Pot &amp; payments</b> for every due date and HMRC’s own figures, <b>Per year</b> for what changes with the tax year, <b>Quarterly (MTD)</b> for the quarterly totals. When one of them falls due, <b>Now</b> says so.</p>"},
-    {emoji:gi("scales"),h:"An estimate, not a return",
-     body:"Every figure here is worked out from what you have logged. It cannot see employment income, dividends or anything HMRC adjusted itself."+
-       "<p>Once you have filed, put HMRC’s real figures in on <b>Pot &amp; payments</b> and the app switches to them.</p>"}]},
+     body:"What you’re on track to owe, what to keep in your pot, and when money next leaves your account. Tap any of them for the detail."},
+    {emoji:gi("scales"),h:"The other tabs are seasonal",
+     body:"You won’t need them most months. When something falls due — filing, a payment, a new tax year — <b>Now</b> tells you and takes you there."},
+    {emoji:gi("scales"),h:"It’s an estimate",
+     body:"Worked out from what you’ve logged here. It can’t see a salary, dividends, or anything HMRC adjusted. Once you’ve filed, put the real figures in and the app uses those instead."}]},
   {k:"tax-payments",tab:"tax",seg:"payments",ft:"tax",when:()=>taxAcked(),
    steps:()=>[
     {emoji:gi("pot"),h:"What to keep back",sel:'[data-coach="pot"]',
-     body:"Built from tax you have <b>already</b> earned, plus anything still owed on earlier years, plus a buffer you choose."+
-       "<p>Tax on money you have not earned yet is deliberately left out — that is what stops the figure being frightening.</p>"},
+     body:"Tax on money you’ve <b>already</b> been paid, plus anything still owed on past years, plus a buffer. Tax on money you haven’t earned yet is left out on purpose."},
     {emoji:gi("buffer"),h:"The buffer is the point",sel:"#bufSeg",
-     body:"It is the difference between <i>probably</i> enough and <i>definitely</i> enough. Set it once and everything outside it is genuinely yours to spend."},
-    {emoji:gi("calendar"),h:"One line per date",sel:'[data-coach="due"]',
-     body:"A single 31 January is usually <b>two different years’ money</b> — the balancing payment finishing one year, and the first instalment towards the next."+
-       "<p>That is the thing that catches sole traders out, so it is listed by date rather than by year.</p>"}]},
+     body:"It’s the difference between <i>probably</i> enough and <i>definitely</i> enough. Set it once, then everything outside it is genuinely yours to spend."},
+    {emoji:gi("calendar"),h:"Why January is so big",sel:'[data-coach="due"]',
+     body:"One 31 January is usually two years’ money at once — finishing off last year, and a payment towards this one. That’s the thing that catches people out, so these are listed by date."}]},
   {k:"tax-allowances",tab:"tax",seg:"allowances",ft:"tax",when:()=>taxAcked(),
    steps:()=>[
     {emoji:gi("privacy"),h:"Set once, per tax year",sel:"#uohBar",
-     body:"Pick a year here and everything below applies to it, and to later years, until you change it again."+
-       "<p>So the year you finish repaying a student loan, or move to Scotland, the years before it keep the figures they were actually assessed on.</p>"}]}
+     body:"Pick a year at the top and everything below applies to it and every year after, until you change it again. So finishing a student loan, or moving to Scotland, doesn’t rewrite your past years."}]},
+  {k:"settings",tab:"settings",
+   steps:()=>[
+    {emoji:gi("backup"),h:"Two headings, two kinds of decision",
+     body:"<b>Your practice</b> is business: your name, your cancellation policy, how your figures are counted. <b>App preferences</b> is just how the app looks and which bits you use."},
+    {emoji:gi("backup"),h:"One file is your safety net",
+     body:"<b>Data &amp; backup → Export backup</b> is the one that matters. The .csv files are for spreadsheets and can’t be restored."}]}
 ];
 /* Called at the end of every navigation. Deliberately quiet: never on top of setup, a sheet, a
    reveal nudge or another tip, and never twice for the same key. */
@@ -9148,7 +9270,8 @@ async function anonymiseClients(codes){
   S.sessions.forEach(s=>{const lc=(s.client||"").toLowerCase();if(!set.has(lc))return;
     s.lateCancel=isLateCancel(s);                                 // capture before the notes text goes
     s.client=map[lc];
-    s.notes=(s.notes&&String(s.notes).trim())?"Y":"";             // keeps the session "complete", drops the content
+    s.notes=notesDone(s)?"Y":"";                                  // keeps the session "complete", drops the content
+    s.adminNote="";                                               // free text the therapist wrote — may name people
     s.invoice="";s.receipt="";});
   (S.rateHistory||[]).forEach(r=>{const lc=(r.client||"").toLowerCase();if(set.has(lc))r.client=map[lc];});
   (S.supervision||[]).forEach(sv=>{if(!Array.isArray(sv.clients))return;
@@ -9986,7 +10109,13 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
         : '<div class="vmsg warn mt">'+gi("lock")+' This iPhone has no passcode or Face ID set up, so the app lock is unavailable. Add one in the iPhone’s own Settings.</div>')+
       '</div>'+
       '<div class="card"><h2>Automatic backup</h2>'+
-        '<p class="small" id="natBkStatus" style="font-weight:600"></p>'+
+        '<p class="small muted">GroundWork keeps its own copy of your records in this app’s folder in the '+
+        '<b>Files</b> app, rewritten every time you change something. It never asks and never interrupts.</p>'+
+        '<div class="vmsg warn mt">'+gi("warning")+' <b>It is on this iPhone.</b> It will get you out of a '+
+        'deleted client or a restore you regret, but not out of a lost or broken phone. Keep taking a real '+
+        '<b>Export backup (.json)</b> somewhere else as well — that is why the reminder still appears.</div>'+
+        '<p class="small muted mt">'+infoLink("backups-explained","How the three kinds of backup differ")+'</p>'+
+        '<p class="small mt" id="natBkStatus" style="font-weight:600"></p>'+
         '<p class="prev" id="natBkHint"></p>'+
         '<button class="btn sec mt" id="natBkNow">Back up now</button>'+
       '</div>'+
@@ -10070,6 +10199,9 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
        appended afterwards, so it needs the same three lines to stay folded like the rest. */
     d.open = !!_setGrpOpen.device;
     d.addEventListener("toggle", () => { _setGrpOpen.device = d.open; });
+    /* This card is appended AFTER VIEWS.settings has already run its own wireInfo() pass, so its
+       "how the three kinds of backup differ" link would never be clickable without this. */
+    try{ wireInfo(d); }catch(e){}
     return d;
   }
 
