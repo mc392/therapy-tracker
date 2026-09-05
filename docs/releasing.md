@@ -112,6 +112,55 @@ Missing secrets fail in the first seconds rather than wasting a runner: the work
 `KEY_ID` and `PRIVATE_KEY` itself and stops. **It does not check `ISSUER_ID`**, so forget
 that one and the run sails past and dies at the archive instead.
 
+## One-time setup for the signing certificate
+
+Every runner starts with an empty keychain, so without this, `-allowProvisioningUpdates`
+quietly **mints a brand-new certificate on every single run** instead of reusing one — and
+Apple caps how many can exist at once. Enough runs and archiving fails outright with
+`Choose a certificate to revoke. Your account has reached the maximum number of
+certificates.` Importing the same certificate every run avoids that entirely.
+
+This part needs a Mac with Xcode, once:
+
+1. Open **Keychain Access** (Spotlight → type it → Enter).
+2. Menu bar → **Keychain Access** → **Certificate Assistant** → **Request a Certificate
+   from a Certificate Authority…**. Fill in your email and name, leave "Saved to disk"
+   selected, and save the `.certSigningRequest` file somewhere you can find it (e.g. the
+   Desktop).
+3. Go to **developer.apple.com/account** → **Certificates, Identifiers & Profiles** →
+   **Certificates** → **+**.
+4. Choose **Apple Development** (this is what the archive step actually asks for — the
+   error names "iOS App Development" profiles specifically), then Continue.
+5. Upload the `.certSigningRequest` file from step 2, then Continue, then **Download** the
+   resulting `.cer` file.
+6. Double-click the downloaded `.cer` file — it adds the certificate to Keychain Access,
+   paired with the private key your request in step 2 created (that pairing only exists on
+   this Mac, which is why steps 2–3 must happen in that order and on the same machine).
+7. In Keychain Access, find the new certificate under the **login** keychain →
+   **My Certificates**. Click the disclosure triangle next to it to confirm a private key
+   sits underneath it — no key, and the export in the next step will fail silently useless.
+8. Right-click the certificate (not just the key) → **Export "Apple Development: …"…**.
+   Save it as `ios_signing.p12` somewhere temporary, and set an export password when
+   prompted — anything memorable, you'll need it once more in step 10.
+9. Convert the file to text so it can go into a GitHub secret:
+   ```bash
+   base64 -i ~/Desktop/ios_signing.p12 | pbcopy
+   ```
+   This copies the result straight to your clipboard.
+10. In GitHub → this repository's **Settings** → **Secrets and variables** → **Actions** →
+    **New repository secret**, add two secrets:
+
+    | Secret | Value |
+    |---|---|
+    | `IOS_SIGNING_CERTIFICATE_P12` | paste the clipboard from step 9 |
+    | `IOS_SIGNING_CERTIFICATE_PASSWORD` | the export password you set in step 8 |
+11. Delete `ios_signing.p12` from your Desktop (or wherever you saved it) — the secret in
+    GitHub is now the only copy that needs to exist, and the private key stays here.
+
+The certificate is valid for a year. When it expires, `-allowProvisioningUpdates` will
+start failing to sign again — repeat steps 1–11 with a fresh certificate; there's no
+renewal flow, since a `.p12` export can't be renewed in place.
+
 ## What the runner has to match
 
 Two versions in `testflight.yml` are not decoration, and both were found the hard way on
