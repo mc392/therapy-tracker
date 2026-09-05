@@ -32,6 +32,7 @@ Rules that apply to EVERY task in this repo (repeat offenders are called out per
 | 7 | T7b-tax-guided-flows.md | **Opus** | T7a | Guided wizards for the infrequent tax jobs |
 | 8 | T6-copy-pass.md | Sonnet | T5, T7a | One-sentence rule per card; label renames |
 | 9 | T9-tax-tests.md | Sonnet | — | Test coverage for cancellation charging |
+| 10 | T10-watch-build.md | **Opus** | — | Build and verify the watchOS timer — **must run on a Mac with Xcode** |
 | 10 | T8-listing-and-policy.md | Sonnet | T4 | True up App Store listing copy and privacy.html |
 
 Sequencing notes:
