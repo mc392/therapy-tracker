@@ -3038,6 +3038,16 @@ function adminMinsPerSession(){const v=settings().adminMinsPerSession;return (v=
    than asking. anaCapacity() falls back to an *implied* full week and says so. */
 function fullWeekSessions(){const v=+(settings().fullWeekSessions);return v>0?v:null;}
 
+/* Attendance lists only the exceptions. ATT_OK_PCT is where the amber chip starts, so the split
+   is the one the reader can already see in the colours rather than a second private threshold.
+   ATT_FOLD_MIN is lower than AGED_MIN because this fold is not history being tidied away — it is
+   a routine "everyone else is fine" summary, and three rows of green chips are already three
+   rows nobody reads. Below it the names are simply listed.
+   Declared up here, not beside AGED_MIN further down the file: infoDef("attendance-mechanics")
+   builds its text at load time and would hit the temporal dead zone of a later const. */
+const ATT_OK_PCT=65;
+const ATT_FOLD_MIN=3;
+
 /* ---- shared shaping helpers ---- */
 function anaDer(){return S.sessions.map(s=>({s,d:derive(s),dt:parseD(s.date)})).filter(x=>x.dt);}
 function anaPast(rows,t){t=t||today();return rows.filter(x=>x.dt<=t);}
@@ -3237,9 +3247,14 @@ function anaCohorts(){
     .map(g=>{
       const marks=ANA_COHORT_MARKS.map(w=>{
         /* Only ask a milestone of a cohort old enough to have reached it — otherwise a cohort
-           that started last month reads as 0% retention at 24 weeks, which is a lie. */
+           that started last month reads as 0% retention at 24 weeks, which is a lie.
+           "Old enough" means EVERY member has had that many weeks, not just some of them.
+           Measuring on whoever happened to be ripe printed a figure built from the early
+           joiners alone, and a quarter with nobody old enough at all could still land on a red
+           0% — the exact misreading the dash exists to prevent. */
+        if(g.members.length<2)return {w,pct:null,n:g.members.length};
         const ripe=g.members.filter(m=>(t-m.first)/86400000>=w*7);
-        if(ripe.length<2)return {w,pct:null,n:ripe.length};
+        if(ripe.length<g.members.length)return {w,pct:null,n:ripe.length};
         const kept=ripe.filter(m=>(m.last-m.first)/86400000>=w*7).length;
         return {w,pct:Math.round(kept/ripe.length*100),n:ripe.length,kept};
       });
@@ -3252,7 +3267,16 @@ function anaCohorts(){
 
 /* EPISODE LENGTH — how many sessions a completed piece of work runs to, and whether that is
    changing. Only FINISHED work counts: someone you are seeing this week has an episode length
-   that has not happened yet, and counting it drags every average down. */
+   that has not happened yet, and counting it drags every average down.
+
+   That exclusion has a bias of its own, and it runs the other way. Short pieces of work finish
+   first, so at any moment the finished pile is over-supplied with them while the long-running
+   clients are all still on the books — a practice whose ongoing work is much longer than
+   anything it has finished sees a median that is genuinely too low. So the in-progress clients
+   are counted too, at the length they have reached SO FAR: their true lengths can only be
+   longer, which makes the combined median a floor the real answer sits above. It is reported
+   beside the finished median rather than instead of it — one is what has happened, the other
+   is the least the answer can be. */
 function anaEpisodes(){
   const t=today();
   const byClient={};
@@ -3261,34 +3285,52 @@ function anaEpisodes(){
     const g=byClient[k]||(byClient[k]={n:0,first:null,last:null});
     g.n++; if(!g.first||x.dt<g.first)g.first=x.dt; if(!g.last||x.dt>g.last)g.last=x.dt;
   });
-  const eps=[];
+  const eps=[],live=[];
   S.clients.forEach(c=>{
     const g=byClient[(c.code||"").toLowerCase()]; if(!g||!g.n)return;
     const fd=freqDays(c), gap=(t-g.last)/86400000;
-    const finished=catOf(c.status)==="Finished"||gap>=3*fd;
-    if(!finished)return;
+    /* clientCategory, not catOf — catOf is the expenses/income category lookup and takes
+       (kind,key). Called with a client status it returned an object, so this test was always
+       false and every ongoing client was being counted as finished work. */
+    const finished=clientCategory(c.status)==="Finished"||gap>=3*fd;
+    if(!finished){live.push({code:c.code,n:g.n});return;}
     eps.push({code:c.code,n:g.n,start:g.first,end:g.last,year:g.first.getFullYear()});
   });
   if(eps.length<4)return {ready:false,need:"Four completed pieces of work. You have "+eps.length+" — this fills in as clients finish."};
   const years={};
   eps.forEach(e=>{(years[e.year]||(years[e.year]=[])).push(e.n);});
   const byYear=Object.keys(years).sort().map(y=>({y,median:anaMedian(years[y]),n:years[y].length}));
-  return {ready:true,median:anaMedian(eps.map(e=>e.n)),n:eps.length,byYear,
+  const median=anaMedian(eps.map(e=>e.n));
+  const floor=anaMedian(eps.map(e=>e.n).concat(live.map(e=>e.n)));
+  return {ready:true,median,n:eps.length,byYear,
     longest:eps.slice().sort((a,b)=>b.n-a.n)[0]||null,
-    ongoing:S.clients.filter(c=>{const g=byClient[(c.code||"").toLowerCase()];
-      return g&&g.n&&catOf(c.status)!=="Finished"&&(t-g.last)/86400000<3*freqDays(c);}).length};
+    ongoing:live.length,
+    ongoingMedian:anaMedian(live.map(e=>e.n)),
+    floor,
+    /* How many clients still on the books have already outlasted the finished median. This is
+       the number that says out loud whether the headline is being dragged down. */
+    beyond:live.filter(e=>e.n>median).length};
 }
 
 /* DRIFTING AWAY — a list to act on, not a chart to look at.
    Anyone still marked as current whose gap has run past 1.5x their own usual interval and who
    has nothing in the diary. 1.5x rather than 2x deliberately: at two intervals a weekly client
-   has already been gone a fortnight and the conversation is harder. */
+   has already been gone a fortnight and the conversation is harder.
+
+   It overlaps the Review status card, which is a different job on the same people: at three
+   intervals the question has stopped being "shall I text them" and become "this client is not
+   really Ongoing any more". So a client past that point is handed to Review status and left off
+   this list — the two cards are one ladder, not two views of the same names. `review` carries
+   them so nobody is silently dropped by the split. */
 const ANA_DRIFT_FACTOR=1.5;
 function anaDrifting(){
   const t=today(), rows=anaDer();
-  const out=[];
+  const out=[],review=[];
   S.clients.forEach(c=>{
-    if(catOf(c.status)==="Finished")return;
+    /* clientCategory, not catOf — see anaEpisodes. catOf(c.status) never equalled "Finished",
+       so every finished client was landing on a list headed "clients you have NOT marked as
+       finished". */
+    if(clientCategory(c.status)==="Finished")return;
     const code=(c.code||"").toLowerCase(); if(!code)return;
     const mine=rows.filter(x=>(x.s.client||"").toLowerCase()===code);
     const past=mine.filter(x=>x.dt<=t&&!isCancelled(x.s));
@@ -3297,17 +3339,26 @@ function anaDrifting(){
     const last=past.reduce((m,x)=>(!m||x.dt>m)?x.dt:m,null);
     const fd=freqDays(c), gap=Math.round((t-last)/86400000);
     if(gap<=fd*ANA_DRIFT_FACTOR)return;
-    out.push({c,last,gap,fd,overdue:Math.round(gap-fd),
+    const row={c,last,gap,fd,overdue:Math.round(gap-fd),
       missed:mine.filter(x=>isCancelled(x.s)&&x.dt>addDays(last,-fd*3)).length,
-      ratio:Math.round(gap/fd*10)/10});
+      ratio:Math.round(gap/fd*10)/10};
+    /* The same predicate the Review status card uses, read from the same function, so the two
+       lists cannot disagree about which side of the line somebody is on. */
+    const att=clientAttendance(c);
+    if(att&&att.currentPause)review.push(row); else out.push(row);
   });
-  return {ready:true,rows:out.sort((a,b)=>b.ratio-a.ratio)};
+  const byRatio=(a,b)=>b.ratio-a.ratio;
+  return {ready:true,rows:out.sort(byRatio),review:review.sort(byRatio)};
 }
 
 /* WHERE CLIENTS COME FROM — the only analytic here that changes what you DO about marketing.
-   Needs the optional `source` field on a client; clients without one are counted separately
-   rather than lumped into a fake "Other", because "we never asked" is a different fact from
-   "they found us themselves". */
+   Needs the optional `source` field on a client. Clients without one are their own row rather
+   than left out of the table: dropping them showed a list of sources that did not add up to the
+   practice, and a reader comparing "Counselling Directory: 4" against a table missing thirty
+   people draws the wrong conclusion from it. Unknown is still kept apart from any real source
+   and always sorts last — "we never asked" is a different fact from "they found us
+   themselves", it is just not a reason to hide the clients. */
+const ANA_SOURCE_UNKNOWN="Unknown";
 function anaSources(){
   const t=today(), counts={},revenue={},lasts={},firsts={};
   anaPast(anaDer(),t).forEach(x=>{
@@ -3318,11 +3369,14 @@ function anaSources(){
     if(!firsts[k]||x.dt<firsts[k])firsts[k]=x.dt;
   });
   const withSrc=S.clients.filter(c=>(c.source||"").trim());
-  if(withSrc.length<3)return {ready:false,unset:S.clients.length-withSrc.length,
-    need:"Three clients with a referral source on them. Open a client and set <b>How they found you</b>."};
+  const unset=S.clients.length-withSrc.length;
+  /* One named source is enough to have something to compare Unknown against; a table that is
+     nothing but an Unknown row is a prompt, not an analytic, so it stays as the waiting note. */
+  if(!withSrc.length||S.clients.length<3)return {ready:false,unset,
+    need:"A referral source on at least one client, and three clients on the books. Open a client and set <b>How they found you</b>."};
   const by={};
   S.clients.forEach(c=>{
-    const src=(c.source||"").trim(); if(!src)return;
+    const src=(c.source||"").trim()||ANA_SOURCE_UNKNOWN;
     const k=(c.code||"").toLowerCase(), n=counts[k]||0;
     const g=by[src]||(by[src]={src,n:0,sessions:[],revenue:0,current:0});
     g.n++; g.sessions.push(n); g.revenue+=revenue[k]||0;
@@ -3330,9 +3384,10 @@ function anaSources(){
   });
   const rows=Object.keys(by).map(k=>by[k]).map(g=>({
     src:g.src,n:g.n,median:anaMedian(g.sessions)||0,revenue:Math.round(g.revenue),
-    current:g.current,stick:Math.round(g.current/g.n*100)}))
-    .sort((a,b)=>b.revenue-a.revenue);
-  return {ready:true,rows,unset:S.clients.length-withSrc.length};
+    current:g.current,stick:Math.round(g.current/g.n*100),
+    unknown:g.src===ANA_SOURCE_UNKNOWN}))
+    .sort((a,b)=>(a.unknown?1:0)-(b.unknown?1:0)||b.revenue-a.revenue);
+  return {ready:true,rows,unset};
 }
 
 /* ============ 1.4 · Am I being paid? ============ */
@@ -3341,22 +3396,35 @@ function anaSources(){
    Dated on the SESSION, not the payment: a session in March paid in June belongs to March's
    figure, or a slow month would look fine simply because nothing had landed yet. */
 function anaDaysToPay(){
-  const months=18, t=today(), series=[], all=[];
-  const rows=anaPast(anaDer(),t).filter(x=>x.s.paidDate&&parseD(x.s.paidDate));
+  const months=18, t=today(), series=[];
+  const rows=anaPast(anaDer(),t).filter(x=>x.s.paidDate&&parseD(x.s.paidDate))
+    .map(x=>({dt:x.dt,days:Math.max(0,Math.round((parseD(x.s.paidDate)-x.dt)/86400000))}));
   if(rows.length<8)return {ready:false,need:"Eight paid sessions with a payment date. You have "+rows.length+"."};
-  for(let i=months;i>=1;i--){
+  /* Every figure comes from `rows`, not from the buckets. The month loop used to run i=18..1 —
+     last month back to eighteen months back — so sessions in the month IN PROGRESS fell outside
+     every bucket while still counting towards the eight that unlock the card. A practice whose
+     paid sessions were all from this month therefore passed the readiness test and then printed
+     a nought-day typical wait against an empty chart, having quietly measured nothing at all.
+     The current month is now a bucket of its own (i=0), and the headline figures are computed
+     from all the rows regardless of which month they land in. */
+  for(let i=months;i>=0;i--){
     const from=anaMonthStart(t,i), to=anaMonthStart(t,i-1);
-    const inM=rows.filter(x=>x.dt>=from&&x.dt<to)
-      .map(x=>Math.max(0,Math.round((parseD(x.s.paidDate)-x.dt)/86400000)));
-    series.push({l:ANA_MONTHS[from.getMonth()],from,v:inM.length?Math.round(inM.reduce((a,b)=>a+b,0)/inM.length):null,n:inM.length});
-    inM.forEach(d=>all.push(d));
+    const inM=rows.filter(x=>x.dt>=from&&x.dt<to).map(x=>x.days);
+    series.push({l:ANA_MONTHS[from.getMonth()],from,partial:i===0,
+      v:inM.length?Math.round(inM.reduce((a,b)=>a+b,0)/inM.length):null,n:inM.length});
   }
+  const all=rows.map(x=>x.days);
+  /* Then vs now needs two windows that do not overlap. slice(-6) against slice(0,6) shared five
+     of their six months on a short history, which made "arriving four days slower than a year
+     ago" a comparison of a period against itself. */
   const rated=series.filter(s=>s.v!=null);
-  const recent=rated.slice(-6), older=rated.slice(0,6);
+  const half=Math.min(6,Math.floor(rated.length/2));
   const mean=a=>a.length?Math.round(a.reduce((x,y)=>x+y.v,0)/a.length):null;
-  return {ready:true,series,avg:Math.round(anaMedian(all)),mean:Math.round(all.reduce((a,b)=>a+b,0)/all.length),
-    recentAvg:mean(recent),olderAvg:mean(older),n:all.length,
-    worst:Math.max(...all),over30:all.filter(d=>d>30).length};
+  const recent=half>=3?rated.slice(-half):[], older=half>=3?rated.slice(0,half):[];
+  return {ready:true,series,avg:Math.round(anaMedian(all)),
+    mean:Math.round(all.reduce((a,b)=>a+b,0)/all.length),
+    recentAvg:mean(recent),olderAvg:mean(older),compareMonths:half,n:all.length,
+    worst:all.reduce((a,b)=>Math.max(a,b),0),over30:all.filter(d=>d>30).length};
 }
 
 /* WHO PAYS LATE — the per-client version, because "31 days on average" is made of people. */
@@ -3378,6 +3446,23 @@ function anaLatePayers(){
 
 /* COST RATIO — what share of turnover the practice costs to run, this year against last.
    Business reporting, not tax reporting: no bands, no allowances, no jurisdiction. */
+/* Two costs never reach ledgerBetween, because they are not bills anybody sends the practice a
+   demand for — they hang off a session and off a supervision entry respectively, and tyNet
+   subtracts both by hand for exactly that reason. Leaving them out here understated the running
+   cost of every practice that hires a room by the hour: the largest single line in a sessional
+   therapist's year was missing from the card headed "what the practice costs to run". They are
+   dated on the session and the supervision entry, the same dates the revenue side uses, so the
+   two halves of the ratio still describe the same twelve months.
+   Rooms on a monthly rent carry a per-session rate of £0 (roomRateHistory gets a 0 step when a
+   room switches), so they arrive through led.roomRent and are not double-counted here. */
+function anaSessionRoomCost(der,from,to){
+  return der.filter(x=>x.dt>from&&x.dt<=to).reduce((a,x)=>a+(x.d.roomRate||0),0);
+}
+function anaSupervisionCost(from,to){
+  const sum=arr=>(arr||[]).reduce((a,v)=>{const d=parseD(v.date);
+    return (d&&d>from&&d<=to)?a+(+v.cost||0):a;},0);
+  return sum(S.supervision)+sum(S.peerSupervision);
+}
 function anaCostRatio(){
   if(!feat("finances"))return {ready:false,need:"Costs &amp; other income is switched off, so there is nothing to compare turnover against."};
   const t=today(), y1from=addYears(t,-1), y2from=addYears(t,-2);
@@ -3386,19 +3471,23 @@ function anaCostRatio(){
   const period=(from,to)=>{
     const led=ledgerBetween(from,to,{toDate:true});
     const income=rev(from,to)+led.otherIncome;
-    const costs=led.expenses+led.roomRent+led.useOfHome;
+    const rooms=anaSessionRoomCost(der,from,to), sup=anaSupervisionCost(from,to);
+    const costs=led.expenses+led.roomRent+led.useOfHome+rooms+sup;
     return {income:Math.round(income),costs:Math.round(costs),
+      rooms:Math.round(rooms),sup:Math.round(sup),
       ratio:income>0?Math.round(costs/income*100):null,led};
   };
   const now=period(y1from,t), prev=period(y2from,y1from);
   if(!now.income)return {ready:false,need:"Some income in the last twelve months."};
-  if(!now.costs)return {ready:false,need:"At least one business cost logged. Add them in <b>Money › Costs &amp; income</b>."};
+  if(!now.costs)return {ready:false,need:"At least one business cost logged — a room fee, supervision, or anything in <b>Money › Costs &amp; income</b>."};
   const cats={};
   (S.expenses||[]).forEach(x=>{
     moneyOccurrences(x,y1from,t).forEach(o=>{
       const key=x.cat||"other";
       cats[key]=(cats[key]||0)+o.amount;});});
   if(now.led.roomRent)cats.roomhire=(cats.roomhire||0)+now.led.roomRent;
+  if(now.rooms)cats.roomhire=(cats.roomhire||0)+now.rooms;
+  if(now.sup)cats.supervision=(cats.supervision||0)+now.sup;
   if(now.led.useOfHome)cats.useofhome=(cats.useofhome||0)+now.led.useOfHome;
   const catName=k=>{const c=(EXP_CATS||[]).find(x=>x.k===k);return c?c.n:"Other";};
   const byCat=Object.keys(cats).map(k=>({k,n:catName(k),amt:Math.round(cats[k]),
@@ -3634,16 +3723,17 @@ function trendsMoneyHTML(){
   out+= dtp.ready
     ? anaCard("Days to payment","ana-dtp",
         anaKpis([[dtp.avg+"d","Typical wait"],
-                 [dtp.recentAvg!=null?dtp.recentAvg+"d":"—","Last 6 months",(dtp.recentAvg!=null&&dtp.olderAvg!=null&&dtp.recentAvg>dtp.olderAvg+3)?"bad":""],
+                 [dtp.recentAvg!=null?dtp.recentAvg+"d":"—","Last "+(dtp.compareMonths||6)+" months",(dtp.recentAvg!=null&&dtp.olderAvg!=null&&dtp.recentAvg>dtp.olderAvg+3)?"bad":""],
                  [dtp.over30,"Payments over 30 days"]])+
         chartLine(dtp.series.filter(x=>x.v!=null).map(x=>({l:x.l,v:x.v})))+
+        '<p class="small muted" style="margin:8px 0 0">'+plural(dtp.n,"payment")+' with a date on '+(dtp.n===1?'it':'them')+', typically '+dtp.avg+' day'+(dtp.avg===1?'':'s')+' — longest '+dtp.worst+'.</p>'+
         (dtp.recentAvg!=null&&dtp.olderAvg!=null
-          ? '<p class="small muted" style="margin:8px 0 0">'+(dtp.recentAvg>dtp.olderAvg
-              ? 'Money is arriving <b>'+(dtp.recentAvg-dtp.olderAvg)+' days slower</b> than a year ago.'
+          ? '<p class="small muted" style="margin:4px 0 0">'+(dtp.recentAvg>dtp.olderAvg
+              ? 'Money is arriving <b>'+(dtp.recentAvg-dtp.olderAvg)+' days slower</b> than in the '+plural(dtp.compareMonths,"month")+' before that.'
               : dtp.recentAvg<dtp.olderAvg
-              ? 'Money is arriving <b>'+(dtp.olderAvg-dtp.recentAvg)+' days faster</b> than a year ago.'
-              : 'Steady against a year ago.')+'</p>':""),
-        {lead:"From the session happening to the money landing."})
+              ? 'Money is arriving <b>'+(dtp.olderAvg-dtp.recentAvg)+' days faster</b> than in the '+plural(dtp.compareMonths,"month")+' before that.'
+              : 'Steady against the '+plural(dtp.compareMonths,"month")+' before that.')+'</p>':""),
+        {lead:"From the session happening to the money landing. The month in progress is included, so a practice that only started logging this month still sees itself."})
     : anaWaiting("Days to payment","ana-dtp",dtp.need);
 
   const lp=anaLatePayers();
@@ -3667,7 +3757,13 @@ function trendsMoneyHTML(){
                  [gbp(cr.takeHome),"Left before tax","good"]])+
         '<div class="grp-h" style="margin-top:6px">Where it goes</div>'+
         cr.byCat.slice(0,8).map(c=>anaBarRow(esc(c.n),gbp(c.amt)+' · '+c.pct+'%',
-          cr.byCat[0].amt?Math.round(c.amt/cr.byCat[0].amt*100):0)).join(""),
+          cr.byCat[0].amt?Math.round(c.amt/cr.byCat[0].amt*100):0)).join("")+
+        (cr.now.rooms||cr.now.sup
+          ? '<p class="small muted" style="margin:10px 0 0">Includes '+
+            [cr.now.rooms?'<b>'+gbp(cr.now.rooms)+'</b> of room fees charged against individual sessions':'',
+             cr.now.sup?'<b>'+gbp(cr.now.sup)+'</b> of supervision':''].filter(Boolean).join(' and ')+
+            ' — neither is entered in Costs &amp; income, but both are money the practice spent to run.</p>'
+          : ''),
         {lead:"Of every pound that came in, how much left again before tax."})
     : anaWaiting("What the practice costs to run","ana-costratio",cr.need);
   return out;
@@ -3944,15 +4040,32 @@ VIEWS.practice=function(){
       const attFold=attAged.length>=AGED_MIN;
       const attCur=attFold?attSorted.filter(x=>trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()])):attSorted;
       const attOld=attFold?attAged:[];
-      const attOngoing=attCur.filter(x=>(x.c.status||"")==="Ongoing");
-      const attOther=attCur.filter(x=>(x.c.status||"")!=="Ongoing");
       const attSection=(title,arr)=>arr.length?'<div class="grp-h">'+title+' <span class="muted" style="font-weight:600">· '+arr.length+' client'+(arr.length>1?'s':'')+' · avg '+grpAvg(arr)+'%</span></div>'+arr.map(attLi).join(""):"";
       const attOldSessions=attOld.reduce((s,x)=>s+x.a.n,0);
+      /* Only the exceptions are listed. A roll-call of every current client, each with a green
+         chip saying they turn up, is a list nobody reads to the bottom — and the ones worth
+         seeing are at the bottom, because it sorts worst-first. So the card now leads with the
+         clients whose attendance has slipped below ATT_OK_PCT or who are sitting in a pause
+         right now, and everybody else folds into one row carrying their count and average. They
+         are still in the KPIs and still in the chart; only the individual rows fold. */
+      const attNeeds=attCur.filter(x=>x.a.pct<ATT_OK_PCT||x.a.currentPause);
+      const attOk=attCur.filter(x=>!(x.a.pct<ATT_OK_PCT||x.a.currentPause));
+      const attOkFold=attOk.length>=ATT_FOLD_MIN;
+      const attOkSessions=attOk.reduce((s,x)=>s+x.a.n,0);
       const attSeries=rollingAttendanceSeries(attRows);   /* the chart keeps everyone — it is history */
       const attCard='<div class="card">'+cardHead("Attendance","attendance-mechanics")+
         anaKpis([[attAvg+"%","Avg attendance"],[attRows.length,"Clients tracked"]])+
         (attRows.length?'<p class="small muted" style="margin:0 0 2px">3-month rolling attendance rate across all tracked clients.</p>'+chartAttendance(attSeries):"")+
-        (attSorted.length?attSection('Ongoing',attOngoing)+attSection('Paused',attOther)+
+        (attSorted.length
+          ? (attNeeds.length
+              ? attSection('Worth a look · under '+ATT_OK_PCT+'% or on a pause',attNeeds)
+              : (attOk.length?'<div class="allclear" style="margin-top:8px"><span class="ace">'+gi("done")+'</span>Everyone you are currently seeing is attending as expected</div>':''))+
+            (attOk.length
+              ? (attOkFold
+                  ? agedFold("attok","Attending as expected · "+plural(attOk.length,"client"),
+                      'avg '+grpAvg(attOk)+'% attendance · '+plural(attOkSessions,"session")+' between them')
+                  : attSection('Attending as expected',attOk))
+              : '')+
             (attOld.length?agedFold("att","Finished & long inactive · "+plural(attOld.length,"client"),
               'avg '+grpAvg(attOld)+'% attendance · '+plural(attOldSessions,"session")+' between them'):"")
           :'<p class="muted small">Need at least two sessions per client to measure attendance.</p>')+'</div>';
@@ -3963,17 +4076,24 @@ VIEWS.practice=function(){
         review.sort((a,b)=>b.a.currentPause.days-a.a.currentPause.days).map(x=>'<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+' <span class="chip f">'+x.a.currentPause.days+'d gap</span></div><div class="li-sub">Last session '+fmtDMY(x.a.last)+' · '+esc(x.c.frequency||"")+'</div></div><div class="li-right"><span class="small muted">tap to update ›</span></div></div>').join("")+'</div>':'';
 
       /* ---- drifting away: the one card here that is a list of people to contact ---- */
+      /* Drifting and Review status are one ladder, not two lists of the same names: anyone whose
+         gap has passed three of their own intervals is Review status's, and anaDrifting has
+         already handed them over. The lead says which job this card is. */
       const dr=anaDrifting();
+      const driftHandover=dr.review.length
+        ? '<p class="small muted" style="margin:10px 0 0">'+plural(dr.review.length,"other client")+
+          ' ha'+(dr.review.length===1?'s':'ve')+' gone past three of their intervals — those are in <b>Review status</b> below, where the question is the status rather than the text message.</p>'
+        : '';
       const driftCard=dr.rows.length
         ? anaCard("Drifting away","ana-drifting",
             dr.rows.slice(0,12).map(r=>'<div class="list-item" data-id="'+r.c._id+'"><div class="li-main">'+
-              '<div class="li-title">'+esc(r.c.code)+' <span class="chip '+(r.ratio>=3?"n":"f")+'">'+r.ratio+'× their gap</span></div>'+
+              '<div class="li-title">'+esc(r.c.code)+' <span class="chip '+(r.ratio>=2.5?"n":"f")+'">'+r.ratio+'× their gap</span></div>'+
               '<div class="li-sub">Last seen '+fmtDMY(r.last)+' · '+r.gap+' days ago · '+esc(r.c.frequency||"")+
                 (r.missed?' · '+plural(r.missed,"recent miss"):'')+'</div></div>'+
-              '<div class="li-right"><span class="small muted">nothing booked</span></div></div>').join(""),
-            {cls:"driftcard",lead:plural(dr.rows.length,"client")+" you have not marked as finished, with no next session in the diary."})
+              '<div class="li-right"><span class="small muted">nothing booked</span></div></div>').join("")+driftHandover,
+            {cls:"driftcard",lead:plural(dr.rows.length,"client")+" you have not marked as finished, still inside three of their own intervals, with no next session in the diary. Early enough that a text is all it takes."})
         : anaCard("Drifting away","ana-drifting",
-            '<div class="allclear"><span class="ace">'+gi("done")+'</span>Everyone current has a next session booked or was seen recently</div>');
+            '<div class="allclear"><span class="ace">'+gi("done")+'</span>Everyone current has a next session booked or was seen recently</div>'+driftHandover);
 
       const co=anaCohorts();
       const cohortCard=co.ready
@@ -3984,16 +4104,27 @@ VIEWS.practice=function(){
               c.marks.map(m=>'<td class="num">'+(m.pct==null?'<span class="muted">–</span>':
                 '<span class="chip '+(m.pct>=70?"y":m.pct>=40?"f":"n")+'">'+m.pct+'%</span>')+'</td>').join("")+
               '</tr>').join("")+'</tbody></table></div>'+
-            '<p class="small muted" style="margin:8px 0 0">Read across a row: of the clients who started then, how many were still coming that many weeks later. A dash means that group has not been going long enough to say.</p>',
+            '<p class="small muted" style="margin:8px 0 0">Read across a row: of the clients who started then, how many were still coming that many weeks later. A dash means <b>not yet</b>, never nought — the column only fills in once every client in that group has had those weeks to run.</p>',
             {lead:"Whether the work you take on is holding better than it used to."})
         : anaWaiting("Cohort retention","ana-cohorts",co.need);
 
       const ep=anaEpisodes();
+      /* The finished median on its own is the number that reads too low, because short work
+         finishes first and the long-running clients are all still on the books. Saying so — and
+         showing the floor the answer cannot be below — is the whole correction. */
+      const epBias=ep.ready&&ep.beyond
+        ? '<p class="small muted" style="margin:8px 0 0"><b>'+plural(ep.beyond,"client")+'</b> you are still seeing ha'+(ep.beyond===1?'s':'ve')+
+          ' already passed '+ep.median+' sessions, so the finished figure is reading low: short pieces of work finish first and end up over-represented in it. '+
+          'Counting everyone at the length they have reached so far — which can only grow — the typical length is <b>at least '+ep.floor+'</b>.'+
+          (ep.ongoingMedian!=null?' Work still going is at '+ep.ongoingMedian+' sessions and counting.':'')+'</p>'
+        : "";
       const epCard=ep.ready
         ? anaCard("How long clients stay","ana-episodes",
             anaKpis([[ep.median,"Sessions, typical finished piece of work"],
+                     [ep.floor==null?"—":"≥ "+ep.floor,"At least, counting work still going"],
                      [ep.n,"Completed pieces of work"],
                      [ep.ongoing,"Still in progress"]])+
+            epBias+
             (ep.byYear.length>1
               ? chartBars(ep.byYear.map(y=>({l:y.y,v:y.median})),false)+
                 '<p class="small muted" style="margin:8px 0 0">Median sessions by the year the work started. '+
@@ -4011,16 +4142,16 @@ VIEWS.practice=function(){
       const srcCard=src.ready
         ? anaCard("Where clients come from","ana-sources",
             '<div class="rawscroll"><table><thead><tr><th>Source</th><th class="num">Clients</th><th class="num">Median sess</th><th class="num">Still current</th><th class="num">Billed</th></tr></thead><tbody>'+
-            src.rows.map(r=>'<tr><td>'+esc(r.src)+'</td><td class="num">'+r.n+'</td><td class="num"><b>'+r.median+'</b></td>'+
+            src.rows.map(r=>'<tr'+(r.unknown?' class="muted"':'')+'><td>'+esc(r.src)+'</td><td class="num">'+r.n+'</td><td class="num"><b>'+r.median+'</b></td>'+
               '<td class="num">'+r.stick+'%</td><td class="num">'+gbp(r.revenue)+'</td></tr>').join("")+
             '</tbody></table></div>'+
-            (src.unset?'<p class="small muted" style="margin:8px 0 0">'+plural(src.unset,"client")+' ha'+(src.unset===1?'s':'ve')+' no source set, so they are not counted here.</p>':'')+
+            (src.unset?'<p class="small muted" style="margin:8px 0 0"><b>Unknown</b> is '+plural(src.unset,"client")+' with nothing filled in — counted so the table adds up to your whole practice, but it is not a source. Fill a few in and the comparison gets sharper.</p>':'')+
             '<p class="small muted" style="margin:6px 0 0">The column that matters is <b>median sessions</b>, not how many enquired.</p>',
             {lead:"Grouped by what you typed in “How they found you”."})
         : anaWaiting("Where clients come from","ana-sources",src.need);
 
-      const foldedTotal=attOld.length+deepOld.length;
-      const html=(foldedTotal?'<p class="small muted" style="margin:-2px 0 10px">Lists here show clients you are currently seeing. Anyone finished, or not seen for over a year, folds into a ⌄ summary row — they still count in every total and chart. Tap one to see them.</p>':'')+
+      const foldedTotal=attOld.length+deepOld.length+(attOkFold?attOk.length:0);
+      const html=(foldedTotal?'<p class="small muted" style="margin:-2px 0 10px">Lists here lead with the clients worth a look. Anyone attending as expected, finished, or not seen for over a year folds into a ⌄ summary row — they still count in every total and chart. Tap one to see them.</p>':'')+
         funnelCard+
         anaKpis([[base,"Clients seen"],[avg,"Avg sessions / client"]])+
         driftCard+reviewCard+attCard+cohortCard+epCard+srcCard+
@@ -4028,7 +4159,8 @@ VIEWS.practice=function(){
           deepCur.map(deepLi).join("")+
           (deepOld.length?agedFold("deep","Finished & long inactive · "+plural(deepOld.length,"client"),
             plural(deepOldSessions,"session")+' between them'):"")+'</div>':'');
-      return {html,folds:{att:()=>attOld.map(attLi).join(""),deep:()=>deepOld.map(deepLi).join("")},funnel:true};
+      return {html,folds:{attok:()=>attOk.map(attLi).join(""),att:()=>attOld.map(attLi).join(""),
+        deep:()=>deepOld.map(deepLi).join("")},funnel:true};
     }
 
     /* ---- MONEY section: the analytics engine, plus the missed-sessions card whose whole point
@@ -5386,7 +5518,8 @@ infoDef("other-income-detail","How other income counts",
   '<p class="small">Anything marked <b>separate</b> \u2014 a second job, tutoring \u2014 is a different trade, so it\u2019s totalled here but kept out of both.</p>');
 infoDef("attendance-mechanics","How attendance is worked out",
   '<p class="small">Long gaps (3\u00d7 the usual interval or more) count as a pause and are excluded from the rate, though they are still noted (\u23f8).</p>'+
-  '<p class="small">Missed sessions \u2014 late cancellations and DNAs \u2014 don\u2019t count as attended.</p>');
+  '<p class="small">Missed sessions \u2014 late cancellations and DNAs \u2014 don\u2019t count as attended.</p>'+
+  '<p class="small">Only the <b>exceptions</b> are listed: clients under '+ATT_OK_PCT+'%, or sitting in a pause right now. Everyone attending as expected folds into one \u2304 row you can open. The average and the chart still count every client \u2014 the fold hides rows, never figures.</p>');
 infoDef("backup-restore-detail","What a backup contains",
   '<p class="small">Export regularly to a file you keep (iCloud/Files/email).</p>'+
   '<p class="small">The <b>.json backup is the complete copy</b> \u2014 it holds every session, supervision entry, client, room and setting. The CSVs are spreadsheet-friendly extracts.</p>'+
@@ -5513,7 +5646,7 @@ infoDef("full-week","A full week for you",
   '<p class="small">Not the most sessions you could physically fit in — the number that a good, busy, sustainable week holds. Only you know it.</p>'+
   '<p class="small"><b>Leave it blank</b> and Trends uses the busiest week you have actually worked in the last six months instead, and says so. That is a fact rather than a target, which is the safer default.</p>');
 infoDef("referral-source","How they found you",
-  '<p class="small">Optional, and free text — whatever words you would use. "Word of mouth", "Counselling Directory", a colleague’s name.</p>'+
+  '<p class="small">Optional. Pick from the list, or choose <b>Something else…</b> and type your own — whatever words you would use. Anything you type joins the list for the next client, so the same source is spelled the same way every time.</p>'+
   '<p class="small">Fill it in and <b>Practice › Trends › Clients</b> can tell you which sources bring people who stay, rather than just who enquires. It is the one thing in the app that can change what you do about finding clients.</p>'+
   '<p class="small muted">It is cleared if you ever anonymise a client, because free text can name people.</p>');
 
@@ -5550,22 +5683,25 @@ infoDef("ana-weeks","Weeks actually worked",
 infoDef("ana-cohorts","Cohort retention",
   '<p class="small">Take everyone who started with you in a given quarter, and ask what proportion were still coming 4, 8, 12 and 24 weeks later.</p>'+
   '<p class="small">The retention funnel says where your clients are <i>now</i>. This says whether the work you are <b>taking on</b> is holding better than it used to — which is a different question, and the one that tells you whether a change to how you assess or contract is working.</p>'+
-  '<p class="small muted">A quarter only appears against a milestone it has had time to reach, so recent cohorts show fewer columns rather than a misleading nought.</p>');
+  '<p class="small muted">A quarter only appears against a milestone once <b>every</b> client in it has had that long — so a recent group shows a dash rather than a nought. A dash means "ask again later"; a nought would mean "nobody stayed", and they are not the same answer.</p>');
 infoDef("ana-episodes","How long clients stay",
   '<p class="small">The number of sessions a completed piece of work runs to, and whether that is changing year on year.</p>'+
-  '<p class="small"><b>Only finished work counts.</b> A client you are seeing this week has a length that has not happened yet, and counting them drags the average down towards nothing. Work counts as finished when the client’s status says so, or when the gap has run past three of their usual intervals.</p>'+
+  '<p class="small"><b>The headline counts finished work only.</b> A client you are seeing this week has a length that has not happened yet. Work counts as finished when the client’s status says so, or when the gap has run past three of their usual intervals.</p>'+
+  '<p class="small">That has a bias built into it, and the second figure is the correction. Short pieces of work finish first, so at any moment the finished pile is over-supplied with them while your long-running clients are all still on the books — which reads as a practice that does shorter work than it really does. <b>“At least”</b> counts everyone in, with the in-progress clients at the length they have reached so far. Those can only grow, so the true typical length sits at or above that number.</p>'+
   '<p class="small">The median is used rather than the mean, so one eight-year client does not move the answer.</p>');
 infoDef("ana-drifting","Drifting away",
   '<p class="small">Clients you have not marked as finished, whose gap has run past <b>one and a half times</b> their own usual interval, and who have nothing booked.</p>'+
   '<p class="small">One and a half rather than two on purpose: at two intervals a weekly client has already been gone a fortnight, and the conversation is much harder than it would have been a week ago.</p>'+
+  '<p class="small"><b>How this differs from Review status.</b> They are two rungs of the same ladder, and no client is on both. Here the gap is between one and a half and three intervals: recent enough that the answer is a text message, and the client is still genuinely current. Once it passes three intervals the answer has changed — the client is not really Ongoing any more — so they move to <b>Review status</b>, which asks you to update the status rather than make contact. Review status also only looks at clients marked Ongoing; this list covers every status that is not Finished.</p>'+
   '<p class="small">This is a list to act on, not a statistic. Some will be holidays you know about. The value is in the two you had lost track of.</p>');
 infoDef("ana-sources","Where clients come from",
   '<p class="small">Grouped by whatever you typed in <b>How they found you</b> on each client.</p>'+
   '<p class="small">The column that matters is not how many enquired — it is the <b>median sessions</b> and how many are <b>still current</b>. A directory that sends ten people who each come twice is worth much less than a colleague who sends two who each stay a year, and enquiry counts alone say the opposite.</p>'+
-  '<p class="small muted">Clients with nothing filled in are counted separately rather than lumped into "Other": never asked is a different fact from found us themselves.</p>');
+  '<p class="small muted">Clients with nothing filled in appear as <b>Unknown</b>, always last and never merged into a real source: never asked is a different fact from found us themselves. They are shown rather than left out so the table adds up to your whole practice — a source list that quietly omits half the clients invites the wrong conclusion from the half it shows.</p>');
 infoDef("ana-dtp","Days to payment",
   '<p class="small">The gap between a session happening and the money arriving, averaged by month.</p>'+
   '<p class="small">Dated on the <b>session</b>, not the payment. A March session paid in June belongs to March’s figure — dating it to June would make a slow month look fine simply because nothing had landed yet.</p>'+
+  '<p class="small">The month in progress is included. Only sessions you have entered a <b>payment date</b> against are counted at all, so if this looks thin the answer is usually that payments are being ticked without a date.</p>'+
   '<p class="small">The median is used, so one client who took nine months does not swamp the month they were in. A number that is creeping up is usually an invoicing habit rather than a client problem.</p>');
 infoDef("ana-late","Who pays late",
   '<p class="small">The per-client version of days-to-payment, because "31 days on average" is made of people.</p>'+
@@ -5574,6 +5710,7 @@ infoDef("ana-late","Who pays late",
 infoDef("ana-costratio","What the practice costs to run",
   '<p class="small">Costs as a share of everything that came in, over the last twelve months, against the twelve before that.</p>'+
   '<p class="small">This is <b>business</b> reporting, not tax: no bands, no allowances, nothing jurisdiction-specific. It answers "of every pound that arrives, how much leaves again before I see it".</p>'+
+  '<p class="small">Everything the practice spends is in it, not only what you typed into Costs &amp; income: <b>room fees charged against individual sessions</b> and <b>supervision</b> both count, because they are bills the practice pays even though they are entered elsewhere. For a therapist hiring a room by the hour the room is usually the largest line of the year.</p>'+
   '<p class="small">A ratio drifting upward while income is flat is the early warning. The category list underneath says which line did it.</p>');
 infoDef("ana-erosion","Fee erosion",
   '<p class="small">Two numbers per month: what you <b>would</b> have billed at full fee, and what you <b>actually</b> billed.</p>'+
@@ -7986,6 +8123,31 @@ function sourceSuggestions(){
   common.forEach(v=>{const k=v.toLowerCase(); if(!seen.has(k))seen.set(k,v);});
   return [...seen.values()];
 }
+/* The field was an <input list=…> over a <datalist>, which is the one HTML control browsers
+   cannot agree on: Chrome shows the list on a double-click but not a single one, Safari on iOS
+   shows nothing at all until you have typed a matching letter, and none of them hint that a list
+   exists. The suggestions are the whole point of the field — a practice that types "Word of
+   mouth", "word of mouth" and "WoM" gets three rows in Where clients come from — so it is now a
+   plain <select>, which every browser renders the same way, with a "Something else…" option that
+   reveals the free-text box. Still free text underneath: `source` is unchanged on the record and
+   nothing here is an enum. */
+const SRC_OTHER="__other__";
+function srcPickValue(v){
+  v=(v||"").trim(); if(!v)return "";
+  return sourceSuggestions().find(x=>x.toLowerCase()===v.toLowerCase())||SRC_OTHER;
+}
+/* The select is the field; the text box only exists for "Something else…". `read` is what the
+   save handler calls, so there is one answer to "what did they choose" wherever it is asked. */
+function wireSourcePicker(body){
+  const pick=body.querySelector("#c_srcPick"), free=body.querySelector("#c_src");
+  if(!pick||!free)return ()=>"";
+  pick.onchange=()=>{
+    const other=pick.value===SRC_OTHER;
+    free.hidden=!other;
+    if(other){if(srcPickValue(free.value)!==SRC_OTHER)free.value="";free.focus();}
+  };
+  return ()=>pick.value===SRC_OTHER?(free.value||"").trim():pick.value;
+}
 function clientForm(c){
   const isNew=!c; const m=c?clone(c):{_id:uid(),code:"",status:"Ongoing",frequency:"Weekly",insurance:"N",notes:"",created:isoD(today())};
   const statuses=[...new Set(S.clientCategories.map(x=>x.status).concat(["Ongoing","Paused","Finished"]))];
@@ -8005,8 +8167,12 @@ function clientForm(c){
        <div id="histWrap"></div>`}
     <div class="field2"><div><label>Insurance?</label><select id="c_ins">${opts(["N","Y"],m.insurance||"N")}</select></div>
       <div><label>How they found you ${infoDot("referral-source","How they found you")}</label>
-        <input id="c_src" list="c_srcList" maxlength="40" placeholder="Optional" value="${esc(m.source||"")}">
-        <datalist id="c_srcList">${sourceSuggestions().map(x=>'<option value="'+esc(x)+'"></option>').join("")}</datalist></div></div>
+        <select id="c_srcPick">${opts2([["","Not recorded"]]
+            .concat(sourceSuggestions().map(x=>[x,x]))
+            .concat([[SRC_OTHER,"Something else…"]]),
+          srcPickValue(m.source))}</select>
+        <input id="c_src" maxlength="40" placeholder="Type the source" value="${esc(m.source||"")}"
+          ${srcPickValue(m.source)===SRC_OTHER?"":"hidden"} style="margin-top:6px"></div></div>
     <label>Notes</label><textarea id="c_notes" rows="2" placeholder="Admin reminders only — e.g. “invoices via employer”">${esc(m.notes||"")}</textarea>
     <p class="small muted">Practical reminders about working with this client. Not a clinical record — this app doesn’t hold one.</p>
     <button class="btn full mt" id="cSave">Save client</button>
@@ -8030,6 +8196,7 @@ function clientForm(c){
        ". Used to suggest the next session, and shared with GroundWork Notes.";
   };
   paintSlot();
+  const readSource=wireSourcePicker(body);
   ["#c_freq","#c_uday","#c_utime"].forEach(sel=>{const n=body.querySelector(sel);if(n)n.onchange=paintSlot;});
   const sdr=body.querySelector("#setDefRate");
   if(sdr)sdr.onclick=()=>{const v=prompt("Default starting rate for new clients (£) — leave blank for none:",defaultRate()==null?"":defaultRate());if(v==null)return;
@@ -8038,7 +8205,7 @@ function clientForm(c){
     setDefaultRate(n);const inp=body.querySelector("#c_rate");if(inp)inp.value=n;sdr.textContent="Update default (£"+n+") ›";toast("Default set to "+gbp(n));};
   body.querySelector("#cSave").onclick=async()=>{
     m.code=body.querySelector("#c_code").value.trim();m.status=body.querySelector("#c_status").value;
-    m.frequency=body.querySelector("#c_freq").value;m.insurance=body.querySelector("#c_ins").value;m.notes=body.querySelector("#c_notes").value;m.source=(body.querySelector("#c_src").value||"").trim();
+    m.frequency=body.querySelector("#c_freq").value;m.insurance=body.querySelector("#c_ins").value;m.notes=body.querySelector("#c_notes").value;m.source=readSource();
     m.usualDay=body.querySelector("#c_uday").value;m.usualTime=body.querySelector("#c_utime").value;
     if(!m.code){toast("Enter a code");return}
     const cat=S.clientCategories.find(x=>x.status===m.status);m.category=cat?cat.category:m.status;
