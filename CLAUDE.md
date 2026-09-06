@@ -360,6 +360,54 @@ Several tests depend on TY (2026-27) being the year **in progress** — the proj
 
 The reconciliation block is the highest-value part: across six practice profiles, `profitBreakdown` = the four MTD quarters summed = `tyNet`. A mismatch means a cost reached one path but not another — exactly how the missing per-session room fee in the SA103 boxes was found.
 
+### Whole-practice test data (Sep 2026)
+`tests/test-data/` holds **eight synthetic practices as importable backup envelopes** — the same
+shape `backupPayload()` writes, so any of them restores through Settings › Data & backup on a real
+device. They exist because the tax engine and the twenty `ana*` trends only say anything
+interesting at a few hundred sessions across several years, which is a size nobody hand-writes.
+Full description in `tests/test-data/README.md`; the review they were built for, and what it found,
+is `docs/test-data-review-2026-09.md`.
+
+```bash
+npm i --no-save playwright   # deliberately NOT a dependency: npm ci runs on the release workflow
+npm run testdata             # regenerate the eight (deterministic — same bytes every run)
+npm run test:review          # Trends + Tax over all eight, invariants asserted, exits non-zero
+npm run test:tax             # tests/tax-tests.js in a headless browser instead of by hand
+```
+
+- **The fixtures are ANCHORED to a date** (`ANCHOR` in `scripts/make-test-data.mjs`, currently
+  2026-09-05) and the engines read the real clock. Once the real date has moved a season on, the
+  data no longer lands in the windows the trends use (last 12 months, last 26 weeks, this tax
+  year) and the readiness gates start reporting on history that has aged out. **Re-run
+  `npm run testdata`** — same caveat, same date, as `tests/tax-tests.js`.
+- **The data is described, never enumerated.** A profile says "weekly, 18% missed, pays about three
+  weeks late, three weeks off in August"; the review's expectations come from that description and
+  from the documented rule, never from what the app returned. Tuning a fixture until the app agrees
+  with it is the exact failure the tax suite warns about.
+- **`scripts/review-test-data.mjs` loads the real `index.html` in a browser** and injects each
+  state, so it cannot pass against a stale copy. It stubs `commit()` first: it reads, never writes.
+  Note `S`, `trendSeg` and friends are top-level `let`s — they live in the global *lexical* scope,
+  so `window.S = …` creates a second copy nothing reads. Assign the bare name.
+- Two profiles carry no `settings.taxAck`, so the Tax tab shows its disclaimer gate rather than any
+  figures. That is the gate under test, not an empty screen.
+- `groundwork-testdata-scotland-high.json` assumes a pension that is **not in the file** —
+  `pensionPcm()` reads `localStorage.tt_pension`, which no backup carries. It is recorded under
+  `testData.device` and applied by the harness. See the review, finding 7.
+
+### Two trends traps this corpus caught (Sep 2026) — do not reintroduce
+- **`catOf` is not `clientCategory`.** `catOf(kind,key)` is the SA103 expense-category lookup and
+  returns its "other business costs" fallback for anything unrecognised, so `catOf(c.status)` is an
+  object that can never equal `"Finished"`. `anaDrifting` and `anaEpisodes` both did that: the
+  drifting list was 14 discharged clients out of 15, and a client discharged this week was left out
+  of the episode median for three of their own intervals. The status→category function is
+  **`clientCategory(status)`**.
+- **`ledgerBetween()` is not every cost.** A room hired BY THE SESSION hangs off the session
+  (`derive().roomRate`) and supervision hangs off its own logs; `tyNet` subtracts both separately.
+  `anaCostRatio` used the ledger alone and reported **8%** where the practice's own SA103 breakdown
+  said **41%** — while an identical practice on a monthly rent read correctly, because monthly rent
+  *does* go through the ledger. It also added `led.useOfHome` on top of `led.expenses`, which
+  already contains it. Anything new that totals "what the practice costs" needs all four parts.
+
 ### Editing this file with scripts
 It is 438KB of single-file app, so bulk edits are scripted. **Always build the whole string, assert every anchor matched, write to `index.html.tmp`, then `os.replace()`.** Opening the real file for writing first truncated it to 0 bytes once when the script raised mid-run.
 

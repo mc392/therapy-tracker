@@ -1,0 +1,130 @@
+{
+  "anchor": "2026-09-05",
+  "schemaVersion": 7,
+  "profiles": [
+    {
+      "name": "newcomer",
+      "file": "groundwork-testdata-newcomer.json",
+      "note": "Three months of history, four clients, works at home. Every trends gate should decline politely.",
+      "clients": 4,
+      "sessions": 42,
+      "first": "2026-06-05",
+      "last": "2026-09-25",
+      "basis": "cash",
+      "taxYears": [
+        "2026-27"
+      ]
+    },
+    {
+      "name": "established",
+      "file": "groundwork-testdata-established.json",
+      "note": "Four years, 26 clients, room hired per session with a mid-history rate rise, cancellation policy at 0/50/100%.",
+      "clients": 27,
+      "sessions": 1183,
+      "first": "2022-11-05",
+      "last": "2026-09-26",
+      "basis": "cash",
+      "taxYears": [
+        "2022-23",
+        "2023-24",
+        "2024-25",
+        "2025-26",
+        "2026-27"
+      ]
+    },
+    {
+      "name": "part-time",
+      "file": "groundwork-testdata-part-time.json",
+      "note": "Part-time, ~£8k profit — under the personal allowance, Class 2 voluntary, accruals basis, use of home at the £18 band.",
+      "clients": 6,
+      "sessions": 272,
+      "first": "2024-07-05",
+      "last": "2026-09-26",
+      "basis": "accruals",
+      "taxYears": [
+        "2024-25",
+        "2025-26",
+        "2026-27"
+      ]
+    },
+    {
+      "name": "scotland-high",
+      "file": "groundwork-testdata-scotland-high.json",
+      "note": "Scotland, ~£55k profit, Plan 2 student loan ending 2026-27, £400/month pension (a device setting), monthly room rent, two filed years with HMRC's own figures, instalments HMRC set, and a claim to reduce.",
+      "clients": 30,
+      "sessions": 1515,
+      "first": "2022-08-26",
+      "last": "2026-09-26",
+      "basis": "cash",
+      "taxYears": [
+        "2022-23",
+        "2023-24",
+        "2024-25",
+        "2025-26",
+        "2026-27"
+      ]
+    },
+    {
+      "name": "chaotic-payments",
+      "file": "groundwork-testdata-chaotic-payments.json",
+      "note": "Accruals basis, 14 clients, a third of sessions unpaid, cancellations at 0/50/75/100%, tick-list barely used.",
+      "clients": 14,
+      "sessions": 419,
+      "first": "2024-04-05",
+      "last": "2026-09-24",
+      "basis": "accruals",
+      "taxYears": [
+        "2023-24",
+        "2024-25",
+        "2025-26",
+        "2026-27"
+      ]
+    },
+    {
+      "name": "winding-down",
+      "file": "groundwork-testdata-winding-down.json",
+      "note": "Five and a half years, 30 clients, 28 of them finished — a practice winding down to two clients.",
+      "clients": 30,
+      "sessions": 1425,
+      "first": "2021-03-05",
+      "last": "2026-09-21",
+      "basis": "cash",
+      "taxYears": [
+        "2020-21",
+        "2021-22",
+        "2022-23",
+        "2023-24",
+        "2024-25",
+        "2025-26",
+        "2026-27"
+      ]
+    },
+    {
+      "name": "online-only",
+      "file": "groundwork-testdata-online-only.json",
+      "note": "Online only, 17 months, everything at home, most features switched off (simple reveal mode).",
+      "clients": 11,
+      "sessions": 257,
+      "first": "2025-05-05",
+      "last": "2026-09-24",
+      "basis": "cash",
+      "taxYears": [
+        "2025-26",
+        "2026-27"
+      ]
+    },
+    {
+      "name": "day-one",
+      "file": "groundwork-testdata-day-one.json",
+      "note": "One client, one session, two days in. The floor every engine has to survive.",
+      "clients": 1,
+      "sessions": 1,
+      "first": "2026-09-03",
+      "last": "2026-09-03",
+      "basis": "cash",
+      "taxYears": [
+        "2026-27"
+      ]
+    }
+  ]
+}
