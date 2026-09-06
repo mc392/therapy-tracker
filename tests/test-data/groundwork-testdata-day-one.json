@@ -1,0 +1,109 @@
+{
+ "app": "GroundWork",
+ "version": 1,
+ "schemaVersion": 7,
+ "note": "The 'notes' field on a session is a yes/no marker that clinical notes were completed elsewhere. 'adminNote' is a free-text practical comment written by the practitioner. This file contains no clinical notes.",
+ "exportedAt": "2026-09-05T09:00:00.000Z",
+ "testData": {
+  "profile": "day-one",
+  "anchor": "2026-09-05",
+  "describes": "One client, one session, two days in. The floor every engine has to survive.",
+  "generatedBy": "scripts/make-test-data.mjs",
+  "device": null
+ },
+ "state": {
+  "clients": [
+   {
+    "_id": "cl-00003",
+    "code": "A1",
+    "status": "Initial session booked",
+    "category": null,
+    "frequency": "Weekly",
+    "insurance": "N",
+    "notes": "",
+    "created": "2026-09-03"
+   }
+  ],
+  "rooms": [
+   {
+    "_id": "rm-00001",
+    "location": "At home",
+    "rate": 0,
+    "due": "n/a",
+    "billing": "session"
+   }
+  ],
+  "sessions": [
+   {
+    "_id": "sx-00005",
+    "client": "A1",
+    "num": 1,
+    "date": "2026-09-03",
+    "time": "10:00",
+    "mode": "In-person",
+    "location": "At home",
+    "room": "",
+    "invoice": "",
+    "paidDate": "",
+    "receipt": "",
+    "notes": "",
+    "adminNote": "",
+    "roomPaid": "",
+    "roomPaidDate": "",
+    "lateCancel": false
+   }
+  ],
+  "supervision": [],
+  "peerSupervision": [],
+  "rateHistory": [
+   {
+    "_id": "rh-00004",
+    "client": "A1",
+    "effectiveFrom": "2000-01-01",
+    "rate": 50
+   }
+  ],
+  "roomRateHistory": [
+   {
+    "_id": "rr-00002",
+    "location": "At home",
+    "effectiveFrom": "2000-01-01",
+    "rate": 0
+   }
+  ],
+  "roomRentHistory": [],
+  "expenses": [],
+  "otherIncome": [],
+  "paidCharges": {},
+  "clientCategories": [
+   {
+    "status": "Ongoing",
+    "category": "Active"
+   },
+   {
+    "status": "Initial session booked",
+    "category": "Active"
+   },
+   {
+    "status": "Active enquiry",
+    "category": "Pipeline"
+   },
+   {
+    "status": "Paused",
+    "category": "Pipeline"
+   },
+   {
+    "status": "Finished",
+    "category": "Finished"
+   }
+  ],
+  "settings": {
+   "practiceName": "GroundWork",
+   "taxBasis": "cash"
+  },
+  "meta": {
+   "schemaVersion": 7
+  }
+ },
+ "audit": []
+}
