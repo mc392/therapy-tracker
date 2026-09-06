@@ -936,8 +936,25 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 .palopt .pswatch i{position:absolute;inset:0}
 .palopt .pswatch i:nth-child(2){left:50%}
 .palopt .pswatch i:nth-child(3){top:66%;left:0;right:0;bottom:0}
-.palopt .pn{font-size:14px;font-weight:700;line-height:1.2}
-.palopt .pd{font-size:11.5px;color:var(--muted);margin-top:1px}
+/* Both are `display:block` deliberately — as inline spans the name and the description ran
+   together into one paragraph ("Start simpleSessions, clients, …"), which reads as a typo rather
+   than as a heading with a description under it. Same shape as `.ftrow .fn`/`.fd`. */
+.palopt .pn{display:block;font-size:14px;font-weight:700;line-height:1.25}
+.palopt .pd{display:block;font-size:11.5px;color:var(--muted);line-height:1.45;margin-top:2px}
+/* ---- long-form choices (the setup wizard's "how much do you want to see?") ----
+   The palette grid packs 150px columns because a swatch plus two words fits one. A choice
+   carrying a sentence or three does not: two of them on a phone gave 40-character columns and a
+   card twenty lines tall. These stack, one per row, whatever the screen. */
+.palgrid.choices{grid-template-columns:1fr;gap:11px}
+.palgrid.choices .palopt{align-items:flex-start;gap:13px;padding:14px}
+/* The icon is a tinted tile at the TOP of the card, not a swatch centred against the whole
+   height of it — beside a long description, vertical centring parks it halfway down the text. */
+.palgrid.choices .pswatch{width:36px;height:36px;border:0;border-radius:11px;overflow:visible;
+  display:grid;place-items:center;background:color-mix(in srgb,var(--brand) 14%,transparent);color:var(--brand)}
+.palgrid.choices .pswatch .gi{width:21px;height:21px;vertical-align:0}
+.palgrid.choices .pt{flex:1;min-width:0}
+.palgrid.choices .pn{font-size:15px}
+.palgrid.choices .pd{font-size:13px;line-height:1.5;margin-top:4px}
 /* Locked schemes stay legible and still show their colours — a greyed-out swatch advertises
    nothing. The lock is a tag, not a disabled state: the button still opens the paywall. */
 .palopt.locked{opacity:.78}
@@ -2166,7 +2183,18 @@ const GLYPH={supervision:'<path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h11A2.5 2.5 0 0 1 1
   info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5.4M12 7.7h.01"/>',
   sessionadd:'<rect x="3.5" y="5" width="17" height="16" rx="2.3"/><path d="M3.5 10h17"/><path d="M8 2.8v4.4M16 2.8v4.4"/><path d="M12 13v5M9.5 15.5h5"/>',
   soundoff:'<path d="M11 4.5 6.5 8.5H3.5v7h3L11 19.5z"/><path d="M16 10l4 4M20 10l-4 4"/>',
-  sound:'<path d="M11 4.5 6.5 8.5H3.5v7h3L11 19.5z"/><path d="M15 9.2a4 4 0 0 1 0 5.6M17.8 6.4a8 8 0 0 1 0 11.2"/>'};
+  sound:'<path d="M11 4.5 6.5 8.5H3.5v7h3L11 19.5z"/><path d="M15 9.2a4 4 0 0 1 0 5.6M17.8 6.4a8 8 0 0 1 0 11.2"/>',
+  /* The same gear the header button draws, so "⚙ Settings" in a sentence and the control it
+     points at are one drawing. */
+  settings:'<circle cx="12" cy="12" r="3.1"/><path d="M12 2.6l1.6 2.7 3.1-.6.5 3.1 2.8 1.5-1.6 2.7 1.6 2.7-2.8 1.5-.5 3.1-3.1-.6L12 21.4l-1.6-2.7-3.1.6-.5-3.1-2.8-1.5L5.6 12 4 9.3l2.8-1.5.5-3.1 3.1.6z"/>',
+  sprout:'<path d="M12 21v-8.2"/><path d="M12 13.2c-4.2 0-6.3-2.5-6.3-6.3 3.8 0 6.3 2.1 6.3 6.3z"/><path d="M12 13.2c0-4.2 2.1-6.3 6.3-6.3 0 3.8-2.5 6.3-6.3 6.3z"/>',
+  grid:'<rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/>',
+  sun:'<circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2.6 12h2.2M19.2 12h2.2M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/>',
+  moon:'<path d="M20.2 14.6A8.6 8.6 0 0 1 9.4 3.8a8.7 8.7 0 1 0 10.8 10.8z"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  close:'<path d="M6.4 6.4l11.2 11.2M17.6 6.4L6.4 17.6"/>',
+  key:'<circle cx="8.2" cy="14.6" r="4.3"/><path d="M11.3 11.5 20 2.8"/><path d="M16.6 6.2l2.3 2.3M14.2 8.6l2.3 2.3"/>',
+  undo:'<path d="M4.5 9.5h9.8a5 5 0 0 1 0 10H8.4"/><path d="M8.2 5.4 4.1 9.5l4.1 4.1"/>'};
 function gi(name,cls){const p=GLYPH[name];if(!p)return "";
   return '<svg class="gi'+(cls?" "+cls:"")+'" viewBox="0 0 24 24" aria-hidden="true">'+p+'</svg>';}
 const SETTINGS_IC='<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
@@ -7711,7 +7739,7 @@ VIEWS.settings=function(){
        <div class="palgrid mt" id="setPal">${PALETTES.filter(p=>!p.free).map(p=>paletteOptionHTML(p,p.k===curPalette())).join("")}</div>
      </details>`:``}
      <label${PALETTES_ENABLED?' style="margin-top:16px"':''}>Light or dark</label>
-     <div class="seg" id="setThemeSeg" style="display:inline-flex">${["light","dark","auto"].map(t=>'<button data-t="'+t+'" class="'+(themePref()===t?"on":"")+'">'+(t==="light"?"☀ Light":t==="dark"?"☾ Dark":"⚙ Match device")+'</button>').join("")}</div>
+     <div class="seg" id="setThemeSeg" style="display:inline-flex;flex-wrap:wrap">${["light","dark","auto"].map(t=>'<button data-t="'+t+'" class="'+(themePref()===t?"on":"")+'">'+(t==="light"?gi("sun")+" Light":t==="dark"?gi("moon")+" Dark":gi("look")+" Match device")+'</button>').join("")}</div>
      <div class="mt">
        <button class="btn sec" id="setSound"></button>
      </div>
@@ -7948,7 +7976,8 @@ VIEWS.settings=function(){
     askB.onclick=async()=>{_persisted=null;await requestPersistence();paintStorage();
       toast(_persisted==="granted"?"Storage protected":"The browser declined for now");};
   })();
-  const soBtn=v.querySelector("#setSound"),updS=()=>{soBtn.textContent=Sfx.on?"🔊 Sound on":"🔇 Sound off";soBtn.classList.toggle("muted",!Sfx.on);};
+  /* innerHTML, not textContent: the label carries a glyph, like the theme chips beside it */
+  const soBtn=v.querySelector("#setSound"),updS=()=>{soBtn.innerHTML=Sfx.on?gi("sound")+" Sound on":gi("soundoff")+" Sound off";soBtn.classList.toggle("muted",!Sfx.on);};
   updS();soBtn.onclick=()=>{const nowOn=Sfx.toggle();updS();if(nowOn){Sfx.prime();Sfx.pop();toast("Sound on");}else toast("Sound muted");};
   const dEl=v.querySelector("#setBkDays"),aEl=v.querySelector("#setBkActs");
   dEl.value=backupDaysThreshold();aEl.value=backupActsThreshold();
@@ -10180,7 +10209,7 @@ function revealOffer(step){
     (plusStep?'<div class="vmsg warn mt">Part of '+PLUS_NAME+'.</div>':'')+
     '<button class="btn full mt" id="rvYes">'+(fs.length>1?"Turn them on":"Turn it on")+'</button>'+
     '<button class="btn ghost full mt" id="rvNo">Not for me</button>'+
-    '<p class="prev" style="text-align:center">Either way you can change your mind in <b>⚙ Settings › Features</b>.</p>';
+    '<p class="prev" style="text-align:center">Either way you can change your mind in <b>'+gi("settings")+' Settings › Features</b>.</p>';
   const finish=async(on)=>{
     const cfg=revealCfg();
     if(cfg.shown.indexOf(step.keys[0])<0)cfg.shown.push(step.keys[0]);
@@ -10207,13 +10236,13 @@ function stepDepth(w){return{emoji:gi("depth"), h:"How much do you want to see?"
     else FEATURES.forEach(f=>{if(f.k!=="accreditation"&&w.features[f.k]===false)delete w.features[f.k];});
   },
   mount(host){
-    host.innerHTML='<div class="palgrid" id="spDepth">'+
-      [["simple","🌱","Start simple","Sessions, clients, money owed and supervision. Tax, costs, trends, the table view, statements and streaks stay out of the way, and the app offers them one at a time as you go."],
-       ["all","🗂","Show me everything","Every feature on from the start. Best if you are moving over from a spreadsheet you already run, or you just want to look around."]]
+    host.innerHTML='<div class="palgrid choices" id="spDepth">'+
+      [["simple",gi("sprout"),"Start simple","Sessions, clients, money owed and supervision. Tax, costs, trends, the table view, statements and streaks stay out of the way, and the app offers them one at a time as you go."],
+       ["all",gi("grid"),"Show me everything","Every feature on from the start. Best if you are moving over from a spreadsheet you already run, or you just want to look around."]]
       .map(o=>'<button type="button" class="palopt'+(w.depth===o[0]?" on":"")+'" data-d="'+o[0]+'">'+
-        '<span class="pswatch" style="font-size:22px;width:auto">'+o[1]+'</span>'+
-        '<span><span class="pn">'+o[2]+'</span><span class="pd">'+o[3]+'</span></span></button>').join("")+'</div>'+
-      '<div class="ovnote">Nothing is deleted either way — “start simple” only hides things, and <b>⚙ Settings › Features</b> has a switch to show everything whenever you want it.</div>';
+        '<span class="pswatch">'+o[1]+'</span>'+
+        '<span class="pt"><span class="pn">'+o[2]+'</span><span class="pd">'+o[3]+'</span></span></button>').join("")+'</div>'+
+      '<div class="ovnote">Nothing is deleted either way — “start simple” only hides things, and <b>'+gi("settings")+' Settings › Features</b> has a switch to show everything whenever you want it.</div>';
     host.querySelectorAll("#spDepth .palopt").forEach(b=>b.onclick=()=>{
       w.depth=b.dataset.d;
       host.querySelectorAll("#spDepth .palopt").forEach(x=>x.classList.toggle("on",x===b));Sfx.tick();});
@@ -10336,8 +10365,8 @@ function stepPractice(w){return{emoji:gi("practice"), h:"What should we call you
       '<label>Strapline <span class="muted">(optional)</span></label>'+
       '<input id="spTag" maxlength="70" placeholder="e.g. Counselling &amp; psychotherapy" value="'+esc(w.tagline)+'">'+
       '<p class="prev">The strapline only shows on printed receipts and statements.</p>'+
-      '<div class="brandprev"><span class="bpt">⬡ GroundWork</span><span class="bpn" id="spPrev"></span></div>'+
-      '<div class="ovnote">🔒 This is <b>your</b> name — never a client’s. Clients are only ever stored as short codes.</div>';
+      '<div class="brandprev"><span class="bpt">GroundWork</span><span class="bpn" id="spPrev"></span></div>'+
+      '<div class="ovnote">'+gi("lock")+' This is <b>your</b> name — never a client’s. Clients are only ever stored as short codes.</div>';
     const n=host.querySelector("#spName"),t=host.querySelector("#spTag"),p=host.querySelector("#spPrev");
     const upd=()=>{w.name=n.value;w.tagline=t.value;p.textContent=n.value.trim()||"Your practice name";};
     n.oninput=upd;t.oninput=upd;upd();
@@ -10351,9 +10380,11 @@ function stepLook(w){return{emoji:gi("look"), h:"Pick a look",
     host.innerHTML=(PALETTES_ENABLED?'<label>Colour scheme</label><div class="palgrid" id="spPal">'+
         PALETTES.map(p=>paletteOptionHTML(p,p.k===w.palette)).join("")+'</div>':'')+
       '<label'+(PALETTES_ENABLED?' style="margin-top:18px"':'')+'>Light or dark</label>'+
-      '<div class="seg" id="spTheme" style="display:inline-flex">'+
+      /* wraps rather than overflowing: three chips with an icon each are wider than a 320px
+         phone, and this seg has no scroller of its own */
+      '<div class="seg" id="spTheme" style="display:inline-flex;flex-wrap:wrap">'+
         ["light","dark","auto"].map(t=>'<button data-t="'+t+'" class="'+(w.theme===t?"on":"")+'">'+
-          (t==="light"?"☀ Light":t==="dark"?"☾ Dark":"⚙ Match device")+'</button>').join("")+'</div>'+
+          (t==="light"?gi("sun")+" Light":t==="dark"?gi("moon")+" Dark":gi("look")+" Match device")+'</button>').join("")+'</div>'+
       '<div style="margin-top:16px">'+ovToggleRow("snd",gi("sound"),"Sound effects","Short synthesised chimes when you save, clear a backlog or hit a milestone.",w.sound)+'</div>';
     host.querySelectorAll("#spPal .palopt").forEach(b=>b.onclick=()=>{
       if(paletteLocked(PALETTES.find(x=>x.k===b.dataset.p)))return openPlusSheet("palettes");
@@ -10415,7 +10446,7 @@ function stepCPD(w){return{emoji:gi("cpd"), h:"CPD, supervision and accreditatio
       '<div style="margin-top:10px">'+ovToggleRow("acc",gi("accreditation"),"I’m working toward accreditation",
         "Adds the BACP Form 3A card: clinical vs supervision hours and the 1:6 ratio. Most therapists don’t need this — leave it off unless you’re actively accruing hours toward accreditation.",
         featureOn(w,"accreditation"))+'</div>'+
-      '<div class="ovnote">Any of this can be changed later in <b>⚙ Settings › Features</b>.</div>';
+      '<div class="ovnote">Any of this can be changed later in <b>'+gi("settings")+' Settings › Features</b>.</div>';
     host.querySelector("#spCpd").oninput=e=>w.cpdTarget=+e.target.value||0;
     [["acc","accreditation"],["peer","peer"]].forEach(pair=>{
       const sw=host.querySelector('[data-sw="'+pair[0]+'"]'); if(!sw)return;
@@ -10442,9 +10473,9 @@ function stepRooms(w){return{emoji:gi("rooms"), h:"Where do you see clients?",
             '<input data-f="loc" value="'+esc(r.loc)+'" placeholder="Room name">'+
             '<input data-f="rate" type="number" min="0" step="0.5" value="'+(+r.rate||0)+'">'+
             '<select data-f="billing">'+opts2([["session","per session"],["monthly","per month"]],r.billing||"session")+'</select>'+
-            '<button class="rmx" data-x="'+i+'" title="Remove">✕</button>'+
+            '<button class="rmx" data-x="'+i+'" title="Remove" aria-label="Remove">'+gi("close")+'</button>'+
           '</div>').join("")+'</div>'+
-        '<button class="btn sec sm mt" id="rmAdd">＋ Add a location</button>'+
+        '<button class="btn sec sm mt" id="rmAdd">'+gi("plus")+' Add a location</button>'+
         '<div class="ovnote">Sessions at home usually cost <b>£0</b>. Most rooms charge <b>per session</b>. Pick <b>per month</b> for a room you rent at a flat monthly rate — those sessions then carry no room cost of their own. Costs are dated, so changing one later never rewrites past sessions. You can set when each venue invoices you (end of month / week) in <b>Clients › Rooms</b>.</div>';
       host.querySelectorAll(".rmrow").forEach(row=>{
         const i=+row.dataset.i;
@@ -10481,7 +10512,7 @@ function stepMoney(w){
 /* Offered during setup so the "starting from nothing" hump is dealt with on day one,
    rather than being discovered in Settings six months later. Entirely optional. */
 function stepImport(w){return{emoji:gi("import"), h:"Already keep a spreadsheet?",
-  sub:"Bring the history across now and your totals, tax figures and client histories start out complete. You can also do this later in <b>⚙ Settings</b>.",
+  sub:"Bring the history across now and your totals, tax figures and client histories start out complete. You can also do this later in <b>"+gi("settings")+" Settings</b>.",
   mount(host){
     const paint=()=>{
       const n=S.sessions.length;
@@ -10490,7 +10521,7 @@ function stepImport(w){return{emoji:gi("import"), h:"Already keep a spreadsheet?
         [gi("letters"),"Your column names are fine","You match them to the app’s fields on the next screen. We guess most of them from the headings."],
         [gi("eye"),"You see it before it lands","A preview shows exactly what will be added, what’s being skipped and why. Nothing saves until you say so."]
       ])+
-      '<button class="btn full mt" id="spImp">'+(n?"📥 Import more rows":"📥 Import my spreadsheet…")+'</button>'+
+      '<button class="btn full mt" id="spImp">'+gi("import")+(n?" Import more rows":" Import my spreadsheet…")+'</button>'+
       (n?'<p class="prev" style="text-align:center">'+n+' session'+(n===1?"":"s")+' in the app so far.</p>'
         :'<p class="prev" style="text-align:center">No history to bring? Skip straight past — Continue.</p>');
       host.querySelector("#spImp").onclick=()=>impOpen({quiet:true,done:paint});
@@ -10515,7 +10546,7 @@ function stepRetention(w){return{emoji:gi("retention"), h:"How long do you keep 
         [gi("split"),"Two clocks, on purpose","Notes and money are kept for different reasons, so they get their own periods. You can clear the notes and still keep the dates and fees your tax return needs."],
         [gi("attention"),"A flag, never a delete","When a client passes their date they appear in <b>Settings › Records retention</b>, with the anonymise and erase tools one tap away. Nothing happens without you."]
       ])+
-      '<p class="prev">Both are editable later in <b>⚙ Settings</b>.</p>';
+      '<p class="prev">Both are editable later in <b>'+gi("settings")+' Settings</b>.</p>';
     host.querySelector("#spRtN").oninput=e=>w.rtNotes=+e.target.value||0;
     host.querySelector("#spRtF").oninput=e=>w.rtFin=+e.target.value||0;
   }};}
@@ -10525,24 +10556,25 @@ function stepBackup(w){return{emoji:gi("backup"), h:"How your data is kept safe"
     host.innerHTML=ovPoints([
       [gi("phone"),"It lives on this device only","No account, no server, nothing uploaded. That’s what keeps client data private — and it means nobody else can recover it for you."],
       [gi("warning"),"Deleting the app or clearing site data wipes it","So does “clear browsing data” in your browser. A backup is the only thing standing between you and starting over."],
-      ["⤓","The .json backup is a complete copy","Every session, client, room, rate and setting. Restore it on any device and you’re exactly where you left off. The CSVs are extracts for spreadsheets — they can’t be restored from."],
-      ["↩︎","Undo and restore points work inside the app","Every change is snapshotted, so a slip is easy to walk back. They live on this device too, so they’re no substitute for a backup."],
+      [gi("export"),"The .json backup is a complete copy","Every session, client, room, rate and setting. Restore it on any device and you’re exactly where you left off. The CSVs are extracts for spreadsheets — they can’t be restored from."],
+      [gi("undo"),"Undo and restore points work inside the app","Every change is snapshotted, so a slip is easy to walk back. They live on this device too, so they’re no substitute for a backup."],
       [gi("desktop"),"One device at a time","GroundWork doesn’t merge changes made in two places at once — whichever saves last wins. Do your day-to-day logging on one device, and use backups to move your data when you switch."]
     ])+
     '<label style="margin-top:16px">Remind me to back up after</label>'+
     '<div class="field2"><div><label>Days</label><input id="spDays" type="number" min="1" value="'+w.bkDays+'"></div>'+
       '<div><label>…or changes</label><input id="spActs" type="number" min="1" value="'+w.bkActs+'"></div></div>'+
     '<p class="prev">A banner appears when either limit is reached, and clears when you export.</p>'+
-    '<button class="btn sec full mt" id="spEnc">🔐 Add a backup passphrase (optional)</button>'+
+    '<button class="btn sec full mt" id="spEnc">'+gi("key")+' Add a backup passphrase (optional)</button>'+
     '<p class="prev">Encrypts backups with AES-256 so they’re safe to keep in iCloud, Drive or email. <b>Lose the passphrase and the file can’t be opened</b> — by anyone.</p>';
     host.querySelector("#spDays").oninput=e=>w.bkDays=Math.max(1,Math.round(+e.target.value)||7);
     host.querySelector("#spActs").oninput=e=>w.bkActs=Math.max(1,Math.round(+e.target.value)||25);
     const eb=host.querySelector("#spEnc");
-    const paint=()=>{eb.textContent=encReady()?"🔐 Passphrase set ✓ — change it":"🔐 Add a backup passphrase (optional)";};
+    /* innerHTML, not textContent: the label carries a glyph now */
+    const paint=()=>{eb.innerHTML=encReady()?gi("done")+" Passphrase set — change it":gi("key")+" Add a backup passphrase (optional)";};
     eb.onclick=()=>encPromptSetup(paint);paint();
   }};}
 function stepDone(w){return{emoji:gi("done"), h:"That’s you set up",
-  sub:"Here’s what we saved. All of it is editable later in <b>⚙ Settings</b>.",
+  sub:"Here’s what we saved. All of it is editable later in <b>"+gi("settings")+" Settings</b>.",
   mount(host){
     const pal=PALETTES.find(p=>p.k===w.palette)||PALETTES[0];
     const offList=FEATURES.filter(f=>!featureOn(w,f.k)).map(f=>f.n);
@@ -10675,7 +10707,7 @@ function showTaxGate(after){
     validate(){if(!w.ack){toast("Tick the box to continue");Sfx.error();return false;}},
     mount(host){
       host.innerHTML=ovPoints(TAX_DISCLAIMER)+
-      '<p class="prev">Also set out in the <a href="terms.html#tax" target="_blank" rel="noopener">Terms of Service</a>, and repeated in <b>⚙ Settings › About</b>.</p>'+
+      '<p class="prev">Also set out in the <a href="terms.html#tax" target="_blank" rel="noopener">Terms of Service</a>, and repeated in <b>'+gi("settings")+' Settings › About</b>.</p>'+
       '<label class="row" style="align-items:flex-start;gap:10px;margin-top:16px;cursor:pointer">'+
         '<input type="checkbox" id="taxAckBox" style="margin-top:3px">'+
         '<span>I understand these figures are estimates for my own planning, not tax advice</span>'+
@@ -10700,12 +10732,12 @@ function stepTax(w){return{emoji:gi("tax"), h:"About the tax figures",
       '<div class="seg" id="spReg" style="display:inline-flex">'+
         '<button data-r="rUK" class="'+(w.region==="rUK"?"on":"")+'">England, Wales or NI</button>'+
         '<button data-r="scotland" class="'+(w.region==="scotland"?"on":"")+'">Scotland</button></div>'+
-      '<p class="prev">Scotland has its own income tax bands. Change it any time in ⚙ Settings — it applies from the tax year you change it in, so earlier years stay as they were.</p>'+
+      '<p class="prev">Scotland has its own income tax bands. Change it any time in '+gi("settings")+' Settings — it applies from the tax year you change it in, so earlier years stay as they were.</p>'+
       '<label class="row" style="align-items:flex-start;gap:10px;margin-top:16px;cursor:pointer">'+
         '<input type="checkbox" id="spTaxAck"'+(w.taxAck?" checked":"")+' style="margin-top:3px">'+
         '<span>I understand these figures are estimates for my own planning, not tax advice</span>'+
       '</label>'+
-      '<div class="ovnote">You can read this again any time in <b>⚙ Settings › About</b>.</div>';
+      '<div class="ovnote">You can read this again any time in <b>'+gi("settings")+' Settings › About</b>.</div>';
     host.querySelector("#spTaxAck").onchange=e=>{w.taxAck=e.target.checked;};
     host.querySelectorAll("#spReg button").forEach(b=>b.onclick=()=>{w.region=b.dataset.r;
       host.querySelectorAll("#spReg button").forEach(x=>x.classList.toggle("on",x===b));Sfx.tick();});
@@ -10771,7 +10803,8 @@ function startSetup(opts){
     title:rerun?"Setup (re-run)":"Set up GroundWork",
     steps, doneLabel:"Finish setup",
     onSkip:async()=>{
-      if(!confirm("Skip setup?\n\nSensible defaults will be used and you can run this again any time from ⚙ Settings."))return;
+      /* a native confirm() is plain text — no glyph to put in it */
+      if(!confirm("Skip setup?\n\nSensible defaults will be used and you can run this again any time from Settings."))return;
       flowClose();await setupSave(w,{skipRooms:true});toast("Setup skipped — defaults applied");
     },
     onDone:async()=>{
