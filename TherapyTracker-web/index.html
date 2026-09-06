@@ -2877,7 +2877,7 @@ VIEWS.sessions=function(){
     rows.forEach(x=>{x._days=Math.floor((t-parseD(x.s.date))/86400000);x._bk=bk(x._days);});
     const groups={};rows.forEach(x=>{(groups[x._bk.o]=groups[x._bk.o]||{l:x._bk.l,items:[]}).items.push(x);});
     const order=Object.keys(groups).map(Number).sort((a,b)=>a-b);
-    container.innerHTML='<div class="paybar"><div class="hint" style="margin-top:4px">Tick what\'s been paid, set each date (defaults today), then Save.</div><div class="row" style="gap:8px;flex-wrap:wrap;margin:8px 0"><input type="date" id="allD" value="'+td+'" style="width:140px"><button class="btn sm sec" id="setAll">Apply date to ticked</button><button class="btn sm savebig" id="savePay">Save payments (0)</button></div></div><div id="prows"></div>';
+    container.innerHTML='<div class="paybar"><div class="hint" style="margin-top:4px">Tick what\'s been paid, set each date (defaults today), then Save.</div><div class="row" style="gap:8px;flex-wrap:wrap;margin:8px 0"><input type="date" id="allD" value="'+td+'" style="width:140px"><button class="btn sm sec" id="setAll">Apply date to ticked</button><button class="btn sm sec" id="chaseAll">✉ Chase…</button><button class="btn sm savebig" id="savePay">Save payments (0)</button></div></div><div id="prows"></div>';
     const gstyle=o=>{const m={4:["var(--good)",14],3:["var(--warn)",16],2:["var(--warn)",30],1:["var(--bad)",26],0:["var(--bad)",100]};const a=m[o]||["var(--muted)",14];if(a[1]>=100)return "background:"+a[0]+";color:#fff";return "background:color-mix(in srgb,"+a[0]+" "+a[1]+"%,transparent);color:"+a[0];};
     const prw=container.querySelector("#prows");
     prw.innerHTML=order.map(o=>{const g=groups[o];const tot=g.items.reduce((a,x)=>a+(x.d.rate||0),0);
@@ -2889,6 +2889,7 @@ VIEWS.sessions=function(){
     prw.querySelectorAll(".pchk").forEach(c=>c.onchange=()=>{Sfx.pop();upd();});
     prw.querySelectorAll(".li-main").forEach(mn=>mn.onclick=()=>{const c=prw.querySelector('.pchk[data-id="'+mn.dataset.id+'"]');c.checked=!c.checked;Sfx.pop();upd();});
     container.querySelector("#setAll").onclick=()=>{const dv=container.querySelector("#allD").value;prw.querySelectorAll(".pchk:checked").forEach(c=>{const di=prw.querySelector('.pdate[data-id="'+c.dataset.id+'"]');if(di)di.value=dv;});};
+    container.querySelector("#chaseAll").onclick=()=>chasePickSheet();
     sbtn.onclick=async()=>{const checks=[...prw.querySelectorAll(".pchk:checked")];if(!checks.length){toast("Tick some sessions first");Sfx.error();return}
       let amount=0;
       checks.forEach(c=>{const di=prw.querySelector('.pdate[data-id="'+c.dataset.id+'"]');const ss=S.sessions.find(z=>z._id===c.dataset.id);if(ss){ss.paidDate=di.value||isoD(today());amount+=derive(ss).rate||0;}});
@@ -5624,6 +5625,11 @@ infoDef("admin-mins","Admin per session",
 infoDef("full-week","A full week for you",
   '<p class="small">Not the most sessions you could physically fit in — the number that a good, busy, sustainable week holds. Only you know it.</p>'+
   '<p class="small"><b>Leave it blank</b> and Trends uses the busiest week you have actually worked in the last six months instead, and says so. That is a fact rather than a target, which is the safer default.</p>');
+infoDef("getting-paid","Getting paid",
+  '<p class="small">Two things, both practice-wide. <b>How you like to be paid</b> is printed on every invoice under "How to pay", and offered inside every payment reminder you copy. <b>Payment terms</b> is how many days an invoice gives before it is due.</p>'+
+  '<p class="small">It is free text on purpose. "Bank transfer to \u2026, reference your initials", "card at the end of the session" and "your insurer settles directly with me" are all real answers, and none of them fits a set of boxes.</p>'+
+  '<p class="small"><b>Nothing is sent from this app.</b> An invoice is a document you print or save as a PDF; a reminder is text you copy and paste into your own email. There is no mail server here and there should not be one \u2014 your client list never leaves the device.</p>'+
+  '<p class="small muted">Invoice references are built from your initials, the date and the client code rather than a running number. Nothing keeps two copies of this app in step, and a counter on the phone and on the laptop would eventually issue the same number twice.</p>');
 infoDef("admin-comment","Admin comments",
   '<p class="small">Practical reminders only \u2014 <b>nothing clinical</b>. "Invoice goes to her employer", "moved from Tuesday", "parking code 4821".</p>'+
   '<p class="small">Unlike the notes tick above it, <b>this text does appear on screen and in exports</b>: one line under the session in the list, and a column in the spreadsheet exports. Write it as though someone else will read it, because they might.</p>'+
@@ -7402,6 +7408,15 @@ VIEWS.settings=function(){
      <input type="number" min="0" max="100" step="5" id="cxDna">
      <p class="prev">Set 0 if you don’t charge for these.</p>
    </div>
+   ${`<div class="card" id="payToCard">${cardHead("Getting paid","getting-paid")}
+     <p class="small muted" style="margin:-2px 0 0">Printed on every invoice and offered in every payment reminder. Free text, because &ldquo;bank transfer&rdquo;, &ldquo;card at the end of the session&rdquo; and &ldquo;your insurer pays me&rdquo; are all real answers.</p>
+     <label>How you like to be paid</label>
+     <textarea id="setPayTo" rows="4" maxlength="400" placeholder="e.g. Bank transfer to A Therapist, 12-34-56, 12345678. Please use your initials as the reference.">${esc(payToDetails())}</textarea>
+     <label>Payment terms (days)</label>
+     <input type="number" min="1" max="180" step="1" id="setInvDays" value="${esc(invoiceDays())}">
+     <p class="prev">An invoice is dated due this many days after you generate it.</p>
+     <button class="btn full mt" id="setPaySave">Save payment details</button>
+   </div>`}
    ${feat("tax")?basisCardHTML():""}
    ${feat("tax")?taxRegionCardHTML():""}
    </div></details>
@@ -7560,6 +7575,15 @@ VIEWS.settings=function(){
     if(fw==null)delete sg.fullWeekSessions; else sg.fullWeekSessions=fw;
     await commit("Working week: "+sm+" min sessions, "+sg.adminMinsPerSession+" min admin"+(fw?", full week "+fw:""));
     toast("Saved");go("settings",{keepScroll:true});};
+  const paySave=v.querySelector("#setPaySave");
+  if(paySave)paySave.onclick=async()=>{
+    const sg=settings();
+    sg.payTo=v.querySelector("#setPayTo").value.trim().slice(0,400);
+    const d=Math.round(+v.querySelector("#setInvDays").value||0);
+    /* Out of range is not an error worth stopping for — clamp it and let invoiceDays() default. */
+    if(d>0&&d<=180)sg.invoiceDays=d; else delete sg.invoiceDays;
+    await commit("Payment details updated");
+    toast("Saved");Sfx.pop();go("settings",{keepScroll:true,openGroup:"business"});};
   v.querySelector("#setNameSave").onclick=async()=>{
     const n=v.querySelector("#setName").value.trim(),t=v.querySelector("#setTag").value.trim();
     if(!n){toast("Enter a practice name");Sfx.error();return;}
@@ -7952,6 +7976,7 @@ function sessionForm(s,o){
   const locs=S.rooms.map(r=>r.location);
   const body=el('<div></div>');
   let pendingWarn=false; // a "Save anyway" is armed; any edit disarms it
+  let dirty=false;       // something has been typed since this form was opened
   /* msg strings come pre-escaped from validateSession, so inject raw */
   function renderValidation(errors,warnings){const vb=body.querySelector("#vbanner");if(!vb)return;
     vb.innerHTML=(errors||[]).map(e=>'<div class="vmsg err">'+gi("blocked")+' '+e.msg+'</div>').join("")+(warnings||[]).map(w=>'<div class="vmsg warn">'+gi("warning")+' '+w.msg+'</div>').join("");}
@@ -7979,6 +8004,7 @@ function sessionForm(s,o){
      <div class="hint">Rate: <b>${gbp(d.rate)}</b>${d.roomRate?` · Room: ${gbp(d.roomRate)} (${esc(d.due)})`:""} · ${d.taxYear} ${d.past?"· past":"· upcoming"}</div>
      <label>Payment received date <span class="muted small">(blank = not paid)</span></label>
      <input type="date" id="f_paid" value="${esc(m.paidDate||"")}">
+     ${(!isNew&&d.overdue&&(d.rate||0)>0)?`<div class="prev"><span class="taxlink" id="f_chase">Chase this payment \u203a</span> — a message to copy into an email.</div>`:""}
      <label>Invoice #</label><input id="f_inv" value="${esc(m.invoice||"")}">
      <div id="f_rpWrap">
        <div class="field2">
@@ -8087,6 +8113,15 @@ function sessionForm(s,o){
     paintCancel();
     /* draw() rebuilds the whole form, so the info dots are re-wired on every pass, not once. */
     wireInfo(body);
+    /* The chaser is a different sheet, and openSheet() replaces this one — so anything typed and
+       not yet saved would go with it. Ask first, rather than losing a session someone just
+       finished filling in to a link they meant as a side trip. */
+    const chz=g("#f_chase");
+    if(chz)chz.onclick=()=>{
+      const cl=S.clients.find(x=>(x.code||"").toLowerCase()===(m.client||"").toLowerCase());
+      if(!cl){toast("No client record to chase");Sfx.error();return;}
+      if(dirty&&!confirm("Leave this session without saving your changes?"))return;
+      closeSheet();chaseSheet(cl);};
     ["#f_date","#f_loc","#f_paid","#f_rp"].forEach(id=>g(id).addEventListener("change",()=>{sync();paintRoomPaid();paintCancel();}));
     g("#save").onclick=async()=>{sync();
       if(!m.client){toast("Choose a client");Sfx.error();return}
@@ -8111,6 +8146,7 @@ function sessionForm(s,o){
   };
   draw();
   body.addEventListener("input",resetWarn);body.addEventListener("change",resetWarn);
+  body.addEventListener("input",()=>{dirty=true;});body.addEventListener("change",()=>{dirty=true;});
   openSheet(isNew?"New session":"Edit session",body);
 }
 
@@ -8465,7 +8501,8 @@ function clientProfile(c){
     '<h3 class="mt">Recent sessions</h3><div id="cpRecent"></div>'+
     '<div class="row mt" style="gap:8px;flex-wrap:wrap">'+
       '<button class="btn" id="cpNew">＋ New session</button>'+
-      (feat("receipts")?'<button class="btn sec" id="cpReceipt">🧾 Receipt / statement</button>':'')+
+      (owed?'<button class="btn sec" id="cpChase">✉ Chase payment</button>':'')+
+      (feat("receipts")?'<button class="btn sec" id="cpReceipt">🧾 Invoice / receipt</button>':'')+
       '<button class="btn ghost" id="cpEdit">Edit client</button></div>';
   const rec=rows.slice(-6).reverse();
   body.querySelector("#cpRecent").innerHTML=rec.length?rec.map(x=>{const pay=payChip(x.s,x.d);
@@ -8476,7 +8513,156 @@ function clientProfile(c){
     setTimeout(()=>{const sel=document.querySelector("#f_client");if(sel){sel.value=c.code;sel.onchange();}},60);};
   body.querySelector("#cpEdit").onclick=()=>{closeSheet();clientForm(c);};
   const cpR=body.querySelector("#cpReceipt");if(cpR)cpR.onclick=()=>{closeSheet();receiptSheet(c);};
+  const cpC=body.querySelector("#cpChase");if(cpC)cpC.onclick=()=>{closeSheet();chaseSheet(c);};
   openSheet("Client · "+c.code,body);
+}
+
+/* ===== Which document is being produced =====
+   This is the FOURTH argument of receiptHTML()/printReceipt(), which used to be a boolean
+   `paidOnly`. It now carries the kind — "statement", "receipt" or "invoice" — and still accepts
+   the old `true` so nothing that passed a boolean has to change.
+   It travels in that argument rather than a fifth one deliberately: the native iOS wrapper
+   re-declares printReceipt(c,rows,label,paidOnly) and passes exactly those four through to
+   receiptHTML, so a fifth argument would be silently dropped and every invoice would come out of
+   the iPhone as a statement. See docs/ios-native.md. */
+function docKind(x){
+  if(x===true)return "receipt";
+  return (x==="receipt"||x==="invoice"||x==="statement")?x:"statement";
+}
+/* Derived from the practice initials, the date and the client code rather than counted.
+   A running counter is the conventional thing and is the wrong thing here: nothing coordinates
+   two copies of this app (see "Multi-tab / multi-device writes" in CLAUDE.md), so a counter kept
+   on the phone and on the laptop would quietly issue the same number twice — which is the one
+   failure an invoice number exists to prevent. This reference is unique to a client and a day,
+   and re-generating the same invoice the same day deliberately reproduces it. */
+function docNumber(c,kind){
+  const t=today();
+  const code=(c.code||"").replace(/[^A-Za-z0-9]/g,"").toUpperCase();
+  return (docKind(kind)==="invoice"?"INV-":"")+practiceInitials()+"-"+isoD(t).replace(/-/g,"")+"-"+code;
+}
+
+/* ===== Copy to clipboard =====
+   The payment chasers are meant to be pasted into whatever the therapist already writes email in,
+   so the clipboard IS the delivery mechanism — there is no mail server here and there should not
+   be one. Two routes because neither works everywhere: navigator.clipboard needs a secure
+   context, and the execCommand fallback needs its textarea focusable, which is why it is
+   off-screen rather than display:none. Both have to run inside the click that asked for them —
+   iOS discards a clipboard write that has lost its user gesture, so never await anything first. */
+function copyText(str,okMsg){
+  const done=()=>{toast(okMsg||"Copied — paste it into an email");try{Sfx.tick();}catch(e){}};
+  const fallback=()=>{
+    try{
+      const ta=document.createElement("textarea");
+      ta.value=str; ta.setAttribute("readonly","");
+      ta.style.cssText="position:fixed;top:0;left:0;width:1px;height:1px;opacity:0";
+      document.body.appendChild(ta);
+      ta.select(); ta.setSelectionRange(0,String(str).length);
+      const ok=document.execCommand("copy");
+      ta.remove();
+      if(ok){done();return true;}
+    }catch(e){}
+    toast("Could not copy — select the text and copy it by hand");
+    try{Sfx.error();}catch(e){}
+    return false;
+  };
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(String(str)).then(done,fallback);
+      return true;
+    }
+  }catch(e){}
+  return fallback();
+}
+
+/* ===== Invoicing and chasing =====
+   How you would like to be paid, and how long a client has to do it. Both are practice-wide, both
+   are free text on purpose: a bank transfer, a standing order reference, "card at the end of the
+   session" and "your insurer pays me directly" are all real answers and none of them is a field. */
+function payToDetails(){return String(settings().payTo||"").trim();}
+function invoiceDays(){const n=+settings().invoiceDays;return (n>0&&n<=180)?Math.round(n):14;}
+/* Every past session of this client's that carries a fee and has no payment date. Same predicate
+   as the Unpaid worklist and the Home prompt (`derive().overdue`), so the three cannot disagree
+   about who owes what. */
+function overdueRowsFor(code){
+  const lc=(code||"").toLowerCase();
+  return S.sessions.map(s=>({s,d:derive(s)}))
+    .filter(x=>(x.s.client||"").toLowerCase()===lc&&x.d.overdue&&(x.d.rate||0)>0)
+    .sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
+}
+/* Everyone with something outstanding, biggest first. */
+function overdueByClient(){
+  return S.clients.map(c=>({c,rows:overdueRowsFor(c.code)}))
+    .filter(x=>x.rows.length)
+    .map(x=>Object.assign(x,{amt:x.rows.reduce((a,r)=>a+(r.d.rate||0),0)}))
+    .sort((a,b)=>b.amt-a.amt);
+}
+
+/* The chaser itself. Plain text, not a PDF and not an email this app sends: a therapist chasing a
+   client is writing to someone she has a relationship with, in her own words, from her own
+   mailbox. The tedious half is remembering which sessions and how much — that is what this
+   builds. Everything else is hers to change, and the sheet hands it over in an editable box
+   precisely so it can be. */
+function chaseText(c,rows){
+  const tot=rows.reduce((a,x)=>a+(x.d.rate||0),0);
+  const lines=rows.map(x=>"    "+fmtD(x.s.date)+"  —  "+gbp(x.d.rate||0)).join("\n");
+  const pay=payToDetails();
+  return "Hi,\n\n"+
+    "A quick note about "+(rows.length===1?"a therapy session":"some therapy sessions")+
+    " I don’t have a payment recorded for:\n\n"+
+    lines+"\n\n"+
+    "Total outstanding: "+gbp(tot)+"\n\n"+
+    (pay?pay+"\n\n":"")+
+    "If you have already sent this, please ignore the message — and do let me know, so I can put my own records right.\n\n"+
+    "Thank you,\n"+practiceName();
+}
+/* The one screen for chasing one client. The message is editable and the button copies whatever
+   is in the box at the time, not the text that was generated — so a rewrite is never lost. */
+function chaseSheet(c){
+  const rows=overdueRowsFor(c.code);
+  if(!rows.length){toast("Nothing outstanding for "+c.code);return;}
+  const tot=rows.reduce((a,x)=>a+(x.d.rate||0),0);
+  const t=today(), oldest=parseD(rows[0].s.date);
+  const days=oldest?Math.floor((t-oldest)/86400000):0;
+  const body=el('<div></div>');
+  body.innerHTML='<div class="hint"><b>'+esc(c.code)+'</b> · '+plural(rows.length,"session")+' · <b>'+gbp(tot)+'</b> outstanding'+
+      (oldest?' · oldest '+fmtDshort(rows[0].s.date)+' ('+days+'d)':'')+'</div>'+
+    '<p class="small muted">Edit it however you like, then copy it and paste it into your own email or message. <b>Nothing is sent from here</b>, and chasing is not recorded against the client.</p>'+
+    '<textarea id="chTxt" rows="15" spellcheck="true"></textarea>'+
+    '<button class="btn full mt" id="chCopy">Copy the message</button>'+
+    (payToDetails()?'':'<p class="small muted mt"><span class="taxlink" id="chPay">Add how you like to be paid ›</span> and it will be part of every chaser and invoice from now on.</p>')+
+    (feat("receipts")?'<button class="btn sec full mt" id="chInv">🧾 Invoice for these sessions instead</button>':'')+
+    '<p class="small muted mt">It starts with a plain “Hi” — this app holds client <b>codes</b>, never names, so there is no name for it to use. Address it however you normally would before you send it.</p>';
+  const ta=body.querySelector("#chTxt");
+  ta.value=chaseText(c,rows);
+  body.querySelector("#chCopy").onclick=()=>copyText(ta.value);
+  const cp=body.querySelector("#chPay");
+  if(cp)cp.onclick=()=>{closeSheet();go("settings",{openGroup:"business",focus:"payToCard"});};
+  const ci=body.querySelector("#chInv");
+  if(ci)ci.onclick=()=>{closeSheet();receiptSheet(c,{kind:"invoice"});};
+  openSheet("Chase payment · "+c.code,body);
+}
+/* Everyone who owes something, from the Unpaid worklist and from the Home prompt. One tap copies
+   that client's chaser without opening anything; tapping the row itself opens the editable one. */
+function chasePickSheet(){
+  const list=overdueByClient();
+  const body=el('<div></div>');
+  if(!list.length){body.innerHTML='<p class="muted small center" style="padding:20px">Nothing outstanding — nobody to chase \ud83c\udf89</p>';openSheet("Chase payment",body);return;}
+  const tot=list.reduce((a,x)=>a+x.amt,0);
+  body.innerHTML='<div class="hint">'+plural(list.length,"client")+' · <b>'+gbp(tot)+'</b> outstanding</div>'+
+    '<p class="small muted">Copy takes that client’s message straight to the clipboard. Tap the row to read or change it first.</p>'+
+    '<div id="chList"></div>';
+  body.querySelector("#chList").innerHTML=list.map(x=>
+    '<div class="list-item" data-code="'+esc(x.c.code)+'"><div class="li-main">'+
+      '<div class="li-title">'+esc(x.c.code)+'</div>'+
+      '<div class="li-sub">'+plural(x.rows.length,"session")+' · oldest '+fmtDshort(x.rows[0].s.date)+'</div></div>'+
+    '<div class="li-right"><b>'+gbp(x.amt)+'</b> <button class="btn sm sec" data-copy="'+esc(x.c.code)+'">Copy</button></div></div>').join("");
+  body.querySelectorAll("[data-copy]").forEach(b=>b.onclick=ev=>{
+    ev.stopPropagation();
+    const x=list.find(y=>y.c.code===b.dataset.copy); if(!x)return;
+    copyText(chaseText(x.c,x.rows),"Copied "+x.c.code+"’s reminder — paste it into an email");});
+  body.querySelectorAll(".list-item").forEach(li=>li.onclick=()=>{
+    const x=list.find(y=>y.c.code===li.dataset.code); if(x)chaseSheet(x.c);});
+  openSheet("Chase payment",body);
 }
 
 /* ============ Invoice / receipt generator ============ */
@@ -8495,42 +8681,86 @@ function receiptRows(c,per){
     .sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
   return {rows,label};
 }
-function receiptSheet(c){
+/* One sheet, three documents. They differ only in which sessions they carry and what the totals
+   line says, so a separate "invoice screen" would be the same four controls twice.
+     statement — everything in the period, and what is still owed on it
+     receipt   — the paid ones, for a client's insurer or their own records
+     invoice   — the UNPAID ones, with a due date and how to pay
+   `o.kind` lets the chaser open this already set to Invoice. */
+function receiptSheet(c,o){
+  o=o||{};
   const body=el('<div></div>');
-  body.innerHTML='<p class="muted small">A printable statement of sessions for this client — for insurance claims, expenses or their records. Print to PDF from the print dialog.</p>'+
+  const kinds=[["statement","Statement — every session in the period"],
+               ["receipt","Receipt — the sessions already paid for"],
+               ["invoice","Invoice — what is still owed, with a due date"]];
+  body.innerHTML='<p class="muted small">A printable document for this client — for their records, their insurer, or to ask for payment. Print to PDF from the print dialog.</p>'+
+    '<label>Document</label><select id="rcKind">'+opts2(kinds,docKind(o.kind))+'</select>'+
     '<label>Period</label><select id="rcPer"><option value="month">This month</option><option value="lastmonth">Last month</option><option value="taxyear">This tax year</option><option value="all">All sessions</option></select>'+
-    '<label class="colchk" style="margin-top:14px"><input type="checkbox" id="rcPaidOnly"> Paid sessions only (receipt)</label>'+
     '<div id="rcPrev" class="mt"></div>'+
+    '<div id="rcInv"></div>'+
     '<button class="btn full mt" id="rcGo">🧾 Generate &amp; print</button>';
-  const prev=()=>{const {rows,label}=receiptRows(c,body.querySelector("#rcPer").value);
-    const po=body.querySelector("#rcPaidOnly").checked;
-    const use=po?rows.filter(x=>x.d.clientPaid):rows;
+  /* Which of the period's sessions this document is actually about. */
+  const pick=()=>{
+    const kind=body.querySelector("#rcKind").value;
+    const {rows,label}=receiptRows(c,body.querySelector("#rcPer").value);
+    const use=kind==="receipt"?rows.filter(x=>x.d.clientPaid)
+             :kind==="invoice"?rows.filter(x=>!x.d.clientPaid)
+             :rows;
+    return {kind,rows,label,use};
+  };
+  const prev=()=>{
+    const {kind,label,use}=pick();
     const tot=use.reduce((a,x)=>a+(x.d.rate||0),0);
-    body.querySelector("#rcPrev").innerHTML='<div class="hint">'+esc(label)+': <b>'+use.length+' session'+(use.length===1?'':'s')+' · '+gbp(tot)+'</b>'+(po?' (paid only)':'')+'</div>';};
-  body.querySelector("#rcPer").onchange=prev;body.querySelector("#rcPaidOnly").onchange=prev;prev();
-  body.querySelector("#rcGo").onclick=()=>{const {rows,label}=receiptRows(c,body.querySelector("#rcPer").value);
-    const po=body.querySelector("#rcPaidOnly").checked;
-    const use=po?rows.filter(x=>x.d.clientPaid):rows;
-    if(!use.length){toast("No sessions in that period");Sfx.error();return;}
-    printReceipt(c,use,label,po);};
-  openSheet("Receipt · "+c.code,body);
+    body.querySelector("#rcPrev").innerHTML='<div class="hint">'+esc(label)+': <b>'+plural(use.length,"session")+' · '+gbp(tot)+'</b>'+
+      (kind==="receipt"?' already paid':kind==="invoice"?' outstanding':'')+'</div>'+
+      (kind==="invoice"&&!use.length?'<p class="small muted">Everything in that period is already paid for — there is nothing to invoice. Try a longer period, or send a receipt instead.</p>':'');
+    /* Only an invoice offers to write anything back, and only when there is something to write. */
+    body.querySelector("#rcInv").innerHTML=(kind==="invoice"&&use.length)
+      ? '<label class="colchk" style="margin-top:14px"><input type="checkbox" id="rcStamp" checked> Record this invoice number against these sessions</label>'+
+        '<p class="prev">Fills each session’s <b>Invoice #</b>, so you can see later which invoice a payment settled.</p>'+
+        (payToDetails()?'':'<p class="small muted mt"><span class="taxlink" id="rcPay">Add how you like to be paid ›</span> and it will be printed on every invoice.</p>')
+      : "";
+    const rp=body.querySelector("#rcPay");
+    if(rp)rp.onclick=()=>{closeSheet();go("settings",{openGroup:"business",focus:"payToCard"});};
+  };
+  body.querySelector("#rcKind").onchange=prev;
+  body.querySelector("#rcPer").onchange=prev;
+  prev();
+  body.querySelector("#rcGo").onclick=async()=>{
+    const {kind,label,use}=pick();
+    if(!use.length){toast(kind==="invoice"?"Nothing outstanding in that period":"No sessions in that period");Sfx.error();return;}
+    const stamp=body.querySelector("#rcStamp");
+    if(kind==="invoice"&&stamp&&stamp.checked){
+      const num=docNumber(c,kind);
+      let n=0;
+      use.forEach(x=>{const ss=S.sessions.find(z=>z._id===x.s._id);if(ss&&ss.invoice!==num){ss.invoice=num;n++;}});
+      if(n)await commit("Invoice "+num+" raised for "+c.code+" ("+plural(n,"session")+")");
+    }
+    printReceipt(c,use,label,kind);};
+  openSheet((docKind(o.kind)==="invoice"?"Invoice · ":"Receipt · ")+c.code,body);
 }
 /* The markup and the printing are split so the native iOS wrapper can render this same
    receipt to a real PDF: window.print() is a no-op inside WKWebView, so the iframe flow
    below silently does nothing there. One builder, two outputs — see docs/ios-native.md.
    Keep this returning {html,num}; the native layer names both. */
 function receiptHTML(c,rows,label,paidOnly){
+  const kind=docKind(paidOnly), isInv=kind==="invoice", isRec=kind==="receipt";
   const tot=rows.reduce((a,x)=>a+(x.d.rate||0),0);
   const paid=rows.filter(x=>x.d.clientPaid).reduce((a,x)=>a+(x.d.rate||0),0);
   const t=today();
-  const num=practiceInitials()+"-"+isoD(t).replace(/-/g,"")+"-"+(c.code||"").replace(/[^A-Za-z0-9]/g,"").toUpperCase();
+  const num=docNumber(c,kind);
+  const dueDate=isInv?addDays(t,invoiceDays()):null;
+  const payBlock=isInv&&payToDetails()
+    ? '<div class="pay"><div class="payh">How to pay</div>'+esc(payToDetails()).replace(/\n/g,"<br>")+'</div>' : "";
   /* print in the chosen scheme's light colours — the on-screen dark theme would be unreadable on paper */
   const pal=PALETTES.find(p=>p.k===curPalette())||PALETTES[0], PB=pal.p[0], PD=pal.p[1];
   /* A charged missed session is on the statement (see receiptRows) but must never read as an
      attended one -- the Mode column says what it actually was. */
+  /* An invoice carries only unpaid sessions, so a Status column saying "Due" on every line is a
+     column of the same word. Statements and receipts genuinely mix the two and keep it. */
   const trs=rows.map(x=>'<tr><td>'+fmtDMY(x.s.date)+'</td><td>#'+esc(x.s.num)+'</td><td>'+
     (x.d.cancelKind?(x.d.cancelKind==="dna"?"Did not attend":"Late cancellation")+(x.d.cancelPct<100?" ("+x.d.cancelPct+"% fee)":""):esc(x.s.mode||""))+
-    '</td><td class="r">'+gbp(x.d.rate)+'</td><td>'+(x.d.clientPaid?("Paid "+fmtDMY(x.s.paidDate)):"Due")+'</td></tr>').join("");
+    '</td><td class="r">'+gbp(x.d.rate)+'</td>'+(isInv?'':'<td>'+(x.d.clientPaid?("Paid "+fmtDMY(x.s.paidDate)):"Due")+'</td>')+'</tr>').join("");
   const html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+esc(num)+'</title><style>'+
     'body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1E2A26;margin:40px;font-size:14px}'+
     'h1{font-size:22px;color:'+PD+';margin:0}.sub{color:#6E7E78;font-size:12px}'+
@@ -8538,14 +8768,19 @@ function receiptHTML(c,rows,label,paidOnly){
     'table{width:100%;border-collapse:collapse;margin-top:10px}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #E6ECEA;font-size:13px}'+
     'th{font-size:11px;text-transform:uppercase;color:#6E7E78}.r{text-align:right}'+
     '.tot{margin-top:14px;text-align:right;font-size:15px}.tot b{font-size:19px;color:'+PD+'}'+
+    '.pay{margin-top:20px;padding:12px 14px;border:1px solid #E6ECEA;border-radius:8px;background:#FAFCFB;font-size:13px;white-space:pre-wrap}'+
+    '.payh{font-size:11px;text-transform:uppercase;color:#6E7E78;margin-bottom:5px;letter-spacing:.04em}'+
     '.foot{margin-top:34px;color:#6E7E78;font-size:11px;border-top:1px solid #E6ECEA;padding-top:10px}'+
     '@media print{body{margin:16mm}}</style></head><body>'+
     '<div class="head"><div><h1>'+esc(practiceName())+'</h1>'+(practiceTagline()?'<div class="sub">'+esc(practiceTagline())+'</div>':'')+'</div>'+
-    '<div style="text-align:right"><div style="font-weight:700">'+(paidOnly?"RECEIPT":"STATEMENT")+'</div><div class="sub">'+esc(num)+'</div><div class="sub">Issued '+fmtD(t)+'</div></div></div>'+
+    '<div style="text-align:right"><div style="font-weight:700">'+(isInv?"INVOICE":isRec?"RECEIPT":"STATEMENT")+'</div><div class="sub">'+esc(num)+'</div><div class="sub">Issued '+fmtD(t)+'</div>'+
+      (isInv?'<div class="sub"><b>Due '+fmtD(dueDate)+'</b></div>':'')+'</div></div>'+
     '<p><b>Client:</b> '+esc(c.code)+' &nbsp;·&nbsp; <b>Period:</b> '+esc(label)+'</p>'+
-    '<table><thead><tr><th>Date</th><th>Session</th><th>Mode</th><th class="r">Fee</th><th>Status</th></tr></thead><tbody>'+trs+'</tbody></table>'+
-    '<div class="tot">'+(paidOnly?('Total received: <b>'+gbp(tot)+'</b>'):('Total billed: <b>'+gbp(tot)+'</b>'+(paid<tot?'<br><span class="sub">of which paid '+gbp(paid)+' · outstanding '+gbp(tot-paid)+'</span>':'<br><span class="sub">paid in full</span>')))+'</div>'+
-    '<div class="foot">Generated by GroundWork on '+fmtD(t)+'. Client identified by confidential code. This document confirms therapy sessions provided by '+esc(practiceName())+'.'+
+    '<table><thead><tr><th>Date</th><th>Session</th><th>Mode</th><th class="r">Fee</th>'+(isInv?'':'<th>Status</th>')+'</tr></thead><tbody>'+trs+'</tbody></table>'+
+    '<div class="tot">'+(isInv?('Amount due: <b>'+gbp(tot)+'</b><br><span class="sub">Payable by '+fmtD(dueDate)+'</span>')
+      :isRec?('Total received: <b>'+gbp(tot)+'</b>')
+      :('Total billed: <b>'+gbp(tot)+'</b>'+(paid<tot?'<br><span class="sub">of which paid '+gbp(paid)+' · outstanding '+gbp(tot-paid)+'</span>':'<br><span class="sub">paid in full</span>')))+'</div>'+payBlock+
+    '<div class="foot">Generated by GroundWork on '+fmtD(t)+'. Client identified by confidential code. This document '+(isInv?'requests payment for':'confirms')+' therapy sessions provided by '+esc(practiceName())+'.'+
       '<br>It is a record of attendance and fees only. No clinical notes are held in this system or reproduced here.</div>'+
     '</body></html>';
   return {html:html,num:num};
