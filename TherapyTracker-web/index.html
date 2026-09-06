@@ -249,7 +249,39 @@ input:not([type=checkbox]):not([type=radio]):focus,select:focus,textarea:focus{o
 /* Date and time controls are drawn by the platform and size themselves from their own text.
    WebKit gives them a large intrinsic minimum, so the generous 14px side padding that suits a
    text box is what pushes the digits under the picker glyph. Trim it for these two only. */
-input[type=date],input[type=time]{padding-left:10px;padding-right:10px;min-width:0;max-width:100%}
+/* `appearance:none` is the load-bearing line, not a cosmetic one. While these keep their native
+   appearance, iOS WebKit sizes them from their own content and adds the padding and border on
+   TOP of the author `width` — `box-sizing:border-box` is ignored for them — so a 177px column
+   held a 199px control and the Time field sat over the Date field's right edge and ran off the
+   screen. Chrome honoured the width and looked perfect throughout. Turning the native appearance
+   off makes them ordinary boxes that obey width; `min-height` puts back the height WebKit used
+   to supply, and the two `-webkit-` shims restore the value's own layout inside the box, which
+   otherwise collapses to zero height on iOS. Verified by measuring, not by eye. */
+/* Written to match the base selector's shape on purpose. That rule is
+   `input:not([type=checkbox]):not([type=radio])`, which outranks a plain `input[type=date]` — the
+   earlier short form of this override was losing to it and the trimmed padding never applied at
+   all. Check the computed value, not the source order, if you touch this. */
+input:not([type=checkbox]):not([type=radio])[type=date],
+input:not([type=checkbox]):not([type=radio])[type=time]{padding:10px;min-width:0;max-width:100%;
+  -webkit-appearance:none;appearance:none;box-sizing:border-box;min-height:45px}
+input[type=date]::-webkit-date-and-time-value,
+input[type=time]::-webkit-date-and-time-value{text-align:left}
+input[type=date]::-webkit-datetime-edit,
+input[type=time]::-webkit-datetime-edit{padding:0}
+/* A date beside a time does not want an even split: "22 May 2026" needs the room and "15:29"
+   does not, and an even split made the Time box look like a mistake. Selected with :has() so the
+   two forms that pair them (a session, a client's usual slot) pick it up with no extra markup.
+   Below ~348px viewport there is not room for both, so the pair stacks — the same escape the
+   auto-fit base rule gives every other pair. */
+.field2:has(input[type=time]){grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
+@media (max-width:348px){.field2:has(input[type=time]){grid-template-columns:minmax(0,1fr)}}
+/* One pulse, then nothing. A permanent highlight on an arrived-at card would still be there the
+   next time the reader scrolls past it, meaning something it no longer means. */
+@keyframes cardflash{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--brand) 60%,transparent)}
+  70%{box-shadow:0 0 0 9px color-mix(in srgb,var(--brand) 0%,transparent)}
+  100%{box-shadow:0 0 0 0 transparent}}
+.flash{animation:cardflash 1.5s ease-out 1}
+@media (prefers-reduced-motion:reduce){.flash{animation:none;outline:2px solid var(--brand);outline-offset:2px}}
 .chip{display:inline-block;padding:3.5px 11px;border-radius:20px;font-size:12px;font-weight:650}
 .chip.y{background:color-mix(in srgb,var(--good) 22%,transparent);color:var(--good)}
 .chip.n{background:color-mix(in srgb,var(--bad) 22%,transparent);color:var(--bad)}
@@ -466,12 +498,36 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
 .legend .lgi i.dash{width:18px;height:0;border-top:2px dashed var(--muted);border-radius:0}
 .grphead{background:var(--soft);color:var(--brand-dark);font-weight:700;font-size:12px;padding:8px 10px;border-radius:8px;margin:12px 0 2px}
 .rawscroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+/* The Trends headline strip. Scrolls sideways rather than wrapping: three tiles that wrap become
+   a three-row block on a narrow phone, which is the opposite of a glance. The scroller is
+   .rawscroll's, per the rule that only an element that genuinely needs a horizontal axis gets
+   one — never the sheet or the page. */
+.trhead{display:flex;gap:10px;padding:2px 2px 12px}
+.trtile{flex:0 0 auto;min-width:134px;text-align:left;cursor:pointer;font-family:inherit;
+  border:1px solid var(--line);border-radius:16px;padding:11px 13px;
+  background:linear-gradient(150deg,color-mix(in srgb,var(--brand) 14%,var(--card)),var(--card));
+  display:flex;flex-direction:column;gap:1px;transition:transform .12s ease}
+.trtile:active{transform:scale(.97)}
+.trtile .tre{font-size:15px;line-height:1}
+.trtile .trv{font-size:21px;font-weight:750;color:var(--ink);line-height:1.15;margin-top:3px;font-variant-numeric:tabular-nums}
+.trtile .trl{font-size:12px;color:var(--muted)}
+.trtile .trs{font-size:11px;font-weight:700;color:var(--brand-dark);margin-top:5px;letter-spacing:.02em}
 #rtable{font-size:12px;white-space:nowrap;min-width:100%}
 #rtable th{cursor:pointer;position:sticky;top:0;background:var(--card);user-select:none}
 #rtable td,#rtable th{padding:7px 9px}
 #colsBox{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px 10px}
 .colchk{display:flex;align-items:center;gap:7px;font-size:13.5px;color:var(--ink);font-weight:500}
 .colchk input[type=checkbox]{width:18px;height:18px;flex:none;margin:0;accent-color:var(--brand)}
+/* One tickable line per outstanding room fee, in the settle sheet. */
+.rdrow{padding:9px 2px;border-bottom:1px solid var(--line)}
+.rdrow:last-child{border-bottom:0}
+/* One movable block per row in the arrange-home sheet. */
+.harow{display:flex;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid var(--line)}
+.harow:last-child{border-bottom:0}
+.harow .li-main{flex:1;min-width:0}
+.hanav{display:flex;gap:6px;flex:none}
+.hanav button{min-width:40px;padding:7px 9px;line-height:1}
+.hanav button:disabled{opacity:.35}
 optgroup{font-size:12px;color:var(--muted)} optgroup option{font-size:16px;color:var(--ink)}
 .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--brand);color:#fff;
   padding:11px 18px;border-radius:24px;font-size:14px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.3)}
@@ -1621,7 +1677,7 @@ function plusStatusLine(){
 const PLUS_SELL=[
   ["Tax","Estimates, the pot, payments on account and what HMRC actually assessed \u2014 kept current as the rates change each April."],
   ["Costs & other income","What the practice costs you, taken off the profit the tax is worked out from."],
-  ["Quarterly (MTD)","Your four quarters, reconciled to the same figures, ready to file."],
+  ["Making Tax Digital","Your four quarters, reconciled to the same figures, ready to file."],
   ["Trends","Retention, attendance against the frequency you agreed, and what missed sessions cost."],
   ["Accreditation hours","Clinical and supervision hours and the 1:6 ratio, for Form 3A."],
   ["GroundWork Notes sync","Sends each client's cadence to the notes app so it knows what still needs writing up."],
@@ -2163,12 +2219,111 @@ function go(tab,opts){
   if(keep!=null)window.scrollTo(0,Math.min(keep,Math.max(0,document.body.scrollHeight-window.innerHeight)));
   else window.scrollTo(0,0);
   paintFab();
+  if(opts.focus)focusCard(opts.focus);
   try{updateBackupBanner();updateSaveBanner();}catch(e){}
   try{coachMaybeTip(tab);}catch(e){}
+}
+/* A prompt that says "room fees are due" and then lands the reader at the top of a long money
+   screen has not actually taken them anywhere. `go(tab,{focus:"id"})` brings the named card into
+   view and flashes it once, so the eye lands on the thing the prompt was about.
+   Same timing as scrollChart() and the segment bar: rAF for a visible tab, a timer as well for a
+   backgrounded one where rAF may never fire, and the section may be drawn a beat after the view
+   is attached. Both attempts are harmless — the second finds the flash already running. */
+function focusCard(id){
+  const run=()=>{const n=document.getElementById(id); if(!n)return true;
+    n.scrollIntoView({behavior:"smooth",block:"center"});
+    n.classList.remove("flash"); void n.offsetWidth; n.classList.add("flash");
+    setTimeout(()=>n.classList.remove("flash"),1800); return true;};
+  requestAnimationFrame(()=>{run();});
+  setTimeout(run,120);
 }
 $("#fab").onclick=()=>sessionForm(null);
 /* ============ VIEWS ============ */
 const VIEWS={};
+
+/* ===== Arranging the home screen =====
+   Home carries nine blocks and no two therapists open the app for the same one: one wants to know
+   what is owed, one who is coming this week, one whether the streak survived. The order is hers.
+
+   Order ONLY \u2014 there is deliberately no "hide" here. Whether a block exists at all is already
+   answered by `feat()` in Settings \u2192 App preferences, and a second switch answering nearly the
+   same question is how a card ends up on in one place and off in another. A block nobody reads
+   goes to the bottom, which costs one scroll and no confusion. */
+const HOME_CARDS=[
+  {k:"attention",n:"Needs attention",      d:"What needs doing today"},
+  {k:"kpis",     n:"The four figures",     d:"Billed, sessions, outstanding, next 7 days"},
+  {k:"spark",    n:"Revenue trend",        d:"The last 24 weeks"},
+  {k:"goals",    n:"Goals",                d:"Payment and completion rings"},
+  {k:"log",      n:"Log something",        d:"New session, repeat, supervision"},
+  {k:"upcoming", n:"Coming up",            d:"Your next sessions"},
+  {k:"heat",     n:"Your year",            d:"A square a day, the last 12 months"},
+  {k:"loyal",    n:"Longstanding clients", d:"Who you have seen most"},
+  {k:"records",  n:"Records",              d:"Streaks and badges"}
+];
+const HOME_DEFAULT=HOME_CARDS.map(x=>x.k);
+/* Repaired on every read rather than migrated, which is what makes an old saved order safe:
+   a key this build no longer has is dropped, and a key the saved order has never heard of \u2014 a
+   block ADDED by an update \u2014 is put back at its DEFAULT position rather than on the end. A new
+   block appended below "Records" for everyone who has ever rearranged is a block nobody sees.
+   Nothing is stored while the order is the default one, so an install that never touches this
+   follows whatever the app ships next. */
+function homeOrder(){
+  const out=(settings().homeOrder||[]).filter(k=>HOME_DEFAULT.indexOf(k)>=0);
+  HOME_DEFAULT.forEach((k,i)=>{if(out.indexOf(k)<0)out.splice(Math.min(i,out.length),0,k);});
+  return out;
+}
+function setHomeOrder(a){
+  const clean=(a||[]).filter(k=>HOME_DEFAULT.indexOf(k)>=0);
+  if(clean.join("|")===HOME_DEFAULT.join("|"))delete settings().homeOrder;
+  else settings().homeOrder=clean;
+}
+/* Set by the last Home render \u2014 see the note where it is assigned. */
+let _homeVisible=[];
+function homeArrangeSheet(){
+  const vis=_homeVisible.slice();
+  if(vis.length<2){toast("Nothing to rearrange yet");return;}
+  let order=homeOrder();
+  const meta=k=>HOME_CARDS.find(x=>x.k===k)||{n:k,d:""};
+  const body=el('<div></div>');
+  body.innerHTML='<p class="small muted">Put the blocks in the order you want to read them. Only what is on your home screen right now is listed \u2014 whether a feature appears at all is still <b>\u2699 Settings \u203a App preferences</b>.</p>'+
+    '<div id="haList" class="mt"></div>'+
+    '<button class="btn full mt" id="haSave">Done</button>'+
+    '<p class="small muted center mt"><span class="taxlink" id="haReset">Put them back the way they were \u203a</span></p>';
+  const list=body.querySelector("#haList");
+  const paint=()=>{
+    const shown=order.filter(k=>vis.indexOf(k)>=0);
+    list.innerHTML=shown.map((k,i)=>{const m=meta(k);
+      return '<div class="harow"><div class="li-main"><div class="li-title">'+esc(m.n)+'</div><div class="li-sub">'+esc(m.d)+'</div></div>'+
+        '<div class="hanav">'+
+          '<button class="btn sm sec" data-mv="'+esc(k)+'" data-dir="-1"'+(i===0?" disabled":"")+' aria-label="Move '+esc(m.n)+' up">\u25b2</button>'+
+          '<button class="btn sm sec" data-mv="'+esc(k)+'" data-dir="1"'+(i===shown.length-1?" disabled":"")+' aria-label="Move '+esc(m.n)+' down">\u25bc</button>'+
+        '</div></div>';}).join("");
+    list.querySelectorAll("[data-mv]").forEach(b=>b.onclick=()=>move(b.dataset.mv,+b.dataset.dir));
+  };
+  /* Swap with the nearest neighbour that is actually ON the screen. Anything the reader cannot
+     see keeps its index, so a block that reappears later (the revenue trend at ten sessions, say)
+     comes back roughly where it was rather than at the bottom. */
+  const move=(k,dir)=>{
+    const i=order.indexOf(k); if(i<0)return;
+    let j=i+dir;
+    while(j>=0&&j<order.length&&vis.indexOf(order[j])<0)j+=dir;
+    if(j<0||j>=order.length)return;
+    const tmp=order[i];order[i]=order[j];order[j]=tmp;
+    try{Sfx.pop();}catch(e){}
+    paint();
+  };
+  paint();
+  body.querySelector("#haReset").onclick=()=>{order=HOME_DEFAULT.slice();try{Sfx.tick();}catch(e){}paint();};
+  /* Staged until Done, the same shape as the guided flows: closing discards, and one commit
+     rather than one per tap of an arrow. */
+  body.querySelector("#haSave").onclick=async()=>{
+    const before=homeOrder().join("|");
+    setHomeOrder(order);
+    if(homeOrder().join("|")!==before)await commit("Rearranged the home screen");
+    closeSheet();toast("Home screen saved");go("home");
+  };
+  openSheet("Arrange your home screen",body);
+}
 
 VIEWS.home=function(){
   const v=el('<div class="view active"></div>');
@@ -2223,27 +2378,45 @@ VIEWS.home=function(){
      shape, which is the whole point of it. */
   const heatCard=der.some(x=>{const d=parseD(x.s.date);return d&&d<=t;})
     ? '<div class="card"><div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Your year</h2><span class="small muted">last 12 months</span></div>'+
-      '<p class="small muted" style="margin:4px 0 10px">One square per day, one column per week — the darker the square, the more sessions that day.</p>'+
+      '<p class="small muted" style="margin:4px 0 10px">One square per day, one column per week.</p>'+
       yearHeatmapHTML()+'</div>'
     : '';
-  v.innerHTML=(S.sessions.length?"":'<div class="hint" style="font-size:14px">👋 <b>Nothing logged yet.</b> Tap <b>＋ New session</b> below to start, or open <b>⚙ Settings → Restore from backup</b> to load a <b>.json</b> backup from another device. Need a refresher? <span class="taxlink" id="hTour">Take the guided tour ›</span></div>')+
-   (S.sessions.length&&feat("attention")?'<div class="card"><h2>Needs attention</h2><div class="attn" id="attn"></div></div>':'')+`
+  /* Every block on this screen, keyed. Built the same way it always was — the only change is
+     that they are put in a map first and then emitted in the reader's own order, rather than
+     concatenated in ours. A block whose conditions are not met is "" and simply does not appear,
+     exactly as before. See HOME_CARDS. */
+  const parts={
+    attention:(S.sessions.length&&feat("attention")?'<div class="card"><h2>Needs attention</h2><div class="attn" id="attn"></div></div>':''),
+    kpis:`
    <div class="kpis mb" data-coach="home-kpis">
      <div class="kpi"><div class="v" data-to="${billed}" data-fmt="m">${gbp(billed)}</div><div class="l">Billed this tax year</div></div>
      <div class="kpi good"><div class="v" data-to="${seenRows.length}">${seenRows.length}</div><div class="l">Sessions this tax year${seenClients?` · ${seenClients} client${seenClients===1?"":"s"}`:""}</div></div>
      <div class="kpi clk ${outstanding?'bad':''}" id="kOut"><div class="v" data-to="${outstanding}" data-fmt="m">${gbp(outstanding)}</div><div class="l">Outstanding now ›</div></div>
      <div class="kpi clk" id="kNext7"><div class="v" data-to="${next7.length}">${next7.length}</div><div class="l">Sessions next 7 days ›</div></div>
-   </div>`+
-   sparkCard+
-   goalsCard+`
+   </div>`,
+    spark:sparkCard,
+    goals:goalsCard,
+    log:`
    <div class="card"><h2>Log something</h2>
      <div class="row" style="flex-wrap:wrap;gap:8px">
        <button class="btn" id="qNew">＋ New session</button>
        <button class="btn sec" id="qRepeat">↻ Repeat last for…</button>`+
        (feat("supervision")?`<button class="btn sec" id="qSup">＋ Supervision</button>`:``)+`
-     </div></div>
-   <div class="card"><h2>Coming up</h2><div id="up"></div></div>`+
-   heatCard+loyalCard+recCard;
+     </div></div>`,
+    upcoming:'<div class="card"><h2>Coming up</h2><div id="up"></div></div>',
+    heat:heatCard,
+    loyal:loyalCard,
+    records:recCard
+  };
+  const order=homeOrder();
+  /* What is actually on the screen this render, for the arrange sheet to offer. Kept here rather
+     than recomputed there: working out whether the revenue trend qualifies means walking every
+     session again, and the sheet can only be opened from a Home that has just rendered. */
+  _homeVisible=order.filter(k=>parts[k]);
+  const arrangeRow=_homeVisible.length>1
+    ? '<p class="small muted center" style="margin:16px 0 0"><span class="taxlink" id="hArrange">Arrange this screen ›</span></p>' : '';
+  v.innerHTML=(S.sessions.length?"":'<div class="hint" style="font-size:14px">👋 <b>Nothing logged yet.</b> Tap <b>＋ New session</b> below to start, or open <b>⚙ Settings → Restore from backup</b> to load a <b>.json</b> backup from another device. Need a refresher? <span class="taxlink" id="hTour">Take the guided tour ›</span></div>')+
+    order.map(k=>parts[k]||"").join("")+arrangeRow;
   const up=v.querySelector("#up");
   if(!upcoming.length)up.innerHTML='<p class="muted small">No future sessions logged.</p>';
   else up.innerHTML=upcoming.slice(0,12).map(x=>{const d=x.d;
@@ -2260,6 +2433,7 @@ VIEWS.home=function(){
   v.querySelector("#qRepeat").onclick=()=>repeatPicker();
   const qs=v.querySelector("#qSup");if(qs)qs.onclick=()=>supervisionForm(null);
   const ht=v.querySelector("#hTour");if(ht)ht.onclick=()=>startTour();
+  const ha=v.querySelector("#hArrange");if(ha)ha.onclick=()=>homeArrangeSheet();
   /* Same treatment the charts get: built before the view is attached, so it has no width yet.
      Land on this week rather than on the same date last year. */
   scrollChart(v.querySelector(".hmgrid"),null);
@@ -2813,7 +2987,7 @@ VIEWS.sessions=function(){
     rows.forEach(x=>{x._days=Math.floor((t-parseD(x.s.date))/86400000);x._bk=bk(x._days);});
     const groups={};rows.forEach(x=>{(groups[x._bk.o]=groups[x._bk.o]||{l:x._bk.l,items:[]}).items.push(x);});
     const order=Object.keys(groups).map(Number).sort((a,b)=>a-b);
-    container.innerHTML='<div class="paybar"><div class="hint" style="margin-top:4px">Tick what\'s been paid, set each date (defaults today), then Save.</div><div class="row" style="gap:8px;flex-wrap:wrap;margin:8px 0"><input type="date" id="allD" value="'+td+'" style="width:140px"><button class="btn sm sec" id="setAll">Apply date to ticked</button><button class="btn sm savebig" id="savePay">Save payments (0)</button></div></div><div id="prows"></div>';
+    container.innerHTML='<div class="paybar"><div class="hint" style="margin-top:4px">Tick what\'s been paid, set each date (defaults today), then Save.</div><div class="row" style="gap:8px;flex-wrap:wrap;margin:8px 0"><input type="date" id="allD" value="'+td+'" style="width:140px"><button class="btn sm sec" id="setAll">Apply date to ticked</button><button class="btn sm sec" id="chaseAll">✉ Chase…</button><button class="btn sm savebig" id="savePay">Save payments (0)</button></div></div><div id="prows"></div>';
     const gstyle=o=>{const m={4:["var(--good)",14],3:["var(--warn)",16],2:["var(--warn)",30],1:["var(--bad)",26],0:["var(--bad)",100]};const a=m[o]||["var(--muted)",14];if(a[1]>=100)return "background:"+a[0]+";color:#fff";return "background:color-mix(in srgb,"+a[0]+" "+a[1]+"%,transparent);color:"+a[0];};
     const prw=container.querySelector("#prows");
     prw.innerHTML=order.map(o=>{const g=groups[o];const tot=g.items.reduce((a,x)=>a+(x.d.rate||0),0);
@@ -2825,6 +2999,7 @@ VIEWS.sessions=function(){
     prw.querySelectorAll(".pchk").forEach(c=>c.onchange=()=>{Sfx.pop();upd();});
     prw.querySelectorAll(".li-main").forEach(mn=>mn.onclick=()=>{const c=prw.querySelector('.pchk[data-id="'+mn.dataset.id+'"]');c.checked=!c.checked;Sfx.pop();upd();});
     container.querySelector("#setAll").onclick=()=>{const dv=container.querySelector("#allD").value;prw.querySelectorAll(".pchk:checked").forEach(c=>{const di=prw.querySelector('.pdate[data-id="'+c.dataset.id+'"]');if(di)di.value=dv;});};
+    container.querySelector("#chaseAll").onclick=()=>chasePickSheet();
     sbtn.onclick=async()=>{const checks=[...prw.querySelectorAll(".pchk:checked")];if(!checks.length){toast("Tick some sessions first");Sfx.error();return}
       let amount=0;
       checks.forEach(c=>{const di=prw.querySelector('.pdate[data-id="'+c.dataset.id+'"]');const ss=S.sessions.find(z=>z._id===c.dataset.id);if(ss){ss.paidDate=di.value||isoD(today());amount+=derive(ss).rate||0;}});
@@ -3613,6 +3788,46 @@ function anaCPD(){
    Shared shapes so twenty analytics cards look like one screen rather than twenty. Each card is
    a heading, an info dot, and the figures — the explanation lives behind the dot, which is the
    only reason this many cards fit on a phone at all. */
+/* ---- the Trends headline strip ----
+   One real figure from each of the three sections you are NOT reading, at the top of the one you
+   are. It is navigation as much as decoration: four sections are easy to forget are there, and a
+   section named with a number out of this practice is a better invitation than a word.
+   Same contract as every other analytic — nothing is invented. A section whose headline is not
+   ready yet is simply left out, and if none of the three has one the strip does not render. */
+function trendsHeadFig(seg){
+  try{
+    if(seg==="clients"){const d=anaDrifting();
+      if(d&&d.rows.length)return {fig:String(d.rows.length),lab:"drifting away",e:"\ud83c\udf31"};
+      /* Nobody drifting is the good case, and it should not leave the section unnamed. Distinct
+         people actually seen in the last twelve months — not the all-time count the section's own
+         KPI shows, so the two are not the same fact printed twice. */
+      const t=today(), from=addYears(t,-1);
+      const seen=new Set(anaDer().filter(x=>x.dt>from&&x.dt<=t&&!isCancelled(x.s))
+        .map(x=>(x.s.client||"").toLowerCase()).filter(Boolean));
+      if(!seen.size)return null;
+      return {fig:String(seen.size),lab:"seen this year",e:"\ud83c\udf31"};}
+    if(seg==="money"){const f=anaFloor();
+      if(!f.ready)return null;
+      return {fig:gbp(f.median),lab:"typical month",e:"\ud83d\udcb7"};}
+    if(seg==="time"){const h=anaHourlyRate();
+      if(!h.ready)return null;
+      return {fig:gbp(h.rate),lab:"an hour, all in",e:"\u23f1\ufe0f"};}
+    if(seg==="you"){const c=anaCPD();
+      if(!c.ready)return null;
+      return {fig:c.total+(c.total===1?" hr":" hrs"),lab:"CPD this year",e:"\ud83c\udf93"};}
+  }catch(e){console.error("Trends headline",seg,e);}
+  return null;
+}
+function trendsHeadline(active){
+  const tiles=TREND_SEGS.filter(x=>x[0]!==active).map(x=>{
+    const f=trendsHeadFig(x[0]); if(!f)return "";
+    return '<button type="button" class="trtile" data-jump="'+esc(x[0])+'">'+
+      '<span class="tre">'+f.e+'</span>'+
+      '<span class="trv">'+f.fig+'</span>'+
+      '<span class="trl">'+esc(f.lab)+'</span>'+
+      '<span class="trs">'+esc(x[1])+' \u203a</span></button>';}).filter(Boolean);
+  return tiles.length?'<div class="trhead rawscroll">'+tiles.join("")+'</div>':"";
+}
 function anaCard(title,infoKey,inner,opt){
   opt=opt||{};
   return '<div class="card'+(opt.cls?" "+opt.cls:"")+'">'+cardHead(title,infoKey,opt.right)+
@@ -3892,10 +4107,13 @@ function trendsYouHTML(){
 
 VIEWS.practice=function(){
   const v=el('<div class="view active"></div>');
+  /* Trends sits last. The first three are places you go to DO something — add a client, check a
+     room, log supervision — and Trends is where you go to read. Putting the reading between two
+     of the doing screens meant scrolling past it on the way to Rooms every time. */
   const segs=[["clients","Clients"]];
-  if(feat("trends"))segs.push(["trends","Trends"]);
   segs.push(["rooms","Rooms"]);
   if(feat("supervision"))segs.push(["supervision","Supervision"]);
+  if(feat("trends"))segs.push(["trends","Trends"]);
   if(pracTab==="supervision"&&!feat("supervision"))pracTab="clients";
   if(pracTab==="trends"&&!feat("trends"))pracTab="clients";
   v.innerHTML=segBar("crtab",segs,pracTab)+'<div id="crbody"></div>';
@@ -4232,7 +4450,8 @@ VIEWS.practice=function(){
                   : trendSeg==="time"  ? {html:trendsTimeHTML(),folds:{}}
                   : trendSeg==="you"   ? {html:trendsYouHTML(),folds:{}}
                   : clientsSection();
-      host.innerHTML=built.html;
+      host.innerHTML=trendsHeadline(trendSeg)+built.html;
+      host.querySelectorAll("[data-jump]").forEach(b=>b.onclick=()=>pick(b.dataset.jump));
       host.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>{
         const c=S.clients.find(x=>x._id===li.dataset.id); if(c)clientForm(c);});
       host.querySelectorAll(".list-item[data-code]").forEach(li=>li.onclick=()=>{
@@ -4246,16 +4465,17 @@ VIEWS.practice=function(){
     };
     wireInfo(body);
     const bar=body.querySelector("#trseg");
+    /* One way in to changing section, used by the segment bar and by the headline tiles.
+       Redraws only the section, never the whole tab: a full go() would throw the reader back to
+       the top of Practice every time they moved between the four. */
+    function pick(seg){
+      if(seg===trendSeg)return;
+      trendSeg=seg;
+      if(bar){bar.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x.dataset.seg===trendSeg));segScroll(bar);}
+      draw(); host.scrollIntoView({block:"start"});
+    }
     if(bar){
-      bar.querySelectorAll("button").forEach(b=>b.onclick=()=>{
-        if(b.dataset.seg===trendSeg)return;
-        trendSeg=b.dataset.seg;
-        bar.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x.dataset.seg===trendSeg));
-        segScroll(bar);
-        /* Redraw only the section, never the whole tab: a full go() would throw the reader back
-           to the top of Practice every time they moved between the four. */
-        draw(); host.scrollIntoView({block:"start"});
-      });
+      bar.querySelectorAll("button").forEach(b=>b.onclick=()=>pick(b.dataset.seg));
       segScroll(bar);
     }
     draw();
@@ -4722,6 +4942,7 @@ function taxRegionCardHTML(){
       '<button data-r="scotland" class="'+(r==="scotland"?"on":"")+'">Scotland</button></div>'+
     '<p class="prev">Applies to <b>'+esc(ty)+'</b> and every later year.</p>'+
     (changed?'<div class="acc-work">'+hist.map(y=>'<div>'+esc(y)+' onwards \u2014 <b>'+(m[y]==="scotland"?"Scotland":"England, Wales or NI")+'</b></div>').join("")+'</div>':'')+
+    '<p class="small muted mt">Moved in an earlier year? <span class="taxlink" id="setRegYears">Set it against that year \u203a</span> \u2014 this control only ever moves '+esc(ty)+' onwards.</p>'+
     '</div>';
 }
 function wireTaxRegion(host){
@@ -4732,6 +4953,8 @@ function wireTaxRegion(host){
     await commit("Income tax region from "+curTaxYear()+": "+b.dataset.r);
     toast(b.dataset.r==="scotland"?"Scottish rates from "+curTaxYear():"UK rates from "+curTaxYear());
     go("settings",{keepScroll:true});});
+  const yl=host.querySelector("#setRegYears");
+  if(yl)yl.onclick=()=>go("tax",{seg:"allowances"});
 }
 function taxRates(ty){const sy=parseInt(ty.slice(0,4));
   const r={pa:12570,basicTop:50270,higherTop:125140,c4lpl:12570,c4upl:50270,c4upper:0.02};
@@ -5652,6 +5875,15 @@ infoDef("admin-mins","Admin per session",
 infoDef("full-week","A full week for you",
   '<p class="small">Not the most sessions you could physically fit in — the number that a good, busy, sustainable week holds. Only you know it.</p>'+
   '<p class="small"><b>Leave it blank</b> and Trends uses the busiest week you have actually worked in the last six months instead, and says so. That is a fact rather than a target, which is the safer default.</p>');
+infoDef("getting-paid","Getting paid",
+  '<p class="small">Two things, both practice-wide. <b>How you like to be paid</b> is printed on every invoice under "How to pay", and offered inside every payment reminder you copy. <b>Payment terms</b> is how many days an invoice gives before it is due.</p>'+
+  '<p class="small">It is free text on purpose. "Bank transfer to \u2026, reference your initials", "card at the end of the session" and "your insurer settles directly with me" are all real answers, and none of them fits a set of boxes.</p>'+
+  '<p class="small"><b>Nothing is sent from this app.</b> An invoice is a document you print or save as a PDF; a reminder is text you copy and paste into your own email. There is no mail server here and there should not be one \u2014 your client list never leaves the device.</p>'+
+  '<p class="small muted">Invoice references are built from your initials, the date and the client code rather than a running number. Nothing keeps two copies of this app in step, and a counter on the phone and on the laptop would eventually issue the same number twice.</p>');
+infoDef("admin-comment","Admin comments",
+  '<p class="small">Practical reminders only \u2014 <b>nothing clinical</b>. "Invoice goes to her employer", "moved from Tuesday", "parking code 4821".</p>'+
+  '<p class="small">Unlike the notes tick above it, <b>this text does appear on screen and in exports</b>: one line under the session in the list, and a column in the spreadsheet exports. Write it as though someone else will read it, because they might.</p>'+
+  '<p class="small muted">It is cleared if you ever anonymise a client, because free text can name people.</p>');
 infoDef("referral-source","How they found you",
   '<p class="small">Optional. Pick from the list, or choose <b>Something else…</b> and type your own — whatever words you would use. Anything you type joins the list for the next client, so the same source is spelled the same way every time.</p>'+
   '<p class="small">Fill it in and <b>Practice › Trends › Clients</b> can tell you which sources bring people who stay, rather than just who enquires. It is the one thing in the app that can change what you do about finding clients.</p>'+
@@ -5804,7 +6036,8 @@ VIEWS.money=function(){
       g.n++;g.amt+=x.d.roomRate||0;const d=parseD(x.s.date);if(!g.min||d<g.min)g.min=d;if(!g.max||d>g.max)g.max=d;});
     const roomRows=Object.keys(roomGrp).map(k=>{const g=roomGrp[k];
       const rng=g.min?(fmtDM(g.min)+(g.max&&+g.max!==+g.min?" – "+fmtDM(g.max):"")):"";
-      return '<tr><td>'+esc(k)+'</td><td class="num">'+g.n+'</td><td>'+rng+'</td><td class="num">'+gbp(g.amt)+'</td></tr>';}).join("");
+      return '<tr><td>'+esc(k)+'</td><td class="num">'+g.n+'</td><td>'+rng+'</td><td class="num">'+gbp(g.amt)+'</td>'+
+        '<td class="num"><button class="btn sm sec" data-settle="'+esc(k)+'">Settle</button></td></tr>';}).join("");
     const fc=incomeForecast();
     const fcCard='<div class="card"><h2>This month &amp; year at a glance</h2>'+
       '<div class="kpis mt">'+
@@ -5824,8 +6057,9 @@ VIEWS.money=function(){
       '<div class="small muted mt" style="font-weight:600">Clients seen per '+statGran+'</div><div id="chCli"></div></div>'+
       '<div class="card"><h2>Last 12 months</h2><table><thead><tr><th>Month</th><th class="num">Sess</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Open</th></tr></thead><tbody>'+mTable+'</tbody></table></div>'+
       '<div class="card"><h2>Outstanding by client</h2>'+(byClient.length?'<table><thead><tr><th>Client</th><th class="num">Sessions</th><th class="num">Amount</th></tr></thead><tbody>'+byClient.map(x=>'<tr><td>'+esc(x.code)+'</td><td class="num">'+x.n+'</td><td class="num">'+gbp(x.amt)+'</td></tr>').join("")+'</tbody></table>':'<p class="muted small">Nothing outstanding 🎉</p>')+'</div>'+
-      '<div class="card"><h2>Room payments due</h2>'+(roomRows?'<table><thead><tr><th>Room</th><th class="num">Sessions</th><th>Dates</th><th class="num">Total</th></tr></thead><tbody>'+roomRows+'</tbody></table>':'<p class="muted small">No room payments outstanding.</p>')+
+      '<div class="card" id="roomDueCard"><h2>Room payments due</h2>'+(roomRows?'<div class="rawscroll"><table><thead><tr><th>Room</th><th class="num">Sessions</th><th>Dates</th><th class="num">Total</th><th></th></tr></thead><tbody>'+roomRows+'</tbody></table></div>':'<p class="muted small">No room payments outstanding.</p>')+
         (S.rooms.some(r=>roomBilling(r)==="monthly")?'<p class="small muted" style="margin-top:8px">Rooms on a monthly rent aren’t listed here — their rent is counted in <b>Costs &amp; income</b>, not per session.</p>':'')+'</div>';
+    body.querySelectorAll("[data-settle]").forEach(b=>b.onclick=()=>roomDueSheet(b.dataset.settle));
     let sel=null;
     /* Redrawing replaces the .svgwrap, which resets its horizontal scroll — so tapping a bar used
        to fling the chart back to the oldest period, hiding the very breakdown it just opened.
@@ -5900,7 +6134,7 @@ VIEWS.tax=function(){
      track to owe, what should be in the pot and when money next leaves; everything else on this
      tab is a job with a season, and taxMoments is what raises those when their season arrives.
      Nothing was removed from the other segments — every existing go("tax",{seg:...}) still lands. */
-  const segs=[["now","Now"],["estimate","Estimate"],["payments","Pot & payments"],["allowances","Per year"],["mtd","Quarterly (MTD)"]];
+  const segs=[["now","Now"],["estimate","Estimate"],["payments","Pot & payments"],["allowances","Per year"],["mtd","Making Tax Digital"]];
   v.innerHTML=segBar("taxseg",segs,taxSeg)+'<div id="taxbody"></div>';
   const body=v.querySelector("#taxbody");
   if(taxSeg!=="estimate"){
@@ -7056,6 +7290,29 @@ function drawAllowances(host){
       ? '<p class="small muted mt"><span class="taxlink" id="slClr">Clear '+esc(ty)+'\u2019s own setting and carry the earlier year forward again \u203a</span></p>'
       : '')+
     '</div>';
+  /* ===== Where you pay income tax, per year =====
+     The engine has always read this by year (`taxRegionFor(ty)`), but the only control that wrote
+     it was in Settings and it always wrote `curTaxYear()` — so someone who moved to or from
+     Scotland two years ago had no way to say so, and every earlier year was silently re-assessed
+     under today's bands. This is that control, on the year strip that already governs the rest of
+     this screen. Same shape and same carry-forward as the student loan card above. */
+  const regInf=yearValue("taxRegionYears",ty,"rUK"), regKey=regInf.v==="scotland"?"scotland":"rUK";
+  const regOwn=yearMap("taxRegionYears")[ty]!=null;
+  const regName=k=>k==="scotland"?"Scotland":"England, Wales or NI";
+  const regCard='<div class="card">'+cardHead("Where you pay income tax","tax-region")+
+    '<p class="small muted">Scotland sets its own income tax bands. Everything else \u2014 the personal allowance, both classes of National Insurance \u2014 is the same wherever you live.</p>'+
+    '<div class="vmsg'+(regKey==="scotland"?" ok":"")+'">'+(regKey==="scotland"?"\ud83c\udff4 ":"")+
+      '<b>'+esc(ty)+'</b> is worked out at <b>'+(regKey==="scotland"?"Scottish rates":"the rates for England, Wales and Northern Ireland")+'</b>.'+
+      (regInf.inherited?' <b>Carried forward from '+esc(regInf.from)+'</b>, so it has no setting of its own yet.':'')+'</div>'+
+    '<label style="margin-top:12px">Where you lived in '+esc(ty)+'</label>'+
+    '<div class="seg" id="alRegSeg" style="display:inline-flex">'+
+      '<button data-r="rUK" class="'+(regKey==="rUK"?"on":"")+'">England, Wales or NI</button>'+
+      '<button data-r="scotland" class="'+(regKey==="scotland"?"on":"")+'">Scotland</button></div>'+
+    '<p class="prev">Changing this sets '+esc(ty)+' and every later year. Earlier years keep the bands they were actually assessed under \u2014 which is the point: a move does not reach backwards.</p>'+
+    (regOwn&&regInf.from===ty
+      ? '<p class="small muted mt"><span class="taxlink" id="regClr">Clear '+esc(ty)+'\u2019s own setting and carry the earlier year forward again \u203a</span></p>'
+      : '')+
+    '</div>';
   /* Only during the April window the seasonal card uses, so this is never a permanent button
      for a job that is only worth doing once a year. */
   const reviewRow=newYearWindowOpen()
@@ -7068,7 +7325,7 @@ function drawAllowances(host){
     yearStrip+
     (status.filed?'<div class="vmsg warn" style="margin-top:10px">\ud83d\uddc4 You have marked <b>'+esc(ty)+'</b> as filed. Changing anything below changes figures you have already submitted \u2014 if this is a correction, keep a note of what you changed and why.</div>':'')+
     '</div>';
-  host.innerHTML=yearCard+slCard+'<div class="card"><h2>Use of home</h2>'+
+  host.innerHTML=yearCard+regCard+slCard+'<div class="card"><h2>Use of home</h2>'+
     '<p class="small muted">If you see clients or do your admin at home, part of running that home is a business cost. HMRC lets you work it out two ways, and you can pick a different one each tax year.</p>'+
     (applied.method&&applied.method!=="none"
       ? '<div class="vmsg ok">\ud83d\udd12 <b>'+esc(applied.method==="simplified"?"Simplified":"Actual costs")+'</b> is what '+esc(ty)+' uses \u2014 '+money(uohMonthlyFor(applied))+' a month, '+money(yearAmt)+' for the year. It is already in your costs and tax estimate.'+
@@ -7093,6 +7350,18 @@ function drawAllowances(host){
     '</div>';
   const arv=host.querySelector("#alReview");
   if(arv)arv.onclick=()=>startNewYearFlow(curTaxYear());
+  const rseg=host.querySelector("#alRegSeg");
+  if(rseg)rseg.querySelectorAll("button").forEach(b=>b.onclick=async()=>{
+    if(b.dataset.r===taxRegionFor(ty))return;
+    setYearValue("taxRegionYears",ty,b.dataset.r,"taxRegion");
+    await commit("Income tax region from "+ty+": "+b.dataset.r);
+    toast(regName(b.dataset.r)+" from "+ty);
+    go("tax",{keepScroll:true});});
+  const rclr=host.querySelector("#regClr");
+  if(rclr)rclr.onclick=async()=>{
+    delete yearMap("taxRegionYears")[ty];
+    await commit("Cleared the income tax region setting for "+ty);
+    go("tax",{keepScroll:true});};
   const slx=host.querySelector("#slSel");
   if(slx)slx.onchange=async()=>{
     setYearValue("studentLoanYears",ty,slx.value,"studentLoan");
@@ -7195,6 +7464,7 @@ function drawAllowances(host){
     if(fl.checked)f[ty]=true; else delete f[ty];
     await commit((fl.checked?"Marked ":"Unmarked ")+ty+" as filed");
     go("tax",{keepScroll:true});};
+  wireInfo(host);
   drawMethod();
 }
 
@@ -7401,6 +7671,15 @@ VIEWS.settings=function(){
      <input type="number" min="0" max="100" step="5" id="cxDna">
      <p class="prev">Set 0 if you don’t charge for these.</p>
    </div>
+   ${`<div class="card" id="payToCard">${cardHead("Getting paid","getting-paid")}
+     <p class="small muted" style="margin:-2px 0 0">Printed on every invoice and offered in every payment reminder. Free text, because &ldquo;bank transfer&rdquo;, &ldquo;card at the end of the session&rdquo; and &ldquo;your insurer pays me&rdquo; are all real answers.</p>
+     <label>How you like to be paid</label>
+     <textarea id="setPayTo" rows="4" maxlength="400" placeholder="e.g. Bank transfer to A Therapist, 12-34-56, 12345678. Please use your initials as the reference.">${esc(payToDetails())}</textarea>
+     <label>Payment terms (days)</label>
+     <input type="number" min="1" max="180" step="1" id="setInvDays" value="${esc(invoiceDays())}">
+     <p class="prev">An invoice is dated due this many days after you generate it.</p>
+     <button class="btn full mt" id="setPaySave">Save payment details</button>
+   </div>`}
    ${feat("tax")?basisCardHTML():""}
    ${feat("tax")?taxRegionCardHTML():""}
    </div></details>
@@ -7559,6 +7838,15 @@ VIEWS.settings=function(){
     if(fw==null)delete sg.fullWeekSessions; else sg.fullWeekSessions=fw;
     await commit("Working week: "+sm+" min sessions, "+sg.adminMinsPerSession+" min admin"+(fw?", full week "+fw:""));
     toast("Saved");go("settings",{keepScroll:true});};
+  const paySave=v.querySelector("#setPaySave");
+  if(paySave)paySave.onclick=async()=>{
+    const sg=settings();
+    sg.payTo=v.querySelector("#setPayTo").value.trim().slice(0,400);
+    const d=Math.round(+v.querySelector("#setInvDays").value||0);
+    /* Out of range is not an error worth stopping for — clamp it and let invoiceDays() default. */
+    if(d>0&&d<=180)sg.invoiceDays=d; else delete sg.invoiceDays;
+    await commit("Payment details updated");
+    toast("Saved");Sfx.pop();go("settings",{keepScroll:true,openGroup:"business"});};
   v.querySelector("#setNameSave").onclick=async()=>{
     const n=v.querySelector("#setName").value.trim(),t=v.querySelector("#setTag").value.trim();
     if(!n){toast("Enter a practice name");Sfx.error();return;}
@@ -7951,6 +8239,7 @@ function sessionForm(s,o){
   const locs=S.rooms.map(r=>r.location);
   const body=el('<div></div>');
   let pendingWarn=false; // a "Save anyway" is armed; any edit disarms it
+  let dirty=false;       // something has been typed since this form was opened
   /* msg strings come pre-escaped from validateSession, so inject raw */
   function renderValidation(errors,warnings){const vb=body.querySelector("#vbanner");if(!vb)return;
     vb.innerHTML=(errors||[]).map(e=>'<div class="vmsg err">'+gi("blocked")+' '+e.msg+'</div>').join("")+(warnings||[]).map(w=>'<div class="vmsg warn">'+gi("warning")+' '+w.msg+'</div>').join("");}
@@ -7978,6 +8267,7 @@ function sessionForm(s,o){
      <div class="hint">Rate: <b>${gbp(d.rate)}</b>${d.roomRate?` · Room: ${gbp(d.roomRate)} (${esc(d.due)})`:""} · ${d.taxYear} ${d.past?"· past":"· upcoming"}</div>
      <label>Payment received date <span class="muted small">(blank = not paid)</span></label>
      <input type="date" id="f_paid" value="${esc(m.paidDate||"")}">
+     ${(!isNew&&d.overdue&&(d.rate||0)>0)?`<div class="prev"><span class="taxlink" id="f_chase">Chase this payment \u203a</span> — a message to copy into an email.</div>`:""}
      <label>Invoice #</label><input id="f_inv" value="${esc(m.invoice||"")}">
      <div id="f_rpWrap">
        <div class="field2">
@@ -7987,10 +8277,8 @@ function sessionForm(s,o){
      </div>
      <p class="small muted" id="f_rpNote" style="display:none"></p>
      <label class="colchk" style="margin-top:16px"><input type="checkbox" id="f_notes"${notesDone(m)?" checked":""}> My notes for this session are written up</label>
-     <p class="small muted">Just a tick. Your actual clinical record stays wherever you already keep it — this app never holds one, which is what makes an export or a statement from here safe to hand over.</p>
-     <label>Admin comment <span class="muted small">(optional)</span></label>
+     <label>Admin comment <span class="muted small">(optional)</span> ${infoDot("admin-comment","About admin comments")}</label>
      <textarea id="f_admin" rows="2" placeholder="e.g. “invoice goes to her employer”, “moved from Tuesday”">${esc(m.adminNote||"")}</textarea>
-     <p class="small muted">Practical reminders only — <b>nothing clinical</b>. This one does appear in exports and on screen.</p>
      <label style="margin-top:14px">Did it go ahead?</label>
      <select id="f_attend">${opts2([["","Yes — attended"],["late","Late cancellation"],["dna","Did not attend (DNA)"]],attendVal(m))}</select>
      <div id="f_cxWrap" style="display:none">
@@ -8086,6 +8374,17 @@ function sessionForm(s,o){
     g("#f_cxPct").addEventListener("input",()=>{delete g("#f_cxPct").dataset.auto;});
     g("#f_cxPct").addEventListener("change",()=>{sync();paintCancel();});
     paintCancel();
+    /* draw() rebuilds the whole form, so the info dots are re-wired on every pass, not once. */
+    wireInfo(body);
+    /* The chaser is a different sheet, and openSheet() replaces this one — so anything typed and
+       not yet saved would go with it. Ask first, rather than losing a session someone just
+       finished filling in to a link they meant as a side trip. */
+    const chz=g("#f_chase");
+    if(chz)chz.onclick=()=>{
+      const cl=S.clients.find(x=>(x.code||"").toLowerCase()===(m.client||"").toLowerCase());
+      if(!cl){toast("No client record to chase");Sfx.error();return;}
+      if(dirty&&!confirm("Leave this session without saving your changes?"))return;
+      closeSheet();chaseSheet(cl);};
     ["#f_date","#f_loc","#f_paid","#f_rp"].forEach(id=>g(id).addEventListener("change",()=>{sync();paintRoomPaid();paintCancel();}));
     g("#save").onclick=async()=>{sync();
       if(!m.client){toast("Choose a client");Sfx.error();return}
@@ -8110,6 +8409,7 @@ function sessionForm(s,o){
   };
   draw();
   body.addEventListener("input",resetWarn);body.addEventListener("change",resetWarn);
+  body.addEventListener("input",()=>{dirty=true;});body.addEventListener("change",()=>{dirty=true;});
   openSheet(isNew?"New session":"Edit session",body);
 }
 
@@ -8212,6 +8512,7 @@ function clientForm(c){
        ". Used to suggest the next session, and shared with GroundWork Notes.";
   };
   paintSlot();
+  wireInfo(body);
   const readSource=wireSourcePicker(body);
   ["#c_freq","#c_uday","#c_utime"].forEach(sel=>{const n=body.querySelector(sel);if(n)n.onchange=paintSlot;});
   const sdr=body.querySelector("#setDefRate");
@@ -8325,6 +8626,58 @@ function peerForm(p){
    in to the session form, and every session it created still had to be opened and corrected. */
 function curTab(){return cur;}
 
+/* ===== Settling per-session room fees =====
+   "Room fees due" used to be a read-only table at the bottom of Money, and the Home prompt that
+   raised it dropped the reader at the top of that screen with nothing to press. The only place a
+   per-session fee could actually be ticked off was one session at a time, or the Incomplete
+   worklist — which never sees a session whose room fee is recorded as "N", because answering the
+   question makes the session complete.
+   Writes exactly what the session form and the bulk editor write (`roomPaid`/`roomPaidDate`) so
+   every downstream reader — derive(), the SA103 boxes, the MTD quarters — is untouched. */
+function roomDueSheet(loc){
+  const td=isoD(today());
+  const rows=S.sessions.map(x=>({s:x,d:derive(x)}))
+    .filter(x=>x.d.roomDue==="Y"&&(x.s.location||"?")===loc)
+    .sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
+  if(!rows.length){toast("Nothing outstanding for "+loc);return;}
+  const body=el('<div></div>');
+  const stage={}; rows.forEach(x=>stage[x.s._id]=true);
+  const total=()=>rows.reduce((a,x)=>a+(stage[x.s._id]?(x.d.roomRate||0):0),0);
+  body.innerHTML='<p class="small muted">These sessions carried a room fee that has fallen due and has not been marked paid. Untick any you have not settled yet.</p>'+
+    '<label>Paid on</label><input type="date" id="rdDate" value="'+esc(td)+'">'+
+    '<div class="row mt" style="gap:8px"><button class="btn sm sec" id="rdAll">Tick all</button><button class="btn sm sec" id="rdNone">Untick all</button></div>'+
+    '<div id="rdRows" class="mt"></div>'+
+    '<button class="btn full mt savebig" id="rdSave"></button>';
+  const rw=body.querySelector("#rdRows");
+  const paint=()=>{
+    rw.innerHTML=rows.map(x=>'<label class="colchk rdrow"><input type="checkbox" data-id="'+x.s._id+'"'+(stage[x.s._id]?" checked":"")+'>'+
+      '<span><b>'+esc(x.s.client||"—")+'</b> · '+fmtDshort(x.s.date)+
+      (x.s.room&&x.s.room!=="-"?' · room '+esc(x.s.room):'')+
+      ' <span class="muted">'+gbp(x.d.roomRate||0)+'</span></span></label>').join("");
+    rw.querySelectorAll("input").forEach(i=>i.onchange=()=>{stage[i.dataset.id]=i.checked;upd();});
+  };
+  const btn=body.querySelector("#rdSave");
+  const upd=()=>{const n=rows.filter(x=>stage[x.s._id]).length;
+    btn.textContent=n?("Mark "+n+" paid · "+gbp(total())):"Nothing ticked";
+    btn.classList.toggle("ready",n>0);};
+  paint();upd();
+  body.querySelector("#rdAll").onclick=()=>{rows.forEach(x=>stage[x.s._id]=true);paint();upd();};
+  body.querySelector("#rdNone").onclick=()=>{rows.forEach(x=>stage[x.s._id]=false);paint();upd();};
+  btn.onclick=async()=>{
+    const when=body.querySelector("#rdDate").value||td;
+    const picked=rows.filter(x=>stage[x.s._id]);
+    if(!picked.length){toast("Tick something first");Sfx.error();return;}
+    let amt=0;
+    picked.forEach(x=>{const ss=S.sessions.find(z=>z._id===x.s._id);if(!ss)return;
+      ss.roomPaid="Y"; ss.roomPaidDate=when; amt+=x.d.roomRate||0;});
+    const ok=await commit("Marked "+picked.length+" room fee"+(picked.length===1?"":"s")+" paid at "+loc);
+    closeSheet();
+    if(ok!==false){toast(gbp(amt)+" marked paid");Sfx.tick();}
+    go("money",{keepScroll:true});
+  };
+  openSheet("Room fees · "+loc,body);
+}
+
 /* ============ Attention feed (Home) ============ */
 function attentionItems(){
   const der=S.sessions.map(s=>({s,d:derive(s)}));
@@ -8340,7 +8693,7 @@ function attentionItems(){
   const rd=der.filter(x=>x.d.roomDue==="Y");
   if(rd.length){const amt=rd.reduce((a,x)=>a+(x.d.roomRate||0),0);
     items.push({cls:"warn",e:gi("rooms"),msg:"<b>Room fees due</b> · "+gbp(amt)+" across "+rd.length+" session"+(rd.length===1?"":"s"),
-      sub:"",btn:"Review",act:()=>go("money")});}
+      sub:"tap to tick them off",btn:"Settle",act:()=>go("money",{seg:"overview",focus:"roomDueCard"})});}
   const sups=(S.supervision||[]).filter(s=>s.date&&parseD(s.date)<=t).sort((a,b)=>parseD(b.date)-parseD(a.date));
   if(sups.length){const days=Math.floor((t-parseD(sups[0].date))/86400000);
     if(days>35)items.push({cls:"acc",e:gi("supervision"),msg:"<b>Supervision due</b> · last was "+days+" days ago",
@@ -8441,7 +8794,8 @@ function clientProfile(c){
     '<h3 class="mt">Recent sessions</h3><div id="cpRecent"></div>'+
     '<div class="row mt" style="gap:8px;flex-wrap:wrap">'+
       '<button class="btn" id="cpNew">＋ New session</button>'+
-      (feat("receipts")?'<button class="btn sec" id="cpReceipt">🧾 Receipt / statement</button>':'')+
+      (owed?'<button class="btn sec" id="cpChase">✉ Chase payment</button>':'')+
+      (feat("receipts")?'<button class="btn sec" id="cpReceipt">🧾 Invoice / receipt</button>':'')+
       '<button class="btn ghost" id="cpEdit">Edit client</button></div>';
   const rec=rows.slice(-6).reverse();
   body.querySelector("#cpRecent").innerHTML=rec.length?rec.map(x=>{const pay=payChip(x.s,x.d);
@@ -8452,7 +8806,156 @@ function clientProfile(c){
     setTimeout(()=>{const sel=document.querySelector("#f_client");if(sel){sel.value=c.code;sel.onchange();}},60);};
   body.querySelector("#cpEdit").onclick=()=>{closeSheet();clientForm(c);};
   const cpR=body.querySelector("#cpReceipt");if(cpR)cpR.onclick=()=>{closeSheet();receiptSheet(c);};
+  const cpC=body.querySelector("#cpChase");if(cpC)cpC.onclick=()=>{closeSheet();chaseSheet(c);};
   openSheet("Client · "+c.code,body);
+}
+
+/* ===== Which document is being produced =====
+   This is the FOURTH argument of receiptHTML()/printReceipt(), which used to be a boolean
+   `paidOnly`. It now carries the kind — "statement", "receipt" or "invoice" — and still accepts
+   the old `true` so nothing that passed a boolean has to change.
+   It travels in that argument rather than a fifth one deliberately: the native iOS wrapper
+   re-declares printReceipt(c,rows,label,paidOnly) and passes exactly those four through to
+   receiptHTML, so a fifth argument would be silently dropped and every invoice would come out of
+   the iPhone as a statement. See docs/ios-native.md. */
+function docKind(x){
+  if(x===true)return "receipt";
+  return (x==="receipt"||x==="invoice"||x==="statement")?x:"statement";
+}
+/* Derived from the practice initials, the date and the client code rather than counted.
+   A running counter is the conventional thing and is the wrong thing here: nothing coordinates
+   two copies of this app (see "Multi-tab / multi-device writes" in CLAUDE.md), so a counter kept
+   on the phone and on the laptop would quietly issue the same number twice — which is the one
+   failure an invoice number exists to prevent. This reference is unique to a client and a day,
+   and re-generating the same invoice the same day deliberately reproduces it. */
+function docNumber(c,kind){
+  const t=today();
+  const code=(c.code||"").replace(/[^A-Za-z0-9]/g,"").toUpperCase();
+  return (docKind(kind)==="invoice"?"INV-":"")+practiceInitials()+"-"+isoD(t).replace(/-/g,"")+"-"+code;
+}
+
+/* ===== Copy to clipboard =====
+   The payment chasers are meant to be pasted into whatever the therapist already writes email in,
+   so the clipboard IS the delivery mechanism — there is no mail server here and there should not
+   be one. Two routes because neither works everywhere: navigator.clipboard needs a secure
+   context, and the execCommand fallback needs its textarea focusable, which is why it is
+   off-screen rather than display:none. Both have to run inside the click that asked for them —
+   iOS discards a clipboard write that has lost its user gesture, so never await anything first. */
+function copyText(str,okMsg){
+  const done=()=>{toast(okMsg||"Copied — paste it into an email");try{Sfx.tick();}catch(e){}};
+  const fallback=()=>{
+    try{
+      const ta=document.createElement("textarea");
+      ta.value=str; ta.setAttribute("readonly","");
+      ta.style.cssText="position:fixed;top:0;left:0;width:1px;height:1px;opacity:0";
+      document.body.appendChild(ta);
+      ta.select(); ta.setSelectionRange(0,String(str).length);
+      const ok=document.execCommand("copy");
+      ta.remove();
+      if(ok){done();return true;}
+    }catch(e){}
+    toast("Could not copy — select the text and copy it by hand");
+    try{Sfx.error();}catch(e){}
+    return false;
+  };
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(String(str)).then(done,fallback);
+      return true;
+    }
+  }catch(e){}
+  return fallback();
+}
+
+/* ===== Invoicing and chasing =====
+   How you would like to be paid, and how long a client has to do it. Both are practice-wide, both
+   are free text on purpose: a bank transfer, a standing order reference, "card at the end of the
+   session" and "your insurer pays me directly" are all real answers and none of them is a field. */
+function payToDetails(){return String(settings().payTo||"").trim();}
+function invoiceDays(){const n=+settings().invoiceDays;return (n>0&&n<=180)?Math.round(n):14;}
+/* Every past session of this client's that carries a fee and has no payment date. Same predicate
+   as the Unpaid worklist and the Home prompt (`derive().overdue`), so the three cannot disagree
+   about who owes what. */
+function overdueRowsFor(code){
+  const lc=(code||"").toLowerCase();
+  return S.sessions.map(s=>({s,d:derive(s)}))
+    .filter(x=>(x.s.client||"").toLowerCase()===lc&&x.d.overdue&&(x.d.rate||0)>0)
+    .sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
+}
+/* Everyone with something outstanding, biggest first. */
+function overdueByClient(){
+  return S.clients.map(c=>({c,rows:overdueRowsFor(c.code)}))
+    .filter(x=>x.rows.length)
+    .map(x=>Object.assign(x,{amt:x.rows.reduce((a,r)=>a+(r.d.rate||0),0)}))
+    .sort((a,b)=>b.amt-a.amt);
+}
+
+/* The chaser itself. Plain text, not a PDF and not an email this app sends: a therapist chasing a
+   client is writing to someone she has a relationship with, in her own words, from her own
+   mailbox. The tedious half is remembering which sessions and how much — that is what this
+   builds. Everything else is hers to change, and the sheet hands it over in an editable box
+   precisely so it can be. */
+function chaseText(c,rows){
+  const tot=rows.reduce((a,x)=>a+(x.d.rate||0),0);
+  const lines=rows.map(x=>"    "+fmtD(x.s.date)+"  —  "+gbp(x.d.rate||0)).join("\n");
+  const pay=payToDetails();
+  return "Hi,\n\n"+
+    "A quick note about "+(rows.length===1?"a therapy session":"some therapy sessions")+
+    " I don’t have a payment recorded for:\n\n"+
+    lines+"\n\n"+
+    "Total outstanding: "+gbp(tot)+"\n\n"+
+    (pay?pay+"\n\n":"")+
+    "If you have already sent this, please ignore the message — and do let me know, so I can put my own records right.\n\n"+
+    "Thank you,\n"+practiceName();
+}
+/* The one screen for chasing one client. The message is editable and the button copies whatever
+   is in the box at the time, not the text that was generated — so a rewrite is never lost. */
+function chaseSheet(c){
+  const rows=overdueRowsFor(c.code);
+  if(!rows.length){toast("Nothing outstanding for "+c.code);return;}
+  const tot=rows.reduce((a,x)=>a+(x.d.rate||0),0);
+  const t=today(), oldest=parseD(rows[0].s.date);
+  const days=oldest?Math.floor((t-oldest)/86400000):0;
+  const body=el('<div></div>');
+  body.innerHTML='<div class="hint"><b>'+esc(c.code)+'</b> · '+plural(rows.length,"session")+' · <b>'+gbp(tot)+'</b> outstanding'+
+      (oldest?' · oldest '+fmtDshort(rows[0].s.date)+' ('+days+'d)':'')+'</div>'+
+    '<p class="small muted">Edit it however you like, then copy it and paste it into your own email or message. <b>Nothing is sent from here</b>, and chasing is not recorded against the client.</p>'+
+    '<textarea id="chTxt" rows="15" spellcheck="true"></textarea>'+
+    '<button class="btn full mt" id="chCopy">Copy the message</button>'+
+    (payToDetails()?'':'<p class="small muted mt"><span class="taxlink" id="chPay">Add how you like to be paid ›</span> and it will be part of every chaser and invoice from now on.</p>')+
+    (feat("receipts")?'<button class="btn sec full mt" id="chInv">🧾 Invoice for these sessions instead</button>':'')+
+    '<p class="small muted mt">It starts with a plain “Hi” — this app holds client <b>codes</b>, never names, so there is no name for it to use. Address it however you normally would before you send it.</p>';
+  const ta=body.querySelector("#chTxt");
+  ta.value=chaseText(c,rows);
+  body.querySelector("#chCopy").onclick=()=>copyText(ta.value);
+  const cp=body.querySelector("#chPay");
+  if(cp)cp.onclick=()=>{closeSheet();go("settings",{openGroup:"business",focus:"payToCard"});};
+  const ci=body.querySelector("#chInv");
+  if(ci)ci.onclick=()=>{closeSheet();receiptSheet(c,{kind:"invoice"});};
+  openSheet("Chase payment · "+c.code,body);
+}
+/* Everyone who owes something, from the Unpaid worklist and from the Home prompt. One tap copies
+   that client's chaser without opening anything; tapping the row itself opens the editable one. */
+function chasePickSheet(){
+  const list=overdueByClient();
+  const body=el('<div></div>');
+  if(!list.length){body.innerHTML='<p class="muted small center" style="padding:20px">Nothing outstanding — nobody to chase \ud83c\udf89</p>';openSheet("Chase payment",body);return;}
+  const tot=list.reduce((a,x)=>a+x.amt,0);
+  body.innerHTML='<div class="hint">'+plural(list.length,"client")+' · <b>'+gbp(tot)+'</b> outstanding</div>'+
+    '<p class="small muted">Copy takes that client’s message straight to the clipboard. Tap the row to read or change it first.</p>'+
+    '<div id="chList"></div>';
+  body.querySelector("#chList").innerHTML=list.map(x=>
+    '<div class="list-item" data-code="'+esc(x.c.code)+'"><div class="li-main">'+
+      '<div class="li-title">'+esc(x.c.code)+'</div>'+
+      '<div class="li-sub">'+plural(x.rows.length,"session")+' · oldest '+fmtDshort(x.rows[0].s.date)+'</div></div>'+
+    '<div class="li-right"><b>'+gbp(x.amt)+'</b> <button class="btn sm sec" data-copy="'+esc(x.c.code)+'">Copy</button></div></div>').join("");
+  body.querySelectorAll("[data-copy]").forEach(b=>b.onclick=ev=>{
+    ev.stopPropagation();
+    const x=list.find(y=>y.c.code===b.dataset.copy); if(!x)return;
+    copyText(chaseText(x.c,x.rows),"Copied "+x.c.code+"’s reminder — paste it into an email");});
+  body.querySelectorAll(".list-item").forEach(li=>li.onclick=()=>{
+    const x=list.find(y=>y.c.code===li.dataset.code); if(x)chaseSheet(x.c);});
+  openSheet("Chase payment",body);
 }
 
 /* ============ Invoice / receipt generator ============ */
@@ -8471,42 +8974,86 @@ function receiptRows(c,per){
     .sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
   return {rows,label};
 }
-function receiptSheet(c){
+/* One sheet, three documents. They differ only in which sessions they carry and what the totals
+   line says, so a separate "invoice screen" would be the same four controls twice.
+     statement — everything in the period, and what is still owed on it
+     receipt   — the paid ones, for a client's insurer or their own records
+     invoice   — the UNPAID ones, with a due date and how to pay
+   `o.kind` lets the chaser open this already set to Invoice. */
+function receiptSheet(c,o){
+  o=o||{};
   const body=el('<div></div>');
-  body.innerHTML='<p class="muted small">A printable statement of sessions for this client — for insurance claims, expenses or their records. Print to PDF from the print dialog.</p>'+
+  const kinds=[["statement","Statement — every session in the period"],
+               ["receipt","Receipt — the sessions already paid for"],
+               ["invoice","Invoice — what is still owed, with a due date"]];
+  body.innerHTML='<p class="muted small">A printable document for this client — for their records, their insurer, or to ask for payment. Print to PDF from the print dialog.</p>'+
+    '<label>Document</label><select id="rcKind">'+opts2(kinds,docKind(o.kind))+'</select>'+
     '<label>Period</label><select id="rcPer"><option value="month">This month</option><option value="lastmonth">Last month</option><option value="taxyear">This tax year</option><option value="all">All sessions</option></select>'+
-    '<label class="colchk" style="margin-top:14px"><input type="checkbox" id="rcPaidOnly"> Paid sessions only (receipt)</label>'+
     '<div id="rcPrev" class="mt"></div>'+
+    '<div id="rcInv"></div>'+
     '<button class="btn full mt" id="rcGo">🧾 Generate &amp; print</button>';
-  const prev=()=>{const {rows,label}=receiptRows(c,body.querySelector("#rcPer").value);
-    const po=body.querySelector("#rcPaidOnly").checked;
-    const use=po?rows.filter(x=>x.d.clientPaid):rows;
+  /* Which of the period's sessions this document is actually about. */
+  const pick=()=>{
+    const kind=body.querySelector("#rcKind").value;
+    const {rows,label}=receiptRows(c,body.querySelector("#rcPer").value);
+    const use=kind==="receipt"?rows.filter(x=>x.d.clientPaid)
+             :kind==="invoice"?rows.filter(x=>!x.d.clientPaid)
+             :rows;
+    return {kind,rows,label,use};
+  };
+  const prev=()=>{
+    const {kind,label,use}=pick();
     const tot=use.reduce((a,x)=>a+(x.d.rate||0),0);
-    body.querySelector("#rcPrev").innerHTML='<div class="hint">'+esc(label)+': <b>'+use.length+' session'+(use.length===1?'':'s')+' · '+gbp(tot)+'</b>'+(po?' (paid only)':'')+'</div>';};
-  body.querySelector("#rcPer").onchange=prev;body.querySelector("#rcPaidOnly").onchange=prev;prev();
-  body.querySelector("#rcGo").onclick=()=>{const {rows,label}=receiptRows(c,body.querySelector("#rcPer").value);
-    const po=body.querySelector("#rcPaidOnly").checked;
-    const use=po?rows.filter(x=>x.d.clientPaid):rows;
-    if(!use.length){toast("No sessions in that period");Sfx.error();return;}
-    printReceipt(c,use,label,po);};
-  openSheet("Receipt · "+c.code,body);
+    body.querySelector("#rcPrev").innerHTML='<div class="hint">'+esc(label)+': <b>'+plural(use.length,"session")+' · '+gbp(tot)+'</b>'+
+      (kind==="receipt"?' already paid':kind==="invoice"?' outstanding':'')+'</div>'+
+      (kind==="invoice"&&!use.length?'<p class="small muted">Everything in that period is already paid for — there is nothing to invoice. Try a longer period, or send a receipt instead.</p>':'');
+    /* Only an invoice offers to write anything back, and only when there is something to write. */
+    body.querySelector("#rcInv").innerHTML=(kind==="invoice"&&use.length)
+      ? '<label class="colchk" style="margin-top:14px"><input type="checkbox" id="rcStamp" checked> Record this invoice number against these sessions</label>'+
+        '<p class="prev">Fills each session’s <b>Invoice #</b>, so you can see later which invoice a payment settled.</p>'+
+        (payToDetails()?'':'<p class="small muted mt"><span class="taxlink" id="rcPay">Add how you like to be paid ›</span> and it will be printed on every invoice.</p>')
+      : "";
+    const rp=body.querySelector("#rcPay");
+    if(rp)rp.onclick=()=>{closeSheet();go("settings",{openGroup:"business",focus:"payToCard"});};
+  };
+  body.querySelector("#rcKind").onchange=prev;
+  body.querySelector("#rcPer").onchange=prev;
+  prev();
+  body.querySelector("#rcGo").onclick=async()=>{
+    const {kind,label,use}=pick();
+    if(!use.length){toast(kind==="invoice"?"Nothing outstanding in that period":"No sessions in that period");Sfx.error();return;}
+    const stamp=body.querySelector("#rcStamp");
+    if(kind==="invoice"&&stamp&&stamp.checked){
+      const num=docNumber(c,kind);
+      let n=0;
+      use.forEach(x=>{const ss=S.sessions.find(z=>z._id===x.s._id);if(ss&&ss.invoice!==num){ss.invoice=num;n++;}});
+      if(n)await commit("Invoice "+num+" raised for "+c.code+" ("+plural(n,"session")+")");
+    }
+    printReceipt(c,use,label,kind);};
+  openSheet((docKind(o.kind)==="invoice"?"Invoice · ":"Receipt · ")+c.code,body);
 }
 /* The markup and the printing are split so the native iOS wrapper can render this same
    receipt to a real PDF: window.print() is a no-op inside WKWebView, so the iframe flow
    below silently does nothing there. One builder, two outputs — see docs/ios-native.md.
    Keep this returning {html,num}; the native layer names both. */
 function receiptHTML(c,rows,label,paidOnly){
+  const kind=docKind(paidOnly), isInv=kind==="invoice", isRec=kind==="receipt";
   const tot=rows.reduce((a,x)=>a+(x.d.rate||0),0);
   const paid=rows.filter(x=>x.d.clientPaid).reduce((a,x)=>a+(x.d.rate||0),0);
   const t=today();
-  const num=practiceInitials()+"-"+isoD(t).replace(/-/g,"")+"-"+(c.code||"").replace(/[^A-Za-z0-9]/g,"").toUpperCase();
+  const num=docNumber(c,kind);
+  const dueDate=isInv?addDays(t,invoiceDays()):null;
+  const payBlock=isInv&&payToDetails()
+    ? '<div class="pay"><div class="payh">How to pay</div>'+esc(payToDetails()).replace(/\n/g,"<br>")+'</div>' : "";
   /* print in the chosen scheme's light colours — the on-screen dark theme would be unreadable on paper */
   const pal=PALETTES.find(p=>p.k===curPalette())||PALETTES[0], PB=pal.p[0], PD=pal.p[1];
   /* A charged missed session is on the statement (see receiptRows) but must never read as an
      attended one -- the Mode column says what it actually was. */
+  /* An invoice carries only unpaid sessions, so a Status column saying "Due" on every line is a
+     column of the same word. Statements and receipts genuinely mix the two and keep it. */
   const trs=rows.map(x=>'<tr><td>'+fmtDMY(x.s.date)+'</td><td>#'+esc(x.s.num)+'</td><td>'+
     (x.d.cancelKind?(x.d.cancelKind==="dna"?"Did not attend":"Late cancellation")+(x.d.cancelPct<100?" ("+x.d.cancelPct+"% fee)":""):esc(x.s.mode||""))+
-    '</td><td class="r">'+gbp(x.d.rate)+'</td><td>'+(x.d.clientPaid?("Paid "+fmtDMY(x.s.paidDate)):"Due")+'</td></tr>').join("");
+    '</td><td class="r">'+gbp(x.d.rate)+'</td>'+(isInv?'':'<td>'+(x.d.clientPaid?("Paid "+fmtDMY(x.s.paidDate)):"Due")+'</td>')+'</tr>').join("");
   const html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+esc(num)+'</title><style>'+
     'body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1E2A26;margin:40px;font-size:14px}'+
     'h1{font-size:22px;color:'+PD+';margin:0}.sub{color:#6E7E78;font-size:12px}'+
@@ -8514,14 +9061,19 @@ function receiptHTML(c,rows,label,paidOnly){
     'table{width:100%;border-collapse:collapse;margin-top:10px}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #E6ECEA;font-size:13px}'+
     'th{font-size:11px;text-transform:uppercase;color:#6E7E78}.r{text-align:right}'+
     '.tot{margin-top:14px;text-align:right;font-size:15px}.tot b{font-size:19px;color:'+PD+'}'+
+    '.pay{margin-top:20px;padding:12px 14px;border:1px solid #E6ECEA;border-radius:8px;background:#FAFCFB;font-size:13px;white-space:pre-wrap}'+
+    '.payh{font-size:11px;text-transform:uppercase;color:#6E7E78;margin-bottom:5px;letter-spacing:.04em}'+
     '.foot{margin-top:34px;color:#6E7E78;font-size:11px;border-top:1px solid #E6ECEA;padding-top:10px}'+
     '@media print{body{margin:16mm}}</style></head><body>'+
     '<div class="head"><div><h1>'+esc(practiceName())+'</h1>'+(practiceTagline()?'<div class="sub">'+esc(practiceTagline())+'</div>':'')+'</div>'+
-    '<div style="text-align:right"><div style="font-weight:700">'+(paidOnly?"RECEIPT":"STATEMENT")+'</div><div class="sub">'+esc(num)+'</div><div class="sub">Issued '+fmtD(t)+'</div></div></div>'+
+    '<div style="text-align:right"><div style="font-weight:700">'+(isInv?"INVOICE":isRec?"RECEIPT":"STATEMENT")+'</div><div class="sub">'+esc(num)+'</div><div class="sub">Issued '+fmtD(t)+'</div>'+
+      (isInv?'<div class="sub"><b>Due '+fmtD(dueDate)+'</b></div>':'')+'</div></div>'+
     '<p><b>Client:</b> '+esc(c.code)+' &nbsp;·&nbsp; <b>Period:</b> '+esc(label)+'</p>'+
-    '<table><thead><tr><th>Date</th><th>Session</th><th>Mode</th><th class="r">Fee</th><th>Status</th></tr></thead><tbody>'+trs+'</tbody></table>'+
-    '<div class="tot">'+(paidOnly?('Total received: <b>'+gbp(tot)+'</b>'):('Total billed: <b>'+gbp(tot)+'</b>'+(paid<tot?'<br><span class="sub">of which paid '+gbp(paid)+' · outstanding '+gbp(tot-paid)+'</span>':'<br><span class="sub">paid in full</span>')))+'</div>'+
-    '<div class="foot">Generated by GroundWork on '+fmtD(t)+'. Client identified by confidential code. This document confirms therapy sessions provided by '+esc(practiceName())+'.'+
+    '<table><thead><tr><th>Date</th><th>Session</th><th>Mode</th><th class="r">Fee</th>'+(isInv?'':'<th>Status</th>')+'</tr></thead><tbody>'+trs+'</tbody></table>'+
+    '<div class="tot">'+(isInv?('Amount due: <b>'+gbp(tot)+'</b><br><span class="sub">Payable by '+fmtD(dueDate)+'</span>')
+      :isRec?('Total received: <b>'+gbp(tot)+'</b>')
+      :('Total billed: <b>'+gbp(tot)+'</b>'+(paid<tot?'<br><span class="sub">of which paid '+gbp(paid)+' · outstanding '+gbp(tot-paid)+'</span>':'<br><span class="sub">paid in full</span>')))+'</div>'+payBlock+
+    '<div class="foot">Generated by GroundWork on '+fmtD(t)+'. Client identified by confidential code. This document '+(isInv?'requests payment for':'confirms')+' therapy sessions provided by '+esc(practiceName())+'.'+
       '<br>It is a record of attendance and fees only. No clinical notes are held in this system or reproduced here.</div>'+
     '</body></html>';
   return {html:html,num:num};
@@ -10273,7 +10825,7 @@ function whatsNewSteps(){
       ["\ud83c\udff4","Scotland, student loans, pension","All three change the number. Set them once under <b>Your tax situation</b> and the estimate follows. Pension contributions now get higher-rate relief properly."],
       ["\ud83e\udd1d","Class 2 when profits are low","Under the Small Profits Threshold it is not due \u2014 but paying it voluntarily keeps the year counting towards your State Pension. The app offers it rather than quietly leaving it out."]
     ])});
-  st.push({emoji:"\ud83e\uddfe", h:"Ready for Making Tax Digital", sub:"In <b>Tax \u203a Quarterly (MTD)</b>.",
+  st.push({emoji:"\ud83e\uddfe", h:"Ready for Making Tax Digital", sub:"In <b>Tax \u203a Making Tax Digital</b>.",
     html:ovPoints([
       ["\ud83d\udcc5","Your four quarters","6 Apr\u20135 Jul, 6 Jul\u20135 Oct, 6 Oct\u20135 Jan, 6 Jan\u20135 Apr, each totalled and reconciled to your year."],
       ["\ud83d\udce6","Totals by tax-return box","Every cost mapped to its SA103 box, exportable as a file."],
