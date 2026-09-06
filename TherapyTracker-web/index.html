@@ -3472,7 +3472,10 @@ function anaCostRatio(){
     const led=ledgerBetween(from,to,{toDate:true});
     const income=rev(from,to)+led.otherIncome;
     const rooms=anaSessionRoomCost(der,from,to), sup=anaSupervisionCost(from,to);
-    const costs=led.expenses+led.roomRent+led.useOfHome+rooms+sup;
+    /* NOT led.useOfHome as well: ledgerBetween folds the use-of-home claim into `expenses`
+       before it returns, so adding it again counted it twice — which is also why the itemised
+       categories below never added up to the headline figure. */
+    const costs=led.expenses+led.roomRent+rooms+sup;
     return {income:Math.round(income),costs:Math.round(costs),
       rooms:Math.round(rooms),sup:Math.round(sup),
       ratio:income>0?Math.round(costs/income*100):null,led};
@@ -5403,7 +5406,11 @@ function taxBreakdown(c){return '<table>'+
   trow('Class 4 NIC @ '+Math.round(c.r.c4main*100)+'%',gbpR(c.n1))+
   (c.n2?trow('Class 4 NIC @ 2%',gbpR(c.n2)):'')+
   (c.class2?trow('Class 2 NIC'+(c.r.class2Mandatory?'':' (voluntary)'),gbpR(c.class2)):'')+
-  (c.sl?trow('Student loan'+(SL_PLANS[settings().studentLoan]?' ('+SL_PLANS[settings().studentLoan].n+')':''),gbpR(c.sl)):'')+
+  /* c.slPlan, not settings().studentLoan: ukTax returns the plan it actually used precisely so a
+     breakdown can name it. The scalar is only kept in step with the LATEST year, so a 2023-24
+     breakdown was labelling its Plan 2 deduction with whatever plan is in force today -- or with
+     no plan name at all, once the loan had been paid off. */
+  (c.sl?trow('Student loan'+(SL_PLANS[c.slPlan]?' ('+SL_PLANS[c.slPlan].n+')':''),gbpR(c.sl)):'')+
   (c.penGross?trow('Basic-rate band extended by pension',gbpR(c.penGross)):'')+
   trow('Total tax',gbpR(c.total),true)+
   trow('Effective rate',(c.effective*100).toFixed(1)+'%')+'</table>';}
@@ -6090,11 +6097,20 @@ function drawNow(host){
 
   /* Same source, same words as the pot card on Pot & payments — that screen is the detail home
      and this is a summary of it, so the two cannot tell different stories. */
+  /* The next bill belongs in the same breath as the surplus. The pot's floor is tax ALREADY
+     EARNED, so for much of a year it can sit near nothing while a real payment is weeks away —
+     and without this line the summary said "that is yours to spend" about money HMRC has already
+     asked for, while Pot & payments, which does carry byNext, said the opposite. */
+  const nextLine=(pot.next&&pot.vsNext!=null)
+    ?'<div class="small" style="margin-top:6px;font-weight:600">By '+fmtD(pot.next.due)+' you need '+money(pot.byNext)+' — '+
+      (pot.vsNext>=0?'you are '+money(pot.vsNext)+' ahead of that already.':money(-pot.vsNext)+' still to put aside.')+'</div>':'';
   const verdict=pot.balance==null?''
-    :'<div class="vmsg '+(pot.vsFloor<0?'err':pot.over<0?'warn':'ok')+'" style="margin-top:12px">'+
+    :'<div class="vmsg '+((pot.vsFloor<0||pot.vsNext<0)?'err':pot.over<0?'warn':'ok')+'" style="margin-top:12px">'+
       (pot.vsFloor<0?'You have '+money(pot.balance)+' put by, '+money(-pot.vsFloor)+' short of the tax you have already earned.'
        :pot.over<0?'You have '+money(pot.balance)+' put by — enough for the tax so far, '+money(-pot.over)+' short of your buffer.'
-       :'You have '+money(pot.balance)+' put by — '+money(pot.over)+' more than you need. That is yours to spend.')+'</div>';
+       :pot.vsNext<0?'You have '+money(pot.balance)+' put by — enough for the tax earned so far, but not for the next bill.'
+       :'You have '+money(pot.balance)+' put by — '+money(pot.over)+' more than you need today. That is yours to spend.')+
+      nextLine+'</div>';
   const potCard='<div class="card nowcard" id="nowPot">'+
     '<div class="row" style="justify-content:space-between;align-items:baseline;gap:8px">'+
       '<h2 style="margin:0">Keep in your pot</h2><span class="small muted" style="white-space:nowrap">pot &amp; payments ›</span></div>'+

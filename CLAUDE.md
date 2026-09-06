@@ -360,6 +360,46 @@ Several tests depend on TY (2026-27) being the year **in progress** — the proj
 
 The reconciliation block is the highest-value part: across six practice profiles, `profitBreakdown` = the four MTD quarters summed = `tyNet`. A mismatch means a cost reached one path but not another — exactly how the missing per-session room fee in the SA103 boxes was found.
 
+### Whole-practice test data (Sep 2026)
+`tests/test-data/` holds **eight synthetic practices as importable backup envelopes** — the same
+shape `backupPayload()` writes, so any of them restores through Settings › Data & backup on a real
+device. They exist because the tax engine and the twenty `ana*` trends only say anything
+interesting at a few hundred sessions across several years, which is a size nobody hand-writes.
+Full description in `tests/test-data/README.md`; the review they were built for, and what it found,
+is `docs/test-data-review-2026-09.md`.
+
+```bash
+npm i --no-save playwright   # deliberately NOT a dependency: npm ci runs on the release workflow
+npm run testdata             # regenerate the eight (deterministic — same bytes every run)
+npm run test:review          # Trends + Tax over all eight, invariants asserted, exits non-zero
+npm run test:tax             # tests/tax-tests.js in a headless browser instead of by hand
+```
+
+- **The fixtures are ANCHORED to a date** (`ANCHOR` in `scripts/make-test-data.mjs`, currently
+  2026-09-05) and the engines read the real clock. Once the real date has moved a season on, the
+  data no longer lands in the windows the trends use (last 12 months, last 26 weeks, this tax
+  year) and the readiness gates start reporting on history that has aged out. **Re-run
+  `npm run testdata`** — same caveat, same date, as `tests/tax-tests.js`.
+- **The data is described, never enumerated.** A profile says "weekly, 18% missed, pays about three
+  weeks late, three weeks off in August"; the review's expectations come from that description and
+  from the documented rule, never from what the app returned. Tuning a fixture until the app agrees
+  with it is the exact failure the tax suite warns about.
+- **`scripts/review-test-data.mjs` loads the real `index.html` in a browser** and injects each
+  state, so it cannot pass against a stale copy. It stubs `commit()` first: it reads, never writes.
+  Note `S`, `trendSeg` and friends are top-level `let`s — they live in the global *lexical* scope,
+  so `window.S = …` creates a second copy nothing reads. Assign the bare name.
+- **Its invariants are derived from the documented rule, not from the function.** The drifting
+  check rebuilds the expected set (past 1.5x their own interval, nothing booked, not finished) and
+  compares it to `rows` **plus** `review`, because the ladder splits that set in two; the episode
+  check rebuilds "finished status or gone three intervals". Both fail on the pre-fix code, which is
+  how they were verified. **A change to either rule has to change the harness too** — if it does
+  not fail first, it is not testing anything.
+- Two profiles carry no `settings.taxAck`, so the Tax tab shows its disclaimer gate rather than any
+  figures. That is the gate under test, not an empty screen.
+- `groundwork-testdata-scotland-high.json` assumes a pension that is **not in the file** —
+  `pensionPcm()` reads `localStorage.tt_pension`, which no backup carries. It is recorded under
+  `testData.device` and applied by the harness. See the review, finding 7.
+
 ### Editing this file with scripts
 It is 438KB of single-file app, so bulk edits are scripted. **Always build the whole string, assert every anchor matched, write to `index.html.tmp`, then `os.replace()`.** Opening the real file for writing first truncated it to 0 bytes once when the script raised mid-run.
 
@@ -480,7 +520,7 @@ Three rules every one of them follows — a wrong figure here is worse than no f
 - **`anaCohorts()` ripeness is the WHOLE cohort, not whoever is old enough.** A milestone is answered only when every member has had those weeks. Measuring on the ripe subset built a percentage out of the early joiners alone, and a group with nobody old enough could still land on a red 0% — the exact misreading the dash exists to prevent. A dash means "not yet"; a nought means "nobody stayed", and the table must never confuse the two.
 - **`anaDaysToPay()` dates on the SESSION, not the payment.** A March session paid in June belongs to March, or a slow month looks fine simply because nothing has landed yet. **The month in progress is a bucket (`i=0`)** — the loop used to start at last month while the readiness test counted every paid session, so a practice whose payments were all from this month passed the gate and then printed a 0-day wait against an empty chart. All the headline figures come from the rows, not the buckets, for the same reason. The then/now windows must not overlap (`compareMonths`): `slice(-6)` against `slice(0,6)` shared five months on a short history and compared a period against itself.
 - **Drifting away and Review status are one ladder, not two views of the same names.** `anaDrifting()` returns `rows` (1.5×–3× their own interval: text them) and `review` (past 3×: their status is wrong), split on `clientAttendance(c).currentPause` — the same predicate the Review status card reads, so the two cannot disagree about which side of the line somebody is on. Don't render `rows.concat(review)`.
-- **`anaCostRatio()` must count the costs that hang off a session.** Per-session room fees (`derive().roomRate`) and supervision never reach `ledgerBetween` — it only knows about entered costs, monthly rent and use of home — and `tyNet` subtracts both by hand for that reason. For a therapist hiring a room by the hour the room is the largest line of the year, and leaving it out understated "what the practice costs to run" by most of it. Rooms on a monthly rent carry a per-session rate of £0, so they arrive via `led.roomRent` and are not double-counted.
+- **`anaCostRatio()` must count the costs that hang off a session.** Per-session room fees (`derive().roomRate`) and supervision never reach `ledgerBetween` — it only knows about entered costs, monthly rent and use of home — and `tyNet` subtracts both by hand for that reason. For a therapist hiring a room by the hour the room is the largest line of the year, and leaving it out understated "what the practice costs to run" by most of it. Rooms on a monthly rent carry a per-session rate of £0, so they arrive via `led.roomRent` and are not double-counted. **Do not add `led.useOfHome` on top of `led.expenses`** either — `ledgerBetween` folds the use-of-home claim into `expenses` before it returns, so counting it again inflates the ratio and is why the itemised categories stopped adding up to the headline figure. Found Sep 2026 by the whole-practice corpus.
 - **`SLOT_DAYS` holds lowercase matcher keys, not display text** — `anaSlots()` renders through `SLOT_DAY_NAMES` or every row says "sun".
 - **`anaCPD()` reports pace from the last 90 days, not the running total**, and the card has **four** states: the awkward one (target met, pace since dropped) is exactly what a running total hides.
 - Three settings feed it and nothing else: `settings.sessionMins` (50), `adminMinsPerSession` (15) and `fullWeekSessions` (**deliberately unset** — `anaCapacity()` falls back to the busiest week actually worked and says so, rather than inventing a target).
