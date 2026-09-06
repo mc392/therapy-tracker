@@ -521,6 +521,13 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
 /* One tickable line per outstanding room fee, in the settle sheet. */
 .rdrow{padding:9px 2px;border-bottom:1px solid var(--line)}
 .rdrow:last-child{border-bottom:0}
+/* One movable block per row in the arrange-home sheet. */
+.harow{display:flex;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid var(--line)}
+.harow:last-child{border-bottom:0}
+.harow .li-main{flex:1;min-width:0}
+.hanav{display:flex;gap:6px;flex:none}
+.hanav button{min-width:40px;padding:7px 9px;line-height:1}
+.hanav button:disabled{opacity:.35}
 optgroup{font-size:12px;color:var(--muted)} optgroup option{font-size:16px;color:var(--ink)}
 .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--brand);color:#fff;
   padding:11px 18px;border-radius:24px;font-size:14px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.3)}
@@ -2234,6 +2241,90 @@ $("#fab").onclick=()=>sessionForm(null);
 /* ============ VIEWS ============ */
 const VIEWS={};
 
+/* ===== Arranging the home screen =====
+   Home carries nine blocks and no two therapists open the app for the same one: one wants to know
+   what is owed, one who is coming this week, one whether the streak survived. The order is hers.
+
+   Order ONLY \u2014 there is deliberately no "hide" here. Whether a block exists at all is already
+   answered by `feat()` in Settings \u2192 App preferences, and a second switch answering nearly the
+   same question is how a card ends up on in one place and off in another. A block nobody reads
+   goes to the bottom, which costs one scroll and no confusion. */
+const HOME_CARDS=[
+  {k:"attention",n:"Needs attention",      d:"What needs doing today"},
+  {k:"kpis",     n:"The four figures",     d:"Billed, sessions, outstanding, next 7 days"},
+  {k:"spark",    n:"Revenue trend",        d:"The last 24 weeks"},
+  {k:"goals",    n:"Goals",                d:"Payment and completion rings"},
+  {k:"log",      n:"Log something",        d:"New session, repeat, supervision"},
+  {k:"upcoming", n:"Coming up",            d:"Your next sessions"},
+  {k:"heat",     n:"Your year",            d:"A square a day, the last 12 months"},
+  {k:"loyal",    n:"Longstanding clients", d:"Who you have seen most"},
+  {k:"records",  n:"Records",              d:"Streaks and badges"}
+];
+const HOME_DEFAULT=HOME_CARDS.map(x=>x.k);
+/* Repaired on every read rather than migrated, which is what makes an old saved order safe:
+   a key this build no longer has is dropped, and a key the saved order has never heard of \u2014 a
+   block ADDED by an update \u2014 is put back at its DEFAULT position rather than on the end. A new
+   block appended below "Records" for everyone who has ever rearranged is a block nobody sees.
+   Nothing is stored while the order is the default one, so an install that never touches this
+   follows whatever the app ships next. */
+function homeOrder(){
+  const out=(settings().homeOrder||[]).filter(k=>HOME_DEFAULT.indexOf(k)>=0);
+  HOME_DEFAULT.forEach((k,i)=>{if(out.indexOf(k)<0)out.splice(Math.min(i,out.length),0,k);});
+  return out;
+}
+function setHomeOrder(a){
+  const clean=(a||[]).filter(k=>HOME_DEFAULT.indexOf(k)>=0);
+  if(clean.join("|")===HOME_DEFAULT.join("|"))delete settings().homeOrder;
+  else settings().homeOrder=clean;
+}
+/* Set by the last Home render \u2014 see the note where it is assigned. */
+let _homeVisible=[];
+function homeArrangeSheet(){
+  const vis=_homeVisible.slice();
+  if(vis.length<2){toast("Nothing to rearrange yet");return;}
+  let order=homeOrder();
+  const meta=k=>HOME_CARDS.find(x=>x.k===k)||{n:k,d:""};
+  const body=el('<div></div>');
+  body.innerHTML='<p class="small muted">Put the blocks in the order you want to read them. Only what is on your home screen right now is listed \u2014 whether a feature appears at all is still <b>\u2699 Settings \u203a App preferences</b>.</p>'+
+    '<div id="haList" class="mt"></div>'+
+    '<button class="btn full mt" id="haSave">Done</button>'+
+    '<p class="small muted center mt"><span class="taxlink" id="haReset">Put them back the way they were \u203a</span></p>';
+  const list=body.querySelector("#haList");
+  const paint=()=>{
+    const shown=order.filter(k=>vis.indexOf(k)>=0);
+    list.innerHTML=shown.map((k,i)=>{const m=meta(k);
+      return '<div class="harow"><div class="li-main"><div class="li-title">'+esc(m.n)+'</div><div class="li-sub">'+esc(m.d)+'</div></div>'+
+        '<div class="hanav">'+
+          '<button class="btn sm sec" data-mv="'+esc(k)+'" data-dir="-1"'+(i===0?" disabled":"")+' aria-label="Move '+esc(m.n)+' up">\u25b2</button>'+
+          '<button class="btn sm sec" data-mv="'+esc(k)+'" data-dir="1"'+(i===shown.length-1?" disabled":"")+' aria-label="Move '+esc(m.n)+' down">\u25bc</button>'+
+        '</div></div>';}).join("");
+    list.querySelectorAll("[data-mv]").forEach(b=>b.onclick=()=>move(b.dataset.mv,+b.dataset.dir));
+  };
+  /* Swap with the nearest neighbour that is actually ON the screen. Anything the reader cannot
+     see keeps its index, so a block that reappears later (the revenue trend at ten sessions, say)
+     comes back roughly where it was rather than at the bottom. */
+  const move=(k,dir)=>{
+    const i=order.indexOf(k); if(i<0)return;
+    let j=i+dir;
+    while(j>=0&&j<order.length&&vis.indexOf(order[j])<0)j+=dir;
+    if(j<0||j>=order.length)return;
+    const tmp=order[i];order[i]=order[j];order[j]=tmp;
+    try{Sfx.pop();}catch(e){}
+    paint();
+  };
+  paint();
+  body.querySelector("#haReset").onclick=()=>{order=HOME_DEFAULT.slice();try{Sfx.tick();}catch(e){}paint();};
+  /* Staged until Done, the same shape as the guided flows: closing discards, and one commit
+     rather than one per tap of an arrow. */
+  body.querySelector("#haSave").onclick=async()=>{
+    const before=homeOrder().join("|");
+    setHomeOrder(order);
+    if(homeOrder().join("|")!==before)await commit("Rearranged the home screen");
+    closeSheet();toast("Home screen saved");go("home");
+  };
+  openSheet("Arrange your home screen",body);
+}
+
 VIEWS.home=function(){
   const v=el('<div class="view active"></div>');
   const ty=curTaxYear();
@@ -2290,24 +2381,42 @@ VIEWS.home=function(){
       '<p class="small muted" style="margin:4px 0 10px">One square per day, one column per week.</p>'+
       yearHeatmapHTML()+'</div>'
     : '';
-  v.innerHTML=(S.sessions.length?"":'<div class="hint" style="font-size:14px">👋 <b>Nothing logged yet.</b> Tap <b>＋ New session</b> below to start, or open <b>⚙ Settings → Restore from backup</b> to load a <b>.json</b> backup from another device. Need a refresher? <span class="taxlink" id="hTour">Take the guided tour ›</span></div>')+
-   (S.sessions.length&&feat("attention")?'<div class="card"><h2>Needs attention</h2><div class="attn" id="attn"></div></div>':'')+`
+  /* Every block on this screen, keyed. Built the same way it always was — the only change is
+     that they are put in a map first and then emitted in the reader's own order, rather than
+     concatenated in ours. A block whose conditions are not met is "" and simply does not appear,
+     exactly as before. See HOME_CARDS. */
+  const parts={
+    attention:(S.sessions.length&&feat("attention")?'<div class="card"><h2>Needs attention</h2><div class="attn" id="attn"></div></div>':''),
+    kpis:`
    <div class="kpis mb" data-coach="home-kpis">
      <div class="kpi"><div class="v" data-to="${billed}" data-fmt="m">${gbp(billed)}</div><div class="l">Billed this tax year</div></div>
      <div class="kpi good"><div class="v" data-to="${seenRows.length}">${seenRows.length}</div><div class="l">Sessions this tax year${seenClients?` · ${seenClients} client${seenClients===1?"":"s"}`:""}</div></div>
      <div class="kpi clk ${outstanding?'bad':''}" id="kOut"><div class="v" data-to="${outstanding}" data-fmt="m">${gbp(outstanding)}</div><div class="l">Outstanding now ›</div></div>
      <div class="kpi clk" id="kNext7"><div class="v" data-to="${next7.length}">${next7.length}</div><div class="l">Sessions next 7 days ›</div></div>
-   </div>`+
-   sparkCard+
-   goalsCard+`
+   </div>`,
+    spark:sparkCard,
+    goals:goalsCard,
+    log:`
    <div class="card"><h2>Log something</h2>
      <div class="row" style="flex-wrap:wrap;gap:8px">
        <button class="btn" id="qNew">＋ New session</button>
        <button class="btn sec" id="qRepeat">↻ Repeat last for…</button>`+
        (feat("supervision")?`<button class="btn sec" id="qSup">＋ Supervision</button>`:``)+`
-     </div></div>
-   <div class="card"><h2>Coming up</h2><div id="up"></div></div>`+
-   heatCard+loyalCard+recCard;
+     </div></div>`,
+    upcoming:'<div class="card"><h2>Coming up</h2><div id="up"></div></div>',
+    heat:heatCard,
+    loyal:loyalCard,
+    records:recCard
+  };
+  const order=homeOrder();
+  /* What is actually on the screen this render, for the arrange sheet to offer. Kept here rather
+     than recomputed there: working out whether the revenue trend qualifies means walking every
+     session again, and the sheet can only be opened from a Home that has just rendered. */
+  _homeVisible=order.filter(k=>parts[k]);
+  const arrangeRow=_homeVisible.length>1
+    ? '<p class="small muted center" style="margin:16px 0 0"><span class="taxlink" id="hArrange">Arrange this screen ›</span></p>' : '';
+  v.innerHTML=(S.sessions.length?"":'<div class="hint" style="font-size:14px">👋 <b>Nothing logged yet.</b> Tap <b>＋ New session</b> below to start, or open <b>⚙ Settings → Restore from backup</b> to load a <b>.json</b> backup from another device. Need a refresher? <span class="taxlink" id="hTour">Take the guided tour ›</span></div>')+
+    order.map(k=>parts[k]||"").join("")+arrangeRow;
   const up=v.querySelector("#up");
   if(!upcoming.length)up.innerHTML='<p class="muted small">No future sessions logged.</p>';
   else up.innerHTML=upcoming.slice(0,12).map(x=>{const d=x.d;
@@ -2324,6 +2433,7 @@ VIEWS.home=function(){
   v.querySelector("#qRepeat").onclick=()=>repeatPicker();
   const qs=v.querySelector("#qSup");if(qs)qs.onclick=()=>supervisionForm(null);
   const ht=v.querySelector("#hTour");if(ht)ht.onclick=()=>startTour();
+  const ha=v.querySelector("#hArrange");if(ha)ha.onclick=()=>homeArrangeSheet();
   /* Same treatment the charts get: built before the view is attached, so it has no width yet.
      Land on this week rather than on the same date last year. */
   scrollChart(v.querySelector(".hmgrid"),null);
