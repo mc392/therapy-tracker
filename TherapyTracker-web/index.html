@@ -2141,6 +2141,11 @@ const GLYPH={supervision:'<path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h11A2.5 2.5 0 0 1 1
   pot:'<path d="M7.5 3.5h9v2.2l-1 1.6V19a2 2 0 0 1-2 2h-3a2 2 0 0 1-2-2V7.3l-1-1.6z"/><path d="M6.5 12.5h11"/>',
   buffer:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v5M12 16v5M3 12h5M16 12h5"/>',
   downtrend:'<path d="M3.5 20V4"/><path d="M3.5 20h17"/><path d="M6.5 8 10 12l3-2.6L19 16"/><path d="M15.6 16h3.6v-3.4"/>',
+  sprout:'<path d="M12 20.5v-6.2"/><path d="M12 14.3c-2.7 0-4.4-1.8-4.4-4.5 2.7 0 4.4 1.8 4.4 4.5z"/><path d="M12 14.3c2.7 0 4.4-1.8 4.4-4.5-2.7 0-4.4 1.8-4.4 4.5z"/>',
+  sapling:'<path d="M12 20.5V7.6"/><path d="M12 15.6c-2.5 0-4.1-1.7-4.1-4.2 2.5 0 4.1 1.7 4.1 4.2z"/><path d="M12 15.6c2.5 0 4.1-1.7 4.1-4.2-2.5 0-4.1 1.7-4.1 4.2z"/><path d="M12 10.2c-1.6-1.6-1.6-4 0-5.6 1.6 1.6 1.6 4 0 5.6z"/>',
+  tree:'<path d="M12 20.5v-6.7"/><path d="M12 3.5a4.2 4.2 0 0 0-4 3 3.8 3.8 0 0 0-.6 7.3h9.2a3.8 3.8 0 0 0-.6-7.3 4.2 4.2 0 0 0-4-3z"/>',
+  evergreen:'<path d="M12 18.6v2"/><path d="M12 2.8 7.6 9.2h2.4L6.4 14.2h2.6L5.4 18.6h13.2L15 14.2h2.6L14 9.2h2.4z"/>',
+  pause:'<circle cx="12" cy="12" r="9.2"/><path d="M10.1 8.8v6.4M13.9 8.8v6.4"/>',
   warning:'<path d="M10.3 3.8 2.5 17.4A2 2 0 0 0 4.2 20.5h15.6a2 2 0 0 0 1.7-3.1L13.7 3.8a2 2 0 0 0-3.4 0z"/><path d="M12 9.4v4.2M12 17h.01"/>',
   blocked:'<circle cx="12" cy="12" r="9.2"/><path d="M5.5 5.5l13 13"/>',
   phone:'<rect x="6.5" y="2.5" width="11" height="19" rx="2.6"/><path d="M10.5 5.5h3"/><path d="M10.8 18.6h2.4"/>',
@@ -4188,9 +4193,9 @@ VIEWS.practice=function(){
     const withSess=S.clients.map(c=>({c,n:counts[c.code.toLowerCase()]||0}));
     const base=withSess.filter(x=>x.n>=1).length;
     const max=Math.max(1,base);
-    const tiers=[{t:1,l:"In therapy",d:"1+ sessions",e:"🌱"},{t:6,l:"Building",d:"6+ sessions",e:"🌿"},{t:12,l:"Established",d:"12+ sessions",e:"🌳"},{t:20,l:"Long-term",d:"20+ sessions",e:"🌲"}];
+    const tiers=[{t:1,l:"In therapy",d:"1+ sessions",e:"sprout"},{t:6,l:"Building",d:"6+ sessions",e:"sapling"},{t:12,l:"Established",d:"12+ sessions",e:"tree"},{t:20,l:"Long-term",d:"20+ sessions",e:"evergreen"}];
     const rows=tiers.map(tr=>{const n=withSess.filter(x=>x.n>=tr.t).length;const pct=base?Math.round(n/base*100):0;const w=Math.round(n/max*100);
-      return '<div class="fr"><div class="ftop"><span>'+tr.e+' <b>'+tr.l+'</b> · '+tr.d+'</span><span>'+n+' '+(n===1?'client':'clients')+(tr.t>1&&base?' · '+pct+'%':'')+'</span></div><div class="fbar"><i data-w="'+w+'" style="width:0"></i></div></div>';}).join("");
+      return '<div class="fr"><div class="ftop"><span>'+gi(tr.e)+' <b>'+tr.l+'</b> · '+tr.d+'</span><span>'+n+' '+(n===1?'client':'clients')+(tr.t>1&&base?' · '+pct+'%':'')+'</span></div><div class="fbar"><i data-w="'+w+'" style="width:0"></i></div></div>';}).join("");
     const funnelCard='<div class="card">'+cardHead("Client retention funnel","ana-funnel")+
       '<p class="small muted" style="margin:-4px 0 10px">How your clients progress over time, by number of sessions.</p>'+
       '<div class="funnel">'+rows+'</div></div>';
@@ -4264,7 +4269,7 @@ VIEWS.practice=function(){
       const pauseNote=a=>{const parts=[];
         if(a.pauses.length)parts.push(a.pauses.length+' pause'+(a.pauses.length>1?'s':'')+' (excluded): '+a.pauses.map(p=>fmtRange(p.from,p.to)).join(', '));
         if(a.currentPause)parts.push('on a pause since '+fmtDM(a.currentPause.from)+' ('+a.currentPause.days+'d)');
-        return parts.length?'<div class="li-sub" style="color:var(--accent-ink)">⏸ '+esc(parts.join(' · '))+'</div>':'';};
+        return parts.length?'<div class="li-sub" style="color:var(--accent-ink)">'+gi("pause")+' '+esc(parts.join(' · '))+'</div>':'';};
       const attAvg=attRows.length?Math.round(attRows.reduce((s,x)=>s+x.a.pct,0)/attRows.length):0;
       const attSorted=attRows.slice().sort((a,b)=>a.a.pct-b.a.pct||b.a.n-a.a.n);
       const attLi=x=>{const a=x.a;
@@ -4305,7 +4310,7 @@ VIEWS.practice=function(){
           :'<p class="muted small">Need at least two sessions per client to measure attendance.</p>')+'</div>';
       /* ---- ongoing clients on a current pause: prompt to review status ---- */
       const review=attRows.filter(x=>x.a.currentPause);
-      const reviewCard=review.length?'<div class="card" style="border:1px solid var(--accent)"><h2>⏸ Review status</h2>'+
+      const reviewCard=review.length?'<div class="card" style="border:1px solid var(--accent)"><h2>'+gi("pause")+' Review status</h2>'+
         '<p class="small muted" style="margin:0 0 6px">These clients are marked <b>Ongoing</b> but haven’t had a session in 3× their usual interval or more. Consider updating them to <b>Paused</b> or <b>Finished</b>.</p>'+
         review.sort((a,b)=>b.a.currentPause.days-a.a.currentPause.days).map(x=>'<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+' <span class="chip f">'+x.a.currentPause.days+'d gap</span></div><div class="li-sub">Last session '+fmtDMY(x.a.last)+' · '+esc(x.c.frequency||"")+'</div></div><div class="li-right"><span class="small muted">tap to update ›</span></div></div>').join("")+'</div>':'';
 
