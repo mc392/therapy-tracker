@@ -310,6 +310,10 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .li-main{flex:1;min-width:0}
 .li-title{font-weight:600;font-size:15px}
 .li-sub{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* A list row is one line and truncates, which is right for "12 Aug · 10:00 · Room 2" and
+   wrong for a paragraph. `.wrap` is the opt-out for rows whose sub IS the content — the tax
+   disclaimer read as four sentences cut off mid-word on a phone. */
+.li-sub.wrap{white-space:normal;overflow:visible;text-overflow:clip}
 .li-right{text-align:right;font-variant-numeric:tabular-nums}
 .muted{color:var(--muted)} .small{font-size:12.5px} .mt{margin-top:12px} .mb{margin-bottom:12px}
 .center{text-align:center}
@@ -398,7 +402,13 @@ nav.tabs{position:fixed;z-index:35;
 nav.tabs button{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:4px;
   flex:1;color:var(--muted);padding:7px 2px 6px;cursor:pointer;font-weight:600;border-radius:16px;transition:color .2s,background .2s}
 nav.tabs button>span:last-child{font-size:10px;line-height:1.1;text-align:center;overflow-wrap:anywhere}
-nav.tabs button .ic{width:24px;height:24px;display:flex;align-items:center;justify-content:center}
+nav.tabs button .ic{position:relative;width:24px;height:24px;display:flex;align-items:center;justify-content:center}
+/* Anchored to the icon and overlapping it, the way a notification badge is drawn everywhere
+   else. It used to sit inline after the label, where it wrapped onto a second line and made
+   that one tab taller than the other four — the whole capsule grew a step in it. Absolutely
+   positioned, so it is out of flow and can never change the bar's height again. */
+nav.tabs .tabbadge{position:absolute;top:-6px;right:-10px;min-width:16px;height:16px;padding:0 4px;
+  font-size:10px;line-height:1;border-radius:8px;box-shadow:0 0 0 2px var(--card);pointer-events:none}
 nav.tabs button .ic svg{width:23px;height:23px;display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
   background:color-mix(in srgb,var(--brand) 16%,transparent)}
@@ -563,6 +573,9 @@ nav.tabs button.navset{display:none}
     color:rgba(255,255,255,.82);padding:11px 14px;border-radius:11px;font-size:14.5px;
     transition:background .15s,color .15s}
   nav.tabs button .ic{width:22px;height:22px}
+  /* The badge ring exists to separate the pill from the icon behind it, so it has to be the
+     colour it actually sits on — here that is the sidebar gradient, not var(--card). */
+  nav.tabs .tabbadge{top:-5px;right:-8px;box-shadow:0 0 0 2px var(--gs2)}
   nav.tabs button .ic svg{width:21px;height:21px}
   nav.tabs button>span:last-child{font-size:14.5px;text-align:left;flex:1}
   /* Flat, not the phone's raised gradient pill — the sidebar IS the gradient here, and a
@@ -2158,7 +2171,7 @@ function renderTabs(){const overdue=S.sessions.filter(s=>derive(s).overdue).leng
      in the header is the affordance people already know, and a sixth item would crowd a bar
      that is already at five. */
   $("#tabs").innerHTML=visibleTabs().map(t=>`<button data-tab="${t.id}" class="${t.id===cur?"on":""}">
-    <span class="ic">${t.ic}</span><span>${t.label}${t.id==="sessions"&&overdue?` <span class="badge">${overdue}</span>`:""}</span></button>`).join("")+
+    <span class="ic">${t.ic}${t.id==="sessions"&&overdue?`<span class="badge tabbadge" aria-label="${overdue} overdue">${overdue}</span>`:""}</span><span>${t.label}</span></button>`).join("")+
     `<button data-tab="settings" class="navset${cur==="settings"?" on":""}"><span class="ic">${SETTINGS_IC}</span><span>Settings</span></button>`;
   $("#tabs").querySelectorAll("button").forEach(b=>b.onclick=()=>go(b.dataset.tab));
   paintFab();
@@ -10639,7 +10652,7 @@ function taxAcked(){return !!settings().taxAck;}
 /* Same four points outside the overlay, where `ovPoints`' styling doesn't belong. */
 function taxDisclaimerListHTML(){return TAX_DISCLAIMER.map(p=>
   '<div class="list-item"><div class="li-main"><div class="li-title">'+p[0]+' '+esc(p[1])+'</div>'+
-  '<div class="li-sub">'+p[2]+'</div></div></div>').join("");}
+  '<div class="li-sub wrap">'+p[2]+'</div></div></div>').join("");}
 function taxDisclaimerSheet(){
   const body=el('<div></div>');
   const sg=settings();
