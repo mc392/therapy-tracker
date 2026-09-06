@@ -104,10 +104,12 @@ function inPage(state) {
   const der = S.sessions.map((s) => ({ s, d: derive(s), dt: parseD(s.date) })).filter((x) => x.dt);
   const t = today();
 
-  /* --- the drifting list, computed from its own stated rule ---
+  /* --- the drifting ladder, computed from its own stated rule ---
      "Anyone still marked as current whose gap has run past 1.5x their own usual interval and who
-     has nothing in the diary." Building the expected set here rather than counting smells means a
-     row that should not be there, and a row that should, both fail. */
+     has nothing in the diary." Since Sep 2026 that candidate set is SPLIT: someone in a current
+     pause (three intervals or more) is handed to Review status instead, and `review` carries them
+     so the split can never silently drop anybody. So the rule is checked against rows + review,
+     and the split itself is checked against the predicate the review card reads. */
   const attendedBy = {}, allBy = {};
   der.forEach((x) => {
     const k = (x.s.client || "").toLowerCase(); if (!k) return;
@@ -124,13 +126,28 @@ function inPage(state) {
   }).map((c) => c.code).sort();
   const drift = out.trends.anaDrifting;
   if (drift && drift.rows) {
-    const got = drift.rows.map((r) => r.c.code).sort();
+    const rows = drift.rows.map((r) => r.c.code);
+    const rev = (drift.review || []).map((r) => r.c.code);
+    const got = rows.concat(rev).sort();
     out.trends._driftExpected = expectDrift.length;
+    out.trends._driftSplit = { drifting: rows.length, review: rev.length };
     if (got.join("|") !== expectDrift.join("|"))
-      fail("drift.rows", "drifting list is " + got.length + " clients, the rule gives " + expectDrift.length,
+      fail("drift.rows", "the drifting ladder holds " + got.length + " clients, the rule gives " + expectDrift.length,
         { extra: got.filter((c) => expectDrift.indexOf(c) < 0).slice(0, 6),
           missing: expectDrift.filter((c) => got.indexOf(c) < 0).slice(0, 6) });
-    else pass("drift.rows", expectDrift.length + " drifting client(s), matching the rule");
+    else pass("drift.rows", expectDrift.length + " client(s) on the ladder, matching the rule");
+    const both = rows.filter((c) => rev.indexOf(c) >= 0);
+    if (both.length) fail("drift.split", both.length + " client(s) on both halves of the ladder", both.slice(0, 6));
+    /* Which half each lands on is the review card's own predicate, read from the same function. */
+    const misplaced = S.clients.filter((c) => {
+      const inRows = rows.indexOf(c.code) >= 0, inRev = rev.indexOf(c.code) >= 0;
+      if (!inRows && !inRev) return false;
+      const att = clientAttendance(c);
+      const paused = !!(att && att.currentPause);
+      return paused !== inRev;
+    }).map((c) => c.code);
+    if (misplaced.length) fail("drift.half", misplaced.length + " client(s) on the wrong half of the ladder", misplaced.slice(0, 6));
+    else pass("drift.half", "drifting vs review split follows the pause predicate");
   }
 
   /* --- episode length, likewise ---

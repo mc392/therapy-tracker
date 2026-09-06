@@ -44,8 +44,31 @@ Scottish bands, the Plan 2 threshold, the personal allowance, Class 4 at 6%, vol
 £3.50/week, and the pension extending the basic-rate band.
 
 **Trends did not.** Three defects, one of them serious enough that the card it affects was
-misleading on every practice that hires a room by the session. All four fixes below are in this
-change; the five remaining items are written up as findings rather than fixed, and say why.
+misleading on every practice that hires a room by the session. Five further items are written up as
+findings rather than fixed, and say why.
+
+### How this lands against `main`
+
+The review ran against `9855a09`. While it was in progress, **PR #14 ("Trends: fix four wrong
+figures") independently found and fixed two of the same three defects** — the `catOf` misuse and
+the two costs missing from the cost ratio — from user feedback rather than from the corpus. That is
+a good sign for both: two routes to the same bugs, agreeing on the same causes and the same fixes.
+
+What that leaves, after merging `main` in:
+
+- **Findings 1 and 2** (`catOf`) — fixed on `main`, and its version goes further (a
+  drifting/Review-status ladder, an episode floor that counts work still in progress). The merge
+  takes `main`'s code wholesale. What this branch adds is the **guard**: the harness now derives
+  the expected drifting set and episode count from the stated rules, so neither can quietly come
+  back. Both checks fail on the pre-#14 code, which is how they were verified.
+- **Finding 3** — `main` added the two missing costs; it kept the **use-of-home double count**,
+  which the corpus found separately and which the merge fixes on top. `main`'s shared helpers
+  (`anaSessionRoomCost`, `anaSupervisionCost`) are used rather than this branch's local copies.
+- **Findings 4 to 9** are untouched by `main` and stand as written.
+
+Post-merge figures, for the record: the cost ratio reads 41% (established), 37% (winding-down),
+57% (chaotic), 18% (Scotland) — each within a point or two of that practice's own SA103 breakdown,
+which is the agreement that was missing before.
 
 ---
 
@@ -59,7 +82,7 @@ discharged years ago** — the top three had last been seen 1,040, 459 and 405 d
 winding-down practice it listed **28**, i.e. every client who had ever finished. The card is a list
 to act on, so a list you cannot act on is worse than no card.
 
-| practice | drifting rows before | after |
+| practice | drifting rows on `9855a09` | after |
 |---|---|---|
 | established | 15 | 1 |
 | winding-down | 28 | 0 |
@@ -75,7 +98,8 @@ to act on, so a list you cannot act on is worse than no card.
 therefore an object, never the string `"Finished"`, so the test never fired once. The function that
 maps a client status to its category is `clientCategory()`.
 
-**Fixed** at all three call sites (`anaDrifting`, and twice in `anaEpisodes`).
+**Fixed** at all three call sites (`anaDrifting`, and twice in `anaEpisodes`) — independently
+and more thoroughly on `main` in PR #14, whose version this branch merges and then guards.
 
 ### 2. Episode length ignored anyone discharged recently
 
@@ -92,7 +116,7 @@ a client discharged six days ago is included.
 figures: the ratio, the change on last year, and what is left before tax. Against the same
 practice's own tax figures:
 
-| practice | card said | its own SA103 breakdown for 2025-26 | card after the fix |
+| practice | card said on `9855a09` | its own SA103 breakdown for 2025-26 | card after the fix |
 |---|---|---|---|
 | established | **8%** of turnover | £11,528 of costs on £28,400 → 41% | **41%** |
 | winding-down | **2%** | £7,068 on £19,055 → 37% | **37%** |
@@ -120,6 +144,11 @@ The "left before tax" figure moved with it — on the established practice from 
 per-session room fees and supervision appear in the category breakdown. A side effect worth having:
 a therapist whose only business cost is supervision (very common in the first year) used to be told
 "add at least one business cost"; the newcomer practice now shows a real 15%.
+
+PR #14 fixed the two missing costs from the same reasoning while this was in progress. It did not
+catch the use-of-home double count — that one only shows as a discrepancy between the headline and
+the itemised categories, which is what the corpus checks — so the merged version is `main`'s shared
+helpers with `led.useOfHome` taken back out of the total.
 
 ### 4. Tax › Now could say "that is yours to spend" about the next bill
 
