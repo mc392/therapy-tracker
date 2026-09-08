@@ -1553,19 +1553,30 @@ function derive(s){
      The last one uses the DATED rate, not the room's rate today: a room that charged £15 back
      when the session happened still has that £15 to account for, however it bills now. */
   const roomPaidNA = !room || roomBilling(room)==="monthly" || !(roomRate>0);
+  /* A session with a per-session room fee RAISES that fee as a liability, tagged to this session,
+     the moment it is logged. Nobody is asked to confirm it: blank has always meant "not settled
+     yet" to `roomDue`, and it now means that everywhere. `roomPaid==="n/a"` is the one deliberate
+     escape hatch, written from the settle screen for a fee that turns out not to be owed at all;
+     it is a decision about a bill, so it is made where bills are managed and never in the session
+     form. */
+  const roomOwed = !roomPaidNA && roomRate>0 && s.roomPaid!=="Y" && s.roomPaid!=="n/a";
   let roomDue="n/a";
-  if(roomRate>0 && s.roomPaid!=="Y" && !roomPaidNA && d){
+  if(roomOwed && d){
     const next=schedNext(roomSchedule(room),d);            /* first payment date on/after the session */
     if(next)roomDue = (next < t)?"Y":"N";
   }
   const cl=S.clients.find(c=>(c.code||"").toLowerCase()===(s.client||"").toLowerCase());
   const status=cl?cl.status:""; const category=cl?cl.category:"";
-  const complete = notesDone(s) && (roomPaidNA || (s.roomPaid&&String(s.roomPaid).trim()));
+  /* `complete` is the WRITE-UP tick and nothing else. It used to also demand a room-paid answer,
+     which put a bookkeeping question inside a clinical worklist: a session could not be "done"
+     until the therapist had said whether she had paid her landlord for it. Those are two
+     different jobs on two different clocks, and the room half now lives in Money. */
+  const complete = notesDone(s);
   let cancelBy=null,canCancel=false;
   if(d){ const tm=(s.time||"00:00").split(":"); const dt=new Date(d); dt.setHours(+tm[0]||0,+tm[1]||0);
     cancelBy=addDays(dt,-3); canCancel=cancelBy>new Date(); }
   return {rate,fullRate,cancelPct,cancelKind:(s.cancelKind||(isLateCancel(s)?"late":null)),
-    roomRate,due,roomPaidNA,clientPaid,past,overdue,roomBooked,roomDue,status,category,complete,cancelBy,canCancel,
+    roomRate,due,roomPaidNA,roomOwed,clientPaid,past,overdue,roomBooked,roomDue,status,category,complete,cancelBy,canCancel,
     week:d?weekNum(d):"",year:d?d.getFullYear():"",taxYear:d?taxYear(d):""};
 }
 
@@ -2391,7 +2402,7 @@ VIEWS.home=function(){
   const st=computeStreak(), goals=gameGoals(), rec=ensureGame().records;
   const goalsCard=!feat("gamify")?'':'<div class="card"><h2>Goals</h2><div class="rings">'+
     ringSVG(goals.paidPct,goals.over>0?(goals.over+" payment"+(goals.over===1?"":"s")+" overdue"):"All payments in ✓")+
-    ringSVG(goals.compPct,goals.incomplete>0?(goals.incomplete+" session"+(goals.incomplete===1?"":"s")+" to complete"):"Notes & room all done ✓")+
+    ringSVG(goals.compPct,goals.incomplete>0?(goals.incomplete+" session"+(goals.incomplete===1?"":"s")+" to complete"):"Every session written up ✓")+
     '</div>'+((goals.over>0||goals.incomplete>0)?'<p class="small muted center" style="margin:10px 0 0">'+(goals.over>0?'<span class="taxlink" id="goPay">Collect payments ›</span>':"")+(goals.over>0&&goals.incomplete>0?' &nbsp;·&nbsp; ':"")+(goals.incomplete>0?'<span class="taxlink" id="goInc">Complete sessions ›</span>':"")+'</p>':"")+'</div>';
   const mk=(emoji,val,lab,locked)=>'<div class="bdg'+(locked?" locked":"")+'"><span class="be">'+emoji+'</span><div><div class="bv">'+val+'</div><div class="bl">'+lab+'</div></div></div>';
   const cCounts=clientSessionCounts();
@@ -2729,9 +2740,11 @@ function payChip(s,d){return d.clientPaid?'<span class="chip y">paid '+fmtDM(s.p
    written still reads correctly and `derive().complete` is untouched. This is the single place
    that decides what counts as written up; the form now only ever writes "Y" or "". */
 function notesDone(s){return !!(s&&s.notes&&String(s.notes).trim());}
+/* What is missing from the RECORD of a session. Room fees were on this list until Sep 2026 and
+   should not have been: an unsettled room fee is a bill outstanding, not an incomplete session,
+   and it is raised, listed and ticked off in Money › Costs & income like every other bill. */
 function missingReasons(s){const m=[];
   if(!notesDone(s))m.push("notes");
-  if(!derive(s).roomPaidNA&&!(s.roomPaid&&String(s.roomPaid).trim()))m.push("room-paid status");
   return m;}
 /* ===== Missed sessions =====
    Two kinds, and the difference matters to the client's bill but never to the clinical record:
@@ -2916,7 +2929,9 @@ function validateSession(m){
   /* WARN: room-paid vs room fee */
   const chargeable=(d.roomRate||0)>0;
   if(m.roomPaid==="Y"&&!chargeable)warnings.push({code:"roompaidnofee",msg:"Marked room paid, but "+esc(m.location||"this location")+" has no room fee"});
-  if(m.roomPaid==="n/a"&&chargeable)warnings.push({code:"roomnafee",msg:"Room marked n/a, but "+esc(m.location||"this room")+" charges "+gbp(d.roomRate)});
+  /* "Room marked n/a but the room charges" used to be flagged here. It is now a deliberate answer
+     rather than a contradiction — the settle screen writes it for a fee that turns out not to be
+     owed — so warning about it would flag the therapist's own decision back at her. */
   /* WARN: £0 / missing rate where the client normally charges */
   if(m.client&&(d.rate||0)===0){const charges=cl&&((cl.rate||0)>0||(S.rateHistory||[]).some(r=>(r.client||"").toLowerCase()===(m.client||"").toLowerCase()&&(r.rate||0)>0));
     if(charges)warnings.push({code:"zerorate",msg:"Rate is £0 although "+esc(m.client)+" normally charges — check rate history"});}
@@ -3060,56 +3075,48 @@ VIEWS.sessions=function(){
   }
   function renderIncomplete(container,rows,refresh){
     const td=isoD(today());
-    if(!rows.length){container.innerHTML='<div class="center" style="padding:30px 10px"><div style="font-size:48px">🌟</div><p class="muted" style="margin-top:6px">Every past session is complete — notes and room all sorted. Spotless!</p></div>';return}
+    /* Notes only. Room fees were ticked off here as well until Sep 2026, which mixed a clinical
+       worklist ("which write-ups do I still owe?") with a bookkeeping one ("which bills have I
+       paid?") — two jobs on two different clocks. Room fees are raised by the session and settled
+       in Money › Costs & income, beside the rent and everything else the practice pays for. */
+    if(!rows.length){container.innerHTML='<div class="center" style="padding:30px 10px"><div style="font-size:48px">🌟</div><p class="muted" style="margin-top:6px">Every past session is written up. Spotless!</p></div>';return}
     rows.sort((a,b)=>parseD(b.s.date)-parseD(a.s.date));
-    container.innerHTML='<div class="bulkbar"><div class="hint" style="margin-top:4px">Catch up on missing <b>notes</b> and <b>room payments</b> in bulk — tick what\'s done, then Save.</div>'+
-      '<div class="bbtns"><button class="btn sm sec" id="allNotes">✓ All notes done</button><button class="btn sm sec" id="allRoom">✓ All room paid</button>'+
-      '<input type="date" id="allRD" value="'+td+'" style="width:140px"><button class="btn sm sec" id="setRD">Apply date</button></div>'+
-      '<button class="btn full savebig" id="saveInc">Save (0)</button></div><div id="irows"></div>';
+    container.innerHTML='<div class="bulkbar"><div class="hint" style="margin-top:4px">Sessions you haven’t marked as written up — tick the ones that are done, then Save.</div>'+
+      '<div class="bbtns"><button class="btn sm sec" id="allNotes">✓ All notes done</button></div>'+
+      '<button class="btn full savebig" id="saveInc">Save (0)</button></div><div id="irows"></div>'+
+      '<p class="small muted" style="margin:10px 2px 0">Room fees aren’t here any more — a session raises its fee automatically and you settle it in <span class="taxlink" id="incRoomGo">Money › Room fees ›</span></p>';
     const irw=container.querySelector("#irows");
     const stage={};
-    irw.innerHTML=rows.map(x=>{const s=x.s,d=x.d;const miss=missingReasons(s);
-      const needNotes=miss.includes("notes"), needRoom=miss.includes("room-paid status");
-      const chargeable=(d.roomRate||0)>0;
-      stage[s._id]={notes:false,room:false,rdate:td,chargeable:chargeable};
-      const notesCtl=needNotes?'<button class="tgl" data-k="notes" data-id="'+s._id+'"><span class="tbox"></span>Notes done</button>':'<span class="chip y">✓ notes</span>';
-      /* Only a session that really does carry a per-session fee can be missing a room-paid answer
-         now — derive() calls every other case n/a — so there is no "No room fee" branch left. */
-      const roomCtl=needRoom?'<button class="tgl" data-k="room" data-id="'+s._id+'"><span class="tbox"></span>Room paid</button>'
-        :(d.roomPaidNA?'<span class="chip na">no room fee to settle</span>':'<span class="chip y">✓ room</span>');
-      const rdInput=needRoom?'<input type="date" class="rinp pdate2" data-id="'+s._id+'" value="'+td+'" style="display:none">':'';
-      return '<div class="irow" data-id="'+s._id+'"><div class="itop"><div><span class="ittl">'+esc(s.client)+'</span> <span class="isub">'+fmtDshort(s.date)+' · #'+esc(s.num)+(chargeable?' · room '+gbp(d.roomRate):'')+'</span></div><div class="li-right small muted">'+gbp(d.rate)+'</div></div><div class="ctrls">'+notesCtl+roomCtl+rdInput+'</div></div>';
+    irw.innerHTML=rows.map(x=>{const s=x.s,d=x.d;
+      stage[s._id]={notes:false};
+      return '<div class="irow" data-id="'+s._id+'"><div class="itop"><div><span class="ittl">'+esc(s.client)+'</span> <span class="isub">'+fmtDshort(s.date)+' · #'+esc(s.num)+'</span></div><div class="li-right small muted">'+gbp(d.rate)+'</div></div>'+
+        '<div class="ctrls"><button class="tgl" data-k="notes" data-id="'+s._id+'"><span class="tbox"></span>Notes done</button></div></div>';
     }).join("");
+    const rg=container.querySelector("#incRoomGo");
+    if(rg)rg.onclick=()=>go("money",{seg:"costs",focus:"roomFeesCard"});
     const sbtn=container.querySelector("#saveInc");
-    const count=()=>{let n=0;Object.keys(stage).forEach(id=>{if(stage[id].notes)n++;if(stage[id].room)n++;});return n;};
+    const count=()=>Object.keys(stage).filter(id=>stage[id].notes).length;
     const upd=()=>{const n=count();sbtn.textContent="Save ("+n+")";sbtn.classList.toggle("ready",n>0);};
     function setTgl(btn,on){const id=btn.dataset.id,k=btn.dataset.k;if(stage[id][k]===on)return;stage[id][k]=on;
       btn.classList.toggle("on",on);btn.classList.remove("pop");void btn.offsetWidth;if(on)btn.classList.add("pop");
-      const row=irw.querySelector('.irow[data-id="'+id+'"]');
-      if(k==="room"){const ri=row.querySelector('.rinp');if(ri)ri.style.display=on?"block":"none";}
       Sfx.pop();upd();}
     irw.querySelectorAll(".tgl").forEach(b=>b.onclick=()=>setTgl(b,!stage[b.dataset.id][b.dataset.k]));
     container.querySelector("#allNotes").onclick=()=>irw.querySelectorAll('.tgl[data-k="notes"]').forEach(b=>setTgl(b,true));
-    container.querySelector("#allRoom").onclick=()=>irw.querySelectorAll('.tgl[data-k="room"]').forEach(b=>setTgl(b,true));
-    container.querySelector("#setRD").onclick=()=>{const dv=container.querySelector("#allRD").value;
-      irw.querySelectorAll('.rinp').forEach(ri=>ri.value=dv);Object.keys(stage).forEach(id=>{if(stage[id].room)stage[id].rdate=dv;});};
-    irw.querySelectorAll('.rinp').forEach(ri=>ri.onchange=()=>{stage[ri.dataset.id].rdate=ri.value;});
     sbtn.onclick=async()=>{
-      const ids=Object.keys(stage).filter(id=>stage[id].notes||stage[id].room);
+      const ids=Object.keys(stage).filter(id=>stage[id].notes);
       if(!ids.length){toast("Tick something first");Sfx.error();return}
-      let nNotes=0,nRoom=0,cleared=0;
-      ids.forEach(id=>{const stg=stage[id];const ss=S.sessions.find(z=>z._id===id);if(!ss)return;
+      let cleared=0;
+      ids.forEach(id=>{const ss=S.sessions.find(z=>z._id===id);if(!ss)return;
         const wasComplete=derive(ss).complete;
-        if(stg.notes){ss.notes="Y";nNotes++;}
-        if(stg.room){ss.roomPaid="Y";const ri=irw.querySelector('.rinp[data-id="'+id+'"]');ss.roomPaidDate=(ri&&ri.value)||stg.rdate||td;nRoom++;}
+        ss.notes="Y";
         if(!wasComplete&&derive(ss).complete)cleared++;});
-      const batch=nNotes+nRoom;
+      const batch=ids.length;
       const f=gameNoteBatch({cleared:cleared});
-      await commit("Catch-up: "+nNotes+" notes, "+nRoom+" room paid");renderTabs();
+      await commit("Catch-up: "+batch+" session"+(batch===1?"":"s")+" written up");renderTabs();
       const remaining=S.sessions.filter(s=>{const d=derive(s);return d.past&&!d.complete;}).length;
-      gameShow({batch:batch,completed:cleared>0,toast:"Updated "+batch+" field"+(batch===1?"":"s")+" 🎉",
-        allClear:remaining===0,allClearEmoji:"🌟",allClearTitle:"Everything's complete!",allClearSub:"All past sessions have notes & room sorted.",
-        bigEffort:cleared>=5,bigEffortSub:cleared+" sessions fully completed in one sweep"},f);
+      gameShow({batch:batch,completed:cleared>0,toast:"Updated "+batch+" session"+(batch===1?"":"s")+" 🎉",
+        allClear:remaining===0,allClearEmoji:"🌟",allClearTitle:"Everything's written up!",allClearSub:"No past session is waiting on notes.",
+        bigEffort:cleared>=5,bigEffortSub:cleared+" sessions completed in one sweep"},f);
       refresh();};
   }
   function renderCal(){
@@ -4541,7 +4548,7 @@ VIEWS.practice=function(){
 function roomBilling(rm){return (rm&&rm.billing==="monthly")?"monthly":"session";}
 /* Does this practice pay for a room per session AT ALL? A therapist working from home, or one
    whose rooms are all on a monthly rent, never has a per-session room fee to settle — so the
-   session form drops that whole pair of controls rather than explaining itself once per session.
+   Room fees card stays away entirely rather than explaining its own emptiness.
    Read against today's rates: this answers "is this a thing I do", not "did this session cost". */
 function anyPerUseRoom(){
   const iso=isoD(today());
@@ -4915,6 +4922,89 @@ function wirePaymentsDue(v){
     b.disabled=true;
     const ok=await setChargePaid(b.dataset.pay,on?null:isoD(today()),b.dataset.lbl);
     if(ok){toast(on?"Marked unpaid":"Marked paid");if(!on)Sfx.pop();}
+    go("money",{seg:"costs",keepScroll:true});});
+  wireInfo(v);
+}
+/* ===== Room fees the sessions have raised =====
+   A session in a room you hire by the hour is a bill, and until Sep 2026 the only place that bill
+   existed was a dropdown inside the session form — so logging a session meant answering a
+   bookkeeping question, and not answering it left the session permanently "incomplete". The
+   session now RAISES the fee (derive().roomOwed, tagged to that session's `_id`) and this card is
+   where the fee is managed, next to the monthly rent and every other cost the practice pays.
+
+   It is deliberately OUTSIDE feat("finances") and outside the Plus gate. The fee is a liability
+   the therapist has actually incurred and the sessions that raised it are her own records —
+   switching a preference off, or not subscribing, must never make money she owes disappear. */
+function roomFeeRows(){
+  const t=today();
+  return S.sessions.map(s=>({s,d:derive(s)})).filter(x=>x.d.roomOwed)
+    .map(x=>{const dt=parseD(x.s.date);
+      /* Due when the room's own payment schedule says it is, exactly as derive() computes it —
+         a fee accrued yesterday for a room paid at month end is not late. */
+      return {s:x.s,d:x.d,dt,loc:x.s.location||"?",amt:x.d.roomRate||0,due:x.d.roomDue==="Y"};})
+    .sort((a,b)=>a.dt-b.dt);
+}
+function roomFeeSettled(days){
+  const t=today(), from=addDays(t,-(days||14));
+  return S.sessions.map(s=>({s,d:derive(s)}))
+    .filter(x=>(x.d.roomRate||0)>0&&!x.d.roomPaidNA&&(x.s.roomPaid==="Y"||x.s.roomPaid==="n/a"))
+    .filter(x=>{const p=x.s.roomPaidDate?parseD(x.s.roomPaidDate):null;return p&&p>=from&&p<=t;})
+    .sort((a,b)=>parseD(b.s.roomPaidDate)-parseD(a.s.roomPaidDate));
+}
+function roomFeesCard(){
+  const rows=roomFeeRows(), settled=roomFeeSettled(14);
+  const anyPerUse=anyPerUseRoom();
+  const monthlyRooms=S.rooms.filter(r=>roomBilling(r)==="monthly");
+  /* Nothing outstanding and no room ever charged by the session: the card is noise, not
+     reassurance — a therapist who works from home has no room fees and never will. */
+  if(!rows.length&&!settled.length&&!anyPerUse)return "";
+  const grp={};
+  rows.forEach(r=>{const g=grp[r.loc]||(grp[r.loc]={loc:r.loc,n:0,amt:0,dueN:0,dueAmt:0,min:null,max:null});
+    g.n++;g.amt+=r.amt;if(r.due){g.dueN++;g.dueAmt+=r.amt;}
+    if(!g.min||r.dt<g.min)g.min=r.dt; if(!g.max||r.dt>g.max)g.max=r.dt;});
+  const groups=Object.keys(grp).map(k=>grp[k]).sort((a,b)=>b.dueAmt-a.dueAmt||b.amt-a.amt);
+  const totalDue=groups.reduce((a,g)=>a+g.dueAmt,0), totalAll=groups.reduce((a,g)=>a+g.amt,0);
+  const groupRow=g=>{
+    const rng=g.min?(fmtDM(g.min)+(g.max&&+g.max!==+g.min?" – "+fmtDM(g.max):"")):"";
+    return '<div class="list-item"><div class="li-main">'+
+      '<div class="li-title">'+esc(g.loc)+' '+
+        (g.dueN?'<span class="chip n">'+g.dueN+' due</span>':'<span class="chip na">not due yet</span>')+'</div>'+
+      /* The due figure leads: this line is CSS-truncated to one row, and "£2,085 of it due now"
+         is the half a reader needs when a long date range would otherwise push it off the end. */
+      '<div class="li-sub">'+(g.dueN&&g.dueN<g.n?gbp(Math.round(g.dueAmt))+' due now · ':'')+
+        plural(g.n,"session")+' · '+esc(rng)+'</div></div>'+
+      '<div class="li-right" style="display:flex;align-items:center;gap:8px">'+gbp(Math.round(g.amt))+
+        '<button class="btn sm '+(g.dueN?'sec':'ghost')+'" data-settle="'+esc(g.loc)+'">Settle</button></div></div>';
+  };
+  const settledRow=x=>'<div class="list-item"><div class="li-main">'+
+      '<div class="li-title">'+esc(x.s.client||"—")+' · '+fmtDshort(x.s.date)+' '+
+        (x.s.roomPaid==="n/a"?'<span class="chip na">not owed</span>':'<span class="chip y">✓</span>')+'</div>'+
+      '<div class="li-sub">'+esc(x.s.location||"?")+' · '+(x.s.roomPaid==="n/a"?'written off':'paid')+' '+fmtDshort(x.s.roomPaidDate)+'</div></div>'+
+    '<div class="li-right" style="display:flex;align-items:center;gap:8px">'+gbp(x.d.roomRate||0)+
+      '<button class="btn sm ghost" data-unsettle="'+esc(x.s._id)+'">Undo</button></div></div>';
+  return '<div class="card" id="roomFeesCard">'+cardHead("Room fees","room-fees-raised")+
+    '<p class="small muted">What your sessions have run up in rooms you pay for by the hour. Every session raises its own fee — you settle them here.</p>'+
+    (rows.length
+      ? '<div class="kpis mt" style="grid-template-columns:1fr 1fr">'+
+          '<div class="kpi'+(totalDue?' bad':'')+'"><div class="v">'+gbp(Math.round(totalDue))+'</div><div class="l">due now</div></div>'+
+          '<div class="kpi"><div class="v">'+gbp(Math.round(totalAll))+'</div><div class="l">outstanding in total</div></div></div>'+
+        '<div style="padding:0 2px;margin-top:8px">'+groups.map(groupRow).join("")+'</div>'
+      : '<p class="muted small mt">'+(anyPerUse?'Every room fee is settled.':'You don’t pay for a room by the session.')+'</p>')+
+    (settled.length?'<details class="dz" style="margin-top:10px"><summary>Settled in the last fortnight ('+settled.length+')</summary>'+
+      '<div style="padding:0 2px">'+settled.map(settledRow).join("")+'</div></details>':'')+
+    (monthlyRooms.length?'<p class="small muted" style="margin-top:8px">'+esc(monthlyRooms.map(r=>r.location).join(", "))+
+      (monthlyRooms.length===1?' is':' are')+' on a monthly rent, so nothing here is raised for '+(monthlyRooms.length===1?'it':'them')+
+      ' — that rent is in <b>Payments due</b> above.</p>':'')+
+    '</div>';
+}
+function wireRoomFees(v){
+  v.querySelectorAll("[data-settle]").forEach(b=>b.onclick=()=>roomDueSheet(b.dataset.settle));
+  v.querySelectorAll("[data-unsettle]").forEach(b=>b.onclick=async()=>{
+    const ss=S.sessions.find(z=>z._id===b.dataset.unsettle); if(!ss)return;
+    b.disabled=true;
+    ss.roomPaid=""; ss.roomPaidDate="";
+    const ok=await commit("Room fee reopened: "+(ss.client||"?")+" "+fmtDshort(ss.date));
+    if(ok!==false)toast("Back on the outstanding list");
     go("money",{seg:"costs",keepScroll:true});});
   wireInfo(v);
 }
@@ -5784,6 +5874,11 @@ infoDef("form3a-mechanics","How these hours are worked out",
 infoDef("retention-rationale","How long, and why",
   '<p class="small">When a client passes one of these dates they appear below, and you decide what happens next.</p>'+
   '<p class="small">Six years each is the common default: the BACP complaint window is around three years, and insurers often ask for six. Your own insurer or supervisor may say otherwise \u2014 this is your call, not the app\u2019s.</p>');
+infoDef("room-fees-raised","How room fees get here",
+  '<p class="small">Every session in a room you pay for <b>by the session</b> raises a fee of its own, at the rate that room charged <b>on the day of that session</b> — not the rate it charges now. Nothing is asked of you when you log the session; the fee simply appears here.</p>'+
+  '<p class="small"><b>Due now</b> means the room’s own payment date has passed. A fee from yesterday for a room you settle at month end is outstanding but not late, and it is listed separately so the two are never confused.</p>'+
+  '<p class="small">Settling a fee here records <b>when you paid it</b>. It does not move the cost between tax years — a room fee belongs to the tax year of the session that ran it up, ticked or not.</p>'+
+  '<p class="small muted"><b>Not owed</b> is for a fee the room never actually charged you. It clears the row without recording a payment, and you can undo it from the settled list underneath.</p>');
 infoDef("payments-due-ticking","What ticking a payment does",
   '<p class="small">Ticking one off changes nothing in your tax figures \u2014 a cost still counts in the year it fell due, whether or not it has been ticked here.</p>');
 infoDef("business-costs-detail","How business costs work",
@@ -6077,13 +6172,17 @@ VIEWS.money=function(){
       return '<tr><td>'+m.toLocaleDateString("en-GB",{month:"short",year:"2-digit"})+'</td><td class="num">'+rs.length+'</td><td class="num">'+gbp(billed)+'</td><td class="num">'+gbp(rec)+'</td><td class="num">'+(billed-rec?gbp(billed-rec):"–")+'</td></tr>';}).join("");
     const byClient=S.clients.map(c=>{const rs=der.filter(x=>(x.s.client||"").toLowerCase()===c.code.toLowerCase()&&x.d.overdue);
       return{code:c.code,n:rs.length,amt:sum(rs,x=>x.d.rate)}}).filter(x=>x.amt>0).sort((a,b)=>b.amt-a.amt);
+    /* Room fees are SETTLED on Costs & income now, beside the rent and the rest of the bills.
+       This stays a read-out — Overview is the "where did the money go" screen — and hands over to
+       the one card that manages them, rather than growing a second set of controls that would
+       have to be kept in step with it. */
     const due=der.filter(x=>x.d.roomDue==="Y");
+    const roomNotYet=der.filter(x=>x.d.roomDue==="N");
     const roomGrp={}; due.forEach(x=>{const k=x.s.location||"?";const g=roomGrp[k]||(roomGrp[k]={n:0,amt:0,min:null,max:null});
       g.n++;g.amt+=x.d.roomRate||0;const d=parseD(x.s.date);if(!g.min||d<g.min)g.min=d;if(!g.max||d>g.max)g.max=d;});
     const roomRows=Object.keys(roomGrp).map(k=>{const g=roomGrp[k];
       const rng=g.min?(fmtDM(g.min)+(g.max&&+g.max!==+g.min?" – "+fmtDM(g.max):"")):"";
-      return '<tr><td>'+esc(k)+'</td><td class="num">'+g.n+'</td><td>'+rng+'</td><td class="num">'+gbp(g.amt)+'</td>'+
-        '<td class="num"><button class="btn sm sec" data-settle="'+esc(k)+'">Settle</button></td></tr>';}).join("");
+      return '<tr><td>'+esc(k)+'</td><td class="num">'+g.n+'</td><td>'+rng+'</td><td class="num">'+gbp(g.amt)+'</td></tr>';}).join("");
     const fc=incomeForecast();
     const fcCard='<div class="card"><h2>This month &amp; year at a glance</h2>'+
       '<div class="kpis mt">'+
@@ -6103,9 +6202,12 @@ VIEWS.money=function(){
       '<div class="small muted mt" style="font-weight:600">Clients seen per '+statGran+'</div><div id="chCli"></div></div>'+
       '<div class="card"><h2>Last 12 months</h2><table><thead><tr><th>Month</th><th class="num">Sess</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Open</th></tr></thead><tbody>'+mTable+'</tbody></table></div>'+
       '<div class="card"><h2>Outstanding by client</h2>'+(byClient.length?'<table><thead><tr><th>Client</th><th class="num">Sessions</th><th class="num">Amount</th></tr></thead><tbody>'+byClient.map(x=>'<tr><td>'+esc(x.code)+'</td><td class="num">'+x.n+'</td><td class="num">'+gbp(x.amt)+'</td></tr>').join("")+'</tbody></table>':'<p class="muted small">Nothing outstanding 🎉</p>')+'</div>'+
-      '<div class="card" id="roomDueCard"><h2>Room payments due</h2>'+(roomRows?'<div class="rawscroll"><table><thead><tr><th>Room</th><th class="num">Sessions</th><th>Dates</th><th class="num">Total</th><th></th></tr></thead><tbody>'+roomRows+'</tbody></table></div>':'<p class="muted small">No room payments outstanding.</p>')+
+      '<div class="card" id="roomDueCard"><h2>Room payments due</h2>'+(roomRows?'<div class="rawscroll"><table><thead><tr><th>Room</th><th class="num">Sessions</th><th>Dates</th><th class="num">Total</th></tr></thead><tbody>'+roomRows+'</tbody></table></div>':'<p class="muted small">No room payments outstanding.</p>')+
+        (roomNotYet.length?'<p class="small muted" style="margin-top:8px">Another '+plural(roomNotYet.length,"session")+' has raised a fee that has not fallen due yet.</p>':'')+
+        '<button class="btn sm sec mt" id="roomManage">Manage room fees ›</button>'+
         (S.rooms.some(r=>roomBilling(r)==="monthly")?'<p class="small muted" style="margin-top:8px">Rooms on a monthly rent aren’t listed here — their rent is counted in <b>Costs &amp; income</b>, not per session.</p>':'')+'</div>';
-    body.querySelectorAll("[data-settle]").forEach(b=>b.onclick=()=>roomDueSheet(b.dataset.settle));
+    const rmg=body.querySelector("#roomManage");
+    if(rmg)rmg.onclick=()=>go("money",{seg:"costs",focus:"roomFeesCard"});
     let sel=null;
     /* Redrawing replaces the .svgwrap, which resets its horizontal scroll — so tapping a bar used
        to fling the chart back to the oldest period, hiding the very breakdown it just opened.
@@ -6123,17 +6225,22 @@ VIEWS.money=function(){
     body.querySelector("#gran").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{statGran=bt.dataset.g;go("money",{keepScroll:true});});
   }
   function drawCosts(){
+    /* Room fees come FIRST and come unconditionally. They are money already owed to a landlord
+       for sessions that have happened, raised from the therapist's own records — neither a
+       preference she switched off nor a subscription she has not bought may make them vanish.
+       Everything below this line is the ledger proper, which is both gated and lockable. */
+    const rooms=roomFeesCard();
     /* Locked and switched-off are different states and must say different things: one is a
        purchase, the other is a preference the reader set themselves. */
     if(plusLocked("finances")){
-      body.innerHTML=plusLockHTML("finances","Costs & other income",
+      body.innerHTML=rooms+plusLockHTML("finances","Costs & other income",
         "Insurance, room rent, CPD and everything else the practice costs you \u2014 taken off the "+
         "profit your tax is worked out from.");
-      plusWireLocks(body); return;
+      plusWireLocks(body); wireRoomFees(body); return;
     }
-    body.innerHTML=feat("finances")?financeCards()
-      :'<div class="card"><h2>Costs &amp; other income</h2><p class="small muted">Switched off in ⚙ Settings › Features. Turn it back on there and your costs reappear — nothing was deleted.</p></div>';
-    wireFinance(body); wirePaymentsDue(body);
+    body.innerHTML=rooms+(feat("finances")?financeCards()
+      :'<div class="card"><h2>Costs &amp; other income</h2><p class="small muted">Switched off in ⚙ Settings › Features. Turn it back on there and your costs reappear — nothing was deleted.</p></div>');
+    wireFinance(body); wirePaymentsDue(body); wireRoomFees(body);
   }
   function drawTable(){body.innerHTML="";body.appendChild(rawPanel());}
   const route=()=>moneySeg==="costs"?drawCosts():moneySeg==="table"?drawTable():drawOverview();
@@ -8316,13 +8423,7 @@ function sessionForm(s,o){
      <input type="date" id="f_paid" value="${esc(m.paidDate||"")}">
      ${(!isNew&&d.overdue&&(d.rate||0)>0)?`<div class="prev"><span class="taxlink" id="f_chase">Chase this payment \u203a</span> — a message to copy into an email.</div>`:""}
      <label>Invoice #</label><input id="f_inv" value="${esc(m.invoice||"")}">
-     <div id="f_rpWrap">
-       <div class="field2">
-         <div><label>Room fee paid?</label><select id="f_rp">${opts(["","Y","N","n/a"],m.roomPaid||"")}</select></div>
-         <div><label>Paid on</label><input type="date" id="f_rpd" value="${esc(m.roomPaidDate||"")}"></div>
-       </div>
-     </div>
-     <p class="small muted" id="f_rpNote" style="display:none"></p>
+     <p class="small muted" id="f_rpNote"></p>
      <label class="colchk" style="margin-top:16px"><input type="checkbox" id="f_notes"${notesDone(m)?" checked":""}> My notes for this session are written up</label>
      <label>Admin comment <span class="muted small">(optional)</span> ${infoDot("admin-comment","About admin comments")}</label>
      <textarea id="f_admin" rows="2" placeholder="e.g. “invoice goes to her employer”, “moved from Tuesday”">${esc(m.adminNote||"")}</textarea>
@@ -8341,7 +8442,11 @@ function sessionForm(s,o){
     const g=id=>body.querySelector(id);
     const sync=()=>{m.client=g("#f_client").value;m.date=g("#f_date").value;m.time=g("#f_time").value;m.mode=g("#f_mode").value;
       m.num=g("#f_num").value;m.location=g("#f_loc").value;m.room=g("#f_room").value;m.paidDate=g("#f_paid").value;
-      m.invoice=g("#f_inv").value;m.roomPaid=g("#f_rp").value;m.roomPaidDate=g("#f_rpd").value;
+      /* `roomPaid` / `roomPaidDate` are deliberately NOT read back here. The form no longer owns
+         them — the room fee this session raises is settled in Money — and reading them from
+         controls that no longer exist is exactly how a saved session would blank its own
+         settlement. They ride through untouched on the clone. */
+      m.invoice=g("#f_inv").value;
       /* `notes` stays the string it has always been so every downstream reader — derive().complete,
          missingReasons, the raw table, older backups — is untouched. It is simply only ever "Y"
          or "" now, because the box that used to hold prose is a tickbox. */
@@ -8363,28 +8468,34 @@ function sessionForm(s,o){
         if(!lockDate)m.date=sg.date;}
       draw();
       if(isNew&&code)body.querySelector("#sugHint").innerHTML='<div class="hint">✨ Pre-filled from this client’s last session — adjust anything, then Save.</div>';};
-    /* Three ways this session has no room fee to settle, and in none of them is "Room fee paid?"
-       a question worth putting on the screen — a therapist working from home would answer it,
-       identically, on every session she ever logs.
-       Hiding it is not enough on its own: an unanswered dropdown would leave the session sitting
-       in the Incomplete worklist forever, so the state is stamped "n/a" as the controls go away.
-       The select stays in the DOM (hidden) precisely so sync() keeps reading it as it always has. */
+    /* The session form used to ask "Room fee paid?" on every single session. It is the wrong
+       screen for the question twice over: it interrupts logging a session with a bookkeeping
+       decision, and an unanswered dropdown left the session sitting in the Incomplete worklist
+       for ever. Logging a session now RAISES the fee — tagged to this session — and this line
+       reports where that fee stands, read-only, with a way through to the screen that settles it
+       alongside the rent and every other bill. Nothing here writes. */
     const paintRoomPaid=()=>{
       const loc=g("#f_loc").value, rm=roomFor(loc);
       const monthly=!!rm&&roomBilling(rm)==="monthly";
       const feeToday=effRoomRate(loc,g("#f_date").value||isoD(today()));
       const na=!rm||monthly||!(feeToday>0);
-      g("#f_rpWrap").style.display=na?"none":"";
-      const note=g("#f_rpNote"); note.style.display=na?"":"none";
-      if(!na)return;
-      const sel=g("#f_rp"), dt=g("#f_rpd");
-      if(sel.value!=="n/a")sel.value="n/a";
-      if(dt.value)dt.value="";
-      note.innerHTML = monthly
-        ? "🏠 <b>"+esc(rm.location)+"</b> is on a monthly rent, so there is nothing to settle for this session. Tick the rent off each month in <b>Money › Costs &amp; income</b>."
-        : !anyPerUseRoom()
-        ? "🏠 You don’t pay for a room by the session, so there is nothing to track here."
-        : "🏠 <b>"+esc(loc||"This location")+"</b> costs you nothing per session, so there is nothing to settle.";
+      const note=g("#f_rpNote");
+      if(na){
+        note.innerHTML = monthly
+          ? gi("rooms")+" <b>"+esc(rm.location)+"</b> is on a monthly rent, so this session raises nothing of its own. The rent is ticked off each month in <b>Money › Costs &amp; income</b>."
+          : !anyPerUseRoom()
+          ? gi("rooms")+" You don’t pay for a room by the session, so there is no room fee to track."
+          : gi("rooms")+" <b>"+esc(loc||"This location")+"</b> costs you nothing per session, so this session raises no room fee.";
+        return;
+      }
+      const settled=m.roomPaid==="Y", notOwed=m.roomPaid==="n/a";
+      note.innerHTML=gi("rooms")+" This session raises a room fee of <b>"+gbp(feeToday)+"</b> for "+esc(loc)+" — "+
+        (settled?('<b>settled</b>'+(m.roomPaidDate?" on "+fmtDshort(m.roomPaidDate):""))
+         :notOwed?'marked <b>not owed</b>'
+         :'<b>not settled yet</b>')+
+        '. <span class="taxlink" id="f_rpGo">Room fees ›</span>';
+      const lnk=note.querySelector("#f_rpGo");
+      if(lnk)lnk.onclick=()=>{closeSheet();go("money",{seg:"costs",focus:"roomFeesCard"});};
     };
     paintRoomPaid();
     const refreshHint=()=>{const d=derive(m);
@@ -8432,7 +8543,7 @@ function sessionForm(s,o){
       if(!cl){toast("No client record to chase");Sfx.error();return;}
       if(dirty&&!confirm("Leave this session without saving your changes?"))return;
       closeSheet();chaseSheet(cl);};
-    ["#f_date","#f_loc","#f_paid","#f_rp"].forEach(id=>g(id).addEventListener("change",()=>{sync();paintRoomPaid();paintCancel();}));
+    ["#f_date","#f_loc","#f_paid"].forEach(id=>g(id).addEventListener("change",()=>{sync();paintRoomPaid();paintCancel();}));
     g("#save").onclick=async()=>{sync();
       if(!m.client){toast("Choose a client");Sfx.error();return}
       if(!m.date){toast("Add a date");Sfx.error();return}
@@ -8674,54 +8785,71 @@ function peerForm(p){
 function curTab(){return cur;}
 
 /* ===== Settling per-session room fees =====
-   "Room fees due" used to be a read-only table at the bottom of Money, and the Home prompt that
-   raised it dropped the reader at the top of that screen with nothing to press. The only place a
-   per-session fee could actually be ticked off was one session at a time, or the Incomplete
-   worklist — which never sees a session whose room fee is recorded as "N", because answering the
-   question makes the session complete.
-   Writes exactly what the session form and the bulk editor write (`roomPaid`/`roomPaidDate`) so
-   every downstream reader — derive(), the SA103 boxes, the MTD quarters — is untouched. */
+   The sheet the Room fees card opens. It lists everything that room still owes — fees that have
+   fallen due AND fees that have only accrued — because a therapist paying her landlord for the
+   month wants to clear the month, not the subset the schedule has caught up with. Only the ones
+   actually due are ticked when it opens, so the default action is still "settle what is owed".
+   It writes exactly what the bulk editor always wrote (`roomPaid` / `roomPaidDate`), so derive(),
+   the SA103 boxes and the MTD quarters are untouched.
+   "Not owed" is the escape hatch that used to be the session form's "n/a" dropdown: a fee raised
+   by a room rate that turns out not to apply to that session has to have somewhere to go, or it
+   sits on the outstanding list for ever. It is a decision about a bill, so it is made here. */
 function roomDueSheet(loc){
   const td=isoD(today());
-  const rows=S.sessions.map(x=>({s:x,d:derive(x)}))
-    .filter(x=>x.d.roomDue==="Y"&&(x.s.location||"?")===loc)
-    .sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
+  const rows=roomFeeRows().filter(x=>x.loc===loc);
   if(!rows.length){toast("Nothing outstanding for "+loc);return;}
+  const nDue=rows.filter(x=>x.due).length;
   const body=el('<div></div>');
-  const stage={}; rows.forEach(x=>stage[x.s._id]=true);
-  const total=()=>rows.reduce((a,x)=>a+(stage[x.s._id]?(x.d.roomRate||0):0),0);
-  body.innerHTML='<p class="small muted">These sessions carried a room fee that has fallen due and has not been marked paid. Untick any you have not settled yet.</p>'+
+  /* Tick what is actually due; leave the rest for the therapist to add deliberately. */
+  const stage={}; rows.forEach(x=>stage[x.s._id]=x.due);
+  const total=()=>rows.reduce((a,x)=>a+(stage[x.s._id]?x.amt:0),0);
+  body.innerHTML='<p class="small muted">Room fees these sessions have run up at <b>'+esc(loc)+'</b>. '+
+      (nDue?plural(nDue,"fee")+' '+(nDue===1?'has':'have')+' fallen due and '+(nDue===1?'is':'are')+' ticked; ':'')+
+      'anything not yet due is listed but left unticked.</p>'+
     '<label>Paid on</label><input type="date" id="rdDate" value="'+esc(td)+'">'+
-    '<div class="row mt" style="gap:8px"><button class="btn sm sec" id="rdAll">Tick all</button><button class="btn sm sec" id="rdNone">Untick all</button></div>'+
+    '<div class="row mt" style="gap:8px"><button class="btn sm sec" id="rdDue">Tick what’s due</button>'+
+      '<button class="btn sm sec" id="rdAll">Tick all</button><button class="btn sm sec" id="rdNone">Untick all</button></div>'+
     '<div id="rdRows" class="mt"></div>'+
-    '<button class="btn full mt savebig" id="rdSave"></button>';
+    '<button class="btn full mt savebig" id="rdSave"></button>'+
+    '<button class="btn full sec mt" id="rdNA">Mark ticked as not owed</button>'+
+    '<p class="small muted" style="margin-top:6px">Not owed takes a fee off this list without recording a payment — for a session the room didn’t actually charge you for.</p>';
   const rw=body.querySelector("#rdRows");
   const paint=()=>{
     rw.innerHTML=rows.map(x=>'<label class="colchk rdrow"><input type="checkbox" data-id="'+x.s._id+'"'+(stage[x.s._id]?" checked":"")+'>'+
       '<span><b>'+esc(x.s.client||"—")+'</b> · '+fmtDshort(x.s.date)+
       (x.s.room&&x.s.room!=="-"?' · room '+esc(x.s.room):'')+
-      ' <span class="muted">'+gbp(x.d.roomRate||0)+'</span></span></label>').join("");
+      ' <span class="muted">'+gbp(x.amt)+'</span>'+
+      (x.due?'':' <span class="chip na">not due yet</span>')+'</span></label>').join("");
     rw.querySelectorAll("input").forEach(i=>i.onchange=()=>{stage[i.dataset.id]=i.checked;upd();});
   };
-  const btn=body.querySelector("#rdSave");
+  const btn=body.querySelector("#rdSave"), naBtn=body.querySelector("#rdNA");
   const upd=()=>{const n=rows.filter(x=>stage[x.s._id]).length;
     btn.textContent=n?("Mark "+n+" paid · "+gbp(total())):"Nothing ticked";
-    btn.classList.toggle("ready",n>0);};
+    btn.classList.toggle("ready",n>0);
+    naBtn.style.display=n?"":"none";
+    naBtn.textContent="Mark "+n+" as not owed";};
   paint();upd();
-  body.querySelector("#rdAll").onclick=()=>{rows.forEach(x=>stage[x.s._id]=true);paint();upd();};
-  body.querySelector("#rdNone").onclick=()=>{rows.forEach(x=>stage[x.s._id]=false);paint();upd();};
-  btn.onclick=async()=>{
+  const setAll=v=>{rows.forEach(x=>stage[x.s._id]=(v==="due"?x.due:v));paint();upd();};
+  body.querySelector("#rdDue").onclick=()=>setAll("due");
+  body.querySelector("#rdAll").onclick=()=>setAll(true);
+  body.querySelector("#rdNone").onclick=()=>setAll(false);
+  /* Both buttons write the same two fields and differ only in what they write, so they share one
+     path — two near-identical copies is how the paid and the written-off case drift apart. */
+  const apply=async(mode)=>{
     const when=body.querySelector("#rdDate").value||td;
     const picked=rows.filter(x=>stage[x.s._id]);
     if(!picked.length){toast("Tick something first");Sfx.error();return;}
     let amt=0;
     picked.forEach(x=>{const ss=S.sessions.find(z=>z._id===x.s._id);if(!ss)return;
-      ss.roomPaid="Y"; ss.roomPaidDate=when; amt+=x.d.roomRate||0;});
-    const ok=await commit("Marked "+picked.length+" room fee"+(picked.length===1?"":"s")+" paid at "+loc);
+      ss.roomPaid=(mode==="na")?"n/a":"Y"; ss.roomPaidDate=when; amt+=x.amt;});
+    const ok=await commit((mode==="na"?"Wrote off ":"Marked ")+picked.length+" room fee"+(picked.length===1?"":"s")+
+      (mode==="na"?" as not owed at ":" paid at ")+loc);
     closeSheet();
-    if(ok!==false){toast(gbp(amt)+" marked paid");Sfx.tick();}
-    go("money",{keepScroll:true});
+    if(ok!==false){toast(mode==="na"?(picked.length+" written off"):(gbp(amt)+" marked paid"));Sfx.tick();}
+    go("money",{seg:"costs",keepScroll:true});
   };
+  btn.onclick=()=>apply("paid");
+  naBtn.onclick=()=>apply("na");
   openSheet("Room fees · "+loc,body);
 }
 
@@ -8736,11 +8864,11 @@ function attentionItems(){
       sub:oldest?("oldest "+fmtDM(oldest)):"",btn:"Collect",act:()=>{sessFilter.view="list";sessFilter.seg="unpaid";go("sessions");}});}
   const inc=der.filter(x=>x.d.past&&!x.d.complete);
   if(inc.length)items.push({cls:"warn",e:gi("notes"),msg:"<b>"+inc.length+" session"+(inc.length===1?"":"s")+" incomplete</b>",
-    sub:"notes or room-paid missing",btn:"Catch up",act:()=>{sessFilter.view="list";sessFilter.seg="incomplete";go("sessions");}});
+    sub:"notes not written up yet",btn:"Catch up",act:()=>{sessFilter.view="list";sessFilter.seg="incomplete";go("sessions");}});
   const rd=der.filter(x=>x.d.roomDue==="Y");
   if(rd.length){const amt=rd.reduce((a,x)=>a+(x.d.roomRate||0),0);
     items.push({cls:"warn",e:gi("rooms"),msg:"<b>Room fees due</b> · "+gbp(amt)+" across "+rd.length+" session"+(rd.length===1?"":"s"),
-      sub:"tap to tick them off",btn:"Settle",act:()=>go("money",{seg:"overview",focus:"roomDueCard"})});}
+      sub:"tap to tick them off",btn:"Settle",act:()=>go("money",{seg:"costs",focus:"roomFeesCard"})});}
   const sups=(S.supervision||[]).filter(s=>s.date&&parseD(s.date)<=t).sort((a,b)=>parseD(b.date)-parseD(a.date));
   if(sups.length){const days=Math.floor((t-parseD(sups[0].date))/86400000);
     if(days>35)items.push({cls:"acc",e:gi("supervision"),msg:"<b>Supervision due</b> · last was "+days+" days ago",
