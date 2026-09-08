@@ -1171,7 +1171,7 @@ const MAX_SNAP=120;
 /* Data schema version, stamped on state and on every backup. Bump when a change would be
    misread by an older build, and add the matching step to migrate(). Data with no stamp is v1
    (everything written before versioning existed). */
-const SCHEMA_VERSION=7;
+const SCHEMA_VERSION=8;
 function stateSchemaVersion(st){const v=st&&st.meta&&+st.meta.schemaVersion;return v>0?v:1;}
 
 function clone(o){return JSON.parse(JSON.stringify(o))}
@@ -1216,6 +1216,13 @@ function normalize(st){
      mid-accreditation would lose them the one screen they're keeping records for. */
   if(sg.features.accreditation==null)sg.features.accreditation=hasData?true:false;
   if(sg.cpdTarget==null)sg.cpdTarget=30;
+  /* v8: does supervision count toward the CPD target? Both default TRUE, which is exactly what
+     the app did before the question could be asked, so no existing install's figure moves. It is
+     genuinely contested — some bodies count clinical supervision as CPD, some count it only in
+     part, some not at all — and an app that quietly decides for the therapist is an app that
+     gives her a number she cannot defend to her accrediting body. */
+  if(sg.cpdCountSupervision==null)sg.cpdCountSupervision=true;
+  if(sg.cpdCountPeer==null)sg.cpdCountPeer=true;
   /* HMRC's default for sole traders since 2024/25 is the CASH basis: income counted when it is
      received and costs when they are paid. Accruals is now the opt-out election, not the norm. */
   if(sg.taxBasis==null)sg.taxBasis="cash";
@@ -1299,7 +1306,11 @@ function normalize(st){
   st.otherIncome.forEach(x=>{if(x&&x.cat==null)x.cat=migrateCat("inc",x.category);});
   /* peer supervision: counts toward total accreditation hours, excluded from the 1:6 ratio */
   st.peerSupervision=st.peerSupervision||[];
-  ["roomRentHistory","expenses","otherIncome","peerSupervision"].forEach(k=>st[k].forEach(x=>{if(x&&!x._id)x._id=uid()}));
+  /* v8: CPD that is not supervision. Deliberately a log of HOURS and nothing else — what a
+     workshop cost is a business cost, and ledgerBetween is the only place costs are totalled.
+     A `cost` here would be a second one, and the MTD quarters would stop reconciling to tyNet. */
+  st.cpd=st.cpd||[];
+  ["roomRentHistory","expenses","otherIncome","peerSupervision","cpd"].forEach(k=>st[k].forEach(x=>{if(x&&!x._id)x._id=uid()}));
   st.rooms.forEach(r=>{if(r&&r.billing==null)r.billing="session"}); // absent billing mode = per-session, the only mode before v3
   /* accreditation hours (Form 3A): supervision totals are entered manually; clinical hours come from logged sessions */
   st.accreditation=st.accreditation||{}; const ac=st.accreditation;
@@ -1377,6 +1388,12 @@ function normalize(st){
      v5 → v6 dates the whole-practice tax settings (region, student loan) to a tax year and adds
      the record of what HMRC actually asked for and what has been paid. A v6 backup can say
      "Plan 2 until 2025-26, none after" and "HMRC assessed 2025-26 at £4,310, two payments on
+     v7 → v8 adds S.cpd, the log of CPD that is not supervision — a workshop, a book, a
+     podcast — and the two switches that say whether supervision counts toward the target at
+     all. A v8 backup can hold twenty hours of workshops and "supervision does not count for
+     me"; a v7 build has neither, so it would drop every one of those hours, put supervision
+     back into the total, and save both losses back. Hence the bump.
+
      account of £1,900 already made"; a v5 build has neither field, so it would apply one loan
      plan to every year and show its own estimate in place of the real assessment — a wrong
      figure presented as the true one. Hence the bump.
@@ -2802,12 +2819,52 @@ function clinicalStats(){const t=today();let inP=0,onl=0;
    their annual CPD requirement. Supervision and peer supervision both count toward it. The Form 3A
    ratio below is a separate, narrower question that only matters while working toward accreditation,
    so it only appears when that's switched on. */
+/* The kinds of CPD that are not supervision. Keyed, like EXP_CATS, so a stored entry keeps
+   meaning what it meant even if the wording on screen changes; `other` is the catch-all and an
+   entry whose key this build has never heard of falls back to it rather than vanishing. */
+const CPD_KINDS={
+  workshop:  {n:"Workshop or training day", e:"\ud83e\uddf0"},
+  course:    {n:"Course or qualification",  e:"\ud83c\udf93"},
+  conference:{n:"Conference or seminar",    e:"\ud83c\udfdb\ufe0f"},
+  webinar:   {n:"Webinar or online talk",   e:"\ud83d\udcbb"},
+  elearning: {n:"E-learning module",        e:"\ud83d\uddb1\ufe0f"},
+  reading:   {n:"Reading",                  e:"\ud83d\udcd6"},
+  podcast:   {n:"Podcast or audio",         e:"\ud83c\udfa7"},
+  personal:  {n:"Personal therapy",         e:"\ud83e\udeb4"},
+  reflection:{n:"Reflective practice",      e:"\u270d\ufe0f"},
+  other:     {n:"Something else",           e:"\u2795"}
+};
+function cpdKind(k){return CPD_KINDS[k]||CPD_KINDS.other;}
+/* Whether supervision counts toward the CPD target is the therapist's call, not the app's --
+   accrediting bodies genuinely differ. Absent means yes, which is what the app did before the
+   question existed, so upgrading never moves anybody's number. */
+function cpdCountsSup(){return settings().cpdCountSupervision!==false;}
+function cpdCountsPeer(){return settings().cpdCountPeer!==false;}
+/* CPD hours over a rolling 12 months, reported as its COMPOSITION rather than one figure.
+   A bare total cannot answer the question every therapist actually has in front of a renewal
+   form -- "how much of this is supervision, and how much is everything else?" -- and it hides
+   the case where a target is met entirely by turning up to supervision. `sup` and `peer` are
+   always the hours that EXIST; `supCounted`/`peerCounted` are the hours allowed into `total`. */
 function cpdYearHours(){
   const t=today(), from=addYears(t,-1);
   const inWin=d=>{const x=d?parseD(d):null;return x&&x>from&&x<=t;};
   const sup=(S.supervision||[]).filter(s=>inWin(s.date)).length;          /* 1 hr each, as before */
   const peer=feat("peer")?(S.peerSupervision||[]).reduce((a,p)=>a+(inWin(p.date)?(+p.hours||0):0),0):0;
-  return {sup,peer,total:sup+peer,from,to:t};
+  const byKind={};
+  let own=0;
+  (S.cpd||[]).forEach(c=>{if(!c||!inWin(c.date))return;
+    const h=+c.hours||0; if(!(h>0))return;
+    const k=CPD_KINDS[c.kind]?c.kind:"other";
+    byKind[k]=(byKind[k]||0)+h; own+=h;});
+  const supCounted=cpdCountsSup()?sup:0, peerCounted=cpdCountsPeer()?peer:0;
+  const parts=[];
+  if(supCounted)parts.push({k:"supervision",n:"Clinical supervision",e:"\ud83d\udcac",hrs:supCounted});
+  if(peerCounted)parts.push({k:"peer",n:"Peer supervision",e:"\ud83e\udd1d",hrs:peerCounted});
+  Object.keys(byKind).sort((a,b)=>byKind[b]-byKind[a])
+    .forEach(k=>parts.push({k,n:cpdKind(k).n,e:cpdKind(k).e,hrs:byKind[k]}));
+  return {sup,peer,supCounted,peerCounted,own,byKind,parts,
+    excluded:(sup-supCounted)+(peer-peerCounted),
+    total:supCounted+peerCounted+own,from,to:t};
 }
 function cpdTarget(){const v=+(settings().cpdTarget);return v>0?v:30;}
 function mountCPD(host){
@@ -2815,31 +2872,111 @@ function mountCPD(host){
   const c=cpdYearHours(), target=cpdTarget(), r1=x=>Math.round(x*10)/10;
   const pct=Math.max(0,Math.min(100,Math.round(c.total/target*100)));
   const short=Math.max(0,target-c.total);
-  host.innerHTML='<div class="card"><h2>CPD hours</h2>'+
-    '<p class="small muted" style="margin:0 0 4px">Continuing professional development in the last 12 months. '+infoLink("cpd-window")+'</p>'+
+  const maxPart=c.parts.reduce((a,p)=>Math.max(a,p.hrs),0);
+  /* WHERE the hours came from, not just how many. A therapist filling in a renewal form is
+     asked to show a spread of activity, and a bar that is 30 hours of one thing is a different
+     answer from a bar that is six kinds of thing -- which a single total cannot tell her. */
+  const parts=c.parts.length
+    ? c.parts.map(pt=>anaBarRow(pt.e+" "+esc(pt.n),r1(pt.hrs)+" hr"+(pt.hrs===1?"":"s"),
+        maxPart?Math.round(pt.hrs/maxPart*100):0)).join("")
+    : '<p class="small muted">Nothing counted in the last 12 months yet.</p>';
+  host.innerHTML='<div class="card">'+cardHead("CPD hours","cpd-window")+
+    '<p class="small muted" style="margin:0 0 4px">Continuing professional development in the last 12 months.</p>'+
     '<div class="kpis mt">'+
       '<div class="kpi'+(c.total>=target?' good':'')+'"><div class="v">'+r1(c.total)+'</div><div class="l">hrs in 12 months</div></div>'+
-      '<div class="kpi"><div class="v">'+r1(c.sup)+'</div><div class="l">from supervision</div></div>'+
-      (feat("peer")?'<div class="kpi"><div class="v">'+r1(c.peer)+'</div><div class="l">from peer</div></div>':'')+
+      '<div class="kpi"><div class="v">'+r1(c.own)+'</div><div class="l">not supervision</div></div>'+
+      '<div class="kpi"><div class="v">'+r1(c.supCounted+c.peerCounted)+'</div><div class="l">from supervision</div></div>'+
       '<div class="kpi"><div class="v">'+target+'</div><div class="l">your target</div></div>'+
     '</div>'+
     '<div class="fbar" style="margin-top:12px"><i style="width:'+pct+'%"></i></div>'+
     (c.total>=target
-      ? '<div class="vmsg ok" style="margin-top:10px">✓ '+r1(c.total)+' hrs logged — you’re at your '+target+'-hour target.</div>'
+      ? '<div class="vmsg ok" style="margin-top:10px">\u2713 '+r1(c.total)+' hrs logged \u2014 you\u2019re at your '+target+'-hour target.</div>'
       : '<div class="vmsg warn" style="margin-top:10px">'+r1(short)+' hr'+(short===1?'':'s')+' short of '+target+'. Anything you log from here counts.</div>')+
-    '<label style="margin-top:14px">Annual CPD target (hours)</label>'+
-    '<input type="number" min="1" max="200" step="1" id="cpdT" value="'+target+'">'+
-    '<p class="small muted">BACP asks accredited members for 30 hours a year; other bodies differ. Set whatever yours requires.</p>'+
+    /* The awkward case a bare total hides: the target is met, but only because supervision is
+       being counted. Some accrediting bodies will not accept that, and it is far better said
+       out loud than discovered on a renewal form. */
+    (c.total>=target&&c.own<target&&(c.supCounted+c.peerCounted)>0
+      ? '<p class="small muted" style="margin:8px 0 0">Without supervision you would be on <b>'+r1(c.own)+' hrs</b> \u2014 '+
+        (c.own>=target?'still at target.':'below your '+target+'-hour target. Worth knowing if your body counts supervision separately.')+'</p>'
+      : '')+
+    (c.excluded>0?'<p class="small muted" style="margin:8px 0 0">'+r1(c.excluded)+' hr'+(c.excluded===1?'':'s')+
+      ' of supervision '+(c.excluded===1?'is':'are')+' logged but not counted, because you\u2019ve said supervision doesn\u2019t count toward your target.</p>':'')+
+    '<div class="grp-h" style="margin-top:14px">Where your hours came from</div>'+parts+
+    '<div class="row mt" style="gap:8px">'+
+      '<button class="btn sm sec" id="cpdOpts">Target &amp; what counts</button></div>'+
     '</div>';
   wireInfo(host);
-  const inp=host.querySelector("#cpdT");
-  inp.onchange=async()=>{
-    const v=Math.max(1,Math.min(200,Math.round(+inp.value||0)));
-    inp.value=v;
-    if(v===cpdTarget())return;
-    settings().cpdTarget=v;
-    await commit("CPD target: "+v+" hrs/yr");
+  const opt=host.querySelector("#cpdOpts"); if(opt)opt.onclick=()=>cpdSettingsSheet();
+}
+/* Target and the two "does supervision count" switches. In a sheet rather than on the card
+   because they are set once and then read every month, and three controls under a progress bar
+   is three controls between the reader and the figure they came for. */
+function cpdSettingsSheet(){
+  const body=el('<div></div>');
+  const w={target:cpdTarget(),sup:cpdCountsSup(),peer:cpdCountsPeer()};
+  body.innerHTML='<label>Annual CPD target (hours)</label>'+
+    '<input type="number" min="1" max="200" step="1" id="cpdT" value="'+w.target+'">'+
+    '<p class="small muted">BACP asks accredited members for 30 hours a year; other bodies differ. Set whatever yours requires.</p>'+
+    '<div class="grp-h" style="margin-top:14px">Does supervision count toward it?</div>'+
+    '<div id="cpdSup"></div>'+
+    '<p class="small muted">Accrediting bodies differ, and some count supervision only in part. Switching one off leaves the hours logged and on your records \u2014 it only takes them out of the target above.</p>'+
+    '<button class="btn full mt savebig ready" id="cpdSave">Save</button>';
+  /* Same switch the Settings feature rows use, so this reads as one app rather than as a second
+     kind of toggle invented for one sheet. `.sw` is a button, not a checkbox — it carries its
+     state in a class and is wired by click, exactly as wireFeatures does. */
+  const rows=body.querySelector("#cpdSup");
+  rows.innerHTML=ovToggleRow("cpdSup",gi("supervision"),"Clinical supervision","One hour for each session you log",w.sup)+
+    (feat("peer")?ovToggleRow("cpdPeer",gi("peer"),"Peer supervision","The hours you log against each entry",w.peer):"");
+  [["cpdSup","sup"],["cpdPeer","peer"]].forEach(pair=>{
+    const sw=rows.querySelector('[data-sw="'+pair[0]+'"]'), row=rows.querySelector('[data-row="'+pair[0]+'"]');
+    if(!sw)return;
+    sw.onclick=()=>{w[pair[1]]=!w[pair[1]];sw.classList.toggle("on",w[pair[1]]);
+      row.classList.toggle("off",!w[pair[1]]);Sfx.tick();};});
+  body.querySelector("#cpdSave").onclick=async()=>{
+    const v=Math.max(1,Math.min(200,Math.round(+body.querySelector("#cpdT").value||0)));
+    if(!(v>=1)){toast("Enter a target between 1 and 200 hours");Sfx.error();return;}
+    const sg=settings();
+    const changed=(v!==cpdTarget())||(w.sup!==cpdCountsSup())||(w.peer!==cpdCountsPeer());
+    sg.cpdTarget=v; sg.cpdCountSupervision=!!w.sup; sg.cpdCountPeer=!!w.peer;
+    if(changed)await commit("CPD: "+v+" hrs/yr target, supervision "+(w.sup?"counts":"doesn\u2019t count"));
+    closeSheet(); if(changed)toast("Saved");
     go(cur,{keepScroll:true});};
+  openSheet("CPD target & what counts",body);
+}
+/* One CPD entry. Hours and what it was -- no cost field, deliberately: what a course cost is a
+   business cost, ledgerBetween is the only place costs are totalled, and a second one here would
+   be counted twice or not at all. The form says so and links across. */
+function cpdForm(rec){
+  const isNew=!rec;
+  const m=rec?clone(rec):{_id:uid(),date:isoD(today()),hours:1,kind:"workshop",title:"",provider:"",notes:""};
+  const body=el('<div></div>');
+  body.innerHTML='<div class="field2"><div><label>Date</label><input type="date" id="c_date" value="'+esc(m.date)+'"></div>'+
+      '<div><label>Hours</label><input type="number" min="0" step="0.25" id="c_hrs" value="'+esc(m.hours)+'"></div></div>'+
+    '<label>What kind</label><select id="c_kind">'+Object.keys(CPD_KINDS).map(k=>
+      '<option value="'+k+'"'+(m.kind===k?" selected":"")+'>'+CPD_KINDS[k].e+' '+esc(CPD_KINDS[k].n)+'</option>').join("")+'</select>'+
+    '<label>What was it <span class="muted small">(title, book, episode)</span></label><input id="c_title" maxlength="80" value="'+esc(m.title||"")+'">'+
+    '<label>Who by <span class="muted small">(optional)</span></label><input id="c_prov" maxlength="60" value="'+esc(m.provider||"")+'">'+
+    '<label>Notes <span class="muted small">(optional \u2014 what you took from it)</span></label><textarea id="c_notes" rows="2" maxlength="300">'+esc(m.notes||"")+'</textarea>'+
+    '<p class="small muted">Hours only. If it cost you anything, put that in <span class="taxlink" id="c_cost">Money \u203a Costs &amp; income \u203a</span> under CPD &amp; training, where it comes off your tax.</p>'+
+    '<button class="btn full mt" id="cSave">Save</button>'+
+    (isNew?"":'<button class="btn danger full mt" id="cDel">Delete</button>');
+  const g=q=>body.querySelector(q);
+  g("#c_cost").onclick=()=>{closeSheet();go("money",{seg:"costs"});};
+  g("#cSave").onclick=async()=>{
+    m.date=g("#c_date").value; m.hours=+g("#c_hrs").value||0; m.kind=g("#c_kind").value;
+    m.title=g("#c_title").value.trim(); m.provider=g("#c_prov").value.trim(); m.notes=g("#c_notes").value.trim();
+    if(!m.date){toast("Pick a date");Sfx.error();return;}
+    if(!(m.hours>0)){toast("Enter how many hours");Sfx.error();return;}
+    if(!m.title){toast("Say what it was");Sfx.error();return;}
+    S.cpd=S.cpd||[];
+    const ex=S.cpd.find(x=>x._id===m._id);
+    if(ex)Object.assign(ex,m); else S.cpd.push(m);
+    await commit((ex?"Edited":"Added")+" CPD: "+m.title+" ("+m.hours+" hr)");
+    closeSheet();toast("Saved");go(cur,{keepScroll:true});};
+  if(!isNew)g("#cDel").onclick=async()=>{
+    S.cpd=(S.cpd||[]).filter(x=>x._id!==m._id);
+    await commit("Deleted CPD: "+(m.title||m.date));closeSheet();toast("Deleted");go(cur,{keepScroll:true});};
+  openSheet(isNew?"Log CPD":"Edit CPD",body);
 }
 /* Form 3A accreditation card: clinical hrs (from sessions) vs supervision hrs (manual), ratio must stay ≤ 6 */
 function mountAccreditation(host){if(!host||!feat("accreditation"))return;
@@ -3162,6 +3299,7 @@ function supervisionPanel(){
   const v=el('<div class="view active"></div>');
   v.innerHTML='<div class="seg mb" id="suptab" style="display:inline-flex"><button data-st="log" class="'+(supTab==="log"?"on":"")+'">Log</button>'+
     (feat("peer")?'<button data-st="peer" class="'+(supTab==="peer"?"on":"")+'">Peer</button>':'')+
+    '<button data-st="cpd" class="'+(supTab==="cpd"?"on":"")+'">CPD</button>'+
     '<button data-st="metrics" class="'+(supTab==="metrics"?"on":"")+'">Insights</button></div><div id="supbody"></div>';
   const sb=v.querySelector("#supbody");
   {
@@ -3194,6 +3332,31 @@ function supervisionPanel(){
       sb.querySelector("#addPeer").onclick=()=>peerForm(null);
       sb.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>peerForm((S.peerSupervision||[]).find(p=>p._id===li.dataset.id)));
     }
+    /* CPD gets a screen of its own rather than a card on Insights. Supervision is one input to
+       a CPD target and, for many therapists, not the largest one -- workshops, reading, podcasts
+       and courses were simply not recordable here before, so the figure on the card could only
+       ever be an undercount presented as a total. */
+    function drawCPD(){
+      const log=(S.cpd||[]).slice().filter(c=>c&&c.date).sort((a,b)=>parseD(b.date)-parseD(a.date));
+      const c=cpdYearHours();
+      const inWin=d=>{const x=d?parseD(d):null;return x&&x>c.from&&x<=c.to;};
+      const row=x=>'<div class="list-item" data-id="'+esc(x._id)+'"><div class="li-main">'+
+        '<div class="li-title">'+cpdKind(x.kind).e+' '+esc(x.title||cpdKind(x.kind).n)+
+          (inWin(x.date)?'':' <span class="chip na">over a year ago</span>')+'</div>'+
+        '<div class="li-sub">'+fmtDshort(x.date)+' · '+esc(cpdKind(x.kind).n)+
+          (x.provider?' · '+esc(x.provider):'')+'</div></div>'+
+        '<div class="li-right">'+(Math.round((+x.hours||0)*10)/10)+' hr'+((+x.hours)===1?'':'s')+'</div></div>';
+      sb.innerHTML='<div id="cpdMount"></div>'+
+        '<div class="toolbar"><button class="btn sm" id="addCpd">＋ Log CPD</button></div>'+
+        '<div class="card" style="padding:4px 12px">'+(log.length?log.map(row).join("")
+          :'<p class="muted small center" style="padding:18px">No CPD logged yet. Workshops, courses, reading, podcasts — anything that counts toward your hours.</p>')+'</div>'+
+        (log.length?'<p class="small muted center">'+log.length+' '+(log.length===1?'entry':'entries')+' logged · '+
+          (Math.round(c.own*10)/10)+' hr'+(c.own===1?'':'s')+' of it in the last 12 months.</p>':'')+
+        '<div class="card"><h2>What goes here</h2><p class="small muted" style="margin:0">Everything that is <b>not</b> supervision — a training day, a book, a podcast episode, an e-learning module, your own therapy. Supervision is logged on its own tabs and added to the total above, unless you\u2019ve said it shouldn\u2019t count.</p></div>';
+      mountCPD(sb.querySelector("#cpdMount"));
+      sb.querySelector("#addCpd").onclick=()=>cpdForm(null);
+      sb.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>cpdForm((S.cpd||[]).find(x=>x._id===li.dataset.id)));
+    }
     function drawMetrics(){
       const t=today();
       const sup=(S.supervision||[]).slice().filter(s=>s.date).sort((a,b)=>parseD(a.date)-parseD(b.date));
@@ -3211,7 +3374,10 @@ function supervisionPanel(){
         return {code:c.code,date:ld||null,days:ld?Math.floor((t-ld)/86400000):null};})
         .sort((a,b)=>{if(a.days==null&&b.days==null)return a.code.localeCompare(b.code);if(a.days==null)return -1;if(b.days==null)return 1;return b.days-a.days;});
       const recencyChip=r=>r.days==null?'<span class="chip n">never</span>':r.days>56?'<span class="chip n">'+r.days+'d</span>':r.days>28?'<span class="chip f">'+r.days+'d</span>':'<span class="chip y">'+r.days+'d</span>';
-      sb.innerHTML='<div id="cpdMount"></div><div id="accMount"></div><div class="kpis mb">'+
+      /* The CPD card moved to its own tab (above). Insights is now the accreditation view --
+         Form 3A and the discussion-recency table -- which is a narrower question for a narrower
+         group, and the two were never really the same screen. */
+      sb.innerHTML='<div id="accMount"></div><div class="kpis mb">'+
         '<div class="kpi"><div class="v">'+totalSess+'</div><div class="l">Sessions logged</div></div>'+
         '<div class="kpi"><div class="v">'+gbp(Math.round(totalCost))+'</div><div class="l">Total spent</div></div>'+
         '<div class="kpi"><div class="v">'+(Math.round(totalHrs*10)/10)+'</div><div class="l">Client-hrs reviewed</div></div>'+
@@ -3220,11 +3386,10 @@ function supervisionPanel(){
         '<div class="card"><h2>Client discussion recency</h2><p class="small muted" style="margin:0 0 6px">Time since each active client was last discussed in supervision'+(avgGap!=null?' · avg '+avgGap+' days between supervisions':'')+'.</p>'+
         (rows.length?'<div style="padding:0 2px">'+rows.map(r=>'<div class="list-item"><div class="li-main"><div class="li-title">'+esc(r.code)+'</div><div class="li-sub">'+(r.date?'Last discussed '+fmtD(r.date):'Not yet discussed in supervision')+'</div></div><div class="li-right">'+recencyChip(r)+'</div></div>').join("")+'</div>':'<p class="muted small">No active clients to show.</p>')+
         '<div class="legend" style="margin-top:10px"><span class="lgi"><i style="background:var(--good)"></i>≤4 wks</span><span class="lgi"><i style="background:var(--accent)"></i>4–8 wks</span><span class="lgi"><i style="background:var(--bad)"></i>8+ wks / never</span></div></div>';
-      mountCPD(sb.querySelector("#cpdMount"));
       mountAccreditation(sb.querySelector("#accMount"));
     }
     if(supTab==="peer"&&!feat("peer"))supTab="log";   // feature switched off since it was last open
-    const route=()=>supTab==="metrics"?drawMetrics():supTab==="peer"?drawPeer():drawLog();
+    const route=()=>supTab==="metrics"?drawMetrics():supTab==="cpd"?drawCPD():supTab==="peer"?drawPeer():drawLog();
     v.querySelector("#suptab").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{supTab=bt.dataset.st;
       v.querySelector("#suptab").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));route();});
     route();
@@ -3826,11 +3991,20 @@ function anaCPD(){
   if(!feat("supervision"))return {ready:false,need:"Supervision is switched off, so there are no CPD hours to count."};
   const c=cpdYearHours(), target=cpdTarget(), t=today(), from=addDays(t,-90);
   const inWin=d=>{const x=d?parseD(d):null;return x&&x>from&&x<=t;};
-  const recent=(S.supervision||[]).filter(s=>inWin(s.date)).length
-    +(feat("peer")?(S.peerSupervision||[]).reduce((a,p)=>a+(inWin(p.date)?(+p.hours||0):0),0):0);
+  /* The pace has to be built from exactly what the TARGET counts, or the two figures on the card
+     answer different questions: counting supervision into the pace while the therapist has said
+     it does not count toward her target reads as "you are fine" against a total that says she is
+     not. */
+  const recent=(cpdCountsSup()?(S.supervision||[]).filter(s=>inWin(s.date)).length:0)
+    +((feat("peer")&&cpdCountsPeer())?(S.peerSupervision||[]).reduce((a,p)=>a+(inWin(p.date)?(+p.hours||0):0),0):0)
+    +(S.cpd||[]).reduce((a,x)=>a+(inWin(x&&x.date)?(+x.hours||0):0),0);
   const pace=recent/90*365;                                  /* hours a year at the current rate */
   return {ready:true,total:Math.round(c.total*10)/10,target,
     sup:c.sup,peer:c.peer,
+    own:Math.round(c.own*10)/10,
+    fromSup:Math.round((c.supCounted+c.peerCounted)*10)/10,
+    parts:c.parts.map(x=>({n:x.n,e:x.e,hrs:Math.round(x.hrs*10)/10})),
+    countsSup:cpdCountsSup(),
     pace:Math.round(pace*10)/10,recent:Math.round(recent*10)/10,
     onTrack:pace>=target,
     shortfall:Math.max(0,Math.round((target-pace)*10)/10),
@@ -4141,8 +4315,15 @@ function trendsYouHTML(){
     ? anaCard("CPD trajectory","ana-cpd",
         anaKpis([[cp.total,"Hours in 12 months",cp.total>=cp.target?"good":""],
                  [cp.pace,"Hours a year at your current pace",cp.onTrack?"good":"bad"],
+                 [cp.own,"Of it, not supervision"],
                  [cp.target,"Your target"]])+
         anaBarRow("Logged against target",cp.total+" of "+cp.target+" hrs",cp.pct)+
+        /* Composition, not just the total. A year made entirely of supervision and a year made
+           of six kinds of activity are different answers to a renewal form, and only one figure
+           on this card could ever tell them apart. */
+        (cp.parts.length>1?'<div class="grp-h" style="margin-top:10px">Where it came from</div>'+
+          cp.parts.map(pt=>anaBarRow(pt.e+" "+esc(pt.n),pt.hrs+" hr"+(pt.hrs===1?"":"s"),
+            Math.round(pt.hrs/cp.parts[0].hrs*100))).join(""):"")+
         /* Four states, not two: whether the last twelve months cleared the target and whether the
            current pace would clear it again are separate questions, and the awkward one — target
            met, pace since dropped — is exactly the case a running total hides. */
@@ -5867,7 +6048,9 @@ infoDef("carryforward","Why nothing needs changing most years",
   '<p class="small">It also means a change only ever moves <b>this year and the ones after it</b>. The year you finish repaying a loan, or move to or from Scotland, every earlier year keeps the figures it was actually assessed on \u2014 including returns you have already filed.</p>');
 infoDef("cpd-window","How your CPD hours are counted",
   '<p class="small">This is a rolling last 12 months, not the current tax year or calendar year \u2014 the window moves forward every time you check.</p>'+
-  '<p class="small">Clinical supervision counts one hour per logged session. Peer supervision counts the hours you have logged for it, when that\u2019s switched on.</p>');
+  '<p class="small">Three things feed it. <b>Anything you log on the CPD tab</b> \u2014 workshops, courses, reading, podcasts, e-learning, your own therapy \u2014 counts the hours you enter. <b>Clinical supervision</b> counts one hour per logged session. <b>Peer supervision</b> counts the hours on each entry, when that\u2019s switched on.</p>'+
+  '<p class="small"><b>Whether supervision counts at all is your decision</b>, under <i>Target &amp; what counts</i>. Accrediting bodies genuinely differ, and some count it only in part. Switching it off leaves every hour logged and on your records \u2014 it only takes them out of this total, so you can see what you have without it.</p>'+
+  '<p class="small muted">Hours only. What a course cost you is a business cost, entered in Money \u203a Costs &amp; income under CPD &amp; training, where it comes off your tax \u2014 it is deliberately not asked for twice.</p>');
 infoDef("form3a-mechanics","How these hours are worked out",
   '<p class="small"><b>Clinical hours</b> are your logged client sessions, each counted as 1 hour (50-minute minimum). Any session flagged as a late cancellation is excluded, in line with the rule that missed sessions don\u2019t count.</p>'+
   '<p class="small"><b>Supervision hours</b> are each logged supervision session (1 hour), plus the training and placement totals below.</p>');
@@ -9557,7 +9740,8 @@ function validateImport(st){
   if(dups)problems.push(dups+" duplicate internal id(s)");
   return {ok:true,problems,counts:{sessions:st.sessions.length,clients:st.clients.length,
     supervision:(st.supervision||[]).length,rooms:(st.rooms||[]).length,
-    peer:(st.peerSupervision||[]).length,expenses:(st.expenses||[]).length,otherIncome:(st.otherIncome||[]).length}};
+    peer:(st.peerSupervision||[]).length,cpd:(st.cpd||[]).length,
+    expenses:(st.expenses||[]).length,otherIncome:(st.otherIncome||[]).length}};
 }
 function exportCSV(){
   const cols=["client","num","date","time","mode","location","room","invoice","paidDate","notes","adminNote","roomPaid","rate","fullRate","attended","cancelCharge","clientPaid","overdue","roomRate","roomDue","status","taxYear","week"];
@@ -9573,6 +9757,8 @@ function csvCell(v){v=v==null?"":String(v);return /[",\n]/.test(v)?'"'+v.replace
 function exportSupervisionCSV(){
   /* peer rows ride along with a type column — leaving them out would silently lose hours
      from the one export a therapist takes to their accreditation paperwork */
+  /* CPD rides along too, for the same reason peer rows do: this is the export that goes to the
+     accreditation paperwork, and hours left out of it are hours the therapist cannot evidence. */
   const cols=["type","date","supervisor","clientHrsReviewed","hours","cost","clientsDiscussed","taxYear"];
   const rows=[cols.join(",")];
   const out=[];
@@ -9582,6 +9768,10 @@ function exportSupervisionCSV(){
   (S.peerSupervision||[]).forEach(p=>out.push({type:"peer",date:p.date||"",supervisor:p.with||"",
     clientHrsReviewed:"",hours:(+p.hours||0),cost:(+p.cost||0),
     clientsDiscussed:p.notes||"",taxYear:p.date?taxYear(p.date):""}));
+  (S.cpd||[]).forEach(x=>out.push({type:"cpd:"+(CPD_KINDS[x.kind]?x.kind:"other"),date:x.date||"",
+    supervisor:x.provider||"",clientHrsReviewed:"",hours:(+x.hours||0),cost:"",
+    clientsDiscussed:[x.title||"",x.notes||""].filter(Boolean).join(" \u2014 "),
+    taxYear:x.date?taxYear(x.date):""}));
   out.sort((a,b)=>parseD(a.date)-parseD(b.date)).forEach(rec=>rows.push(cols.map(c=>csvCell(rec[c])).join(",")));
   download("groundwork-supervision-"+isoD(today())+".csv",rows.join("\n"),"text/csv");toast("Supervision CSV downloaded")}
 /* Costs and other income, with each recurring row expanded into the months it actually covers
