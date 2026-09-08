@@ -3969,25 +3969,53 @@ function anaCostRatio(){
     takeHome:Math.round(now.income-now.costs)};
 }
 
-/* FEE EROSION — the fee you actually average against the fee you think you charge.
-   Reduced cancellation charges, clients still on an old rate and a shifting mix all pull the
-   effective figure below the headline, and a practice can raise its headline rate while its
-   real average falls. Nothing else in the app would show that. */
+/* WHAT A SESSION ACTUALLY EARNS — and what the gap between that and the fee schedule is made of.
+
+   This card was called "fee erosion" and was not clear about what it measured, so here is the
+   arithmetic in full. derive() gives every session a `fullRate` (the fee in force for that client
+   on that date) and a `rate` (`fullRate` × the cancellation charge stamped on it). The card's two
+   lines are Σrate and ΣfullRate over the same sessions. Since `rate` differs from `fullRate` in
+   exactly one way, THE WHOLE GAP IS FEE WRITTEN OFF ON MISSED SESSIONS — nothing else can put a
+   pound in it. The old copy claimed the gap was also made of "clients still on an older rate" and
+   "a mix that has shifted", which is untrue: those move the fee schedule line itself, not the
+   distance between the two lines. Naming the gap for what it is, and counting the sessions behind
+   it, is the whole change.
+
+   Three figures, because a therapist asks three different questions and they have three different
+   answers: what an average booked slot earned (`eff`, over every session including the ones that
+   did not happen), what a session that went ahead earned (`att`), and what the fee schedule said
+   those slots were worth (`head`). The trend is each line's own first half against its own last
+   half, so a practice that raised its fees while its take stood still can see exactly that. */
 function anaFeeErosion(){
   const months=anaMonthlySeries(18).filter(m=>m.n>0);
   if(months.length<6)return {ready:false,need:"Six months with sessions in them. You have "+months.length+"."};
   const series=months.map(m=>({l:m.l,from:m.from,
-    eff:Math.round(m.revenue/m.n*100)/100, head:Math.round(m.full/m.n*100)/100, n:m.n}));
+    eff:Math.round(m.revenue/m.n*100)/100, head:Math.round(m.full/m.n*100)/100,
+    n:m.n, attended:m.attended}));
+  const sum=(a,f)=>a.reduce((x,y)=>x+f(y),0);
+  const nAll=sum(months,m=>m.n), nAtt=sum(months,m=>m.attended);
+  const rev=sum(months,m=>m.revenue), full=sum(months,m=>m.full);
+  const r2=x=>Math.round(x*100)/100;
+  /* Window averages, not last month's. One month of a small practice is a handful of sessions,
+     and a headline that jumps every time a single client cancels is not a headline. */
+  const eff=nAll?r2(rev/nAll):0, head=nAll?r2(full/nAll):0, att=nAtt?r2(rev/nAtt):0;
+  /* The missed sessions behind the gap, over exactly the span the figures cover. */
+  const from=months[0].from, to=months[months.length-1].to;
+  const rows=anaPast(anaDer(),today()).filter(x=>x.dt>=from&&x.dt<to&&isCancelled(x.s));
+  const missedCharged=rows.filter(x=>(x.d.cancelPct||0)>0).length;
+  const missedFree=rows.length-missedCharged;
   const half=Math.floor(series.length/2);
-  const mean=a=>a.length?a.reduce((x,y)=>x+y.eff,0)/a.length:0;
-  const firstH=mean(series.slice(0,half)), lastH=mean(series.slice(-half));
-  const last=series[series.length-1];
-  return {ready:true,series,
-    eff:last.eff,head:last.head,
-    gap:Math.round((last.head-last.eff)*100)/100,
-    gapPct:last.head>0?Math.round((last.head-last.eff)/last.head*100):0,
-    change:Math.round((lastH-firstH)*100)/100,
-    changePct:firstH>0?Math.round((lastH-firstH)/firstH*100):0};
+  const mean=(a,k)=>a.length?a.reduce((x,y)=>x+y[k],0)/a.length:0;
+  const firstE=mean(series.slice(0,half),"eff"), lastE=mean(series.slice(-half),"eff");
+  const firstH=mean(series.slice(0,half),"head"), lastH=mean(series.slice(-half),"head");
+  return {ready:true,series,months:series.length,
+    eff,head,att,
+    sessions:nAll,attended:nAtt,missed:rows.length,missedCharged,missedFree,
+    gap:r2(head-eff), gapPct:head>0?Math.round((head-eff)/head*100):0,
+    lost:Math.round(full-rev),
+    change:r2(lastE-firstE), changePct:firstE>0?Math.round((lastE-firstE)/firstE*100):0,
+    headChange:r2(lastH-firstH), headChangePct:firstH>0?Math.round((lastH-firstH)/firstH*100):0,
+    halfMonths:half};
 }
 
 /* ============ 1.5 · Am I all right? ============ */
@@ -4229,15 +4257,30 @@ function trendsMoneyHTML(){
 
   const fe=anaFeeErosion();
   out+= fe.ready
-    ? anaCard("Fee erosion","ana-erosion",
-        anaKpis([[gbp(fe.eff),"Average fee actually billed"],
-                 [gbp(fe.head),"If everything billed in full"],
-                 [(fe.gap>0?"−":"")+gbp(Math.abs(fe.gap)),"The gap · "+fe.gapPct+"%",fe.gap>0?"bad":""]])+
+    ? anaCard("What a session actually earns","ana-erosion",
+        anaKpis([[gbp(fe.eff),"Per session booked"],
+                 [gbp(fe.att),"Per session that went ahead","good"],
+                 [gbp(fe.head),"What your fees say"],
+                 [(fe.gap>0?"\u2212":"")+gbp(Math.abs(fe.gap)),"The gap \u00b7 "+fe.gapPct+"%",fe.gap>0?"bad":""]])+
         anaGapChart(fe.series)+
-        '<p class="small muted" style="margin:8px 0 0">Over these '+fe.series.length+' months your effective fee '+
-          (fe.change>0?'rose by <b>'+gbp(fe.change)+'</b> ('+fe.changePct+'%)':fe.change<0?'<b>fell</b> by '+gbp(Math.abs(fe.change))+' ('+Math.abs(fe.changePct)+'%)':'held steady')+'.</p>',
-        {lead:"Solid line is what you billed. Dashed is what full fees would have come to."})
-    : anaWaiting("Fee erosion","ana-erosion",fe.need);
+        /* Name the gap for what it is and count what is behind it. "Fee erosion · 14%" told a
+           reader that something was wrong without telling them what, and the old explanation
+           listed two causes that arithmetically cannot appear in this figure at all. */
+        '<p class="small muted" style="margin:8px 0 0">'+
+          (fe.gap>0
+            ? 'The gap is <b>fee written off on sessions that didn\u2019t happen</b> \u2014 and nothing else. Over these '+
+              fe.months+' months '+plural(fe.missed,"session")+' of '+fe.sessions+' were missed, costing <b>'+gbp(fe.lost)+'</b>'+
+              (fe.missedCharged?' after the '+fe.missedCharged+' you did charge for':'')+'.'
+            : 'Every session you booked was billed in full \u2014 nothing was written off.')+'</p>'+
+        /* Two trends, not one. A practice can raise its fees and watch its take stand still, and
+           that is the sentence this card exists to be able to write. */
+        '<p class="small muted" style="margin:4px 0 0">Over these '+fe.months+' months what you <b>earn</b> per session '+
+          (fe.change>0?'rose by <b>'+gbp(fe.change)+'</b> ('+fe.changePct+'%)':fe.change<0?'<b>fell</b> by '+gbp(Math.abs(fe.change))+' ('+Math.abs(fe.changePct)+'%)':'held steady')+
+          ', while your fees themselves '+
+          (fe.headChange>0?'rose by '+gbp(fe.headChange):fe.headChange<0?'fell by '+gbp(Math.abs(fe.headChange)):'held steady')+
+          '.'+(fe.headChange-fe.change>0.5?' Some of the rise is not reaching you.':'')+'</p>',
+        {lead:"Averages over "+fe.months+" months. Solid line is what you billed, dashed is what the same slots were worth at full fee \u2014 the figures beside the lines are the latest month."})
+    : anaWaiting("What a session actually earns","ana-erosion",fe.need);
 
   const dtp=anaDaysToPay();
   /* Two different practices, two different cards. One is paid up front and wants to know how
@@ -6403,10 +6446,14 @@ infoDef("ana-costratio","What the practice costs to run",
   '<p class="small">This is <b>business</b> reporting, not tax: no bands, no allowances, nothing jurisdiction-specific. It answers "of every pound that arrives, how much leaves again before I see it".</p>'+
   '<p class="small">Everything the practice spends is in it, not only what you typed into Costs &amp; income: <b>room fees charged against individual sessions</b> and <b>supervision</b> both count, because they are bills the practice pays even though they are entered elsewhere. For a therapist hiring a room by the hour the room is usually the largest line of the year.</p>'+
   '<p class="small">A ratio drifting upward while income is flat is the early warning. The category list underneath says which line did it.</p>');
-infoDef("ana-erosion","Fee erosion",
-  '<p class="small">Two numbers per month: what you <b>would</b> have billed at full fee, and what you <b>actually</b> billed.</p>'+
-  '<p class="small">The gap is made of reduced cancellation charges, clients still on an older rate, and a mix that has shifted towards your cheaper work. None of it is visible in a headline rate.</p>'+
-  '<p class="small">A practice can raise its advertised fee and watch its real average fall at the same time. This is the only place in the app that would show you that.</p>');
+infoDef("ana-erosion","What a session actually earns",
+  '<p class="small">Three different questions, because they have three different answers.</p>'+
+  '<div class="acc-work"><div><b>Per session booked</b> — everything you billed, divided by every session in the diary, <i>including</i> the ones that were cancelled or not attended. This is what an hour of your week is really worth.</div>'+
+  '<div><b>Per session that went ahead</b> — the same money divided by the sessions that actually happened.</div>'+
+  '<div><b>What your fees say</b> — the same slots priced at the full fee in force for that client on that date. Not one advertised rate: it follows each client\u2019s own fee history.</div></div>'+
+  '<p class="small"><b>The gap is one thing only: fee written off on sessions that didn\u2019t happen.</b> Every session carries the fee in force and the cancellation charge you stamped on it, and the difference between the two lines is that charge and nothing else. A fee rise, or a mix that has shifted towards cheaper work, moves the fee line itself — it cannot appear in the gap. (This card used to say otherwise; it was wrong.)</p>'+
+  '<p class="small">Both trends are shown, because a practice can raise its fees and watch its take stand still. If your fees rose more than your earnings did, the difference went somewhere — usually to missed sessions you chose not to charge for.</p>'+
+  '<p class="small muted">Eighteen months, whole months only, and the headline figures are averages over the whole span rather than last month alone — one month of a small practice is a handful of sessions, and a headline that swings on a single cancellation is not a headline.</p>');
 infoDef("ana-supcadence","Supervision cadence",
   '<p class="small">Clinical hours for every hour of supervision, by quarter, against the 1:6 guideline.</p>'+
   '<p class="small"><b>This is not the accreditation ratio.</b> Form 3A, in Supervision › Insights, counts different things over a different window for a different purpose. This is the everyday version: is the gap between supervision quietly widening?</p>'+
