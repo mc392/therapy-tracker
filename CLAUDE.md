@@ -70,12 +70,49 @@ itself and `ios/App/App/public/` is a gitignored copy rebuilt on every sync. Ful
   lock.
 - **`sw.js` is skipped on native** (service workers do not register on Capacitor's scheme and the
   bundle is already local) and pruned from the copied app, along with `icon-ideas/`.
+- **Two Swift files are wired by `scripts/add-native-plugin.mjs`**, not one:
+  `GroundWorkNativePlugin.swift` (the `@objc` surface) and `GroundWorkRecordsFolder.swift` (the
+  records folder's bookmark and file IO). Adding a third means adding it to that script's `FILES`
+  list, and `npm run check` asserts both are in the Xcode target.
 
-### Automatic backups on the phone (Aug 2026)
-Desktop Chrome/Edge auto-saves an encrypted backup silently through the File System Access API.
-That API does not exist on iOS, so the only safety net there was the nag banner and a manual
-share sheet. Behind the native guard, **every `commit()` also writes a copy into the app's
-Documents folder**, 2s debounced:
+### The records folder (Sep 2026) — where the data actually lives on iOS
+**The counsellor picks a folder, normally in iCloud Drive, and every save is rewritten into it.**
+The same idea as GroundWork Notes, which has always kept records in a folder the counsellor owns;
+the point is that there is nothing to remember. Settings › This iPhone › *Where your records are
+saved*. Native half is `ios/App/App/GroundWorkRecordsFolder.swift` (document picker +
+security-scoped bookmark + coordinated IO); full detail in **`docs/ios-native.md` § The records
+folder**.
+
+- **It is NOT a rewrite of the store and NOT sync.** `S` is still one object read synchronously
+  from IndexedDB on every render; the folder holds the durable copy. Export/Restore are untouched
+  and are still how records move between devices — "Multi-tab / multi-device writes" below is
+  unchanged.
+- **The folder is never overwritten blind.** `checkFolder()` compares the live file's modification
+  date to the one this device last wrote (`tt_folder_status.mtime`, `FOLDER_SLACK` of 4s for a
+  file provider's clock). A date it did not write pauses folder writes (`_folderHeld`) and asks
+  which copy wins. IndexedDB saving carries on regardless, so "Decide later" loses nothing.
+- **A failed folder write falls back to the Documents copy.** `retireDeviceCopy()` runs only after
+  a folder write has landed, and `tt_autobk_retired` is cleared the moment one fails. A save that
+  cannot reach the folder must never be a save with no copy at all.
+- **`markBackedUp()` is called only when the folder is in iCloud Drive** (`RecordsFolder.isInICloud`,
+  which answers no whenever it cannot tell). That is the one change to the manual-backup nag, and
+  the whole point of the feature. A folder under "On My iPhone" is not off this phone, so the
+  reminder stays on and the card says why.
+- **Reading back goes through `importFromText()`** — `importJSON()` minus the file input, split out
+  for exactly this. Same passphrase prompt, same `validateImport`, same two tiers of
+  `restoreConfirm`. Never add a shortcut past it.
+- The offer to pick a folder is made **once** (`tt_folder_asked`), 5s after launch, to somebody
+  with 3+ sessions — deliberately not a setup-wizard step.
+- **`npm run test:folder`** (`scripts/check-records-folder.mjs`) drives all of it in a real browser
+  with a fake Capacitor, 22 assertions including the conflict → restore → resume path. Needs
+  `npm i --no-save playwright`. **The Swift has never been compiled** — same caveat as the watch
+  app; `npm run check` asserts the two halves still name the same methods.
+
+### Automatic backups on the phone (Aug 2026) — the fallback since Sep 2026
+What an iPhone with **no records folder chosen** gets, and what comes back if the chosen folder
+stops answering. Desktop Chrome/Edge auto-saves an encrypted backup silently through the File
+System Access API; that API does not exist on iOS, so behind the native guard **every `commit()`
+also writes a copy into the app's Documents folder**, 2s debounced:
 - `backupPayload()` (near `exportJSON`) is now the **single** backup envelope — `exportJSON`,
   `encPayload` and the native auto-backup all build their file from it. Adding a field in one
   place is the whole point; don't reintroduce a second literal.
@@ -94,9 +131,10 @@ Documents folder**, 2s debounced:
 - **`flushAutoBackup()` runs on backgrounding.** iOS suspends the WebView, and a pending 2s timer
   suspends with it — logging a session then putting the phone straight down is exactly the case
   this exists for.
-- **`markBackedUp()` is deliberately untouched.** A copy on the same phone is no protection for
-  someone with iCloud Backup off, so the manual-export nag is unchanged; the banner detail line
-  only appends "(an automatic copy is kept on this iPhone)".
+- **`markBackedUp()` is deliberately untouched by this path.** A copy on the same phone is no
+  protection for someone with iCloud Backup off, so the manual-export nag is unchanged; the banner
+  detail line only appends "(an automatic copy is kept on this iPhone)". A *records folder in
+  iCloud Drive* is the only thing that answers that nag.
 - `UIFileSharingEnabled` + `LSSupportsOpeningDocumentsInPlace` in `Info.plist` are what make that
   folder visible in the Files app. Without them the files exist but nobody can reach them.
 
