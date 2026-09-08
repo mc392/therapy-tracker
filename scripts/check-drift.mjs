@@ -38,7 +38,14 @@ const SEAMS = [
   ["async function backupPayload(", "the one backup envelope — the automatic backup writes this, not its own copy of it"],
   ["function encReady(",        "decides, per write, whether the automatic backup is encrypted"],
   ["async function encPayload(","the encrypted payload the automatic backup writes when a passphrase is set"],
-  ["function updateBackupBanner(", "wrapped to add 'an automatic copy is kept on this iPhone' to the nag"],
+  ["function updateBackupBanner(", "wrapped to say where the copies are going"],
+  /* The records folder: the iOS app writes every save into a folder the user picked, and reads
+     it back through the app's own restore. Rename either of these and the PWA is perfect while
+     an iPhone quietly stops saving into iCloud Drive — the failure this whole check exists for. */
+  ["async function importFromText(", "the records folder restores through this — importJSON() minus the file input"],
+  ["function markBackedUp(",    "an iCloud records folder answers the manual-backup nag through this"],
+  ["function sheetPromise(",    "every question the records folder asks is one of these"],
+  ["function encPromptSetup(",  "offered after restoring an encrypted folder file onto a phone with no passphrase"],
   /* GroundWork Plus: the native StoreKit block refreshes the shared entitlement cache by name.
      Rename one of these and the PWA carries on perfectly while purchases stop working on iOS. */
   ["function plusActive(",      "the entitlement gate every locked view asks"],
@@ -53,6 +60,26 @@ for (const [needle, why] of SEAMS)
   if (!html.includes(needle)) fail(`index.html no longer contains \`${needle}\` — ${why}`);
 
 /* ---- 3. The native block is present and still inert on the web ---- */
+/* The records folder is JS in the native block plus Swift behind it, and the two halves can
+   drift apart without anything failing to build: a method the web layer calls that the plugin
+   does not declare simply rejects at runtime, on a phone, silently falling back to the copy in
+   the app's own Documents folder. */
+const FOLDER_CALLS = ["folderInfo", "folderPick", "folderForget", "folderWrite", "folderRead",
+                      "folderList", "folderDelete"];
+if (existsSync("ios/App/App/GroundWorkRecordsFolder.swift")) {
+  const plugin = readFileSync("ios/App/App/GroundWorkNativePlugin.swift", "utf8");
+  for (const m of FOLDER_CALLS) {
+    if (!plugin.includes(`CAPPluginMethod(name: "${m}"`))
+      fail(`GroundWorkNativePlugin does not declare \`${m}\` — Capacitor would reject the call at runtime, on a phone, with the web layer none the wiser`);
+    if (!plugin.includes(`@objc func ${m}(`))
+      fail(`GroundWorkNativePlugin declares \`${m}\` but does not implement it`);
+    if (!html.includes(`GW.${m}(`))
+      fail(`index.html no longer calls \`GW.${m}()\` — the native records folder has a method nothing reaches`);
+  }
+} else {
+  fail("ios/App/App/GroundWorkRecordsFolder.swift is missing — the records folder has no native half");
+}
+
 if (!html.includes("Native iOS shell (Capacitor)"))
   fail("the native iOS block has gone from index.html");
 if (!html.includes("CAP.isNativePlatform && CAP.isNativePlatform()"))
@@ -77,7 +104,8 @@ for (const fn of ENGINE_MUST_BE_PURE) {
   if (html.slice(at, end < 0 ? html.length : end).includes("plusLocked("))
     fail(`${fn} calls plusLocked() — the paywall belongs in the view layer, not the tax engine (tests/tax-tests.js calls this directly)`);
 }
-const DATA_PLANE = ["async function commit(", "async function exportJSON(", "function importJSON("];
+const DATA_PLANE = ["async function commit(", "async function exportJSON(", "function importJSON(",
+  "async function importFromText("];
 for (const fn of DATA_PLANE) {
   const at = html.indexOf(fn);
   if (at < 0) { fail(`index.html no longer contains \`${fn}\``); continue; }
@@ -104,8 +132,9 @@ if (strays.length)
    quietly takes over. That cost an hour once; it is asserted now. */
 if (existsSync("ios/App/App.xcodeproj/project.pbxproj")) {
   const pbx = readFileSync("ios/App/App.xcodeproj/project.pbxproj", "utf8");
-  if (!pbx.includes("GroundWorkNativePlugin.swift"))
-    fail("GroundWorkNativePlugin.swift is not in the Xcode target — run `node scripts/add-native-plugin.mjs`");
+  for (const f of ["GroundWorkNativePlugin.swift", "GroundWorkRecordsFolder.swift"])
+    if (!pbx.includes(f))
+      fail(`${f} is not in the Xcode target — run \`node scripts/add-native-plugin.mjs\``);
 }
 if (existsSync("ios/App/App/capacitor.config.json")) {
   const gen = JSON.parse(readFileSync("ios/App/App/capacitor.config.json", "utf8"));

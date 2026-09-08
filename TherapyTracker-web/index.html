@@ -2194,7 +2194,9 @@ const GLYPH={supervision:'<path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h11A2.5 2.5 0 0 1 1
   plus:'<path d="M12 5v14M5 12h14"/>',
   close:'<path d="M6.4 6.4l11.2 11.2M17.6 6.4L6.4 17.6"/>',
   key:'<circle cx="8.2" cy="14.6" r="4.3"/><path d="M11.3 11.5 20 2.8"/><path d="M16.6 6.2l2.3 2.3M14.2 8.6l2.3 2.3"/>',
-  undo:'<path d="M4.5 9.5h9.8a5 5 0 0 1 0 10H8.4"/><path d="M8.2 5.4 4.1 9.5l4.1 4.1"/>'};
+  undo:'<path d="M4.5 9.5h9.8a5 5 0 0 1 0 10H8.4"/><path d="M8.2 5.4 4.1 9.5l4.1 4.1"/>',
+  folder:'<path d="M3 7.6A2.1 2.1 0 0 1 5.1 5.5h3.6a2.1 2.1 0 0 1 1.6.75l1 1.15H18.9A2.1 2.1 0 0 1 21 9.5v6.9a2.1 2.1 0 0 1-2.1 2.1H5.1A2.1 2.1 0 0 1 3 16.4z"/>',
+  cloud:'<path d="M7.2 18.5h9.4a3.6 3.6 0 0 0 .5-7.15 5.2 5.2 0 0 0-9.95-1.2A4 4 0 0 0 7.2 18.5z"/>'};
 function gi(name,cls){const p=GLYPH[name];if(!p)return "";
   return '<svg class="gi'+(cls?" "+cls:"")+'" viewBox="0 0 24 24" aria-hidden="true">'+p+'</svg>';}
 const SETTINGS_IC='<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
@@ -5804,18 +5806,22 @@ infoDef("backup-restore-detail","What a backup contains",
    failures, and only one of them is the one that matters. Spelling that out here rather than
    in three separate cards is the only way a reader can compare them. */
 infoDef("backups-explained","Backups: which is which",
-  '<p class="small">Three things here look like backups. Only the first is one you can rely on.</p>'+
-  '<div class="grp-h">1 \u00b7 Export backup (.json) \u2014 the real one</div>'+
+  '<p class="small">Four things here look like backups. They are not alternatives to each other.</p>'+
+  '<div class="grp-h">1 \u00b7 Your records folder (iPhone app) \u2014 where your records live</div>'+
+  '<p class="small">On the iPhone app you can pick a folder of your own \u2014 normally in <b>iCloud Drive</b> \u2014 and GroundWork rewrites your whole practice into it every time you change something. It is in <b>your</b> files, not inside the app, so you can see it, copy it and keep it without GroundWork being involved.</p>'+
+  '<p class="small">A folder in iCloud Drive is <b>off this phone</b>. Lose the phone and your practice is still there; set up a new one and you point it at the same folder. While that is working, the backup reminder below goes quiet, because there is nothing left for it to warn about.</p>'+
+  '<p class="small">A folder under <b>On My iPhone</b> is not off the phone, and the reminder stays on.</p>'+
+  '<div class="grp-h">2 \u00b7 Export backup (.json) \u2014 the portable one</div>'+
   '<p class="small">A single file with <b>everything</b> in it. You choose where it goes: iCloud, Drive, a memory stick, an email to yourself. <b>Restore from backup</b> reads it back and the app is exactly as it was.</p>'+
-  '<p class="small"><b>This is the only copy that survives losing the device.</b> If your phone goes in the sea, this file is your practice.</p>'+
-  '<div class="grp-h">2 \u00b7 Automatic backup \u2014 convenience, not insurance</div>'+
-  '<p class="small">The app quietly saves a copy after every change, without asking. On an iPhone it goes into GroundWork\u2019s own folder in the <b>Files</b> app; on desktop Chrome or Edge it overwrites a file you picked once.</p>'+
+  '<p class="small">This is how records move <b>between devices</b>, and it is the copy to take before anything drastic. If you have no records folder, it is also the only copy that survives losing the device \u2014 if your phone goes in the sea, this file is your practice.</p>'+
+  '<div class="grp-h">3 \u00b7 Automatic backup \u2014 convenience, not insurance</div>'+
+  '<p class="small">The app quietly saves a copy after every change, without asking. On an iPhone with <b>no</b> records folder chosen it goes into GroundWork\u2019s own folder in the <b>Files</b> app; on desktop Chrome or Edge it overwrites a file you picked once.</p>'+
   '<p class="small">It is excellent for the everyday accidents \u2014 deleting the wrong client, a restore you regret, an app that will not open. It is <b>the same device</b>, though, so it is no help at all if that device is lost, stolen or broken (unless iCloud Backup happens to be sweeping that folder up for you).</p>'+
-  '<p class="small">It also never speaks. It will not nag you, and the app still asks you to take a real export on a schedule \u2014 that reminder is deliberate and is not switched off by the automatic copy existing.</p>'+
-  '<div class="grp-h">3 \u00b7 Spreadsheet exports (.csv) \u2014 not backups at all</div>'+
+  '<p class="small">It also never speaks. It will not nag you, and without a records folder the app still asks you to take a real export on a schedule \u2014 that reminder is deliberate and is not switched off by the automatic copy existing.</p>'+
+  '<div class="grp-h">4 \u00b7 Spreadsheet exports (.csv) \u2014 not backups at all</div>'+
   '<p class="small">Extracts for a spreadsheet or an accountant. They are readable, partial, and <b>cannot be restored</b> \u2014 there is no button that takes one back in. Nothing that only exists in a CSV can be recovered into the app.</p>'+
   '<div class="grp-h">In short</div>'+
-  '<p class="small">Let the automatic copy do its job, and still export a real backup off this device regularly. The two are not alternatives.</p>');
+  '<p class="small">If you can have a records folder in iCloud Drive, have one \u2014 that is your practice kept safe without you thinking about it. Take an export as well before anything drastic, and whenever you are moving to another device.</p>');
 /* ---- how the figures are counted (cash vs accruals) ----
    The card lives in Settings \u203a Your practice: it is a decision about the business that gets made
    once, not a view toggle. Built here beside the tax engine so the wording and the engine that
@@ -10088,26 +10094,38 @@ async function restoreConfirm(o,st,rep){
     summary:"the "+d.sessions+" session"+(d.sessions===1?"":"s")+" on this device "+(d.sessions===1?"is":"are")+" replaced by the backup’s "+b2.sessions+".",
     phrase:"RESTORE",verb:"Restore backup"});
 }
-function importJSON(e){const f=e.target.files[0];if(!f)return;const rd=new FileReader();
-  rd.onload=async()=>{try{let o=JSON.parse(rd.result);
+/* The whole restore, from the TEXT of a backup rather than from a file input.
+   Split out of importJSON() so the iOS records folder can restore through exactly the same
+   path: the passphrase prompt, validateImport, and restoreConfirm's two tiers. A folder is a
+   friendlier place for a backup to come from, not a safer one, so it earns the same friction.
+   Returns true only when the data was actually replaced, so a caller can tell a completed
+   restore from one the reader cancelled. `label` is what the audit log and the restore point
+   are named after. */
+async function importFromText(text,label){
+  try{
+    let o=JSON.parse(text);
     if(o&&o.enc===1){
       const pass=await askPassphrase({title:"Encrypted backup",verb:"Unlock backup",
         msg:"This backup file is encrypted. Enter the passphrase it was saved with."});
-      if(!pass)return;
+      if(!pass)return false;
       try{
         const key=await encDeriveKey(pass,new Uint8Array(b64ToBuf(o.salt)));
         const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:new Uint8Array(b64ToBuf(o.iv))},key,b64ToBuf(o.data));
         o=JSON.parse(new TextDecoder().decode(pt));
-      }catch(err2){alert("Wrong passphrase or corrupted file — nothing changed.");return;}
+      }catch(err2){alert("Wrong passphrase or corrupted file — nothing changed.");return false;}
     }
     const st=o.state||o;
     const rep=validateImport(st);
     if(!rep.ok)throw new Error(rep.problems.join("; "));
-    if(!await restoreConfirm(o,st,rep))return;
+    if(!await restoreConfirm(o,st,rep))return false;
     S=normalize(st);
-    await commit("Restored backup ("+(S.sessions.length)+" sessions)");markBackedUp();
+    await commit((label||"Restored backup")+" ("+(S.sessions.length)+" sessions)");markBackedUp();
     applySettings();toast("Backup restored");go("home");
-  }catch(err){alert("Could not import: "+err.message)}};rd.readAsText(f);e.target.value="";}
+    return true;
+  }catch(err){alert("Could not import: "+err.message);return false}
+}
+function importJSON(e){const f=e.target.files[0];if(!f)return;const rd=new FileReader();
+  rd.onload=()=>{importFromText(rd.result);};rd.readAsText(f);e.target.value="";}
 async function showSnapshots(){if(!_db){toast("Restore points need storage");return}
   const snaps=await snapRecent(80); // newest first, straight off the cursor
   const body=el('<div></div>');
@@ -11751,19 +11769,162 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
     })();
   };
 
-  /* ================= Automatic backups =================
-     On desktop Chrome/Edge an encrypted backup auto-saves silently through the File System
-     Access API. That API does not exist on iOS, so on the platform this app is actually
-     shipping on the only safety net was a nag banner and a manual share sheet — a lost or
-     broken phone loses everything since the customer last bothered.
+  /* ================= Where your records are kept =================
+     GroundWork Notes keeps the counsellor's records in a folder she picks — normally inside her
+     own iCloud Drive — and the thing everyone notices about it is that there is nothing to
+     remember. The folder is off the phone, it survives losing the phone, setting up a new one is
+     choosing the same folder again, and it is all visible in Files without the app being
+     involved. This is that, for GroundWork.
 
-     Every save now also writes a copy into the app's own Documents folder: visible to the
-     user in the Files app (UIFileSharingEnabled in Info.plist) and carried by the phone's
-     own iCloud/device backup.
+     What it is NOT is a rewrite of the store. `S` is one object read synchronously from IndexedDB
+     on every render and it stays that way; the folder holds the durable copy, rewritten after
+     every save and read back when this device does not have the newest one. Export and Restore
+     are untouched and are still how records move between devices.
+
+     Four rules the code below depends on. Breaking any of them is silent.
+
+      * **The folder is never overwritten blind.** `checkFolder()` compares the live file's
+        modification date against the one this device last wrote. A date it did not write means
+        something else has been in there — a second device, a phone restored from a backup, a new
+        install pointed at an existing folder — so folder writes PAUSE (`_folderHeld`) until the
+        reader says which copy wins. Saving to IndexedDB carries on untouched throughout, so
+        nothing is lost while the question is open. There is no merge and there is not going to be
+        one; see CLAUDE.md, "Multi-tab / multi-device writes".
+      * **A folder write that fails falls back to the copy on the phone.** The Documents copy is
+        retired only after a folder write has actually landed, and comes straight back if the
+        folder stops answering. A save that cannot reach the folder must never be a save with no
+        copy at all.
+      * **`markBackedUp()` is called only for a folder in iCloud Drive.** That is the single
+        change to the manual-backup nag and it is the whole point of the feature: a copy in the
+        user's own iCloud is off this phone, so the reminder has nothing left to warn about. A
+        folder under "On My iPhone" is not off this phone and the reminder stays — see
+        `RecordsFolder.isInICloud`, which answers "no" whenever it cannot tell.
+      * **Reading the folder back goes through `importFromText()`**, which is `importJSON()` minus
+        the file input: validateImport, the passphrase prompt, and restoreConfirm's two tiers. A
+        folder is a friendlier source than a download, not a safer one. */
+
+  const FOLDER_LIVE     = "GroundWork records.json";
+  const FOLDER_LIVE_ENC = "GroundWork records.enc.json";
+  const FOLDER_HISTORY  = "Previous versions";
+  const FOLDER_KEEP     = 7;
+  /* How far past our own last write a modification date has to be before it counts as somebody
+     else's. A file provider's clock is not this device's clock and iCloud can restamp on upload,
+     so this is deliberately generous: a false positive costs a modal on a device that has lost
+     nothing, and a real second device is minutes or hours out, never seconds. */
+  const FOLDER_SLACK    = 15000;
+  const folderLiveName  = enc => enc ? FOLDER_LIVE_ENC : FOLDER_LIVE;
+  const folderDatedName = (enc, day) => FOLDER_HISTORY + "/GroundWork " + day + (enc ? ".enc.json" : ".json");
+  /* Both names travel to the native side rather than being hardcoded there, so a rename here is
+     the whole rename. */
+  const folderArgs      = () => ({ live:FOLDER_LIVE, alt:FOLDER_LIVE_ENC });
+  const encOn           = () => typeof encReady==="function" && !!encReady();
+  const LSdel           = k => { try{ localStorage.removeItem(k); }catch(e){} };
+
+  /* What this device knows about the folder without asking, seeded from localStorage so the first
+     paint after a cold start is already right; refreshFolder() then confirms it. Device state, so
+     tt_* and never S — a backup restored onto another phone must not point it at this one's
+     folder, which it has no permission to open anyway. */
+  let folder = { set:LSget("tt_folder_on","0")==="1", name:LSget("tt_folder_name",""),
+                 path:LSget("tt_folder_path",""), icloud:LSget("tt_folder_icloud","0")==="1",
+                 reachable:true, live:null, alt:null, error:"" };
+  let _folderHeld = false;      /* the folder holds a copy this device did not write */
+
+  function rememberFolder(info){
+    folder = {
+      set:       !!(info && info.set),
+      name:      (info && info.name) || "",
+      path:      (info && info.path) || "",
+      icloud:    !!(info && info.icloud),
+      reachable: info ? info.reachable !== false : true,
+      error:     (info && info.error) || "",
+      live:      (info && info.live) || null,
+      alt:       (info && info.alt) || null
+    };
+    LSset("tt_folder_on", folder.set ? "1" : "0");
+    LSset("tt_folder_name", folder.name);
+    LSset("tt_folder_path", folder.path);
+    LSset("tt_folder_icloud", folder.icloud ? "1" : "0");
+    return folder;
+  }
+  async function refreshFolder(){
+    if(!GW || !GW.folderInfo) return folder;
+    try{ return rememberFolder(await GW.folderInfo(folderArgs())); }
+    catch(e){ return folder; }
+  }
+  /* Whichever live file is actually there, newest first. Both exist only when a change of
+     passphrase mode failed to tidy the superseded one away. */
+  function folderNewest(){
+    const opts = [];
+    if(folder.live && folder.live.exists)
+      opts.push({ path:FOLDER_LIVE,     enc:false, at:+folder.live.modifiedAt || 0 });
+    if(folder.alt && folder.alt.exists)
+      opts.push({ path:FOLDER_LIVE_ENC, enc:true,  at:+folder.alt.modifiedAt  || 0 });
+    return opts.sort((a,b) => b.at - a.at)[0] || null;
+  }
+
+  function folderStatus(){ try{ return JSON.parse(LSget("tt_folder_status","null")) || null; }catch(e){ return null; } }
+  function setFolderStatus(o){
+    const prev = folderStatus();                   /* a failure must not erase what we last saw */
+    if(!o.ok && prev){ o.okAt = prev.ok ? prev.at : prev.okAt; if(o.mtime == null) o.mtime = prev.mtime; }
+    LSset("tt_folder_status", JSON.stringify(o));
+  }
+
+  /* Returns true/false and reports nothing itself: this runs behind whatever the reader is doing,
+     and a background save that interrupts them is worse than one that fails quietly. The Settings
+     button is the one caller that speaks. */
+  async function writeFolder(){
+    if(!folder.set || !GW || !GW.folderWrite) return false;
+    if(_folderHeld) return false;                  /* an unresolved conflict — never overwrite */
+    try{
+      const enc  = encOn();
+      const data = enc ? await encPayload() : JSON.stringify(await backupPayload());
+      const prev = folderStatus();
+      const r = await GW.folderWrite({ path:folderLiveName(enc), data:data });
+      if(!r || !r.ok) throw new Error((r && r.error) || "the folder would not accept the file");
+      setFolderStatus({ ok:true, at:Date.now(), enc:enc, mtime:+r.modifiedAt || Date.now() });
+      /* Turning a passphrase on must not leave yesterday's readable copy in the folder. Only on an
+         actual change of mode — otherwise this is a failing call on every single save. */
+      if(prev && prev.enc != null && !!prev.enc !== enc){
+        try{ await GW.folderDelete({ path:folderLiveName(!enc) }); }catch(e){}
+      }
+      /* The one place the manual-backup nag is answered by something other than an export. */
+      if(folder.icloud){ try{ markBackedUp(); }catch(e){} }
+      try{ await rotateFolder(enc, data); }
+      catch(e){ console.warn("Records folder: dated copy failed", e); }   /* the live copy landed */
+      return true;
+    }catch(e){
+      console.error("Records folder write failed", e);
+      setFolderStatus({ ok:false, at:Date.now(), msg:String((e && e.message) || e) });
+      return false;
+    }
+  }
+
+  /* One dated copy a day, newest seven kept — the same reasoning as the on-phone rotation. The
+     live file is overwritten on every save, so on its own it is one bad edit away from being no
+     backup at all, and a mistake noticed on Thursday needs Wednesday's file. Daily, not per-save:
+     seven copies from one afternoon are seven copies of the same afternoon. */
+  async function rotateFolder(enc, data){
+    const day = isoD(today());
+    if(LSget("tt_folder_day","") === day) return;
+    const w = await GW.folderWrite({ path:folderDatedName(enc, day), data:data });
+    if(!w || !w.ok) throw new Error((w && w.error) || "the dated copy would not write");
+    LSset("tt_folder_day", day);                   /* only after the write, so a failure retries */
+    const ls = await GW.folderList({ path:FOLDER_HISTORY });
+    const files = ((ls && ls.files) || [])
+      .filter(n => /^GroundWork \d{4}-\d{2}-\d{2}\.(enc\.)?json$/.test(n || ""))
+      .sort();                                     /* the date leads the name, so oldest-first */
+    for(const n of files.slice(0, Math.max(0, files.length - FOLDER_KEEP)))
+      await GW.folderDelete({ path:FOLDER_HISTORY + "/" + n });
+  }
+
+  /* ================= The copy on the phone itself =================
+     What every iPhone got before there was a records folder, and still what an iPhone with no
+     folder chosen gets: a copy in the app's own Documents folder, visible in the Files app
+     (UIFileSharingEnabled) and carried by the phone's own iCloud/device backup.
 
      It deliberately does NOT call markBackedUp(). A copy that lives on the same phone is no
-     protection at all for someone with iCloud Backup switched off, so the manual-export nag
-     stays exactly as it was — see the note in docs/ios-native.md. */
+     protection at all for someone with iCloud Backup switched off, so the manual-export nag stays
+     exactly as it was — a *records folder in iCloud Drive* is the thing that answers it. */
   const AUTO_DIR   = "auto-backups";
   const autoName   = enc => "GroundWork auto-backup" + (enc ? ".enc.json" : ".json");
   const autoDayName= (enc, day) => AUTO_DIR + "/GroundWork " + day + (enc ? ".enc.json" : ".json");
@@ -11776,20 +11937,15 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
     LSset("tt_autobk_status", JSON.stringify(o));
   }
 
-  /* Returns true/false rather than reporting anything itself: this runs behind whatever the
-     user is doing, and a background backup that interrupts them is worse than one that fails
-     quietly. The Settings button is the one caller that speaks up. */
   async function nativeAutoBackup(){
     const FS = P("Filesystem");
     if(!FS) return false;                            /* plugin absent — no-op, not an error */
     try{
-      const enc  = typeof encReady==="function" && !!encReady();
+      const enc  = encOn();
       const data = enc ? await encPayload() : JSON.stringify(await backupPayload());
       const prev = autoStatus();
       await FS.writeFile({ path:autoName(enc), data, directory:"DOCUMENTS", encoding:"utf8" });
       setAutoStatus({ ok:true, at:Date.now(), enc:enc });
-      /* Turning a passphrase on must not leave the readable copy sitting in Files. Only when the
-         mode has actually changed — otherwise this is a failing plugin call on every single save. */
       if(prev && prev.enc != null && !!prev.enc !== enc){
         try{ await FS.deleteFile({ path:autoName(!enc), directory:"DOCUMENTS" }); }catch(e){}
       }
@@ -11803,10 +11959,6 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
     }
   }
 
-  /* One dated copy a day, newest seven kept. The live file is overwritten on every save, so on
-     its own it is one bad edit away from being no backup at all — a mistake noticed on Thursday
-     needs Wednesday's file. Daily, not per-save, because seven copies from one afternoon are
-     seven copies of the same afternoon. */
   async function rotateAutoBackup(FS, enc, data){
     const day = isoD(today());
     if(LSget("tt_autobk_day","") === day) return;
@@ -11821,16 +11973,45 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
       await FS.deleteFile({ path:AUTO_DIR+"/"+n, directory:"DOCUMENTS" });
   }
 
+  /* Once a records folder is in use the on-phone live copy is a strictly worse version of the
+     same file, and two GroundWork backups in Files is how somebody restores the wrong one. Only
+     the LIVE file goes: the dated copies under auto-backups/ are restore points that cannot be
+     re-created and age out on their own within the week. */
+  async function retireDeviceCopy(){
+    if(LSget("tt_autobk_retired","0") === "1") return;
+    LSset("tt_autobk_retired","1");
+    const FS = P("Filesystem");
+    if(!FS) return;
+    for(const n of [autoName(true), autoName(false)]){
+      try{ await FS.deleteFile({ path:n, directory:"DOCUMENTS" }); }catch(e){}
+    }
+  }
+
+  /* ================= One save, whichever destinations are live =================
+     The folder is the record; the phone's own Documents folder is what is left when there is no
+     folder, or when the folder cannot be reached. Never nothing. */
+  async function saveCopies(){
+    if(folder.set){
+      if(await writeFolder()){ retireDeviceCopy(); return true; }
+      /* Unreachable, or paused on an unresolved conflict. Either way the copy on the phone is
+         what is left, and it is a different destination that cannot clobber the folder — so it
+         runs in BOTH cases. A device sitting on an unanswered question for a week must not be a
+         device with no copy anywhere. */
+      LSset("tt_autobk_retired","0");
+    }
+    return nativeAutoBackup();
+  }
+
   /* commit() is the single save choke point, so wrapping it covers every edit in the app.
      The original's return value is what callers check to know whether the write landed — it is
-     passed straight back, and the backup is fired and forgotten after it. A failed backup can
+     passed straight back, and the copies are fired and forgotten after it. A failed copy can
      therefore neither block a save nor mask a failed one: the red banner is raised by commit()
      itself, before this ever runs. */
   let _autoBkT = null, _autoBkPending = false;
   function scheduleAutoBackup(){
     _autoBkPending = true;
     clearTimeout(_autoBkT);
-    _autoBkT = setTimeout(() => { _autoBkPending = false; nativeAutoBackup(); }, 2000);
+    _autoBkT = setTimeout(() => { _autoBkPending = false; saveCopies(); }, 2000);
   }
   /* iOS suspends the WebView when the app is backgrounded and a pending timer suspends with it.
      Log a session, put the phone straight down, and the copy would never be written — which is
@@ -11838,7 +12019,7 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
   function flushAutoBackup(){
     if(!_autoBkPending) return;
     _autoBkPending = false; clearTimeout(_autoBkT);
-    nativeAutoBackup();
+    saveCopies();
   }
   const _commit = window.commit;
   window.commit = async function(){
@@ -11847,17 +12028,159 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
     return ok;
   };
 
-  /* The nag itself is untouched (see above); the banner may as well say the copy exists. */
-  const _updateBackupBanner = window.updateBackupBanner;
-  window.updateBackupBanner = function(){
-    const r = _updateBackupBanner.apply(this, arguments);
-    try{
-      const bar = document.getElementById("backupBanner"), d = document.getElementById("bkdetail"), st = autoStatus();
-      if(bar && d && st && st.ok && bar.classList.contains("show"))
-        d.textContent += " (an automatic copy is kept on this iPhone)";
-    }catch(e){}
-    return r;
-  };
+  /* ================= Does this device hold the newest copy? =================
+     The question that makes the folder a place records live rather than a place they are copied
+     to. It runs at launch and whenever the app comes back after a spell away. */
+  function folderIsForeign(){
+    const newest = folderNewest();
+    if(!newest) return null;                       /* empty folder — the next save fills it */
+    const st = folderStatus();
+    const seen = (st && +st.mtime) || 0;
+    return (!seen || newest.at > seen + FOLDER_SLACK) ? newest : null;
+  }
+
+  async function checkFolder(){
+    if(!GW || !GW.folderInfo) return;
+    const info = await refreshFolder();
+    if(!info.set || info.reachable === false) return;
+    const foreign = folderIsForeign();
+    if(!foreign){ _folderHeld = false; return; }
+    _folderHeld = true;                            /* nothing is written until this is settled */
+    whenIdle(() => askFolderCopy(foreign));
+  }
+
+  /* Setup, What's new, the guided flows and the lock screen each own the screen while they are
+     up, and a sheet opened on top of one replaces it. This question can wait: it is only asking,
+     and writes are already paused. */
+  function whenIdle(fn, tries){
+    const busy = () => {
+      try{
+        if(typeof _flow !== "undefined" && _flow) return true;
+        const ov = document.getElementById("ovRoot");
+        if(ov && ov.classList.contains("show")) return true;
+        const sh = document.getElementById("sheet");
+        if(sh && sh.classList.contains("open")) return true;
+        if(locked) return true;
+      }catch(e){}
+      return false;
+    };
+    const n = tries == null ? 90 : tries;
+    if(!busy()) return fn();
+    if(n <= 0) return;
+    setTimeout(() => whenIdle(fn, n - 1), 1000);
+  }
+
+  function folderWhen(t){
+    return t ? new Date(t).toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})
+             : "an unknown date";
+  }
+
+  /* Two copies, no merge: the reader picks one. "Decide later" leaves writes paused and the
+     question comes back next time — which is the safe answer, because the folder is untouched and
+     the phone is still saving to its own database exactly as it always does. */
+  async function askFolderCopy(newest){
+    const st    = folderStatus();
+    const first = !(st && st.mtime);                            /* never written here from here */
+    const empty = !(S && S.sessions && S.sessions.length) && !(S && S.clients && S.clients.length);
+    const where = esc(folder.name || "That folder");
+
+    const lead = empty
+      ? "<b>" + where + "</b> already holds GroundWork records, saved " + esc(folderWhen(newest.at)) +
+        ". There is nothing on this iPhone yet, so they can simply be loaded in."
+      : first
+        ? "<b>" + where + "</b> already holds GroundWork records, saved " + esc(folderWhen(newest.at)) +
+          ", and this iPhone has records of its own. They cannot be merged — one of them has to win."
+        : "The records in <b>" + where + "</b> were changed " + esc(folderWhen(newest.at)) +
+          ", and it was not this iPhone that changed them. Something else has written to the folder since this phone last did.";
+
+    const body = el('<div></div>');
+    body.innerHTML =
+      '<p class="small">' + lead + '</p>' +
+      '<p class="small muted">Nothing is being saved into the folder until you choose. Everything you do on this iPhone is still being saved on the iPhone.</p>' +
+      '<button class="btn full mt" id="fcLoad">Load the folder’s copy onto this iPhone</button>' +
+      (empty ? "" :
+      '<button class="btn ghost full mt" id="fcKeep">Keep this iPhone’s copy and write over the folder</button>') +
+      '<button class="btn ghost full mt" id="fcLater">Decide later</button>';
+
+    const choice = await sheetPromise(empty ? "Your records are in this folder" : "Two copies of your records", body, (b, fin) => {
+      b.querySelector("#fcLoad").onclick = () => fin("load");
+      const k = b.querySelector("#fcKeep"); if(k) k.onclick = () => fin("keep");
+      b.querySelector("#fcLater").onclick = () => fin(null);
+    });
+
+    if(choice === "load"){ await loadFromFolder(newest); return; }
+    if(choice === "keep"){
+      /* Adopt the folder's date as seen, or the next save asks the same question again. */
+      setFolderStatus({ ok:true, at:Date.now(), enc:newest.enc, mtime:newest.at });
+      _folderHeld = false;
+      scheduleAutoBackup();
+      toast("This iPhone’s copy will be saved into the folder");
+      return;
+    }
+    toast("Nothing has been written to the folder");
+  }
+
+  async function loadFromFolder(pick){
+    if(!GW || !GW.folderRead) return false;
+    const chosen = pick || folderNewest();
+    if(!chosen){ toast("There is nothing in that folder yet"); return false; }
+    toast("Reading the folder…");
+    let r = null;
+    try{ r = await GW.folderRead({ path:chosen.path }); }catch(e){}
+    if(!r || !r.found){ toast((r && r.error) || "Could not read that folder"); Sfx.error(); return false; }
+    const ok = await importFromText(r.data, "Loaded from your records folder");
+    if(ok){
+      setFolderStatus({ ok:true, at:Date.now(), enc:chosen.enc, mtime:+r.modifiedAt || chosen.at });
+      _folderHeld = false;
+      if(chosen.enc && !encOn()) whenIdle(warnPassphraseLost);
+    }
+    return ok;
+  }
+
+  /* The passphrase is device state — it is in this phone's own storage and has never travelled in
+     a backup — so a phone that has just restored an encrypted file cannot write another one. The
+     next save would replace the encrypted file in the folder with a readable one, which is a
+     thing to be told about rather than to discover. */
+  async function warnPassphraseLost(){
+    const body = el('<div></div>');
+    body.innerHTML =
+      '<div class="vmsg warn">'+gi("key")+' The file you just loaded was <b>encrypted</b>, but this iPhone does not have a backup passphrase set.</div>'+
+      '<p class="small">Your records are safely restored — the passphrase you typed unlocked them. But a passphrase lives on the phone that set it and never travels inside a backup, so this iPhone cannot write an encrypted file back.</p>'+
+      '<p class="small">Unless you set one, the next save will replace the encrypted file in your folder with a <b>readable</b> one.</p>'+
+      '<button class="btn full mt" id="pwGo">Set a passphrase now</button>'+
+      '<button class="btn ghost full mt" id="pwNo">Carry on without one</button>';
+    const go2 = await sheetPromise("Set your backup passphrase again?", body, (b, fin) => {
+      b.querySelector("#pwGo").onclick = () => fin(true);
+      b.querySelector("#pwNo").onclick = () => fin(null);
+    });
+    if(go2) setTimeout(() => { try{ encPromptSetup(() => scheduleAutoBackup()); }catch(e){} }, 250);
+  }
+
+  async function chooseFolder(){
+    if(!GW || !GW.folderPick){ toast("Not available in this build of the app"); return false; }
+    let r = null;
+    try{ r = await GW.folderPick(folderArgs()); }catch(e){}
+    if(!r || r.cancelled) return false;
+    if(!r.picked){ toast((r && r.error) || "Could not use that folder"); Sfx.error(); return false; }
+    rememberFolder(r);
+    /* A different folder is a different history: nothing in it has been seen from this device. */
+    LSdel("tt_folder_status"); LSdel("tt_folder_day");
+    _folderHeld = false;
+    const foreign = folderIsForeign();
+    if(foreign){ _folderHeld = true; await askFolderCopy(foreign); return true; }
+    if(await writeFolder()){ retireDeviceCopy(); Sfx.tick(); toast("Your records are now saved in " + (folder.name || "that folder")); }
+    else { Sfx.error(); toast("Could not save into that folder"); }
+    return true;
+  }
+
+  async function forgetFolder(){
+    try{ await GW.folderForget(); }catch(e){}
+    rememberFolder({ set:false });
+    LSdel("tt_folder_status"); LSdel("tt_folder_day");
+    LSset("tt_autobk_retired","0");     /* the copy on the phone takes over again */
+    _folderHeld = false;
+    scheduleAutoBackup();
+  }
 
   /* Same wording as the app's own "last backed up" line, so the two read as one idea. */
   function autoAgo(t){
@@ -11871,11 +12194,68 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
   const AUTO_WHERE = "kept in GroundWork’s folder in the Files app, and included in your iPhone’s own backup";
   function autoBkLine(){
     const st = autoStatus();
-    if(!st)    return "Automatic backup: nothing saved yet — the next change you make writes one.";
-    if(st.ok)  return "Automatic backup: last saved "+autoAgo(st.at)+" · "+AUTO_WHERE+".";
-    return "Automatic backup: the last attempt ("+autoAgo(st.at)+") failed — "+(st.msg||"unknown error")+". "+
+    if(!st)    return "Copy on this iPhone: nothing saved yet — the next change you make writes one.";
+    if(st.ok)  return "Copy on this iPhone: last saved "+autoAgo(st.at)+" · "+AUTO_WHERE+".";
+    return "Copy on this iPhone: the last attempt ("+autoAgo(st.at)+") failed — "+(st.msg||"unknown error")+". "+
       (st.okAt ? "The copy from "+autoAgo(st.okAt)+" is still on this iPhone." : "No copy has been saved on this iPhone yet.");
   }
+  function folderLine(){
+    if(!folder.set) return autoBkLine();
+    if(folder.reachable === false)
+      return "This folder cannot be reached — " + (folder.error || "choose it again below.");
+    if(_folderHeld)
+      return "Paused: the folder holds a copy this iPhone did not write, so nothing is being saved there until you choose which copy to keep.";
+    const st = folderStatus();
+    if(!st)    return "Nothing saved here yet — the next change you make writes your records into it.";
+    if(st.ok)  return "Last saved " + autoAgo(st.at) + "." + (st.enc ? " Encrypted with your passphrase." : "");
+    return "The last attempt (" + autoAgo(st.at) + ") failed — " + (st.msg || "unknown error") + ". " +
+      (st.okAt ? "The copy from " + autoAgo(st.okAt) + " is still in the folder. " : "Nothing has been saved into this folder yet. ") +
+      "A copy is being kept on this iPhone instead.";
+  }
+
+  /* Offered once, and only to somebody who has records to lose. A brand-new install is in the
+     setup wizard, where a fourth question about storage before the first session is logged would
+     be one question too many; the same offer is always sitting in Settings. */
+  const FOLDER_OFFER_AFTER = 3;      /* sessions */
+  async function maybeOfferFolder(){
+    if(folder.set || !GW || !GW.folderPick) return;
+    if(LSget("tt_folder_asked","0") === "1") return;
+    if(!S || !S.sessions || S.sessions.length < FOLDER_OFFER_AFTER) return;
+    LSset("tt_folder_asked","1");    /* asked, whatever the answer — nothing is offered twice */
+    const body = el('<div></div>');
+    body.innerHTML =
+      '<p class="small">GroundWork can keep your records in a folder of your own — normally in <b>iCloud Drive</b> — and rewrite them there every time you change something.</p>'+
+      '<p class="small">Your practice then lives in <b>your</b> files rather than only inside this app. It survives losing the phone, and setting up a new one is choosing the same folder again.</p>'+
+      '<p class="small muted">Exporting a backup still works exactly as it does now, and is still how you move your records to a different device.</p>'+
+      '<button class="btn full mt" id="ofGo">Choose a folder…</button>'+
+      '<button class="btn ghost full mt" id="ofNo">Not now</button>';
+    const yes = await sheetPromise("Keep your records in your own files", body, (b, fin) => {
+      b.querySelector("#ofGo").onclick = () => fin(true);
+      b.querySelector("#ofNo").onclick = () => fin(null);
+    });
+    if(yes) await chooseFolder();
+  }
+
+  /* The nag itself is untouched; the banner may as well say where the copies are. When an iCloud
+     records folder is working the banner is not up at all — writeFolder() has called
+     markBackedUp() — so the branches below are the cases where it still has something to say. */
+  const _updateBackupBanner = window.updateBackupBanner;
+  window.updateBackupBanner = function(){
+    const r = _updateBackupBanner.apply(this, arguments);
+    try{
+      const bar = document.getElementById("backupBanner"), d = document.getElementById("bkdetail");
+      if(!bar || !d || !bar.classList.contains("show")) return r;
+      if(_folderHeld)
+        d.textContent += " (saving to your records folder is paused — see Settings › This iPhone)";
+      else if(folder.set && !folder.icloud)
+        d.textContent += " (your records folder is on this iPhone, so it is not a copy off it)";
+      else if(!folder.set){
+        const st = autoStatus();
+        if(st && st.ok) d.textContent += " (an automatic copy is kept on this iPhone)";
+      }
+    }catch(e){}
+    return r;
+  };
 
   /* ================= Receipts become real PDFs =================
      window.print() is a no-op in WKWebView, so printReceipt()'s hidden iframe silently
@@ -11962,6 +12342,9 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
           else askUnlock();
         }
         rescheduleNotifications();
+        /* Long enough away that another device could have written to the folder. A quick flick to
+           the Files app and back is not worth a round trip to iCloud. */
+        if(Date.now() - lastHidden > 60000) checkFolder();
       }
     });
   }
@@ -12046,7 +12429,7 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
     const d = el(
       '<details class="sgrp" data-g="device"><summary>'+
         '<span class="sgt">This iPhone</span>'+
-        '<span class="sgs">Lock, reminders and sharing — settings that belong to this device</span>'+
+        '<span class="sgs">Where your records are saved, plus lock and reminders — settings that belong to this device</span>'+
       '</summary><div class="sgb">'+
       '<div class="card"><h2>Lock &amp; reminders</h2>'+
         '<p class="small muted">These are stored on this device only and are not part of a backup, '+
@@ -12059,12 +12442,9 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
           '<p class="prev">How long you can leave GroundWork before it asks again.</p>'
         : '<div class="vmsg warn mt">'+gi("lock")+' This iPhone has no passcode or Face ID set up, so the app lock is unavailable. Add one in the iPhone’s own Settings.</div>')+
       '</div>'+
-      '<div class="card">'+cardHead("Automatic backup","backups-explained")+
-        '<p class="small muted" style="margin:-2px 0 0">A copy kept in this app’s folder in the <b>Files</b> app, rewritten on every change.</p>'+
-        '<div class="vmsg warn mt">'+gi("warning")+' <b>It is on this iPhone.</b> No help if the phone is lost or broken — keep exporting a real backup somewhere else too.</div>'+
-        '<p class="small mt" id="natBkStatus" style="font-weight:600"></p>'+
-        '<p class="prev" id="natBkHint"></p>'+
-        '<button class="btn sec mt" id="natBkNow">Back up now</button>'+
+      '<div class="card">'+cardHead("Where your records are saved","backups-explained")+
+        '<p class="small muted" style="margin:-2px 0 0">Every change you make is written into a folder you choose — normally in <b>iCloud Drive</b> — so your practice lives in your own files rather than only inside this app.</p>'+
+        '<div class="mt" id="natFolder"></div>'+
       '</div>'+
       '</div></details>');
 
@@ -12117,30 +12497,61 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
       paint();
     }
 
-    /* Painted from the stored status, never by reading the folder back: that would put an
-       await on every Settings render for a line that only says when. */
-    const bkStat = d.querySelector("#natBkStatus"), bkHint = d.querySelector("#natBkHint"), bkNow = d.querySelector("#natBkNow");
-    function paintAutoBk(){
-      if(!P("Filesystem")){
-        bkStat.textContent = "Automatic backup: not available in this build of the app.";
-        bkHint.textContent = "Export a backup by hand from Data & backup instead.";
-        bkNow.style.display = "none";
-        return;
-      }
-      bkStat.textContent = autoBkLine();
-      bkHint.textContent = (typeof encReady==="function" && encReady())
-        ? "The copy is encrypted with your passphrase, the same as an encrypted export."
-        : "Set a passphrase under Data & backup and this copy is encrypted too.";
+    /* Built from what this device already knows, then repainted once the folder has answered:
+       an await on every Settings render, for a line that only says when, would show a blank card
+       for as long as iCloud takes to reply. */
+    const fdHost = d.querySelector("#natFolder");
+    function folderCardHTML(){
+      if(!GW || !GW.folderPick)
+        return '<p class="small" style="font-weight:600">A records folder is not available in this build of the app.</p>'+
+               '<p class="prev">'+esc(autoBkLine())+'</p>';
+      if(!folder.set)
+        return '<div class="vmsg warn">'+gi("warning")+' <b>No folder chosen.</b> Your records are being copied into GroundWork’s own folder in <b>Files</b>, which is still on this iPhone — no help at all if it is lost, stolen or broken.</div>'+
+               '<p class="small mt" style="font-weight:600">'+esc(autoBkLine())+'</p>'+
+               '<button class="btn full mt" id="fdPick">'+gi("folder")+' Choose a folder…</button>';
+      return '<p class="small" style="font-weight:600">'+gi(folder.icloud?"cloud":"phone")+' '+esc(folder.path || folder.name || "Your folder")+'</p>'+
+        (folder.icloud
+          ? '<p class="prev">This folder is in iCloud Drive, so a copy of your practice is off this iPhone. While it keeps working, the backup reminder stays quiet.</p>'
+          : '<div class="vmsg warn">'+gi("warning")+' This folder is <b>on this iPhone</b>, so it is not a copy off it. The backup reminder stays on. Choose a folder in iCloud Drive to change that.</div>')+
+        '<p class="small mt" style="font-weight:600">'+esc(folderLine())+'</p>'+
+        '<p class="prev">Kept here: <b>'+esc(folderLiveName(encOn()))+'</b>, rewritten on every change, plus one dated copy a day in <b>'+esc(FOLDER_HISTORY)+'</b> (the newest '+FOLDER_KEEP+' are kept).</p>'+
+        '<div class="row mt" style="flex-wrap:wrap;gap:8px">'+
+          '<button class="btn sec" id="fdNow">Save now</button>'+
+          '<button class="btn sec" id="fdLoad">Load from folder</button>'+
+          '<button class="btn ghost" id="fdPick">Change folder…</button>'+
+          '<button class="btn ghost" id="fdOff">Stop using it</button>'+
+        '</div>';
     }
-    bkNow.onclick = async () => {
-      bkNow.disabled = true; bkNow.textContent = "Backing up\u2026";
-      const ok = await nativeAutoBackup();
-      bkNow.disabled = false; bkNow.textContent = "Back up now";
-      paintAutoBk();
-      if(ok){ Sfx.tick(); toast("Copy saved on this iPhone"); }
-      else { Sfx.error(); toast("Could not save a copy on this iPhone"); }
-    };
-    paintAutoBk();
+    function paintFolder(){
+      fdHost.innerHTML = folderCardHTML();
+      const on = (id, fn) => { const b = fdHost.querySelector(id); if(b) b.onclick = fn; };
+      on("#fdPick", async () => { await chooseFolder(); paintFolder(); });
+      on("#fdNow", async e => {
+        const b = fdHost.querySelector("#fdNow");
+        b.disabled = true; b.textContent = "Saving…";
+        const ok = await writeFolder();
+        paintFolder();
+        if(ok){ Sfx.tick(); toast("Saved into your folder"); }
+        else { Sfx.error(); toast(_folderHeld ? "Paused until you choose which copy to keep" : "Could not save into your folder"); }
+      });
+      on("#fdLoad", async () => { await refreshFolder(); await loadFromFolder(); paintFolder(); });
+      on("#fdOff", async () => {
+        const body = el('<div></div>');
+        body.innerHTML =
+          '<p class="small">GroundWork stops writing into <b>'+esc(folder.name || "that folder")+'</b>. The files already in it are <b>left exactly where they are</b> — they are yours, in your folder.</p>'+
+          '<p class="small">Your records stay on this iPhone and copies go back to GroundWork’s own folder in Files. The backup reminder comes back on.</p>'+
+          '<button class="btn full mt" id="foGo">Stop using this folder</button>'+
+          '<button class="btn ghost full mt" id="foNo">Cancel</button>';
+        const yes = await sheetPromise("Stop saving into this folder?", body, (b, fin) => {
+          b.querySelector("#foGo").onclick = () => fin(true);
+          b.querySelector("#foNo").onclick = () => fin(null);
+        });
+        if(!yes) return;
+        await forgetFolder(); paintFolder(); toast("No longer saving into that folder");
+      });
+    }
+    paintFolder();
+    refreshFolder().then(() => { if(document.body.contains(fdHost)) paintFolder(); });
 
     /* VIEWS.settings wires open/close state for the groups it built itself; this one is
        appended afterwards, so it needs the same three lines to stay folded like the rest. */
@@ -12153,6 +12564,21 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
   }
 
   /* ================= Boot ================= */
+  /* The folder check needs S, which the app's own boot loads asynchronously in an earlier script
+     block. `S` is a top-level `let`, so this is the same binding, not a copy — waiting on it is
+     waiting on the app to be ready, and there is nothing else to hook. It gives up after ten
+     seconds rather than polling for ever behind a crash screen. */
+  function whenLoaded(){
+    return new Promise(res => {
+      let n = 100;
+      const tick = () => {
+        try{ if(typeof S !== "undefined" && S && Array.isArray(S.sessions)) return res(true); }catch(e){}
+        if(--n <= 0) return res(false);
+        setTimeout(tick, 100);
+      };
+      tick();
+    });
+  }
   (async function(){
     if(GW){
       try{ bio = await GW.biometricAvailable(); }catch(e){}
@@ -12160,6 +12586,9 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
     if(lockOn() && bio.available){ showLock(); askUnlock(); }
     else if(lockOn() && !bio.available) LSset("tt_lock","0");   /* passcode removed since */
     rescheduleNotifications();
+    if(!await whenLoaded()) return;
+    await checkFolder();
+    setTimeout(maybeOfferFolder, 5000);
   })();
 })();
 </script>
