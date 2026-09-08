@@ -3787,26 +3787,47 @@ function anaSources(){
 
 /* DAYS TO PAYMENT — how long money takes to arrive, and whether that is getting worse.
    Dated on the SESSION, not the payment: a session in March paid in June belongs to March's
-   figure, or a slow month would look fine simply because nothing had landed yet. */
+   figure, or a slow month would look fine simply because nothing had landed yet.
+
+   THE ADVANCE-PAYMENT PROBLEM (fixed Sep 2026). The gap used to be clamped at zero and every
+   payment averaged together, which is wrong for the way most therapy is actually paid for. A
+   practice where people pay at the session, or by standing order the week before, is a practice
+   whose gaps are mostly 0 and whose median is therefore 0 or 1 — a flat line at the bottom of a
+   chart, month after month, saying nothing. Worse, it hides the only part of the question worth
+   asking: of the ones that were NOT settled up front, how long did they take? Averaging fifty
+   zeroes against three sixty-day waits reports "typically 0 days" about a practice with a real
+   collection problem.
+   So the rows are split at the session date. `upfront` is paid before or on the day, and its
+   headline is a PERCENTAGE — that is what "everyone pays at the session" looks like as a figure.
+   `after` is everything else, and every wait figure on the card is computed from that group
+   alone and labelled as such. The two are never averaged together again.
+   Nothing is clamped any more either, so paying a fortnight ahead reads as a fortnight ahead
+   rather than as "same day". */
 function anaDaysToPay(){
-  const months=18, t=today(), series=[];
+  const months=18, t=today();
   const rows=anaPast(anaDer(),t).filter(x=>x.s.paidDate&&parseD(x.s.paidDate))
-    .map(x=>({dt:x.dt,days:Math.max(0,Math.round((parseD(x.s.paidDate)-x.dt)/86400000))}));
+    .map(x=>({dt:x.dt,days:Math.round((parseD(x.s.paidDate)-x.dt)/86400000)}));
   if(rows.length<8)return {ready:false,need:"Eight paid sessions with a payment date. You have "+rows.length+"."};
-  /* Every figure comes from `rows`, not from the buckets. The month loop used to run i=18..1 —
-     last month back to eighteen months back — so sessions in the month IN PROGRESS fell outside
-     every bucket while still counting towards the eight that unlock the card. A practice whose
-     paid sessions were all from this month therefore passed the readiness test and then printed
-     a nought-day typical wait against an empty chart, having quietly measured nothing at all.
-     The current month is now a bucket of its own (i=0), and the headline figures are computed
-     from all the rows regardless of which month they land in. */
+  const after=rows.filter(x=>x.days>0);          /* settled after the session — the only real wait */
+  const onDay=rows.filter(x=>x.days===0);
+  const advance=rows.filter(x=>x.days<0);        /* paid before it happened */
+  const upfront=advance.length+onDay.length;
+  const pct=n=>Math.round(n/rows.length*100);
+  /* One bucket per month, INCLUDING the month in progress (i=0). The loop used to start at last
+     month while the readiness test counted every paid session, so a practice whose payments were
+     all from this month passed the gate and then printed a nought-day wait against an empty
+     chart. Each month carries both figures: the typical wait of the sessions that were not
+     settled up front, and the share that were. */
+  const series=[];
   for(let i=months;i>=0;i--){
     const from=anaMonthStart(t,i), to=anaMonthStart(t,i-1);
-    const inM=rows.filter(x=>x.dt>=from&&x.dt<to).map(x=>x.days);
-    series.push({l:ANA_MONTHS[from.getMonth()],from,partial:i===0,
-      v:inM.length?Math.round(inM.reduce((a,b)=>a+b,0)/inM.length):null,n:inM.length});
+    const inM=rows.filter(x=>x.dt>=from&&x.dt<to);
+    const late=inM.filter(x=>x.days>0).map(x=>x.days);
+    series.push({l:ANA_MONTHS[from.getMonth()],from,partial:i===0,n:inM.length,nLate:late.length,
+      v:late.length?Math.round(anaMedian(late)):null,
+      up:inM.length?Math.round((inM.length-late.length)/inM.length*100):null});
   }
-  const all=rows.map(x=>x.days);
+  const lateDays=after.map(x=>x.days);
   /* Then vs now needs two windows that do not overlap. slice(-6) against slice(0,6) shared five
      of their six months on a short history, which made "arriving four days slower than a year
      ago" a comparison of a period against itself. */
@@ -3814,27 +3835,81 @@ function anaDaysToPay(){
   const half=Math.min(6,Math.floor(rated.length/2));
   const mean=a=>a.length?Math.round(a.reduce((x,y)=>x+y.v,0)/a.length):null;
   const recent=half>=3?rated.slice(-half):[], older=half>=3?rated.slice(0,half):[];
-  return {ready:true,series,avg:Math.round(anaMedian(all)),
-    mean:Math.round(all.reduce((a,b)=>a+b,0)/all.length),
-    recentAvg:mean(recent),olderAvg:mean(older),compareMonths:half,n:all.length,
-    worst:all.reduce((a,b)=>Math.max(a,b),0),over30:all.filter(d=>d>30).length};
+  return {ready:true,series,
+    n:rows.length,nLate:after.length,nUpfront:upfront,nAdvance:advance.length,nOnDay:onDay.length,
+    upfrontPct:pct(upfront),advancePct:pct(advance.length),
+    /* Median days EARLY, as a positive number, for a practice that is paid ahead. */
+    advanceAvg:advance.length?Math.round(Math.abs(anaMedian(advance.map(x=>x.days)))):null,
+    /* Every wait figure below describes the `after` group and nothing else. */
+    avg:lateDays.length?Math.round(anaMedian(lateDays)):null,
+    mean:lateDays.length?Math.round(lateDays.reduce((a,b)=>a+b,0)/lateDays.length):null,
+    worst:lateDays.length?lateDays.reduce((a,b)=>Math.max(a,b),0):0,
+    over30:lateDays.filter(d=>d>30).length,
+    recentAvg:mean(recent),olderAvg:mean(older),compareMonths:half};
 }
 
-/* WHO PAYS LATE — the per-client version, because "31 days on average" is made of people. */
+/* WHO PAYS LATE — the per-client version, because "31 days on average" is made of people.
+
+   This card used to be a debt list: sorted by what each client owed RIGHT NOW, headed by whoever
+   happened to have an unpaid session this week. That is a worklist, and the app already has one
+   — Sessions › Unpaid, with a Chase button on it. Reproducing it under a Trends heading answered
+   a question nobody came to Trends to ask, and buried the one they did: is this person's paying
+   getting worse?
+   So it reports BEHAVIOUR OVER TIME. Each client's paid sessions are split into an older and a
+   newer half of their own history, and `drift` is how many days the newer half moved. Sorted by
+   drift, worst first, so the client who has quietly gone from paying on the day to paying three
+   weeks late is at the top even though nothing of theirs is overdue today. Current debt is still
+   shown on the row — it is useful context — but it no longer decides the order.
+
+   Same split as the days-to-payment card, and for the same reason: a client who pays at the
+   session has gaps of zero, and averaging those in makes every up-front payer look identical.
+   `typical` describes the payments that came in AFTER the session; `upfrontPct` says how often
+   they did not have to. */
+const ANA_LP_MIN=4;                 /* payments needed before a client's own trend means anything */
+const ANA_LP_DRIFT=5;               /* days of movement before it is worth calling a change */
 function anaLatePayers(){
   const t=today(), by={};
   anaPast(anaDer(),t).forEach(x=>{
     const k=(x.s.client||"").toLowerCase(); if(!k)return;
-    const g=by[k]||(by[k]={code:x.s.client,days:[],unpaid:0,owed:0});
-    if(x.s.paidDate&&parseD(x.s.paidDate))g.days.push(Math.max(0,Math.round((parseD(x.s.paidDate)-x.dt)/86400000)));
+    const g=by[k]||(by[k]={code:x.s.client,pays:[],unpaid:0,owed:0});
+    if(x.s.paidDate&&parseD(x.s.paidDate))
+      g.pays.push({dt:x.dt,days:Math.round((parseD(x.s.paidDate)-x.dt)/86400000)});
     else if(x.d.overdue){g.unpaid++;g.owed+=x.d.rate||0;}
   });
-  const rows=Object.keys(by).map(k=>by[k]).filter(g=>g.days.length>=2||g.unpaid)
-    .map(g=>({code:g.code,n:g.days.length,avg:g.days.length?Math.round(anaMedian(g.days)):null,
-      over30:g.days.filter(d=>d>30).length,unpaid:g.unpaid,owed:Math.round(g.owed)}))
-    .sort((a,b)=>(b.owed-a.owed)||((b.avg||0)-(a.avg||0)));
+  const rows=Object.keys(by).map(k=>{
+    const g=by[k];
+    g.pays.sort((a,b)=>a.dt-b.dt);                       /* oldest first — the halves need order */
+    const late=g.pays.filter(x=>x.days>0).map(x=>x.days);
+    const upfront=g.pays.length-late.length;
+    /* Split the client's own history in two. Halves of their own record, not a fixed window:
+       a fortnightly client and a weekly one cover very different spans in the same six months,
+       and a calendar window would compare one against a period the other had barely entered. */
+    let drift=null,then=null,now=null;
+    if(g.pays.length>=ANA_LP_MIN){
+      const h=Math.floor(g.pays.length/2);
+      const older=g.pays.slice(0,h).map(x=>Math.max(0,x.days));
+      const newer=g.pays.slice(-h).map(x=>Math.max(0,x.days));
+      if(older.length&&newer.length){
+        then=Math.round(anaMedian(older)); now=Math.round(anaMedian(newer)); drift=now-then;}
+    }
+    return {code:g.code,n:g.pays.length,nLate:late.length,
+      upfrontPct:g.pays.length?Math.round(upfront/g.pays.length*100):null,
+      typical:late.length?Math.round(anaMedian(late)):null,
+      over30:late.filter(d=>d>30).length,
+      then,now,drift,unpaid:g.unpaid,owed:Math.round(g.owed)};
+  }).filter(r=>r.n>=2||r.unpaid);
   if(!rows.length)return {ready:false,need:"A few paid sessions with dates on them."};
-  return {ready:true,rows,slow:rows.filter(r=>(r.avg||0)>30||r.unpaid)};
+  /* Drift leads; a client with too little history to have one sorts below everyone who has,
+     ranked by how long they take. Debt is context on the row, never the ordering. */
+  rows.sort((a,b)=>{
+    const ad=a.drift==null?-1e9:a.drift, bd=b.drift==null?-1e9:b.drift;
+    return bd-ad || (b.typical||0)-(a.typical||0) || b.owed-a.owed;});
+  const trended=rows.filter(r=>r.drift!=null);
+  return {ready:true,rows,trended,
+    slowing:trended.filter(r=>r.drift>=ANA_LP_DRIFT),
+    improving:trended.filter(r=>r.drift<=-ANA_LP_DRIFT),
+    steady:trended.filter(r=>Math.abs(r.drift)<ANA_LP_DRIFT),
+    driftMin:ANA_LP_DRIFT,minPays:ANA_LP_MIN};
 }
 
 /* COST RATIO — what share of turnover the practice costs to run, this year against last.
@@ -4165,33 +4240,79 @@ function trendsMoneyHTML(){
     : anaWaiting("Fee erosion","ana-erosion",fe.need);
 
   const dtp=anaDaysToPay();
+  /* Two different practices, two different cards. One is paid up front and wants to know how
+     firmly that holds; one waits and wants to know how long. Printing "typically 0 days" at the
+     first and a chart of zeroes at both is how this card came to say nothing to anybody. */
+  const dtpWait=dtp.ready&&dtp.nLate>=3;
   out+= dtp.ready
     ? anaCard("Days to payment","ana-dtp",
-        anaKpis([[dtp.avg+"d","Typical wait"],
-                 [dtp.recentAvg!=null?dtp.recentAvg+"d":"—","Last "+(dtp.compareMonths||6)+" months",(dtp.recentAvg!=null&&dtp.olderAvg!=null&&dtp.recentAvg>dtp.olderAvg+3)?"bad":""],
-                 [dtp.over30,"Payments over 30 days"]])+
-        chartLine(dtp.series.filter(x=>x.v!=null).map(x=>({l:x.l,v:x.v})))+
-        '<p class="small muted" style="margin:8px 0 0">'+plural(dtp.n,"payment")+' with a date on '+(dtp.n===1?'it':'them')+', typically '+dtp.avg+' day'+(dtp.avg===1?'':'s')+' — longest '+dtp.worst+'.</p>'+
-        (dtp.recentAvg!=null&&dtp.olderAvg!=null
+        anaKpis([[dtp.upfrontPct+"%","Settled on the day or before",dtp.upfrontPct>=80?"good":""],
+                 [dtpWait?dtp.avg+"d":"—","Typical wait on the rest",
+                   dtpWait?(dtp.avg>30?"bad":dtp.avg>14?"":"good"):""],
+                 [dtpWait&&dtp.recentAvg!=null?dtp.recentAvg+"d":"—","Last "+(dtp.compareMonths||6)+" months",
+                   (dtpWait&&dtp.recentAvg!=null&&dtp.olderAvg!=null&&dtp.recentAvg>dtp.olderAvg+3)?"bad":""],
+                 [dtp.over30,"Waits over 30 days",dtp.over30?"bad":""]])+
+        /* The chart plots ONLY the sessions that were not settled up front. A month in which
+           everybody paid on the day has no wait to draw and is simply absent, which is the
+           honest answer — a nought would read as "instant" rather than "nothing to measure". */
+        (dtpWait?chartLine(dtp.series.filter(x=>x.v!=null).map(x=>({l:x.l,v:x.v}))):"")+
+        '<p class="small muted" style="margin:8px 0 0">'+
+          plural(dtp.nUpfront,"payment")+' of '+dtp.n+' arrived on the day or before'+
+          (dtp.nAdvance?' \u2014 '+dtp.nAdvance+' of them genuinely in advance, typically '+
+            dtp.advanceAvg+' day'+(dtp.advanceAvg===1?'':'s')+' early':'')+'.'+
+          (dtpWait?' The other '+plural(dtp.nLate,"payment")+' took '+dtp.avg+' day'+(dtp.avg===1?'':'s')+
+            ' at the median, longest '+dtp.worst+'.':'')+'</p>'+
+        (!dtpWait
+          ? '<p class="small muted" style="margin:4px 0 0">'+(dtp.nLate
+              ? 'Only '+plural(dtp.nLate,"payment")+' came in after the session, which is too few to read a trend from. On this evidence you are paid as you go.'
+              : '<b>Every payment was settled by the day of the session.</b> There is no waiting time to chart.')+'</p>'
+          : (dtp.recentAvg!=null&&dtp.olderAvg!=null
           ? '<p class="small muted" style="margin:4px 0 0">'+(dtp.recentAvg>dtp.olderAvg
-              ? 'Money is arriving <b>'+(dtp.recentAvg-dtp.olderAvg)+' days slower</b> than in the '+plural(dtp.compareMonths,"month")+' before that.'
+              ? 'Of those, money is arriving <b>'+(dtp.recentAvg-dtp.olderAvg)+' days slower</b> than in the '+plural(dtp.compareMonths,"month")+' before that.'
               : dtp.recentAvg<dtp.olderAvg
-              ? 'Money is arriving <b>'+(dtp.olderAvg-dtp.recentAvg)+' days faster</b> than in the '+plural(dtp.compareMonths,"month")+' before that.'
-              : 'Steady against the '+plural(dtp.compareMonths,"month")+' before that.')+'</p>':""),
-        {lead:"From the session happening to the money landing. The month in progress is included, so a practice that only started logging this month still sees itself."})
+              ? 'Of those, money is arriving <b>'+(dtp.olderAvg-dtp.recentAvg)+' days faster</b> than in the '+plural(dtp.compareMonths,"month")+' before that.'
+              : 'Steady against the '+plural(dtp.compareMonths,"month")+' before that.')+'</p>':"")),
+        {lead:"How much of your work is paid up front, and how long the rest takes."})
     : anaWaiting("Days to payment","ana-dtp",dtp.need);
 
   const lp=anaLatePayers();
+  /* One row per client, headed by the direction of travel rather than by a balance. The chip is
+     the DRIFT — how their recent paying compares with their own earlier paying — because that is
+     the thing this card exists to surface and the thing no other screen shows. */
+  const lpChip=r=>r.drift==null
+      ? '<span class="chip na">too few to say</span>'
+      : r.drift>=lp.driftMin?'<span class="chip n">+'+r.drift+'d slower</span>'
+      : r.drift<=-lp.driftMin?'<span class="chip y">'+Math.abs(r.drift)+'d faster</span>'
+      : '<span class="chip f">steady</span>';
+  const lpRow=r=>'<div class="list-item" data-code="'+esc(r.code)+'"><div class="li-main">'+
+      '<div class="li-title">'+esc(r.code)+' '+lpChip(r)+'</div>'+
+      '<div class="li-sub">'+
+        (r.drift!=null?'was '+r.then+'d, now '+r.now+'d'
+          :r.n?plural(r.n,"payment")+' so far':'nothing settled yet')+
+        (r.upfrontPct!=null&&r.upfrontPct>0?' · '+r.upfrontPct+'% up front':'')+
+        (r.over30?' · '+r.over30+' over 30d':'')+'</div></div>'+
+      '<div class="li-right">'+(r.owed?'<b style="color:var(--bad)">'+gbp(r.owed)+'</b>'
+        :r.typical!=null?'<span class="small muted">'+r.typical+'d</span>':'<span class="small muted">up to date</span>')+
+      '</div></div>';
   out+= lp.ready
     ? anaCard("Who pays late","ana-late",
-        (lp.rows.length
-          ? lp.rows.slice(0,12).map(r=>'<div class="list-item" data-code="'+esc(r.code)+'"><div class="li-main">'+
-              '<div class="li-title">'+esc(r.code)+' '+(r.avg!=null?'<span class="chip '+(r.avg>30?"n":r.avg>14?"f":"y")+'">'+r.avg+'d</span>':'')+'</div>'+
-              '<div class="li-sub">'+(r.n?plural(r.n,"payment")+' · typically '+r.avg+' days':'nothing settled yet')+
-                (r.over30?' · '+r.over30+' over 30d':'')+'</div></div>'+
-              '<div class="li-right">'+(r.owed?'<b style="color:var(--bad)">'+gbp(r.owed)+'</b>':'<span class="small muted">up to date</span>')+'</div></div>').join("")
-          : '<p class="muted small">Everyone is up to date.</p>'),
-        {lead:"Sorted by what is outstanding, then by how long they take."})
+        (lp.trended.length
+          ? anaKpis([[lp.slowing.length,"Getting slower",lp.slowing.length?"bad":"good"],
+                     [lp.steady.length,"Holding steady"],
+                     [lp.improving.length,"Getting faster",lp.improving.length?"good":""]])
+          : '')+
+        (lp.slowing.length
+          ? '<div class="vmsg warn" style="margin:10px 0">'+gi("downtrend")+' <b>'+
+            (lp.slowing.length===1?esc(lp.slowing[0].code)+' has'
+              :plural(lp.slowing.length,"client")+' have')+
+            '</b> slipped by '+lp.driftMin+' days or more against their own earlier record.</div>'
+          : lp.trended.length
+          ? '<div class="vmsg ok" style="margin:10px 0">\u2713 Nobody is paying meaningfully slower than they used to.</div>'
+          : '')+
+        lp.rows.slice(0,12).map(lpRow).join("")+
+        (lp.rows.length>12?'<p class="small muted" style="margin:8px 0 0">Showing the 12 with the most movement, of '+lp.rows.length+'.</p>':'')+
+        '<p class="small muted" style="margin:8px 0 0">Chasing what is outstanding <i>today</i> is a job, not a trend \u2014 that lives on <span class="taxlink" id="lpUnpaid">Sessions \u203a Unpaid \u203a</span> with a Chase button on it.</p>',
+        {lead:"Whether each client\u2019s paying is drifting, measured against their own earlier record \u2014 not against a calendar."})
     : anaWaiting("Who pays late","ana-late",lp.need);
 
   const cr=anaCostRatio();
@@ -4691,6 +4812,10 @@ VIEWS.practice=function(){
       host.querySelectorAll(".list-item[data-code]").forEach(li=>li.onclick=()=>{
         const c=S.clients.find(x=>(x.code||"").toLowerCase()===(li.dataset.code||"").toLowerCase());
         if(c)clientForm(c);});
+      /* The one link out of Trends into a worklist: "who pays late" is a trend, chasing today's
+         debt is a job, and the card says so rather than doing both badly. */
+      const lpu=host.querySelector("#lpUnpaid");
+      if(lpu)lpu.onclick=e=>{e.stopPropagation();sessFilter.view="list";sessFilter.seg="unpaid";go("sessions");};
       /* folded rows are built the first time each block is opened, not now */
       wireAgedFolds(host,built.folds);
       wireInfo(host);
@@ -6262,13 +6387,16 @@ infoDef("ana-sources","Where clients come from",
   '<p class="small">The column that matters is not how many enquired — it is the <b>median sessions</b> and how many are <b>still current</b>. A directory that sends ten people who each come twice is worth much less than a colleague who sends two who each stay a year, and enquiry counts alone say the opposite.</p>'+
   '<p class="small muted">Clients with nothing filled in appear as <b>Unknown</b>, always last and never merged into a real source: never asked is a different fact from found us themselves. They are shown rather than left out so the table adds up to your whole practice — a source list that quietly omits half the clients invites the wrong conclusion from the half it shows.</p>');
 infoDef("ana-dtp","Days to payment",
-  '<p class="small">The gap between a session happening and the money arriving, averaged by month.</p>'+
+  '<p class="small"><b>Two questions, kept apart.</b> How much of your work is settled by the day of the session — at the session, or in advance — and, for everything else, how long you actually waited.</p>'+
+  '<p class="small">They are never averaged together. Most therapy is paid at the session, so mixing fifty same-day payments in with three sixty-day waits reports "typically 0 days" about a practice with a real collection problem, and draws a flat line along the bottom of the chart every month. <b>Every waiting figure on this card describes only the payments that came in after the session.</b></p>'+
   '<p class="small">Dated on the <b>session</b>, not the payment. A March session paid in June belongs to March’s figure — dating it to June would make a slow month look fine simply because nothing had landed yet.</p>'+
   '<p class="small">The month in progress is included. Only sessions you have entered a <b>payment date</b> against are counted at all, so if this looks thin the answer is usually that payments are being ticked without a date.</p>'+
   '<p class="small">The median is used, so one client who took nine months does not swamp the month they were in. A number that is creeping up is usually an invoicing habit rather than a client problem.</p>');
 infoDef("ana-late","Who pays late",
-  '<p class="small">The per-client version of days-to-payment, because "31 days on average" is made of people.</p>'+
-  '<p class="small">Sorted by what is actually outstanding first, then by how slowly they pay. <b>Over 30 days</b> counts how many of their payments took longer than a month.</p>'+
+  '<p class="small">The per-client version of days-to-payment, because "31 days on average" is made of people. It reports the <b>direction of travel</b>, not today’s balance.</p>'+
+  '<p class="small">Each client’s payments are cut in half — their own earlier half against their own recent half — and the chip is how far the recent half moved. Halves of their own record rather than a fixed number of months, because a fortnightly client and a weekly one cover very different ground in the same six months. It takes '+ANA_LP_MIN+' payments before anyone gets a trend at all, and '+ANA_LP_DRIFT+' days of movement before it is called a change rather than noise.</p>'+
+  '<p class="small">Payments settled <b>on or before the day</b> are counted separately (the "up front" figure) and kept out of the waiting time, for the same reason as on the days-to-payment card: averaging same-day payments in makes everyone look identical and hides the ones who really do take a month.</p>'+
+  '<p class="small">What is outstanding today is shown on the row for context, but it does <b>not</b> set the order — it used to, which made this a debt list that happened to live under Trends. Chasing is a job with its own screen: Sessions › Unpaid.</p>'+
   '<p class="small muted">Nothing here changes a fee or sends anything. It is for deciding who to ask for payment up front.</p>');
 infoDef("ana-costratio","What the practice costs to run",
   '<p class="small">Costs as a share of everything that came in, over the last twelve months, against the twelve before that.</p>'+

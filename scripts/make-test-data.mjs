@@ -121,7 +121,11 @@ function inBreak(d) {
      start / end            when the work ran
      frequency              their cadence, which sets the interval
      missRate               share of appointments that became a late cancellation or DNA
-     payLagDays             typical days from session to payment ([lo,hi]); null = never pays
+     payLagDays             typical days from session to payment ([lo,hi]); null = never pays.
+                            NEGATIVE is paid in advance, which is how a great deal of therapy is
+                            actually paid for — a standing order the week before, or cash at the
+                            door. Without a profile that does it, the days-to-payment analytic
+                            cannot be exercised on the case it was rebuilt for.
      unpaidTailWeeks        recent sessions deliberately left unpaid (money genuinely outstanding)
      notesGap               share of sessions with the write-up not ticked (the Incomplete worklist)
    Every session carries what the app itself would have written: a stamped cancelCharge on a
@@ -576,7 +580,10 @@ function profileOnlineOnly() {
       frequency: pick(r, ["Weekly", "Every 2 weeks"]), rate: pick(r, [50, 55]),
       status: stillOn ? "Ongoing" : "Finished",
       time: pick(r, ["08:00", "12:00", "13:00", "17:00", "18:00", "19:00"]),
-      missRate: r() * 0.15, payLagDays: [0, 2], onlineRate: 1,
+      /* Paid up front: an online practice that takes payment before the session or on the day.
+         Its days-to-payment card is therefore the "97% settled on the day or before" shape, not
+         the "typically ten days" one, and both shapes get exercised across the corpus. */
+      missRate: r() * 0.15, payLagDays: [-7, 3], onlineRate: 1,
       location: "At home", upcoming: stillOn,
     });
   }
@@ -587,7 +594,7 @@ function profileOnlineOnly() {
   });
   supervisionRun(st, r, { from: monthsAgo(17), everyDays: 28, supervisor: "D. Alvi", cost: 60 });
   recurringCost(st, r, { desc: "Video platform", amount: 12, from: monthsAgo(17), cat: "software", tickRate: 0.5 });
-  return { st, note: "Online only, 17 months, everything at home, most features switched off (simple reveal mode)." };
+  return { st, note: "Online only, 17 months, everything at home, paid in advance, most features switched off (simple reveal mode)." };
 }
 
 /* ---------- 8 · Just installed, one client, nothing else ---------- */

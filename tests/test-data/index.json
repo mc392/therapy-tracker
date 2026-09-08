@@ -102,7 +102,7 @@
     {
       "name": "online-only",
       "file": "groundwork-testdata-online-only.json",
-      "note": "Online only, 17 months, everything at home, most features switched off (simple reveal mode).",
+      "note": "Online only, 17 months, everything at home, paid in advance, most features switched off (simple reveal mode).",
       "clients": 11,
       "sessions": 257,
       "first": "2025-05-05",
