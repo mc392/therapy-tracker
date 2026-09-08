@@ -465,6 +465,16 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
 .prev{font-size:11px;color:var(--muted);margin-top:3px}
 .acc-work{margin-top:10px;padding:11px 13px;border:1px solid var(--line);border-radius:12px;background:var(--soft);font-size:12.5px;line-height:1.75;color:var(--ink)}
 .acc-work div{margin:1px 0} .acc-work b{font-weight:700}
+/* The three steps of getting a quarter filed (Tax > Making Tax Digital). Two are already done
+   by the time the reader is looking at them and one is not ours to do, so the marker carries
+   that distinction: a tick in brand green against the outstanding step's outline. */
+.mtdstep{display:flex;gap:11px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--hair)}
+.mtdstep:first-of-type{border-top:0;padding-top:6px}
+.mtdstep>div{min-width:0;flex:1}
+.mtdn{flex:0 0 26px;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;margin-top:1px}
+.mtdn svg{width:15px;height:15px}
+.mtdstep.on>.mtdn{background:color-mix(in srgb,var(--brand) 16%,transparent);color:var(--brand)}
+.mtdstep.todo>.mtdn{border:1px dashed var(--line);color:var(--muted)}
 /* Settings groups: collapsed sections so the page opens as a short menu, not a wall of cards */
 .sgrp{background:color-mix(in srgb,var(--card) var(--glass),transparent);
   -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
@@ -1703,19 +1713,29 @@ function plusStatusLine(){
   return kind+who+(s.expiresAt?" \u00b7 renews "+esc(fmtD(String(s.expiresAt).slice(0,10))):" \u00b7 no expiry")+".";
 }
 
-/* ---- what Plus is, in the order it is worth paying for ---- */
+/* ---- what Plus is, in the order it is worth paying for ----
+   Ordered by what actually makes someone reach for a card, which is the January bill and not the
+   charts \u2014 docs/monetisation.md is blunt that Trends is tier filler, so it does not lead. The
+   MTD line is written to the "instead of, not as well as" reframe in
+   docs/tax-positioning-2026-09.md \u00a72: the point is that Plus plus a cheap submission tool
+   replaces a bookkeeping subscription, not that it sits alongside one. Plain text \u2014
+   openPlusSheet escapes these. */
 const PLUS_SELL=[
-  ["Tax","Estimates, the pot, payments on account and what HMRC actually assessed \u2014 kept current as the rates change each April."],
-  ["Costs & other income","What the practice costs you, taken off the profit the tax is worked out from."],
-  ["Making Tax Digital","Your four quarters, reconciled to the same figures, ready to file."],
-  ["Trends","Retention, attendance against the frequency you agreed, and what missed sessions cost."],
-  ["Accreditation hours","Clinical and supervision hours and the 1:6 ratio, for Form 3A."],
-  ["GroundWork Notes sync","Sends each client's cadence to the notes app so it knows what still needs writing up."],
-  ["Practice analytics","Twenty more views of your own records \u2014 who stays, what an hour is really worth, how full your weeks are."]
+  ["What to set aside","A running figure worked from money you have actually been paid \u2014 including the January that is half again bigger than people expect, months before it lands."],
+  ["Costs & other income","Insurance, room rent, supervision, CPD and the rest, taken off the profit your tax is worked out from. Bundled with tax because an estimate without them is one nobody should save against."],
+  ["Your pot, and what leaves it","Payments on account, the balancing payment, every due date in order, and what HMRC actually assessed once you have filed."],
+  ["Making Tax Digital","Your four quarters added up and exported as a file for your accountant, or for software that files. You are already keeping the records, so the only thing left to buy is the submission \u2014 and HMRC lists free ones."],
+  ["Trends","Twenty readings of your own history: who stays, who drifts, what an hour is really worth and what missed sessions cost."],
+  ["Accreditation hours","Clinical and supervision hours and the 1:6 ratio, in the shape Form 3A asks for."],
+  ["GroundWork Notes sync","Sends each client\u2019s cadence to the notes app so it knows what still needs writing up."]
 ];
+/* The annual promise, said in one sentence. It is the honest reason a subscription rather than a
+   one-off unlock: HMRC bands, thresholds, Class 2/4 rates and student-loan plans move every
+   April, and keeping ukTax() right is the recurring work being paid for. */
+const PLUS_PROMISE="Rates, bands and thresholds are kept current as they change each April.";
 const PLUS_REASONS={
   tax:"Tax is part of "+PLUS_NAME, finances:"Costs & other income is part of "+PLUS_NAME,
-  mtd:"The MTD export is part of "+PLUS_NAME, trends:"Trends is part of "+PLUS_NAME,
+  mtd:"The quarterly export is part of "+PLUS_NAME, trends:"Trends is part of "+PLUS_NAME,
   accreditation:"Accreditation hours are part of "+PLUS_NAME,
   notesSync:"Notes sync is part of "+PLUS_NAME, palettes:"More colour schemes are part of "+PLUS_NAME
 };
@@ -1732,8 +1752,10 @@ function openPlusSheet(reason){
     '<h2>'+esc(active?PLUS_NAME:(PLUS_REASONS[reason]||PLUS_NAME))+'</h2>'+
     '<p class="small muted">'+(active?plusStatusLine()
       :"Everything you already use stays free \u2014 logging sessions, receipts, and every backup and "+
-       "export. "+PLUS_NAME+" adds the parts that do the year-end work for you.")+'</p>'+
+       "export. "+PLUS_NAME+" adds the year-end work: what you will owe, what to keep back for it, "+
+       "and the figures already added up when it is time to file.")+'</p>'+
     '<div class="plfeat">'+PLUS_SELL.map(f=>'<div><b>'+esc(f[0])+'</b> \u2014 '+esc(f[1])+'</div>').join("")+'</div>'+
+    (active?'':'<p class="small muted">'+esc(PLUS_PROMISE)+'</p>')+
     (active?'<button class="btn sec full mt" id="plManage">Manage subscription</button>'
      :nat?'<p class="small muted mt" id="plPrice">'+(_plusPrice?esc(_plusPrice):"Checking the price\u2026")+'</p>'+
           '<button class="btn full" id="plBuy">Subscribe</button>'+
@@ -5858,6 +5880,32 @@ infoDef("tax-region","Where you pay income tax",
   '<p class="small">Scotland sets its own income tax bands. Get this wrong and the estimate is simply wrong — there is no partial credit.</p>'+
   '<p class="small">National Insurance, Class 4 and student loan repayments are the same everywhere in the UK, so only the income tax part changes.</p>'+
   '<p class="small"><b>It applies from the tax year you set it in, forwards.</b> Earlier years keep the bands they were actually assessed under, so moving across the border never rewrites a return you have already filed.</p>');
+/* ---- Making Tax Digital ----
+   The claims discipline for these three is set out in docs/tax-positioning-2026-09.md §2: state
+   the mechanism, never issue the verdict. So they say what MTD asks for, what this app produces
+   and where the boundary is; they never say "compliant", never name a vendor, and never tell a
+   reader that their particular chain of tools satisfies the rules. */
+infoDef("mtd-what","What Making Tax Digital asks for",
+  '<p class="small">MTD for Income Tax replaces one return at the end of the year with <b>four summaries during it</b>, plus a final declaration. Same tax, same deadlines for paying — more check-ins.</p>'+
+  '<div class="acc-work"><div><b>Digital records</b> — your income and costs kept in software rather than on paper.</div>'+
+  '<div><b>A quarterly update</b> — totals for the period, sent through software HMRC has recognised.</div>'+
+  '<div><b>A final declaration</b> — after the year ends, the return proper.</div></div>'+
+  '<p class="small mt">It reaches you on turnover, not profit: over £50,000 from April 2026, over £30,000 from April 2027, over £20,000 from April 2028. Below that nothing changes for you yet.</p>'+
+  '<p class="small muted">The quarters run 6 Apr–5 Jul, 6 Jul–5 Oct, 6 Oct–5 Jan and 6 Jan–5 Apr, and each update is due about a month after its quarter closes.</p>');
+infoDef("mtd-route","Getting a quarter filed",
+  '<p class="small">Three parts, and this app does two of them.</p>'+
+  '<div class="acc-work"><div><b>1. The records.</b> Logging sessions here <i>is</i> keeping a digital record — dated, priced, and already sorted into the tax-return box each cost belongs in.</div>'+
+  '<div><b>2. The totals.</b> The quarterly table, on whichever basis you have set, reconciled to the same figures as the rest of the Tax tab.</div>'+
+  '<div><b>3. The submission.</b> Not this app. It needs software HMRC has recognised, which needs a server GroundWork deliberately does not have.</div></div>'+
+  '<p class="small mt"><b>Why export a file rather than copy the numbers.</b> MTD wants the figures to travel <i>digitally</i> from your records to HMRC — a <b>digital link</b>. Reading a total off one screen and typing it into another breaks that chain; moving a file does not. It is also simply less error-prone at the point where a typo becomes a wrong submission.</p>'+
+  '<p class="small">Software that takes figures from a spreadsheet and sends them is usually called <b>bridging software</b>. HMRC lists what is recognised, free options included, and that list is the place to look rather than any recommendation from here — it stays current and we would not.</p>'+
+  '<p class="small"><a href="https://www.gov.uk/guidance/find-software-that-works-with-making-tax-digital-for-income-tax" target="_blank" rel="noopener">HMRC’s list of software ›</a> · <a href="https://www.gov.uk/guidance/choose-the-right-software-for-making-tax-digital-for-income-tax" target="_blank" rel="noopener">Choosing between them ›</a></p>'+
+  '<p class="small muted">Whether a particular set of tools meets the rules in your circumstances is a question for your accountant. This app keeps records and adds them up; it makes no claim about your filing.</p>');
+infoDef("mtd-exports","Which file for what",
+  '<p class="small">Both files hold exactly the same figures — they are built from one shared shape, so they cannot drift apart. Only the wrapper differs.</p>'+
+  '<div class="acc-work"><div><b>.csv</b> — opens in Excel, Numbers or Google Sheets, and it is the format bridging software expects. One row per figure, with the quarter, the SA103 box and the amount, so it filters and pivots without being reshaped first. <b>Reach for this one.</b></div>'+
+  '<div><b>.json</b> — the same quarters as structured data, for an accountant’s system or anything that would rather parse than read.</div></div>'+
+  '<p class="small mt">Neither is a backup and neither can be restored. The one file that can is <b>Settings › Data &amp; backup › Export backup</b>. '+infoLink("backups-explained","Backups: which is which")+'</p>');
 infoDef("cancel-rules","How the notice periods work",
   '<p class="small">One line per notice period you honour. They are read <b>from most notice to least</b>, and a cancellation is charged by the first line it qualifies for.</p>'+
   '<div class="acc-work"><div>at least <b>48</b> hrs → <b>0</b>%</div><div>at least <b>24</b> hrs → <b>50</b>%</div><div class="muted">…anything less, or no date recorded → <b>100%</b></div></div>'+
@@ -6160,8 +6208,9 @@ VIEWS.tax=function(){
      estimates are worked out on a screen they cannot see yet. */
   if(plusLocked("tax")){
     v.innerHTML=plusLockHTML("tax","Tax",
-      "What to set aside, what to keep in the pot and when it leaves \u2014 payments on account, "+
-      "the January balancing payment, and the quarterly figures for MTD.");
+      "You are already logging the sessions. This turns them into what you will owe, what to keep "+
+      "back for it, and when it leaves \u2014 payments on account, the January balancing payment, "+
+      "and the quarterly figures for Making Tax Digital already added up.");
     plusWireLocks(v); return v;
   }
   /* Nothing is drawn until the disclaimer has been acknowledged. Existing installs never see
@@ -6917,16 +6966,64 @@ function mtdPeriod(q){
   const expTotal=Object.keys(boxes).reduce((a,k)=>a+boxes[k],0);
   return {q,turnover,other,boxes,expTotal,net:turnover+other-expTotal};
 }
-function mtdExport(ty){
+/* The ONE shape both exports render. Adding a figure here adds it to the .json and the .csv
+   together — the same reason backupPayload() is the single backup envelope. Two files that are
+   built from two literals are two files that eventually disagree, and the one place that would
+   surface is somebody's quarterly update. */
+function mtdRows(ty){
+  const p2=n=>Math.round(n*100)/100;
+  return mtdQuarters(ty).map(q=>{
+    const p=mtdPeriod(q);
+    return {period:q.n,label:q.label,from:isoD(q.from),to:isoD(q.to),
+      income:{turnover:p2(p.turnover),other:p2(p.other)},
+      expenses:Object.keys(p.boxes).sort((a,b)=>a-b)
+        .map(b=>({sa103Box:+b,name:SA103[b]||"",amount:p2(p.boxes[b])})),
+      expenseTotal:p2(p.expTotal),net:p2(p.net)};
+  });
+}
+const MTD_EXPORT_NOTE="Quarterly totals for MTD for Income Tax. Not a submission - GroundWork is not "+
+  "HMRC-recognised software and cannot file. Hand these to your accountant, or to software that files.";
+function mtdExportJSON(ty){
   const out={app:"GroundWork",generated:new Date().toISOString(),taxYear:ty,
-    basis:taxBasis(),note:"Quarterly totals for MTD for Income Tax. Not a submission - hand to your accountant or bridging software.",
-    periods:[]};
-  mtdQuarters(ty).forEach(q=>{const p=mtdPeriod(q);
-    out.periods.push({period:q.n,from:isoD(q.from),to:isoD(q.to),
-      income:{turnover:Math.round(p.turnover*100)/100,other:Math.round(p.other*100)/100},
-      expenses:Object.keys(p.boxes).sort((a,b)=>a-b).map(b=>({sa103Box:+b,name:SA103[b]||"",amount:Math.round(p.boxes[b]*100)/100}))});});
+    basis:taxBasis(),note:MTD_EXPORT_NOTE,periods:mtdRows(ty)};
   download("groundwork-mtd-"+ty.replace("/","-")+".json",JSON.stringify(out,null,2),"application/json");
-  toast("MTD figures downloaded");
+  toast("MTD figures downloaded (.json)");
+}
+/* Long/tidy, one row per figure — not one row per quarter with the boxes spread across columns.
+   A therapist's boxes change from quarter to quarter (a cost that only falls in Q2 exists in Q2
+   alone), so a wide sheet would need its columns recomputed from the union of every quarter and
+   would still hand a bridging tool a grid full of blanks. One row per figure survives a pivot
+   table, an accountant's filter, and a bridging tool's column mapping equally well.
+   `section` is what you filter on: income / expense / total. */
+function mtdExportCSV(ty){
+  const cols=["taxYear","basis","period","periodLabel","from","to","section","sa103Box","description","amount"];
+  const rows=[cols.join(",")];
+  const basis=taxBasis();
+  const put=(r,section,box,desc,amt)=>rows.push([ty,basis,r.period,r.label,r.from,r.to,
+    section,box==null?"":box,desc,amt.toFixed(2)].map(csvCell).join(","));
+  mtdRows(ty).forEach(r=>{
+    put(r,"income",null,"Turnover — session fees",r.income.turnover);
+    put(r,"income",null,"Other business income",r.income.other);
+    r.expenses.forEach(e=>put(r,"expense",e.sa103Box,e.name,e.amount));
+    put(r,"total",null,"Total expenses",r.expenseTotal);
+    put(r,"total",null,"Net for the quarter",r.net);
+  });
+  /* A trailing comment line would break a naive parser, so the caveat rides in a cell of its
+     own row instead — visible in a spreadsheet, and skipped by anything filtering on `section`. */
+  rows.push(cols.map(c=>csvCell(c==="description"?MTD_EXPORT_NOTE:"")).join(","));
+  /* LEADING BOM, and it is load-bearing for the one job this file has. Excel on Windows reads a
+     CSV in the system codepage unless a UTF-8 byte-order mark says otherwise, and these rows
+     carry en-dashes from the quarter labels ("6 Apr – 5 Jul") and pound signs from the SA103
+     names. Without it the therapist opens the file and every dash is "â€“". The
+     other three CSV exports predate this and are left alone deliberately — changing what an
+     existing export writes is a separate decision from what a new one writes. */
+  download("groundwork-mtd-"+ty.replace("/","-")+".csv","\uFEFF"+rows.join("\n"),"text/csv");
+  toast("MTD figures downloaded (.csv)");
+}
+/* Kept as the single named entry point: scripts/check-drift.mjs asserts this function exists and
+   stays free of plusLocked(), and the format argument defaults so any older caller still works. */
+function mtdExport(ty,fmt){
+  return fmt==="csv"?mtdExportCSV(ty):mtdExportJSON(ty);
 }
 
 /* ---- Tax > MTD ---- */
@@ -7245,23 +7342,45 @@ function drawMTD(host){
   const boxes=mtdExpenseBoxes(tyBounds(ty).start,tyBounds(ty).end);
   const boxRows=Object.keys(boxes).sort((a,b)=>a-b).map(b=>
     '<tr class="boxrow" data-box="'+b+'" style="cursor:pointer"><td><b>Box '+b+'</b></td><td>'+esc(SA103[b]||"")+'</td><td class="num">'+gbp(Math.round(boxes[b]))+'</td></tr>').join("");
-  host.innerHTML='<div class="card"><h2>Quarterly figures</h2>'+
+  host.innerHTML='<div class="card">'+cardHead("Quarterly figures","mtd-what")+
     '<p class="small muted">Making Tax Digital asks for a summary four times a year instead of one return at the end. These are your quarters for '+ty+', on the <b>'+esc(basisLabel().toLowerCase())+'</b>.</p>'+
     '<div class="rawscroll"><table><thead><tr><th>Quarter</th><th class="num">Income</th><th class="num">Costs</th><th class="num">Net</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     '<p class="small muted center" style="margin-top:6px">Tap a quarter to see exactly what is in it.</p>'+
-    '<button class="btn sec full mt" id="mtdExp">⤓ Export these figures (.json)</button>'+
-    '<p class="small muted mt"><b>This app cannot file for you.</b> Sending a quarterly update needs software HMRC has recognised. What it does do is help you keep a digital record directly linked to your session data, which gives you a useful estimate and helps you speed up and trust your actual submission.</p>'+
+    '</div>'+
+    /* The old version of this screen ended on "this app cannot file for you" -- true, and a dead
+       end. The sentence after it is the one that matters: you do not have to buy a whole
+       bookkeeping package to get these figures filed. See docs/tax-positioning-2026-09.md.
+       Note what this card is careful NOT to do. It describes the route and links to HMRC's own
+       list; it never names a product, never promises a free one exists for this reader, and
+       never rules on whether their particular setup satisfies the rules. That last one is a
+       question about their circumstances, which this app has said from the first screen it
+       does not know. */
+    '<div class="card">'+cardHead("Filing these","mtd-route")+
+    '<p class="small muted" style="margin:-2px 0 0">Three things have to happen. You have already done the first two.</p>'+
+    '<div class="mtdstep on"><span class="mtdn">'+gi("done")+'</span><div><b>A digital record of the work</b>'+
+      '<div class="small muted">Every session and cost you have logged, dated and sorted into the right tax-return box. This is the part that takes all year, and it is behind you.</div></div></div>'+
+    '<div class="mtdstep on"><span class="mtdn">'+gi("done")+'</span><div><b>The quarter added up</b>'+
+      '<div class="small muted">The table above. Export it as a file and hand it on \u2014 a file, rather than figures copied off a screen, is what '+infoLink("mtd-route","keeps the chain digital")+'.</div>'+
+      '<div class="row" style="gap:8px;flex-wrap:wrap;margin:10px 0 2px">'+
+        '<button class="btn sec sm" id="mtdExpCsv" style="flex:1 1 140px">'+gi("table")+' Export .csv</button>'+
+        '<button class="btn ghost sm" id="mtdExpJson" style="flex:1 1 140px">'+gi("export")+' Export .json</button></div>'+
+      '<div class="small muted">The <b>.csv</b> is the one to reach for: it opens in a spreadsheet and it is what bridging software reads. The .json carries the same figures for anything that prefers structured data. '+infoLink("mtd-exports","Which file for what")+'</div></div></div>'+
+    '<div class="mtdstep todo"><span class="mtdn">'+gi("plane")+'</span><div><b>Somebody presses Submit</b>'+
+      '<div class="small muted"><b>GroundWork cannot do this part, and is not trying to.</b> A quarterly update has to go through software HMRC has recognised. Your accountant can send it, or you can use a submission tool yourself \u2014 HMRC keeps the list, and there are free and low-cost ones on it built for exactly this, taking the figures from a spreadsheet.</div>'+
+      '<div class="small" style="margin-top:6px"><a href="https://www.gov.uk/guidance/find-software-that-works-with-making-tax-digital-for-income-tax" target="_blank" rel="noopener">HMRC\u2019s list of software \u203a</a></div></div></div>'+
     '</div>'+
     '<div class="card"><h2>'+ty+' by tax-return box</h2>'+
     '<p class="small muted">Where each cost lands on the self-employment pages (SA103).</p>'+
     (boxRows?'<div class="rawscroll"><table><thead><tr><th>Box</th><th>What HMRC calls it</th><th class="num">'+ty+'</th></tr></thead><tbody>'+boxRows+'</tbody></table></div>'
             :'<p class="muted small">No costs recorded for '+ty+' yet.</p>')+
-    '<p class="small muted mt">When MTD applies to you depends on turnover: over \u00a350,000 from April 2026, over \u00a330,000 from April 2027, over \u00a320,000 from April 2028.</p></div>';
+    '<p class="small muted mt">When MTD applies to you depends on turnover: over \u00a350,000 from April 2026, over \u00a330,000 from April 2027, over \u00a320,000 from April 2028. Under that you carry on filing one return a year \u2014 and these are still the year already added up, a quarter at a time.</p></div>';
   /* Redundant while the whole Tax tab is locked, and kept deliberately: the export is its own
      line in the tier, and this is the guard that survives Tax ever being unlocked separately.
-     Note it gates the BUTTON \u2014 mtdExport() itself stays pure, because tests call it. */
-  const b=host.querySelector("#mtdExp");
-  if(b)b.onclick=()=>{if(plusLocked("mtd"))return openPlusSheet("mtd");mtdExport(ty);};
+     Note it gates the BUTTONS \u2014 mtdExport() itself stays pure, because tests call it. */
+  const expBtn=(sel,fmt)=>{const b=host.querySelector(sel);
+    if(b)b.onclick=()=>{if(plusLocked("mtd"))return openPlusSheet("mtd");mtdExport(ty,fmt);};};
+  expBtn("#mtdExpCsv","csv"); expBtn("#mtdExpJson","json");
+  wireInfo(host);
   host.querySelectorAll(".qrow").forEach(tr=>tr.onclick=()=>{
     const q=mtdQuarters(ty).find(x=>x.n===+tr.dataset.q);
     periodBreakdownSheet("Quarter "+q.n+" \u00b7 "+q.label,q.from,q.to,
@@ -7681,9 +7800,12 @@ function plusSettingsCardHTML(){
   const active=plusActive();
   return '<div class="card"><h2>'+PLUS_NAME+'</h2>'+
     '<p class="small muted">'+plusStatusLine()+'</p>'+
-    '<p class="small muted">Tax, costs &amp; other income, the MTD export, Trends, accreditation '+
-      'hours, GroundWork Notes sync and the extra colour schemes. Logging, receipts and every '+
-      'backup and export stay free.</p>'+
+    /* Colour schemes were in this sentence until Sep 2026 and are now switched off entirely
+       (see PALETTES_ENABLED). A tier that lists something nobody can reach reads as padding,
+       which is the opposite of what this card is for. */
+    '<p class="small muted">What you will owe and what to keep back for it, costs &amp; other income, '+
+      'the quarterly figures for Making Tax Digital, Trends, accreditation hours and GroundWork '+
+      'Notes sync. Logging, receipts and every backup and export stay free.</p>'+
     '<button class="btn '+(active?"sec ":"")+'full mt" data-plus="settings">'+
       (active?"View details":"Unlock "+PLUS_NAME)+'</button></div>';
 }
@@ -10131,7 +10253,7 @@ const FEATURES=[
   {k:"trends",       ic:gi("trends"), n:"Trends",                 d:"Retention funnel, attendance against expected frequency, missed sessions and how long clients stay. Lives inside Practice."},
   {k:"finances",     ic:gi("finances"), n:"Costs & other income",   d:"Business costs (insurance, wifi, monthly room rent) and income that isn’t a client session. Both feed your net income and tax figures.",dep:"money"},
   {k:"money",        ic:gi("money"), n:"Money",                  d:"Revenue charts, what is outstanding, and the month-by-month picture of what came in."},
-  {k:"tax",          ic:gi("tax"), n:"Tax",                    d:"Tax-year totals, UK sole-trader tax estimates and monthly take-home."},
+  {k:"tax",          ic:gi("tax"), n:"Tax",                    d:"What to set aside, when it falls due, monthly take-home, and the quarterly figures for Making Tax Digital."},
   {k:"raw",          ic:gi("table"), n:"Table view",             d:"A spreadsheet-style browser of every session, inside Money. Sortable columns and a column picker.",dep:"money"},
   {k:"receipts",     ic:gi("receipts"), n:"Receipts & statements",  d:"Printable statements for a client’s insurer, employer or their own records."},
   {k:"attention",    ic:gi("attention"), n:"Needs attention feed",   d:"A Home list of overdue payments, missing notes and clients you haven’t seen in a while."},
@@ -10157,7 +10279,7 @@ const REVEAL_STEPS=[
    sub:"Now that money is actually coming in, <b>Receipts &amp; statements</b> prints a dated statement of what a client has paid — for their insurer, their employer, or their own records."},
   {keys:["tax","finances"], when:st=>st.sessions.length>=10,
    emoji:gi("tax"), title:"Ready to think about tax?",
-   sub:"Ten sessions in. <b>Tax</b> turns them into a running estimate of what to set aside — including the January payment on account that catches people out — and <b>Costs &amp; other income</b> takes insurance, supervision, room rent and CPD off the profit it is worked out from. They arrive together because the estimate is wrong without the costs."},
+   sub:"Ten sessions in. <b>Tax</b> turns them into a running figure for what to set aside — including the first January, which is usually half again bigger than people expect because a payment on account sits on top of the bill — and <b>Costs &amp; other income</b> takes insurance, supervision, room rent and CPD off the profit it is worked out from. They arrive together because the estimate is wrong without the costs."},
   {keys:["gamify"],   when:st=>st.sessions.length>=15,
    emoji:gi("gamify"), title:"Want a bit of celebration?",
    sub:"Streaks, goal rings and the occasional confetti when you clear a backlog. Entirely cosmetic — plenty of people leave it off."},
@@ -11107,6 +11229,18 @@ const TIPS=[
      body:"It’s the difference between <i>probably</i> enough and <i>definitely</i> enough. Set it once, then everything outside it is genuinely yours to spend."},
     {emoji:gi("calendar"),h:"Why January is so big",sel:'[data-coach="due"]',
      body:"One 31 January is usually two years’ money at once — finishing off last year, and a payment towards this one. That’s the thing that catches people out, so these are listed by date."}]},
+  /* The MTD screen is the one screen whose BOUNDARY has to be understood before its figures are
+     any use: a reader who thinks the app files for them will miss a deadline believing they are
+     covered. So the tip leads on what it does not do, which is the opposite of how every other
+     tip here is written. */
+  {k:"tax-mtd",tab:"tax",seg:"mtd",ft:"tax",when:()=>taxAcked(),
+   steps:()=>[
+    {emoji:gi("tax"),h:"Four summaries instead of one return",
+     body:"Making Tax Digital asks for a total every quarter rather than one figure in January. If your turnover is under the threshold it doesn\u2019t reach you yet \u2014 but the quarters are still your year, added up as you go."},
+    {emoji:gi("plane"),h:"This app can\u2019t file \u2014 on purpose",
+     body:"Sending an update needs software HMRC has recognised, which needs a server. GroundWork keeps the records and does the adding up; something else presses Submit. <b>Filing these</b> shows the whole route and links to HMRC\u2019s own list."},
+    {emoji:gi("table"),h:"Export the file, don\u2019t retype the numbers",sel:"#mtdExpCsv",
+     body:"The figures are meant to travel digitally from your records to HMRC. Copying a total off this screen into something else breaks that; handing over the <b>.csv</b> doesn\u2019t \u2014 and it\u2019s what bridging software reads."}]},
   {k:"tax-allowances",tab:"tax",seg:"allowances",ft:"tax",when:()=>taxAcked(),
    steps:()=>[
     {emoji:gi("privacy"),h:"Set once, per tax year",sel:"#uohBar",
