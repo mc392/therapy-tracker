@@ -101,16 +101,22 @@ obligation, not a luxury, and charging to meet it reads as punitive.
 |---|---|---|
 | Tax | `tax` — `VIEWS.tax` (`index.html:4111`), `TABS` entry `index.html:1610` | The anchor. Estimate, pot, payments on account, per-year settings, seasonal moments, both guided flows. |
 | Costs & other income | `finances` — `financeCards()` (`3068`), `financeForm()` (`3120`) | **Bundled with tax, never sold separately.** Your own comment at `index.html:7728-7731` gives the reason: an estimate that ignores what the practice costs you is one nobody should set money aside against. That argument applies with more force when money is changing hands — selling a knowingly overstated tax figure is not on. |
-| MTD quarterly export | `#mtdExp` button, wired `index.html:5201` → `mtdExport()` (`4861`) | Gate the button, not the function. |
+| MTD quarterly export | `#mtdExpCsv` / `#mtdExpJson` buttons → `mtdExport(ty,fmt)` | Gate the buttons, not the function. `.csv` and `.json` are rendered from one `mtdRows()` shape. The **positioning** of this line — that Plus plus a cheap submission tool replaces a bookkeeping subscription rather than sitting alongside one — is `docs/tax-positioning-2026-09.md`. |
 | Trends | `trends` — segment pushed at `index.html:2540` | Retention funnel, attendance vs expected, missed sessions, long-term clients. |
 | Accreditation (Form 3A) | `accreditation` — `mountAccreditation()` (`index.html:2149`) | The 1:6 ratio and total hours. |
 | GroundWork Notes sync | `#rosterSync` handler (`index.html:5847`) → `syncSchedules()` (`6823`) | Gate in the click handler; leave the card and its copy visible. |
-| Extra colour schemes | `PALETTES[].free` (`index.html:1362-1368`) | Sage is `free:true`; the other five are Plus. |
+| ~~Extra colour schemes~~ | — | **Dropped Sep 2026.** Colour schemes are switched off in the app entirely (`PALETTES_ENABLED`), so this was gating something nobody could reach. Removed from `PLUS_FEATURES`, and from the paywall and Settings copy that still listed it. |
 
-Honest note on two of these: **Trends and colour schemes are tier filler, not tier drivers.**
-The funnel and the attendance chart are admired once and rarely reopened. They earn their
-place in the bundle; do not build marketing around them. Tax, MTD and Notes sync are what
-people actually reach for a card over.
+Honest note: **Trends is tier filler, not a tier driver.** The funnel and the attendance chart
+are admired once and rarely reopened. It earns its place in the bundle; do not build marketing
+around it. Tax, MTD and Notes sync are what people actually reach for a card over — and
+`PLUS_SELL` is ordered accordingly, with the January bill first and Trends fifth.
+
+**How the tier is pitched, as opposed to what is in it, is a separate decision record:**
+`docs/tax-positioning-2026-09.md`. It covers the two objections that actually come up ("MTD
+isn't me" and "I already pay for MTD software"), the three audiences they come from, and the
+claims guard-rails — the list of things this app must never say about tax, which is short and
+absolute.
 
 ### Deliberately not in Plus
 
