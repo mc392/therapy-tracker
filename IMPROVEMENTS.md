@@ -78,6 +78,65 @@ submitted year. Verified all four tax years' monthly, annual and net figures unc
 
 ---
 
+## Sep 2026 — feedback round
+
+Five pieces of user feedback, all delivered.
+
+### 1. Room fees no longer belong to the session form ✅
+"Don't force a room-paid decision within session input/edit, assume no if blank. Hand off
+management to a different section entirely."
+
+A session with a per-session room rate now **raises** that fee automatically, tagged to the
+session (`derive().roomOwed`); blank means "not settled yet", which is what `roomDue` always took
+it to mean. `derive().complete` is the write-up tick and nothing else, so an unpaid room fee can no
+longer make a session incomplete. The two form controls are gone, replaced by a read-only line —
+and `sync()` no longer reads those fields at all, so a save cannot blank a settlement. Settling
+happens on **Money › Costs & income**, beside Payments due and the rent, in a card that renders
+outside both `feat("finances")` and the Plus gate: money already owed for sessions that happened is
+neither a preference nor a purchase. Storage is unchanged (`roomPaid` / `roomPaidDate`), so the
+SA103 boxes and the MTD quarters are untouched.
+
+### 2. CPD tracks everything, shows its composition, and asks about supervision ✅
+Schema **v8**. `S.cpd` logs workshops, courses, conferences, webinars, e-learning, reading,
+podcasts, personal therapy and reflective practice; `cpdYearHours()` reports the breakdown rather
+than one number; `settings.cpdCountSupervision` / `cpdCountPeer` let the therapist decide whether
+supervision counts, defaulting true so no existing figure moves. When the target is met *only*
+because supervision counts, the card says what the figure would be without it. CPD gets its own
+sub-tab; Insights keeps Form 3A. **Hours only, no cost field** — a course's cost is a business cost
+and `ledgerBetween` is the only place costs are totalled.
+
+### 3. Days to payment was measuring the wrong thing ✅
+"Still isn't showing anything useful — potentially getting skewed by most people paying in advance?"
+
+Correct, and worse than skew. The gap was clamped at zero and every payment averaged together, so a
+practice paid at the session had a median of 0 and a flat line along the bottom of the chart — while
+fifty same-day payments averaged against three sixty-day waits reported "typically 0 days" about a
+practice with a real collection problem. Now: **a percentage settled up front**, and every waiting
+figure computed from the payments that came in *after* the session. Nothing is clamped. A month
+where everyone paid on the day is absent from the chart rather than drawn as a nought.
+
+The corpus had **no advance payments at all**, so it could not exercise this case; `payLagDays` now
+accepts a negative lag and `online-only` is the up-front practice.
+
+### 4. Who pays late is a trend, not a debt list ✅
+It was sorted by what each client owed today — a worklist, which already exists on Sessions ›
+Unpaid with a Chase button on it. Each client's payments are now split into their own earlier and
+later half and sorted by how far the recent half moved, so the client who has gone from paying on
+the day to paying three weeks late leads the list with nothing overdue. Debt stays on the row as
+context; the card links to the worklist rather than duplicating it.
+
+### 5. Fee erosion said what it was not measuring ✅
+`rate` differs from `fullRate` in exactly one way — the cancellation charge stamped on the session —
+so the gap between the card's two lines is **written-off fee on missed sessions and nothing else**.
+The card claimed it was also made of older client rates and a shifted mix; both move the fee line
+itself and cannot appear in the gap. Retitled **"What a session actually earns"**, with three
+figures (per session booked, per session that went ahead, what the fees say), the gap named and the
+missed sessions behind it counted. Headlines are now averages over the whole span: the old
+last-month headline read −£8.64/14% on the established fixture where the true 18-month figure is
+−£1.48/2%.
+
+---
+
 ## Follow-ups still open
 
 1. ~~**The tax test suite has no coverage for cancellation charging.**~~ **Done (Aug 2026,
@@ -97,7 +156,15 @@ submitted year. Verified all four tax years' monthly, annual and net figures unc
    Capacitor and the native features are done, and the app has an App Store Connect record
    (Aug 2026). Remaining: TestFlight on real hardware, screenshots, submission.
 
+7. **`S.cpd` has no spreadsheet import.** The importer covers sessions only. Someone arriving with
+   a CPD log in Excel still types it in. It exports (supervision CSV) but does not import.
+8. **Nothing reconciles a room fee against what the landlord actually invoiced.** The Room fees card
+   totals what the sessions raised; if the room's own invoice disagrees, the therapist adjusts the
+   room rate or writes the odd fee off as "not owed". A per-invoice reconciliation was considered
+   and is probably over-engineering for a sole trader.
+
 ## Notes
 - These were prompted by user feedback and security/compliance considerations.
-- Each item kept backwards compatibility. The only schema bump was v4 → v5, and it moves no
-  existing figure.
+- Each item kept backwards compatibility. Schema bumps so far: v4 → v5 (cancellation charges),
+  v5 → v6 (dated tax settings), v6 → v7 (notes vs admin comments) and v7 → v8 (the CPD log and the
+  two supervision switches). None of them moves an existing figure.

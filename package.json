@@ -8,6 +8,7 @@
     "testdata": "node scripts/make-test-data.mjs",
     "test:tax": "node scripts/run-tax-tests.mjs",
     "test:review": "node scripts/review-test-data.mjs",
+    "test:behaviour": "node scripts/check-behaviour.mjs",
     "sync": "cap sync ios && node scripts/add-native-plugin.mjs && node scripts/register-native-plugin.mjs && node scripts/add-watch-target.mjs && node scripts/install-assets.mjs && node scripts/prune-public.mjs",
     "ios": "npm run check && npm run sync && cap open ios",
     "open": "cap open ios",
