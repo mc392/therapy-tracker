@@ -1396,6 +1396,19 @@ function normalize(st){
     });
     st.meta.adminNoteSplit=true;
   }
+  /* one-time backfill: "did it go ahead?" joined the write-up tick as a requirement for
+     `derive().complete` (Sep 2026). A session only ever gets `attendConfirmed` from actually
+     saving the form with that field on screen (see sessionForm's sync()) — so without this,
+     every already-complete session in an existing practice would flip to incomplete the moment
+     this build loads, flooding the worklist and the attention feed with nothing anyone did wrong.
+     Grandfather them in: a session that already counted as done under the old rule (notes ticked)
+     keeps counting as done. Only sessions saved from here on, or edited and re-saved, are held to
+     the new rule for real. Gated so it can never re-stamp a session someone has deliberately left
+     unconfirmed. */
+  if(!st.meta.attendConfirmBackfill){
+    st.sessions.forEach(s=>{if(s&&notesDone(s)&&s.attendConfirmed==null)s.attendConfirmed=true;});
+    st.meta.attendConfirmBackfill=true;
+  }
   /* Ordered migrations run here as the schema grows:
        if(stateSchemaVersion(st)<4){ ...upgrade...; }
      Data stamped newer than this build is left completely untouched — never downgrade it in
@@ -1606,11 +1619,13 @@ function derive(s){
   }
   const cl=S.clients.find(c=>(c.code||"").toLowerCase()===(s.client||"").toLowerCase());
   const status=cl?cl.status:""; const category=cl?cl.category:"";
-  /* `complete` is the WRITE-UP tick and nothing else. It used to also demand a room-paid answer,
-     which put a bookkeeping question inside a clinical worklist: a session could not be "done"
-     until the therapist had said whether she had paid her landlord for it. Those are two
-     different jobs on two different clocks, and the room half now lives in Money. */
-  const complete = notesDone(s);
+  /* `complete` is the WRITE-UP tick and, since Sep 2026, whether "Did it go ahead?" has actually
+     been confirmed (see attendConfirmed). It used to also demand a room-paid answer, which put a
+     bookkeeping question inside a clinical worklist: a session could not be "done" until the
+     therapist had said whether she had paid her landlord for it. That was a different job on a
+     different clock, and the room half now lives in Money — attendance stays here because, unlike
+     the room fee, it is a fact about the session itself. */
+  const complete = notesDone(s) && attendConfirmed(s);
   let cancelBy=null,canCancel=false;
   if(d){ const tm=(s.time||"00:00").split(":"); const dt=new Date(d); dt.setHours(+tm[0]||0,+tm[1]||0);
     cancelBy=addDays(dt,-3); canCancel=cancelBy>new Date(); }
@@ -2795,11 +2810,20 @@ function payChip(s,d){return d.clientPaid?'<span class="chip y">paid '+fmtDM(s.p
    written still reads correctly and `derive().complete` is untouched. This is the single place
    that decides what counts as written up; the form now only ever writes "Y" or "". */
 function notesDone(s){return !!(s&&s.notes&&String(s.notes).trim());}
+/* Whether "Did it go ahead?" has actually been looked at, alongside notes, for `derive().complete`
+   (Sep 2026). This is NOT the same question as attendVal(s) — a blank cancelKind already means
+   "attended" and always has, so testing that would make the requirement vacuous. `attendConfirmed`
+   is a separate flag the session form stamps true on every save where the field was on screen
+   (i.e. the date isn't in the future — see paintCancel), so it is genuinely absent until someone
+   has saved the session with a chance to answer it. Pre-existing complete sessions are grandfathered
+   in by a one-time backfill in normalize() so upgrading never retroactively un-completes them. */
+function attendConfirmed(s){return !!(s&&s.attendConfirmed);}
 /* What is missing from the RECORD of a session. Room fees were on this list until Sep 2026 and
    should not have been: an unsettled room fee is a bill outstanding, not an incomplete session,
    and it is raised, listed and ticked off in Money › Costs & income like every other bill. */
 function missingReasons(s){const m=[];
   if(!notesDone(s))m.push("notes");
+  if(!attendConfirmed(s))m.push("attendance");
   return m;}
 /* ===== Missed sessions =====
    Two kinds, and the difference matters to the client's bill but never to the clinical record:
@@ -3284,6 +3308,13 @@ VIEWS.sessions=function(){
       ids.forEach(id=>{const ss=S.sessions.find(z=>z._id===id);if(!ss)return;
         const wasComplete=derive(ss).complete;
         ss.notes="Y";
+        /* This worklist is notes-only by design, but `complete` now also needs attendConfirmed
+           (see attendConfirmed()). A row that reaches here is already past, so whatever it
+           carries for attendance — a cancellation kind already on record, or nothing, which reads
+           as attended — is the real answer; ticking a session done here is the same act as saving
+           it from the session form with that answer left exactly as it stands. Without this a
+           session could be ticked here every time and never leave the list. */
+        ss.attendConfirmed=true;
         if(!wasComplete&&derive(ss).complete)cleared++;});
       const batch=ids.length;
       const f=gameNoteBatch({cleared:cleared});
@@ -8992,7 +9023,13 @@ function sessionForm(s,o){
         m.cancelledAt=g("#f_cxOn").value||"";
         const raw=g("#f_cxPct").value.trim();
         m.cancelCharge=raw===""?cancelPolicyPct(kind,cancelNoticeHrs(m)):Math.max(0,Math.min(100,+raw||0));
-      }};
+      }
+      /* "Did it go ahead?" is now required for `derive().complete`, alongside notes — see
+         attendConfirmed(). It is only ever confirmed here, by actually saving the form while the
+         field was on screen (i.e. the date isn't in the future — same test as paintCancel's). A
+         session saved while still future-dated has not answered the question yet, so it stays
+         unconfirmed until it is saved again once its date has arrived. */
+      m.attendConfirmed=(m.date<=isoD(today()));};
     g("#f_client").onchange=()=>{const code=g("#f_client").value; sync(); m.client=code;
       if(isNew&&code){const sg=suggestFor(code);Object.assign(m,{num:sg.num,time:sg.time,mode:sg.mode,location:sg.location,room:sg.room});
         if(!lockDate)m.date=sg.date;}
@@ -10411,6 +10448,12 @@ function impPlan(rows,map,order,opt){
       /* historical convention put this in the notes text; honour both (see isLateCancel) */
       lateCancel:impLateCancel(get(r,"lateCancel"),notes)==="late",
       cancelKind:impLateCancel(get(r,"lateCancel"),notes),
+      /* The import already decides attendance for every row — from the lateCancel column where
+         there is one, defaulting to attended where there isn't — the same choice the session
+         form's "Did it go ahead?" makes. So it counts as answered on the way in, the same as a
+         form save does; there is no second, separate question left for the therapist to open
+         each imported row just to confirm. */
+      attendConfirmed:true,
       /* An imported missed session was charged whatever the sheet says, or -- with no column for
          it -- the full fee, which is what every such session carried before this field existed.
          The policy is deliberately NOT consulted: it describes what to charge from now on, not
