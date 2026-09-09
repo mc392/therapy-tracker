@@ -556,6 +556,65 @@
     return { pass: j.periods.length === 4 && j.periods[0].expenses.length > 0 && !!j.basis,
       act: j.periods.length + " periods, basis=" + j.basis }; });
 
+  /* --- the export's SHAPE, which is a promise to whoever consumes the file ---
+     The rule (see mtdRows): every quarter emits every box in MTD_EXP_BOXES, in box order,
+     zeros included, so a mapping worked out once keeps working. Expectation below is the box
+     list written out longhand from that rule, not read back off the function. The single Wifi
+     cost falls in Q2 alone, so on the pre-fix code — which emitted only boxes that had a
+     figure — Q1, Q3 and Q4 differ from Q2 and this fails. */
+  run("MTD: every quarter emits the same expense rows in the same order", function () {
+    mkState({ expenses: [{ _id: "e", desc: "Wifi", amount: 30, date: "2026-08-10", recurrence: "once", cat: "phone" }] });
+    var sig = mtdRows(TY).map(function (p) {
+      return p.expenses.map(function (e) { return e.sa103Box; }).join(","); });
+    var same = sig.every(function (s) { return s === sig[0]; });
+    return { act: same ? sig[0] : sig.join(" | "), exp: "20,21,23,24,26,28,30",
+      note: same ? "identical across all four quarters" : "quarters disagree" }; });
+
+  /* A file whose own rows do not add up to its own totals is worse than no file: the reader
+     cannot tell which of the two is wrong. Recomputed from the rows, never from mtdPeriod. */
+  run("MTD: each quarter's rows add up to its own stated totals", function () {
+    mkState({ fee: 60, sessions: mkSessions(20, "2026-04-08", 60),
+      expenses: [{ _id: "e", desc: "Wifi", amount: 30, date: "2026-04-10", recurrence: "monthly", cat: "phone" }],
+      supervision: [{ _id: "v", date: "2026-06-01", supervisor: "J", count: 1, cost: 60, clients: [] }] });
+    var bad = [];
+    mtdRows(TY).forEach(function (p) {
+      var sum = p.expenses.reduce(function (a, e) { return a + e.amount; }, 0);
+      if (Math.abs(sum - p.expenseTotal) > 0.02)
+        bad.push("Q" + p.period + " rows " + num(sum) + " vs total " + p.expenseTotal);
+      var net = p.income.turnover + p.income.other - p.expenseTotal;
+      if (Math.abs(net - p.net) > 0.02)
+        bad.push("Q" + p.period + " net " + num(net) + " vs stated " + p.net);
+    });
+    return { pass: !bad.length, act: bad.length ? bad.join("; ") : "all four quarters add up" }; });
+
+  /* Whoever files has to match each row to a box and to an API property without reading the
+     English. A blank in either column is a row they have to guess at. */
+  run("MTD: every expense row carries a box, a name and an HMRC field", function () {
+    mkState({});
+    var miss = [];
+    mtdRows(TY).forEach(function (p) { p.expenses.forEach(function (e) {
+      if (!e.sa103Box || !e.name || !e.hmrcField) miss.push("Q" + p.period + " box " + e.sa103Box); }); });
+    return { pass: !miss.length, act: miss.length ? miss.join(", ") : "every row fully labelled" }; });
+
+  /* The CSV is the one people actually hand on, so check the file itself, not just mtdRows:
+     a stable header, and one identical block of rows per quarter (2 income + 7 expense + 2
+     total = 11), plus the header line and the trailing note row. */
+  run("MTD: the .csv is one identical block of rows per quarter", function () {
+    mkState({ expenses: [{ _id: "e", desc: "Wifi", amount: 30, date: "2026-08-10", recurrence: "once", cat: "phone" }] });
+    var real = window.download, cap = null;
+    window.download = function (n, t) { cap = { n: n, t: t }; };
+    mtdExport(TY, "csv"); window.download = real;
+    var lines = cap.t.replace(/^\uFEFF/, "").split("\n");
+    var head = lines[0];
+    var perQ = {};
+    lines.slice(1, -1).forEach(function (l) {
+      var q = l.split(",")[2]; perQ[q] = (perQ[q] || 0) + 1; });
+    var counts = Object.keys(perQ).map(function (k) { return perQ[k]; });
+    var even = counts.length === 4 && counts.every(function (n) { return n === 11; });
+    return { pass: even && head.indexOf("hmrcField") >= 0 && cap.n.indexOf(".csv") > 0,
+      act: counts.join("/") + " rows per quarter, header=" + head,
+      note: "expect 11/11/11/11 and an hmrcField column" }; });
+
   /* =========================================================================
      8. Reconciliation across realistic practice profiles
      The invariant that matters: the breakdown sheet, the four MTD quarters and
