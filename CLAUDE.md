@@ -87,10 +87,24 @@ folder**.
   from IndexedDB on every render; the folder holds the durable copy. Export/Restore are untouched
   and are still how records move between devices — "Multi-tab / multi-device writes" below is
   unchanged.
-- **The folder is never overwritten blind.** `checkFolder()` compares the live file's modification
-  date to the one this device last wrote (`tt_folder_status.mtime`, `FOLDER_SLACK` of 4s for a
-  file provider's clock). A date it did not write pauses folder writes (`_folderHeld`) and asks
-  which copy wins. IndexedDB saving carries on regardless, so "Decide later" loses nothing.
+- **The folder is never overwritten blind, and WHO wrote it is recorded, never inferred.**
+  `checkFolder()` reads `.GroundWork-writer.json` — a hidden marker beside the records naming the
+  device that last wrote them (`tt_folder_device`). Its own id is never a conflict however the
+  dates have drifted; a different id always is. A marker is written **after** the records, never
+  before: one claiming this device over somebody else's records is what would let the next save
+  overwrite them. A conflict pauses folder writes (`_folderHeld`) and asks which copy wins;
+  IndexedDB saving carries on regardless, so "Decide later" loses nothing.
+  - **This replaced a modification-date comparison, which was wrong twice over** and asked "two
+    copies of your records?" on every launch of a phone that was the only writer (Sep 2026).
+    **iCloud restamps** a file when it uploads, so the date read back is not the date written; and
+    **the WebView is suspended on backgrounding** — `flushAutoBackup()` fires, the native write
+    lands on its own queue, and iOS suspends JS before the continuation that records the write can
+    run. Both leave a date this device cannot account for. Don't reintroduce an mtime test; the
+    marker is the answer and the mtime is only ever wording for the sheet.
+  - **No marker + this device has written here before = adopt it and stamp one.** That is the
+    one-time migration for folders written before markers existed, and it is why the fix does not
+    ask everybody once more. A folder this device has *never* written to still asks — that is the
+    new-phone case, which is the whole point.
 - **A failed folder write falls back to the Documents copy.** `retireDeviceCopy()` runs only after
   a folder write has landed, and `tt_autobk_retired` is cleared the moment one fails. A save that
   cannot reach the folder must never be a save with no copy at all.
@@ -104,7 +118,8 @@ folder**.
 - The offer to pick a folder is made **once** (`tt_folder_asked`), 5s after launch, to somebody
   with 3+ sessions — deliberately not a setup-wizard step.
 - **`npm run test:folder`** (`scripts/check-records-folder.mjs`) drives all of it in a real browser
-  with a fake Capacitor, 22 assertions including the conflict → restore → resume path. Needs
+  with a fake Capacitor, 29 assertions including the conflict → restore → resume path and all
+  three marker cases. Needs
   `npm i --no-save playwright`. **The Swift has never been compiled** — same caveat as the watch
   app; `npm run check` asserts the two halves still name the same methods.
 

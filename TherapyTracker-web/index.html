@@ -11807,11 +11807,9 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
   const FOLDER_LIVE_ENC = "GroundWork records.enc.json";
   const FOLDER_HISTORY  = "Previous versions";
   const FOLDER_KEEP     = 7;
-  /* How far past our own last write a modification date has to be before it counts as somebody
-     else's. A file provider's clock is not this device's clock and iCloud can restamp on upload,
-     so this is deliberately generous: a false positive costs a modal on a device that has lost
-     nothing, and a real second device is minutes or hours out, never seconds. */
-  const FOLDER_SLACK    = 15000;
+  /* Who last wrote the records, recorded by the writer rather than inferred from the file.
+     Hidden, so it never shows up in Files beside the records themselves. See folderWrittenBy(). */
+  const FOLDER_WRITER   = ".GroundWork-writer.json";
   const folderLiveName  = enc => enc ? FOLDER_LIVE_ENC : FOLDER_LIVE;
   const folderDatedName = (enc, day) => FOLDER_HISTORY + "/GroundWork " + day + (enc ? ".enc.json" : ".json");
   /* Both names travel to the native side rather than being hardcoded there, so a rename here is
@@ -11862,6 +11860,64 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
     return opts.sort((a,b) => b.at - a.at)[0] || null;
   }
 
+  /* ---- Which device wrote what is in the folder ----
+     This app used to answer that by comparing the live file's modification date against the one
+     it recorded at write time, and on a real phone that is not an answer at all:
+
+       * **iCloud restamps.** A file-provider folder sets its own modification date when an item
+         uploads, so the date read back later is not the date this device wrote.
+       * **The WebView is suspended on backgrounding.** `flushAutoBackup()` fires from
+         `appStateChange`, the native write lands — the plugin call is on its own queue and the
+         app has background time — and then iOS suspends the WebView before the JS continuation
+         that records the write ever runs. The file changed and nothing here knows it.
+
+     Either one puts a date in the folder that this device cannot account for, so every launch
+     after an edit asked "two copies of your records?" on a phone that was the only writer. The
+     answer is now written down rather than deduced: a tiny marker beside the records naming the
+     device that last wrote them. A marker holding THIS device's id is never a conflict, however
+     the dates have drifted; a different id always is, however close they are. */
+  let _devId = null;
+  function folderDeviceId(){
+    if(_devId) return _devId;
+    _devId = LSget("tt_folder_device","");
+    if(!_devId){
+      _devId = "d" + Date.now().toString(36) + Math.random().toString(36).slice(2,10);
+      LSset("tt_folder_device", _devId);
+    }
+    return _devId;
+  }
+
+  async function readFolderWriter(){
+    if(!GW || !GW.folderRead) return null;
+    try{
+      const r = await GW.folderRead({ path:FOLDER_WRITER });
+      if(!r || !r.found) return null;
+      const o = JSON.parse(r.data);
+      return (o && o.writer) ? o : null;
+    }catch(e){ return null; }        /* unreadable is "don't know", never "somebody else" */
+  }
+
+  /* Best effort, and never throws: a folder that will not take the marker degrades to the rule
+     below rather than failing a save. */
+  async function writeFolderWriter(enc){
+    if(!GW || !GW.folderWrite) return false;
+    try{
+      const r = await GW.folderWrite({ path:FOLDER_WRITER, data:JSON.stringify({
+        app:"GroundWork", kind:"writer", writer:folderDeviceId(),
+        at:new Date().toISOString(), file:folderLiveName(!!enc) }) });
+      if(!(r && r.ok)) console.warn("Records folder: could not write the writer marker", r && r.error);
+      return !!(r && r.ok);
+    }catch(e){ console.warn("Records folder: could not write the writer marker", e); return false; }
+  }
+
+  /* "mine" | "theirs" | "unknown". Unknown means no marker — a folder written by a build from
+     before markers existed, or one that will not accept the file. */
+  async function folderWrittenBy(){
+    const mark = await readFolderWriter();
+    if(!mark || !mark.writer) return "unknown";
+    return mark.writer === folderDeviceId() ? "mine" : "theirs";
+  }
+
   function folderStatus(){ try{ return JSON.parse(LSget("tt_folder_status","null")) || null; }catch(e){ return null; } }
   function setFolderStatus(o){
     const prev = folderStatus();                   /* a failure must not erase what we last saw */
@@ -11887,6 +11943,10 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
       if(prev && prev.enc != null && !!prev.enc !== enc){
         try{ await GW.folderDelete({ path:folderLiveName(!enc) }); }catch(e){}
       }
+      /* AFTER the records, never before. A marker claiming this device while the records in the
+         folder are still somebody else's is what would let the next save quietly overwrite them;
+         a marker that is missing only costs a question. */
+      await writeFolderWriter(enc);
       /* The one place the manual-backup nag is answered by something other than an export. */
       if(folder.icloud){ try{ markBackedUp(); }catch(e){} }
       try{ await rotateFolder(enc, data); }
@@ -12030,23 +12090,36 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
 
   /* ================= Does this device hold the newest copy? =================
      The question that makes the folder a place records live rather than a place they are copied
-     to. It runs at launch and whenever the app comes back after a spell away. */
-  function folderIsForeign(){
-    const newest = folderNewest();
-    if(!newest) return null;                       /* empty folder — the next save fills it */
-    const st = folderStatus();
-    const seen = (st && +st.mtime) || 0;
-    return (!seen || newest.at > seen + FOLDER_SLACK) ? newest : null;
-  }
-
+     to. It runs at launch, on return after a spell away, and straight after a folder is picked. */
   async function checkFolder(){
     if(!GW || !GW.folderInfo) return;
     const info = await refreshFolder();
     if(!info.set || info.reachable === false) return;
-    const foreign = folderIsForeign();
-    if(!foreign){ _folderHeld = false; return; }
+
+    const newest = folderNewest();
+    if(!newest){ _folderHeld = false; return; }    /* empty folder — the next save fills it */
+
+    const who = await folderWrittenBy();
+    const st  = folderStatus();
+    const written = !!(st && st.mtime);            /* this device has written here before */
+
+    /* No marker, but this device has been writing to this folder: it is a folder from before
+       markers existed. Adopt it and leave one, so the question is answered once instead of on
+       every launch. The alternative — asking — is the bug this replaced, and the exposure is
+       limited to somebody who was already running two devices against a build that had no
+       markers. A folder this device has NEVER written to still asks, which is the case that
+       matters: a new phone pointed at records that are already there. */
+    if(who === "mine" || (who === "unknown" && written)){
+      _folderHeld = false;
+      /* Adopt whatever date the folder has ended up stamping. It is no longer evidence of
+         anything, but it keeps the status line honest. */
+      setFolderStatus(Object.assign({ ok:true, at:Date.now(), enc:newest.enc }, st || {}, { mtime:newest.at }));
+      if(who === "unknown") writeFolderWriter(newest.enc);
+      return;
+    }
+
     _folderHeld = true;                            /* nothing is written until this is settled */
-    whenIdle(() => askFolderCopy(foreign));
+    whenIdle(() => askFolderCopy(newest, who === "theirs"));
   }
 
   /* Setup, What's new, the guided flows and the lock screen each own the screen while they are
@@ -12078,20 +12151,18 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
   /* Two copies, no merge: the reader picks one. "Decide later" leaves writes paused and the
      question comes back next time — which is the safe answer, because the folder is untouched and
      the phone is still saving to its own database exactly as it always does. */
-  async function askFolderCopy(newest){
-    const st    = folderStatus();
-    const first = !(st && st.mtime);                            /* never written here from here */
+  async function askFolderCopy(newest, byAnother){
     const empty = !(S && S.sessions && S.sessions.length) && !(S && S.clients && S.clients.length);
     const where = esc(folder.name || "That folder");
 
     const lead = empty
       ? "<b>" + where + "</b> already holds GroundWork records, saved " + esc(folderWhen(newest.at)) +
         ". There is nothing on this iPhone yet, so they can simply be loaded in."
-      : first
-        ? "<b>" + where + "</b> already holds GroundWork records, saved " + esc(folderWhen(newest.at)) +
-          ", and this iPhone has records of its own. They cannot be merged — one of them has to win."
-        : "The records in <b>" + where + "</b> were changed " + esc(folderWhen(newest.at)) +
-          ", and it was not this iPhone that changed them. Something else has written to the folder since this phone last did.";
+      : byAnother
+        ? "The records in <b>" + where + "</b> were last saved by <b>another device</b>, " +
+          esc(folderWhen(newest.at)) + ". This iPhone has its own copy, and they cannot be merged — one of them has to win."
+        : "<b>" + where + "</b> already holds GroundWork records, saved " + esc(folderWhen(newest.at)) +
+          ", and this iPhone has records of its own. They cannot be merged — one of them has to win.";
 
     const body = el('<div></div>');
     body.innerHTML =
@@ -12110,8 +12181,11 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
 
     if(choice === "load"){ await loadFromFolder(newest); return; }
     if(choice === "keep"){
-      /* Adopt the folder's date as seen, or the next save asks the same question again. */
+      /* Claim the folder, or the next save asks the same question again. The marker goes down
+         before the records do, which is the one place that order is right: the reader has just
+         said this iPhone wins, and a save that lands afterwards must not re-open the question. */
       setFolderStatus({ ok:true, at:Date.now(), enc:newest.enc, mtime:newest.at });
+      await writeFolderWriter(newest.enc);
       _folderHeld = false;
       scheduleAutoBackup();
       toast("This iPhone’s copy will be saved into the folder");
@@ -12132,6 +12206,9 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
     if(ok){
       setFolderStatus({ ok:true, at:Date.now(), enc:chosen.enc, mtime:+r.modifiedAt || chosen.at });
       _folderHeld = false;
+      /* This device now holds what the folder holds, so it is the one that may write next. Without
+         this the very next launch would ask the same question again. */
+      await writeFolderWriter(chosen.enc);
       if(chosen.enc && !encOn()) whenIdle(warnPassphraseLost);
     }
     return ok;
@@ -12163,11 +12240,13 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
     if(!r || r.cancelled) return false;
     if(!r.picked){ toast((r && r.error) || "Could not use that folder"); Sfx.error(); return false; }
     rememberFolder(r);
-    /* A different folder is a different history: nothing in it has been seen from this device. */
+    /* A different folder is a different history: nothing in it has been seen from this device.
+       Re-picking the SAME folder still lands on its own marker, so it is recognised rather than
+       treated as a stranger. */
     LSdel("tt_folder_status"); LSdel("tt_folder_day");
     _folderHeld = false;
-    const foreign = folderIsForeign();
-    if(foreign){ _folderHeld = true; await askFolderCopy(foreign); return true; }
+    await checkFolder();                 /* one routine decides, whether asked at launch or here */
+    if(_folderHeld) return true;         /* the question is up; whichever answer wins does the writing */
     if(await writeFolder()){ retireDeviceCopy(); Sfx.tick(); toast("Your records are now saved in " + (folder.name || "that folder")); }
     else { Sfx.error(); toast("Could not save into that folder"); }
     return true;

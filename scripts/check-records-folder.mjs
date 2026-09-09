@@ -319,23 +319,66 @@ async function main() {
   await page.evaluate(async () => { S.sessions[1].notes = "Y"; await commit("edit3"); });
   await page.waitForTimeout(SETTLE);
 
-  /* ---- 6. A file this device did not write pauses folder writes ---- */
+  /* ---- 6. Who wrote the file, not when ----
+     The marker beside the records is what says which device wrote them. These three cases are the
+     bug that shipped first: a phone that was the only writer was asked "two copies of your
+     records?" on every single launch, because the check compared modification dates and neither
+     iCloud nor a suspended WebView respects them. */
+  st = await state(page);
+  check(!!(st.folder && st.folder.files[".GroundWork-writer.json"]), "marker.written",
+    "every save leaves a marker naming the device that wrote the records",
+    st.folder && Object.keys(st.folder.files));
+
+  /* (a) iCloud restamps a file on upload, and the WebView is suspended on backgrounding before
+     the JS that records a write can run. Both leave a date this device cannot account for. */
+  await page.evaluate(() => window.__phone.set((q) => {
+    q.folder.files["GroundWork records.json"].mtime = Date.now() + 3600000;
+  }));
+  await bootApp(page, url);
+  await page.waitForTimeout(3000);
+  let popped = await page.evaluate(() => {
+    const sh = document.querySelector("#sheet");
+    return !!(sh && sh.classList.contains("open") && sh.querySelector("#fcLoad"));
+  });
+  check(!popped, "marker.mtimeDrift",
+    "a modification date this device never recorded is NOT a conflict while the marker is its own");
+
+  /* (b) A folder written by a build from before markers existed. Adopted once, and stamped, so
+     the question is answered rather than asked again every launch. */
+  await page.evaluate(() => window.__phone.set((q) => { delete q.folder.files[".GroundWork-writer.json"]; }));
+  await bootApp(page, url);
+  await page.waitForTimeout(3000);
+  popped = await page.evaluate(() => {
+    const sh = document.querySelector("#sheet");
+    return !!(sh && sh.classList.contains("open") && sh.querySelector("#fcLoad"));
+  });
+  check(!popped, "marker.migrates",
+    "a folder with no marker that this device has been writing to is adopted, not queried");
+  st = await state(page);
+  check(!!(st.folder && st.folder.files[".GroundWork-writer.json"]), "marker.backfilled",
+    "and a marker is left behind so it is only ever adopted once");
+
+  /* (c) A real second device: a different id in the marker, whatever the dates say. */
   const foreign = await page.evaluate(() => {
     const p = window.__phone.get();
     const cur = JSON.parse(p.folder.files["GroundWork records.json"].data);
     cur.state.sessions.push({ _id: "sX", client: "AB12", date: "2026-08-20", time: "10:00",
       location: "At home", attended: "Y", paid: "Y", notes: "Y" });
-    cur.exportedAt = new Date(Date.now() + 3600000).toISOString();
+    cur.exportedAt = new Date(Date.now() + 120000).toISOString();
     const text = JSON.stringify(cur);
     window.__phone.set((q) => {
-      q.folder.files["GroundWork records.json"] = { data: text, mtime: Date.now() + 3600000 };
+      q.folder.files["GroundWork records.json"] = { data: text, mtime: Date.now() };
+      q.folder.files[".GroundWork-writer.json"] = {
+        data: JSON.stringify({ app: "GroundWork", kind: "writer", writer: "d-the-other-phone",
+                               at: new Date().toISOString(), file: "GroundWork records.json" }),
+        mtime: Date.now() };
     });
     return cur.state.sessions.length;
   });
   await bootApp(page, url);                 /* relaunch: checkFolder() runs at boot */
   const asked = await sheetShows(page, "#fcLoad");
   check(asked, "conflict.ask",
-    "a modification date this device did not write raises the two-copies question at launch");
+    "records last written by another device DO raise the two-copies question at launch");
 
   const stampBefore = await page.evaluate(() => window.__phone.get().folder.files["GroundWork records.json"].mtime);
   await page.evaluate(async () => { S.sessions[0].time = "11:00"; await commit("edit while paused"); });
@@ -354,7 +397,7 @@ async function main() {
   /* ---- 7. Loading the folder's copy goes through the app's own restore ---- */
   if (asked) {
     await tap(page, "#fcLoad");
-    const restoreShown = await sheetShows(page, "#rsGo, #dzGo");
+    const restoreShown = await sheetShows(page, "#rsGo, #dzAck");
     check(restoreShown, "conflict.restoreLadder",
       "loading the folder's copy goes through restoreConfirm rather than replacing the data outright");
     if (await page.evaluate(() => !!document.querySelector("#rsGo"))) {
@@ -369,6 +412,21 @@ async function main() {
         return s && s.ok;
       });
       check(!!held, "conflict.resumed", "after loading, saving into the folder resumes");
+      const claimed = await page.evaluate(() => {
+        const f = window.__phone.get().folder.files[".GroundWork-writer.json"];
+        try { return f && JSON.parse(f.data).writer === localStorage.getItem("tt_folder_device"); }
+        catch (e) { return false; }
+      });
+      check(!!claimed, "conflict.claims",
+        "and this device becomes the writer of record, so the next launch does not ask again");
+      /* The whole point: having settled it once, a relaunch must be quiet. */
+      await bootApp(page, url);
+      await page.waitForTimeout(3000);
+      const asksAgain = await page.evaluate(() => {
+        const sh = document.querySelector("#sheet");
+        return !!(sh && sh.classList.contains("open") && sh.querySelector("#fcLoad"));
+      });
+      check(!asksAgain, "conflict.settled", "and the question is not asked again on the next launch");
     }
   }
 
