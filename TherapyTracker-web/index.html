@@ -8409,6 +8409,10 @@ function plusSettingsCardHTML(){
 VIEWS.settings=function(){
   const v=el('<div class="view active"></div>');
   v.innerHTML=`
+   <div class="card" style="padding:10px 14px">
+     <input id="setSearch" type="search" placeholder="Search settings…" style="width:100%">
+     <p class="small muted" id="setSearchNone" style="margin:8px 2px 0;display:none">No settings match that search.</p>
+   </div>
    <details class="sgrp" data-g="business"><summary><span class="sgt">Your practice</span><span class="sgs">Decisions about the business: name, charging policy and how your figures are counted</span></summary><div class="sgb">
    <div class="card">${cardHead("Practice details","practice-details")}
      <label>Practice name</label><input id="setName" maxlength="60" value="${esc(practiceName())}">
@@ -8670,6 +8674,27 @@ VIEWS.settings=function(){
     d.open=!!_setGrpOpen[k];
     d.addEventListener("toggle",()=>{_setGrpOpen[k]=d.open;});
   });
+  /* Search filters by card, not by group: a group stays visible whenever any card inside it
+     matches, and opens automatically so the reader never has to expand a group by hand to see
+     why it's still here. Clearing the box restores each group to whatever _setGrpOpen already
+     held, rather than closing everything again. */
+  const setSearch=v.querySelector("#setSearch"), setSearchNone=v.querySelector("#setSearchNone");
+  if(setSearch)setSearch.oninput=()=>{
+    const q=setSearch.value.trim().toLowerCase();
+    let anyGroup=false;
+    v.querySelectorAll(".sgrp").forEach(g=>{
+      if(!q){g.hidden=false;g.open=!!_setGrpOpen[g.dataset.g];return;}
+      let anyCard=false;
+      g.querySelectorAll(':scope>.sgb>.card').forEach(c=>{
+        const hit=c.textContent.toLowerCase().includes(q);
+        c.hidden=!hit;
+        if(hit)anyCard=true;
+      });
+      g.hidden=!anyCard;
+      if(anyCard){g.open=true;anyGroup=true;}
+    });
+    if(setSearchNone)setSearchNone.style.display=(q&&!anyGroup)?"":"none";
+  };
   (async function paintStorage(){
     const stEl=v.querySelector("#stStatus"),hintEl=v.querySelector("#stHint"),askB=v.querySelector("#stAsk");
     if(!stEl)return;
@@ -9376,7 +9401,8 @@ function rateChange(code){
 
 /* ============ Supervision ============ */
 function supervisionForm(s){
-  const isNew=!s;const m=s?clone(s):{_id:uid(),date:isoD(today()),supervisor:(S.supervision.slice(-1)[0]||{}).supervisor||"",count:1,cost:55,clients:[]};
+  const isNew=!s;const last=S.supervision.slice(-1)[0];
+  const m=s?clone(s):{_id:uid(),date:isoD(today()),supervisor:(last||{}).supervisor||"",count:1,cost:last?last.cost:"",clients:[]};
   const body=el('<div></div>');
   const allCodes=clientList();
   const sel=new Set(m.clients||[]);
