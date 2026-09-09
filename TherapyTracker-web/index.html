@@ -785,6 +785,13 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:0
 .funnel .fbar{height:24px;border-radius:9px;background:var(--soft);overflow:hidden}
 .funnel .fbar>i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,var(--brand),var(--hi));transition:width 1.05s cubic-bezier(.2,.85,.25,1)}
 
+/* Bars in the Trends SVG charts rise in the same way the funnel's do — grown from their own
+   baseline via a transform (not height/y), which animates reliably across browsers without
+   fighting each chart's own stacking maths. .top is for bars stacked downward from a zero line
+   (chartCombo's room/supervision/costs), whose fixed edge is their top, not their bottom. */
+.cbar{transform-box:fill-box;transform-origin:center bottom;transition:transform .65s cubic-bezier(.2,.85,.25,1)}
+.cbar.top{transform-origin:center top}
+
 /* ===== grouped client chips (supervision clients-discussed) ===== */
 .cgrp{margin-top:9px}
 .cglab{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;margin-bottom:5px}
@@ -2714,7 +2721,7 @@ function chartBars(data,money){
   const h=180,padT=20,padB=36,padL=8,step=44,bw=26,n=data.length||1;
   const W=Math.max(n*step+padL*2,280),innerH=h-padT-padB,max=Math.max(1,...data.map(d=>d.v));
   const body=data.map((d,i)=>{const x=padL+i*step+(step-bw)/2,bh=Math.max(d.v?2:0,Math.round(innerH*d.v/max)),y=padT+innerH-bh;
-    return '<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+bh+'" rx="4" fill="var(--brand)"></rect>'+
+    return '<rect class="cbar" style="transform:scaleY(0)" x="'+x+'" y="'+y+'" width="'+bw+'" height="'+bh+'" rx="4" fill="var(--brand)"></rect>'+
       '<text x="'+(x+bw/2)+'" y="'+(y-4)+'" text-anchor="middle" font-size="9" fill="var(--muted)">'+(d.v?(money?moneyShort(d.v):d.v):"")+'</text>'+
       '<text x="'+(x+bw/2)+'" y="'+(h-padB+16)+'" text-anchor="middle" font-size="9" fill="var(--muted)">'+esc(d.l)+'</text>';}).join("");
   return '<div class="svgwrap"><svg viewBox="0 0 '+W+' '+h+'" width="'+W+'" height="'+h+'"><line x1="'+padL+'" y1="'+padT+'" x2="'+(W-padL)+'" y2="'+padT+'" stroke="var(--line)"></line><text x="'+padL+'" y="'+(padT-5)+'" font-size="9" fill="var(--muted)">'+(money?moneyShort(max):max)+'</text>'+body+'</svg></div>';
@@ -2771,12 +2778,12 @@ function chartCombo(data,sel){
   const yOf=v=>zeroY-innerH*v/range;
   const bars=data.map((d,i)=>{const x=padL+i*step+(step-bw)/2;let out="";
     let up=zeroY;                                            /* positives stack upward from zero */
-    const rh=innerH*d.revenue/range;if(rh>0){up-=rh;out+='<rect x="'+x+'" y="'+up.toFixed(1)+'" width="'+bw+'" height="'+rh.toFixed(1)+'" fill="var(--brand)"></rect>';}
-    const oh=innerH*(d.oth||0)/range;if(oh>0){up-=oh;out+='<rect x="'+x+'" y="'+up.toFixed(1)+'" width="'+bw+'" height="'+oh.toFixed(1)+'" fill="var(--good)"></rect>';}
+    const rh=innerH*d.revenue/range;if(rh>0){up-=rh;out+='<rect class="cbar" style="transform:scaleY(0)" x="'+x+'" y="'+up.toFixed(1)+'" width="'+bw+'" height="'+rh.toFixed(1)+'" fill="var(--brand)"></rect>';}
+    const oh=innerH*(d.oth||0)/range;if(oh>0){up-=oh;out+='<rect class="cbar" style="transform:scaleY(0)" x="'+x+'" y="'+up.toFixed(1)+'" width="'+bw+'" height="'+oh.toFixed(1)+'" fill="var(--good)"></rect>';}
     let y=zeroY;                                             /* negatives stack downward */
-    const rmh=innerH*d.room/range;if(rmh>0){out+='<rect x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+rmh.toFixed(1)+'" fill="var(--warn)"></rect>';y+=rmh;}
-    const sph=innerH*d.sup/range;if(sph>0){out+='<rect x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+sph.toFixed(1)+'" fill="var(--accent)"></rect>';y+=sph;}
-    const ch=innerH*(d.costs||0)/range;if(ch>0){out+='<rect x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+ch.toFixed(1)+'" fill="var(--bad)"></rect>';y+=ch;}
+    const rmh=innerH*d.room/range;if(rmh>0){out+='<rect class="cbar top" style="transform:scaleY(0)" x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+rmh.toFixed(1)+'" fill="var(--warn)"></rect>';y+=rmh;}
+    const sph=innerH*d.sup/range;if(sph>0){out+='<rect class="cbar top" style="transform:scaleY(0)" x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+sph.toFixed(1)+'" fill="var(--accent)"></rect>';y+=sph;}
+    const ch=innerH*(d.costs||0)/range;if(ch>0){out+='<rect class="cbar top" style="transform:scaleY(0)" x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+ch.toFixed(1)+'" fill="var(--bad)"></rect>';y+=ch;}
     return out;}).join("");
   const npts=data.map((d,i)=>[padL+i*step+step/2,yOf(d.net)]);
   const nline=npts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
@@ -4289,7 +4296,7 @@ function anaRefChart(data,ref,opt){
     if(d.v==null)return '<text x="'+(x+bw/2)+'" y="'+(padT+innerH-4)+'" text-anchor="middle" font-size="9" fill="var(--muted)">–</text>';
     const y=yOf(d.v),bh=Math.max(2,padT+innerH-y);
     const over=opt.invert?(d.v<ref):(d.v>=ref);
-    return '<rect x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+bh.toFixed(1)+'" rx="3" fill="'+(over?"var(--brand)":"var(--warn)")+'"></rect>'+
+    return '<rect class="cbar" style="transform:scaleY(0)" x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+bh.toFixed(1)+'" rx="3" fill="'+(over?"var(--brand)":"var(--warn)")+'"></rect>'+
       '<text x="'+(x+bw/2)+'" y="'+(y-4).toFixed(1)+'" text-anchor="middle" font-size="9" font-weight="700" fill="var(--muted)">'+esc(String(opt.fmt?opt.fmt(d.v):d.v))+'</text>';
   }).join("");
   const labs=data.map((d,i)=>'<text x="'+(padL+i*step+step/2)+'" y="'+(h-padB+15)+'" text-anchor="middle" font-size="9" fill="var(--muted)">'+esc(d.l)+'</text>').join("");
@@ -4965,7 +4972,10 @@ VIEWS.practice=function(){
       wireAgedFolds(host,built.folds);
       wireInfo(host);
       host.querySelectorAll(".svgwrap,.hmgrid").forEach(w=>scrollChart(w,null));
-      if(built.funnel)requestAnimationFrame(()=>host.querySelectorAll(".funnel .fbar>i").forEach(i=>{i.style.width=(+i.dataset.w)+"%";}));
+      requestAnimationFrame(()=>{
+        if(built.funnel)host.querySelectorAll(".funnel .fbar>i").forEach(i=>{i.style.width=(+i.dataset.w)+"%";});
+        host.querySelectorAll(".cbar").forEach(b=>{b.style.transform="scaleY(1)";});
+      });
     };
     wireInfo(body);
     const bar=body.querySelector("#trseg");
@@ -4976,7 +4986,7 @@ VIEWS.practice=function(){
       if(seg===trendSeg)return;
       trendSeg=seg;
       if(bar){bar.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x.dataset.seg===trendSeg));segScroll(bar);}
-      draw(); host.scrollIntoView({block:"start"});
+      draw();
     }
     if(bar){
       bar.querySelectorAll("button").forEach(b=>b.onclick=()=>pick(b.dataset.seg));
