@@ -285,29 +285,64 @@ Following from §1 — the institution's money is not the prize:
 **8.1 Device loss is now an evidence risk, not just a data risk.**
 
 GroundWork is local-first with no server, and a trainee's entire qualification evidence would
-live on one phone. A course cannot responsibly recommend a tool where a dropped phone costs a
-hundred logged client hours. The mitigations mostly exist — the iCloud records folder, encrypted
-backups, the native automatic backups — but they are currently **opt-in and nagged**. For this
-audience that is not enough:
+live on one device. A course cannot responsibly recommend a tool where a dropped phone costs a
+hundred logged client hours.
 
-- Backup destination becomes part of setup for a training install, not an offer made once at
-  5 seconds after launch to somebody with three sessions.
-- A visible, honest backup-health state, and the progress screen refusing to look healthy while
-  the records are not backed up anywhere off the device.
-- Restore genuinely tested by the trainee, once, early, as a prompted step.
+**The answer to this is already built, on iOS.** The **records folder** (Sep 2026,
+`docs/ios-native.md` § *The records folder*) has the counsellor pick a folder — normally in
+iCloud Drive — and rewrites the whole practice into it on every save, with a dated copy a day
+under *Previous versions*. A folder in iCloud Drive is genuinely off the phone, so losing the
+phone loses nothing and setting up a new one is choosing the same folder again. Behind it,
+`nativeAutoBackup()` keeps a copy in the app's own Documents as the fallback, and a failed
+folder write falls straight back to it — a save that cannot reach the folder is never a save
+with no copy at all. `markBackedUp()` is called **only** when the folder really is in iCloud
+Drive, so "On My iPhone" does not silence the manual-backup reminder.
 
-**8.2 The known multi-device limitation becomes materially worse here.**
+So this is not a build. It is three adjustments to how the existing feature is *offered*:
 
-`CLAUDE.md` § *Known limitations* is explicit: two copies of the app overwrite each other, and
-restore is a whole-state replace with no merge. A trainee on a phone in placement and a laptop
-at home is a **more likely** shape than a settled private practitioner, and the failure mode —
-a stale laptop tab stamping week-old state over a term's logged hours — is exactly the data this
-plan makes load-bearing. This does not have to be fixed for Stage 1, but it must be **stated
-plainly to the trainee** and it should be reconsidered before Stage 4 sells seats to forty
-people at once. The fix sketch in CLAUDE.md (monotonic `S.meta.rev` + `BroadcastChannel`) is the
-starting point.
+- **The folder becomes part of setup for a training install**, not an offer made once
+  (`tt_folder_asked`) five seconds after launch to somebody with three sessions. For this
+  audience "where do your records live" is a first-day question, not a nudge.
+- **The progress screen must refuse to look healthy while the records are not off the device.**
+  A green "84 of 100 hours" on a phone with no backup destination is the single most misleading
+  screen this app could draw for a trainee.
+- **Web and Android trainees are not covered by any of it.** The records folder is iOS-only;
+  desktop Chrome/Edge has the File System Access API auto-backup; an Android or iOS-Safari PWA
+  user has neither and gets the manual export nag alone. If the pilot cohort is not all on
+  iPhones — and it will not be — this gap is real and needs an honest answer before seats are
+  sold, not after.
 
----
+**8.2 The known multi-device limitation is the one that is genuinely unfixed.**
+
+`CLAUDE.md` § *Known limitations* is explicit: `commit()` writes the whole of `S` under one key,
+nothing coordinates two copies of the app, and restore is a whole-state replace with **no
+merge**. A trainee on a placement phone and a home laptop is a **more likely** shape than a
+settled private practitioner, and the failure mode — a stale tab stamping week-old state over a
+term's logged hours — is exactly the data this plan makes load-bearing.
+
+One part of this has been hardened and it is worth being precise about which. The records
+folder is **never overwritten blind**: every save leaves `.GroundWork-writer.json` beside the
+records naming the device that wrote them, and a marker holding a *different* device's id pauses
+folder writes (`_folderHeld`) and asks which copy wins. That is a real second-device detector,
+and it deliberately replaced a modification-date comparison that could not work — iCloud
+restamps a file on upload, and iOS suspends the WebView mid-write, so the date read back is not
+the date this device wrote.
+
+But note exactly what that does and does not give:
+
+- It **detects** a second writer and stops, rather than merging. The trainee still has to choose
+  one copy and lose the other.
+- It covers **the folder**. Two browser tabs on a laptop still overwrite each other in
+  IndexedDB with no marker, no warning and no detection at all.
+- It is **iOS-only**, for the same reason as §8.1.
+
+Stage 1 does not have to fix this, but it does have to **say it plainly to the trainee** — one
+device is the supported shape, and the folder is how you move to a new one. It should be
+reconsidered properly before Stage 4 sells seats to forty people at once, because forty trainees
+will include several running phone-plus-laptop and at least one who loses a term. The fix sketch
+in CLAUDE.md — a monotonic `S.meta.rev`, refuse a write whose base `rev` is stale, broadcast over
+`BroadcastChannel` — is the starting point, and the writer marker is the proof that the
+"record who wrote it, never infer it" approach is the right shape for it.
 
 ## 9. Immediate next steps
 

@@ -44,6 +44,24 @@ After each task: commit with a message naming the task id, and tick it off here.
 
 - [x] T1 · [x] T2 · [x] T3 · [x] T4 · [x] T5 · [x] T7a · [x] T7b · [x] T6 · [x] T9 · [x] T8
 
+## Later tasks
+
+Written after the original ten, on their own schedules rather than as one orchestrated round.
+Same rules and same kickoff prompt.
+
+| # | Task file | Model | Depends on | One-line scope |
+|---|---|---|---|---|
+| T10 | T10-training-record.md | **Opus** | — | The trainee record: per-session duration, type, three-way medium, supervision hours, placements, personal therapy, CPD reflection (schema v9) |
+
+T10 is Stage 1 of `docs/institutional-partnerships-2026-09.md` and is safe to implement
+regardless of how that plan's Stage 0 (find a partner course) turns out — the fields are worth
+having for any trainee. It also contains the one live correction in that plan: supervision is
+counted as entries today, not hours.
+
+- [ ] T10
+
+---
+
 **All ten tasks implemented (31 Aug 2026).** Also delivered outside this plan: schedule
 sync with GroundWork Notes (`scripts/check-schedule-parity.mjs` asserts both apps predict
 identically; the rule lives in the Notes repo's `docs/schedule-sync.md`).

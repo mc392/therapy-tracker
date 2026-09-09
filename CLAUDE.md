@@ -295,7 +295,7 @@ Key functions:
 ### Durability rules (added Aug 2026 — do not regress)
 - **Never load every snapshot.** Use `snapCount()`, `snapRecent(n)` and `snapOldestIds(n)` (all cursor-based). The old `snapAll()` getAll in `commit()`'s prune step cost **1,088 ms** per save at the 120-snapshot cap on a 1,145-session dataset; `snapPrune()` does it in ~11 ms.
 - **Never swallow a save error.** `commit()` calls `noteSaveFailure()` on failure, which raises `#saveBanner` and corrects the caller's "Saved" toast on the next tick. `clearSaveFailure()` runs on the next successful save.
-- **`requestPersistence()`** runs at init (`navigator.storage.persist()`). Without a grant, iOS Safari evicts this app's storage after ~7 days of no visits. Status is shown in Settings › Storage on this device; `denied` is normal until the app is added to the Home Screen.
+- **`requestPersistence()`** runs at init (`navigator.storage.persist()`). Without a grant, iOS Safari evicts this app's storage after ~7 days of no visits. Status is shown in Settings › Storage on this device; `denied` is normal until the app is added to the Home Screen. **That card is `.webonly`** (Sep 2026): it talks about a browser clearing the app's data and tells the reader to add it to the Home Screen, neither of which means anything in the native iOS app, which has its own durability story — the records folder and the Documents auto-backups. Everything the card says stays true for the PWA; it is suppressed on native by the existing `[data-native] .webonly` rule, not deleted.
 - **`exportJSON()` must work with `_db === null`** — the crash screen is the only way out of a broken render and it offers Export.
 - **`tyNet()` and `tyIncome()` are memoised** (`tyMemo`, cleared in `go()`, `commit()` and `normalize()`). Each walks every session and runs `ledgerBetween` twice; the Payments screen asks for several years at once and each year's schedule reaches into the year either side, so uncached the call count grows quadratically with history. Anything that mutates `S` outside those three entry points must call `tyMemoClear()`.
 
@@ -331,8 +331,18 @@ fee paid?" dropdown inside the session form, and leaving it blank left the sessi
 *incomplete* — a bookkeeping question inside a clinical worklist, on a session that could not be
 "done" until the therapist had said whether she had paid her landlord for it.
 
-- **`derive().complete` is the write-up tick and nothing else**, and `missingReasons()` returns
-  notes only. The Incomplete worklist and the attention feed are notes-only to match.
+- **`derive().complete` is the write-up tick plus the attendance confirmation, and nothing
+  else** — `complete = notesDone(s) && attendConfirmed(s)`, and `missingReasons()` returns
+  those two. Attendance joined it in Sep 2026 (it was notes only when room fees moved out);
+  the bookkeeping question is what was removed and it stays out. **`attendConfirmed` is only
+  ever written by saving the session form with that field on screen**, never derived — a
+  logged session already means "attended", so inferring it would make the requirement
+  vacuous. That is also why `meta.attendConfirmBackfill` exists: without it every already-done
+  session in an existing practice would flip to incomplete the moment this build loads and
+  flood the worklist. It grandfathers in anything that counted as done under the old rule
+  (notes ticked), once, and is gated so it can never re-stamp a session deliberately left
+  unconfirmed. The Incomplete worklist ticks attendance itself on rows it clears — every row
+  reaching it is already past.
 - **`derive().roomOwed`** is the liability: a per-session rate applies, and `roomPaid` is neither
   `"Y"` nor `"n/a"`. **Blank means "not settled yet"** — which is what `roomDue` always took it to
   mean. `roomDue` still splits that into `"Y"` (the room's own payment date has passed) and `"N"`
