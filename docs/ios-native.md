@@ -149,14 +149,24 @@ mechanism, and the same traps, as `VaultBookmark` and `RosterBookmark` in Ground
 
 Four rules the JS depends on. Breaking any of them is silent.
 
-- **The folder is never overwritten blind.** `checkFolder()` runs at launch, and on return after
-  a minute or more away, and compares the live file's modification date against the one this
-  device last wrote (`tt_folder_status.mtime`, with `FOLDER_SLACK` for a file provider whose
-  clock is not this device's). A date it did not write means something else has been in there —
-  a second device, a restored phone, a new install pointed at an existing folder — so folder
-  writes **pause** (`_folderHeld`) and the reader is asked which copy wins. Saving to IndexedDB
+- **The folder is never overwritten blind, and who wrote it is recorded rather than deduced.**
+  `checkFolder()` runs at launch, on return after a minute or more away, and straight after a
+  folder is picked. It reads `.GroundWork-writer.json`, a hidden marker beside the records naming
+  the device that last wrote them (`tt_folder_device`, a random id in localStorage like every
+  other per-device setting). The marker holding **this** device's id is never a conflict, however
+  far the dates have drifted; a **different** id always is, however close they are. A conflict
+  pauses folder writes (`_folderHeld`) and asks the reader which copy wins. Saving to IndexedDB
   carries on untouched throughout, so nothing is lost while the question is open, and "Decide
-  later" is a safe answer: the folder is not written and the question comes back next launch.
+  later" is safe: the folder is not written and the question comes back next launch.
+  - **The marker is written AFTER the records, never before.** One claiming this device while the
+    records in the folder are still somebody else's is exactly what would let the next save
+    overwrite them without asking. A marker that is merely missing only costs a question.
+  - **No marker, but this device has written here before → adopt it and stamp one.** The one-time
+    migration for folders written before markers existed. A folder this device has *never* written
+    to still asks, which is the case that matters: a new phone pointed at records already there.
+  - **A folder that will not accept the marker** degrades to that same rule — it behaves as a
+    single-writer folder and logs a warning. Correct for one device, and it cannot silently
+    overwrite a second one, because a second device's own marker would still be there to find.
 - **A folder write that fails falls back to the copy on the phone.** The Documents copy below is
   retired only *after* a folder write has actually landed, and comes straight back if the folder
   stops answering. A save that cannot reach the folder must never be a save with no copy at all.
@@ -172,13 +182,35 @@ has at least three sessions (`tt_folder_asked`). It is deliberately not a setup-
 fourth question about storage before the first session is logged is one question too many, and
 the same offer sits in Settings for ever.
 
+### The modification-date mistake, and why the marker exists
+
+The first version of this compared the live file's modification date against the one recorded at
+write time. On a real phone that is not a comparison at all, and it shipped asking *"Two copies of
+your records?"* on **every launch after an edit**, on a phone that was the only device involved.
+
+Two independent causes, either of which is enough on its own:
+
+- **iCloud restamps a file when it uploads it.** The date read back later is not the date this
+  device wrote, so the file always looks as though somebody else touched it.
+- **The WebView is suspended on backgrounding, mid-write.** `flushAutoBackup()` fires from
+  `appStateChange`; the native `folderWrite` runs on its own dispatch queue and completes, because
+  the app still has background time — and iOS suspends JS before the continuation that records
+  `tt_folder_status.mtime` ever runs. The file changed, and nothing in the web layer knows it.
+
+The lesson generalises past this feature: **a filesystem timestamp is not an identity.** Anything
+that needs to know whether *this* app wrote *that* file has to write that fact down. Slack on the
+comparison does not fix it — the drift is unbounded in the first case and the record is simply
+absent in the second.
+
 ### What is tested, and what is not
 
 `npm run test:folder` (`scripts/check-records-folder.mjs`) drives all of the above in a real
 browser against the real `index.html`, with a fake Capacitor installed by `addInitScript`: a fake
 folder and a fake Documents directory, both kept in localStorage so they survive the reload that
-the launch-time conflict check needs. Twenty-two assertions, including the whole conflict →
-restore → resume path and the fallback when the folder refuses a write. It needs Playwright,
+the launch-time conflict check needs. Twenty-nine assertions, including the whole conflict →
+restore → resume path, the fallback when the folder refuses a write, and each of the three marker
+cases above — a drifted date that must stay quiet, a pre-marker folder that must be adopted once,
+and a genuine second device that must still be caught. It needs Playwright,
 which is deliberately not a dependency:
 
 ```bash
