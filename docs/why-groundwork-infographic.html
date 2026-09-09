@@ -1,0 +1,571 @@
+<title>What One Session Buys</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+:root{
+  --ground:#F2F6F3;
+  --surface:#FFFFFF;
+  --sunk:#E9EFEA;
+  --ink:#1C2822;
+  --ink-soft:#57685E;
+  --ink-faint:#7C8D83;
+  --line:#D7E0D9;
+  --hair:#E4EBE5;
+  --sage:#5C7A6D;
+  --sage-deep:#3C4F44;
+  --sage-wash:#E4EDE7;
+  --clay:#A0563A;
+  --clay-wash:#F6E9E3;
+  --shadow:0 1px 2px rgba(28,40,34,.05), 0 8px 24px -16px rgba(28,40,34,.28);
+
+  /* Diagram ink. Separate from the UI tokens because a stroke on a chart has to hold its own
+     against the ground at 1-2px, where a border on a card does not. */
+  --dg-sage:#4E6C5E;
+  --dg-clay:#95502F;
+  --dg-line:#AFBFB4;
+
+  --display:"Newsreader", Georgia, "Times New Roman", serif;
+  --body:"Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#121815;
+    --surface:#1A221E;
+    --sunk:#151C18;
+    --ink:#E7EDE9;
+    --ink-soft:#A0B0A6;
+    --ink-faint:#7E9086;
+    --line:#2B3631;
+    --hair:#242E29;
+    --sage:#8FB2A0;
+    --sage-deep:#BAD2C3;
+    --sage-wash:#1E2A24;
+    --clay:#D08E6B;
+    --clay-wash:#2A1F1A;
+    --dg-sage:#9BC0AC;
+    --dg-clay:#E29B74;
+    --dg-line:#465650;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#121815;
+  --surface:#1A221E;
+  --sunk:#151C18;
+  --ink:#E7EDE9;
+  --ink-soft:#A0B0A6;
+  --ink-faint:#7E9086;
+  --line:#2B3631;
+  --hair:#242E29;
+  --sage:#8FB2A0;
+  --sage-deep:#BAD2C3;
+  --sage-wash:#1E2A24;
+  --clay:#D08E6B;
+  --clay-wash:#2A1F1A;
+  --dg-sage:#9BC0AC;
+  --dg-clay:#E29B74;
+  --dg-line:#465650;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--ground);
+  color:var(--ink);
+  font-family:var(--body);
+  font-size:16px;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1040px;margin:0 auto;padding:0 24px 72px}
+@media (max-width:620px){ .wrap{padding:0 16px 56px} }
+
+/* ---------- masthead ---------- */
+.mast{padding:56px 0 40px;display:flex;flex-direction:column;gap:22px}
+.brandline{display:flex;align-items:center;gap:12px}
+.mark{width:34px;height:34px;flex:0 0 34px}
+.brandname{
+  font-family:var(--display);font-weight:600;font-size:23px;letter-spacing:-.015em;
+  color:var(--sage-deep);
+}
+.brandname em{font-style:normal;color:var(--sage)}
+.eyebrow{
+  font-family:var(--mono);font-size:11.5px;font-weight:500;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--ink-faint);
+}
+h1{
+  font-family:var(--display);font-weight:400;
+  font-size:clamp(34px,5.6vw,58px);line-height:1.08;letter-spacing:-.02em;
+  margin:0;text-wrap:balance;max-width:19ch;
+}
+h1 em{font-style:italic;color:var(--sage)}
+.standfirst{
+  font-size:clamp(16.5px,2vw,19px);line-height:1.55;color:var(--ink-soft);
+  max-width:60ch;margin:0;
+}
+.standfirst b{color:var(--ink);font-weight:600}
+
+/* ---------- section furniture ---------- */
+section{padding-top:52px}
+.sechead{display:flex;flex-direction:column;gap:8px;margin-bottom:22px;max-width:66ch}
+h2{
+  font-family:var(--display);font-weight:500;
+  font-size:clamp(24px,3.2vw,33px);line-height:1.18;letter-spacing:-.015em;
+  margin:0;text-wrap:balance;
+}
+.sechead p{margin:0;color:var(--ink-soft);font-size:16.5px;max-width:62ch}
+.rule{height:1px;background:var(--line);border:0;margin:0}
+
+/* ---------- the record ---------- */
+.record{
+  background:var(--surface);border:1px solid var(--line);border-radius:6px;
+  box-shadow:var(--shadow);overflow:hidden;
+}
+.record-head{
+  display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap;
+  padding:13px 18px;background:var(--sunk);border-bottom:1px solid var(--hair);
+}
+.record-head span:first-child{
+  font-family:var(--mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-faint);font-weight:500;
+}
+.record-head span:last-child{font-size:13px;color:var(--ink-faint)}
+.fields{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));
+  gap:1px;background:var(--hair);
+}
+.field{background:var(--surface);padding:14px 18px;display:flex;flex-direction:column;gap:4px}
+.field .k{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-faint);
+}
+.field .v{font-family:var(--mono);font-size:15px;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+.field .v.tick{color:var(--sage)}
+.field .v.cross{color:var(--clay)}
+.record-foot{
+  padding:12px 18px;border-top:1px solid var(--hair);
+  font-size:13.5px;color:var(--ink-soft);
+}
+.record-foot b{color:var(--ink);font-weight:600}
+
+/* ---------- figures ---------- */
+figure{margin:0}
+.figbox{
+  background:var(--surface);border:1px solid var(--line);border-radius:6px;
+  padding:22px 20px 18px;box-shadow:var(--shadow);
+}
+.figscroll{overflow-x:auto;overflow-y:hidden}
+.figscroll svg{display:block;min-width:660px;width:100%;height:auto;color:var(--ink)}
+figcaption{
+  margin-top:16px;padding-top:14px;border-top:1px solid var(--hair);
+  font-size:13.5px;line-height:1.6;color:var(--ink-soft);max-width:72ch;
+}
+figcaption b{color:var(--ink);font-weight:600}
+/* SVG paint routed through tokens. Attribute-level colour would have pinned the diagrams to the
+   light palette, which is what the first render of this page actually did. */
+.s-sage{stroke:var(--dg-sage)} .f-sage{fill:var(--dg-sage)}
+.s-clay{stroke:var(--dg-clay)} .f-clay{fill:var(--dg-clay)}
+.s-line{stroke:var(--dg-line)}
+
+/* ---------- the boundary panel ---------- */
+.boundary{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:6px;overflow:hidden;
+}
+@media (max-width:720px){ .boundary{grid-template-columns:1fr} }
+.side{background:var(--surface);padding:22px}
+.side.paid{background:var(--sunk)}
+.side h3{
+  font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.12em;
+  text-transform:uppercase;margin:0 0 4px;
+}
+.side.gratis h3{color:var(--sage)}
+.side.paid h3{color:var(--clay)}
+.side .lede{font-size:14px;color:var(--ink-soft);margin:0 0 14px}
+.side ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+.side li{display:flex;gap:10px;align-items:flex-start;font-size:14.5px;line-height:1.5}
+.side li svg{flex:0 0 15px;width:15px;height:15px;margin-top:4px}
+.side.gratis li svg{color:var(--sage)}
+.side.paid li svg{color:var(--clay)}
+.side li b{font-weight:600}
+
+/* ---------- promise strip ---------- */
+.promise{
+  margin-top:18px;border:1px solid var(--sage);border-radius:6px;
+  background:var(--sage-wash);padding:18px 20px;
+  display:flex;gap:14px;align-items:flex-start;
+}
+.promise svg{flex:0 0 20px;width:20px;height:20px;color:var(--sage-deep);margin-top:2px}
+.promise p{margin:0;font-size:14.5px;line-height:1.6;color:var(--ink)}
+.promise b{font-weight:700}
+
+/* ---------- the January panel ---------- */
+.jan{
+  background:var(--surface);border:1px solid var(--line);border-radius:6px;
+  box-shadow:var(--shadow);overflow:hidden;
+}
+.jan-head{padding:18px 22px 4px}
+.jan-head h3{font-family:var(--display);font-weight:500;font-size:21px;margin:0 0 4px;letter-spacing:-.01em}
+.jan-head p{margin:0;font-size:14px;color:var(--ink-soft);max-width:58ch}
+.sum{padding:18px 22px 22px;display:flex;flex-direction:column;gap:0}
+.sum-row{
+  display:flex;justify-content:space-between;align-items:baseline;gap:16px;
+  padding:11px 0;border-bottom:1px solid var(--hair);
+}
+.sum-row:last-child{border-bottom:0}
+.sum-row .lbl{font-size:14.5px;color:var(--ink-soft)}
+.sum-row .lbl b{color:var(--ink);font-weight:600}
+.sum-row .amt{
+  font-family:var(--mono);font-size:16px;font-weight:500;
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.sum-row.total{border-top:2px solid var(--ink);border-bottom:0;margin-top:6px;padding-top:13px}
+.sum-row.total .lbl{color:var(--ink);font-weight:600;font-size:15.5px}
+.sum-row.total .amt{font-size:22px;font-weight:600;color:var(--clay)}
+.sum-note{
+  padding:14px 22px;background:var(--clay-wash);border-top:1px solid var(--hair);
+  font-size:13.5px;line-height:1.6;color:var(--ink);
+}
+.sum-note b{font-weight:600}
+
+/* ---------- honest limits ---------- */
+.limits{
+  border:1px solid var(--line);border-radius:6px;background:var(--sunk);padding:24px 22px;
+}
+.limits h3{
+  font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-faint);margin:0 0 14px;
+}
+.limits dl{margin:0;display:grid;gap:14px}
+.limits dt{font-weight:600;font-size:14.5px;margin-bottom:2px}
+.limits dd{margin:0;font-size:14px;color:var(--ink-soft);line-height:1.55;max-width:70ch}
+.limits a{color:var(--sage);text-decoration:underline;text-underline-offset:2px}
+.limits a:hover{color:var(--sage-deep)}
+
+footer{
+  margin-top:52px;padding-top:22px;border-top:1px solid var(--line);
+  display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
+  font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-faint);
+}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--sage);outline-offset:3px;border-radius:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <div class="brandline">
+      <svg class="mark" viewBox="0 0 40 40" role="img" aria-label="GroundWork">
+        <rect x="5" y="24" width="6" height="12" rx="3" fill="#5C7A6D"></rect>
+        <rect x="14" y="18" width="6" height="18" rx="3" fill="#5C7A6D"></rect>
+        <rect x="23" y="11" width="6" height="25" rx="3" fill="#3C4F44"></rect>
+        <path d="M30 13c4-1 7-4 7-8-4 0-8 2-9 6-.3 1.3 1 2.3 2 2z" fill="#6A8B7C"></path>
+      </svg>
+      <div class="brandname">Ground<em>Work</em></div>
+    </div>
+    <div class="eyebrow">One record · everything downstream</div>
+    <h1>What one logged session <em>buys you</em></h1>
+    <p class="standfirst">A therapist's practice generates one kind of record: <b>you saw someone, on a day, in a room, and they either paid or they didn't.</b> Everything below is derived from that one row — the diary, the chasing, the statements, and eventually the tax. Nothing here is typed twice.</p>
+  </header>
+
+  <hr class="rule">
+
+  <!-- ============ 1. the input ============ -->
+  <section>
+    <div class="sechead">
+      <h2>The whole of the work you do</h2>
+      <p>Six fields, tapped out between clients or at the end of the day. There is no bookkeeping to learn, no chart of accounts, and no bank feed to reconcile — because a sole practitioner's books are just this, repeated.</p>
+    </div>
+
+    <div class="record">
+      <div class="record-head">
+        <span>Session · new entry</span>
+        <span>about twenty seconds</span>
+      </div>
+      <div class="fields">
+        <div class="field"><span class="k">Client</span><span class="v">RM&#8209;04</span></div>
+        <div class="field"><span class="k">Date</span><span class="v">Tue 8 Sep</span></div>
+        <div class="field"><span class="k">Time</span><span class="v">14:00</span></div>
+        <div class="field"><span class="k">Room</span><span class="v">Bridge St</span></div>
+        <div class="field"><span class="k">Attended</span><span class="v tick">Yes</span></div>
+        <div class="field"><span class="k">Paid</span><span class="v cross">Not yet</span></div>
+      </div>
+      <div class="record-foot"><b>A code, not a name.</b> Client identities stay out of the app entirely, so a lost phone is not a data breach — and nothing clinical is stored here. Your notes live wherever they already live.</div>
+    </div>
+  </section>
+
+  <!-- ============ 2. the derivation ============ -->
+  <section>
+    <div class="sechead">
+      <h2>Where that row goes</h2>
+      <p>The same six fields answer four everyday questions the moment they are entered, and a further three once a year — the ones that involve HMRC. The line between them is where GroundWork Plus sits.</p>
+    </div>
+
+    <figure class="figbox">
+      <div class="figscroll">
+        <svg viewBox="0 0 1000 560" role="img" aria-label="One logged session feeds four everyday answers and, below the GroundWork Plus line, three tax answers. A separate export lane passes through a deliberate gap in that line, showing that backups and exports are never gated.">
+          <defs>
+            <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" fill="currentColor"></path>
+            </marker>
+            <marker id="arSage" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" class="f-sage"></path>
+            </marker>
+            <marker id="arClay" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" class="f-clay"></path>
+            </marker>
+          </defs>
+
+          <!-- seed -->
+          <rect x="330" y="20" width="340" height="66" rx="5" fill="none" stroke="currentColor" stroke-width="2"></rect>
+          <text x="500" y="47" text-anchor="middle" font-family="Public Sans, sans-serif" font-size="15" font-weight="700" fill="currentColor">One session, logged</text>
+          <text x="500" y="68" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor" opacity=".65">code · date · room · attended · paid</text>
+
+          <!-- trunk to the free rail -->
+          <line x1="500" y1="86" x2="500" y2="126" stroke="currentColor" stroke-width="1.5"></line>
+          <line x1="155" y1="126" x2="845" y2="126" stroke="currentColor" stroke-width="1.5"></line>
+          <line x1="155" y1="126" x2="155" y2="156" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar)"></line>
+          <line x1="327" y1="126" x2="327" y2="156" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar)"></line>
+          <line x1="500" y1="126" x2="500" y2="156" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar)"></line>
+          <line x1="673" y1="126" x2="673" y2="156" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar)"></line>
+          <line x1="845" y1="126" x2="845" y2="156" class="s-sage" stroke-width="1.5" marker-end="url(#arSage)"></line>
+
+          <!-- free nodes -->
+          <g font-family="Public Sans, sans-serif">
+            <rect x="75" y="162" width="160" height="92" rx="5" fill="none" class="s-line" stroke-width="1"></rect>
+            <text x="155" y="192" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">Who's next</text>
+            <text x="155" y="215" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".7">today, this week,</text>
+            <text x="155" y="232" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".7">who's drifted away</text>
+
+            <rect x="247" y="162" width="160" height="92" rx="5" fill="none" class="s-line" stroke-width="1"></rect>
+            <text x="327" y="192" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">Who owes you</text>
+            <text x="327" y="215" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".7">how much, how long,</text>
+            <text x="327" y="232" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".7">and the chaser written</text>
+
+            <rect x="420" y="162" width="160" height="92" rx="5" fill="none" class="s-line" stroke-width="1"></rect>
+            <text x="500" y="192" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">What's unfinished</text>
+            <text x="500" y="215" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".7">notes not written,</text>
+            <text x="500" y="232" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".7">room fees not settled</text>
+
+            <rect x="593" y="162" width="160" height="92" rx="5" fill="none" class="s-line" stroke-width="1"></rect>
+            <text x="673" y="192" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">Paperwork</text>
+            <text x="673" y="215" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".7">statements, receipts,</text>
+            <text x="673" y="232" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".7">invoices, CPD hours</text>
+
+            <!-- the export lane, drawn as the one that is never gated -->
+            <rect x="765" y="162" width="160" height="92" rx="5" fill="none" class="s-sage" stroke-width="2"></rect>
+            <text x="845" y="192" text-anchor="middle" font-size="14" font-weight="700" class="f-sage">Your records</text>
+            <text x="845" y="215" text-anchor="middle" font-size="11.5" class="f-sage">backup, spreadsheet,</text>
+            <text x="845" y="232" text-anchor="middle" font-size="11.5" class="f-sage">import back in</text>
+          </g>
+
+          <!-- left trunk down past the boundary -->
+          <polyline points="330,53 55,53 55,344" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></polyline>
+
+          <!-- the boundary, with a deliberate gap where the export lane crosses -->
+          <line x1="20" y1="298" x2="762" y2="298" class="s-clay" stroke-width="1.5" stroke-dasharray="7 6"></line>
+          <line x1="928" y1="298" x2="980" y2="298" class="s-clay" stroke-width="1.5" stroke-dasharray="7 6"></line>
+          <text x="20" y="286" font-family="IBM Plex Mono, monospace" font-size="11.5" font-weight="600" letter-spacing="1.4" class="f-clay">GROUNDWORK PLUS</text>
+          <text x="845" y="286" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" letter-spacing=".8" class="f-sage">— never gated —</text>
+
+          <!-- export lane passes straight through the gap -->
+          <line x1="845" y1="254" x2="845" y2="340" class="s-sage" stroke-width="2" marker-end="url(#arSage)"></line>
+          <text x="845" y="364" text-anchor="middle" font-family="Public Sans, sans-serif" font-size="12.5" font-weight="600" class="f-sage">Yours in every tier</text>
+          <text x="845" y="383" text-anchor="middle" font-family="Public Sans, sans-serif" font-size="11.5" class="f-sage" opacity=".85">including if you stop</text>
+          <text x="845" y="400" text-anchor="middle" font-family="Public Sans, sans-serif" font-size="11.5" class="f-sage" opacity=".85">paying, or never start</text>
+
+          <!-- plus rail -->
+          <line x1="55" y1="344" x2="625" y2="344" class="s-clay" stroke-width="1.5"></line>
+          <line x1="175" y1="344" x2="175" y2="374" class="s-clay" stroke-width="1.5" marker-end="url(#arClay)"></line>
+          <line x1="400" y1="344" x2="400" y2="374" class="s-clay" stroke-width="1.5" marker-end="url(#arClay)"></line>
+          <line x1="625" y1="344" x2="625" y2="374" class="s-clay" stroke-width="1.5" marker-end="url(#arClay)"></line>
+
+          <g font-family="Public Sans, sans-serif">
+            <rect x="75" y="380" width="200" height="106" rx="5" fill="none" class="s-clay" stroke-width="1.5"></rect>
+            <text x="175" y="409" text-anchor="middle" font-size="14" font-weight="700" class="f-clay">What you'll owe</text>
+            <text x="175" y="432" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".78">a running figure from</text>
+            <text x="175" y="449" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".78">money actually received,</text>
+            <text x="175" y="466" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".78">months before it lands</text>
+
+            <rect x="300" y="380" width="200" height="106" rx="5" fill="none" class="s-clay" stroke-width="1.5"></rect>
+            <text x="400" y="409" text-anchor="middle" font-size="14" font-weight="700" class="f-clay">What to keep back</text>
+            <text x="400" y="432" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".78">a pot target built on tax</text>
+            <text x="400" y="449" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".78">already earned — the rest</text>
+            <text x="400" y="466" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".78">is honestly yours</text>
+
+            <rect x="525" y="380" width="200" height="106" rx="5" fill="none" class="s-clay" stroke-width="1.5"></rect>
+            <text x="625" y="409" text-anchor="middle" font-size="14" font-weight="700" class="f-clay">Four MTD quarters</text>
+            <text x="625" y="432" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".78">added up, sorted into</text>
+            <text x="625" y="449" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".78">tax-return boxes, and</text>
+            <text x="625" y="466" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".78">handed over as a file</text>
+          </g>
+
+          <text x="20" y="524" font-family="Public Sans, sans-serif" font-size="12" fill="currentColor" opacity=".62">Everything above the dashed line is free, permanently. Nothing below it touches the record itself.</text>
+        </svg>
+      </div>
+      <figcaption><b>The gap in the dashed line is the design.</b> A subscription that could sit between a therapist and her own client records would be indefensible — and under UK GDPR, unlawful. So the export lane is drawn straight through the paywall: every backup, every spreadsheet export and the importer that got your history in stay free in every tier, including after a subscription lapses.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ 3. the boundary in words ============ -->
+  <section>
+    <div class="sechead">
+      <h2>Where the line falls</h2>
+      <p>Running the practice is the free half. The paid half is the once-a-year work that has a deadline and a penalty behind it.</p>
+    </div>
+
+    <div class="boundary">
+      <div class="side gratis">
+        <h3>Free, permanently</h3>
+        <p class="lede">Everything you touch in an ordinary week.</p>
+        <ul>
+          <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 8.5 6 12l7.5-8"></path></svg><span>Clients, sessions, rooms, the diary</span></li>
+          <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 8.5 6 12l7.5-8"></path></svg><span>Who owes you, and a written chaser</span></li>
+          <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 8.5 6 12l7.5-8"></path></svg><span><b>Statements, receipts and invoices</b> — a client needing proof for an insurer is an obligation, not an upsell</span></li>
+          <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 8.5 6 12l7.5-8"></path></svg><span>Supervision and CPD hours</span></li>
+          <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 8.5 6 12l7.5-8"></path></svg><span>Every backup, export and import</span></li>
+          <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 8.5 6 12l7.5-8"></path></svg><span>Bringing three years of spreadsheet history in</span></li>
+        </ul>
+      </div>
+      <div class="side paid">
+        <h3>GroundWork Plus</h3>
+        <p class="lede">The year-end work, done from records you already keep.</p>
+        <ul>
+          <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v10M3 8h10"></path></svg><span><b>What you'll owe</b>, updated as the year runs</span></li>
+          <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v10M3 8h10"></path></svg><span><b>Costs and other income</b> — insurance, room rent, supervision, CPD, taken off the profit</span></li>
+          <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v10M3 8h10"></path></svg><span><b>The pot</b>, payments on account, and every due date in order</span></li>
+          <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v10M3 8h10"></path></svg><span><b>Four MTD quarters</b>, exported for filing</span></li>
+          <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v10M3 8h10"></path></svg><span>Trends, accreditation hours, notes-app sync</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="promise">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2 3.5 4.8v4.6c0 3.6 2.6 6.9 6.5 8.1 3.9-1.2 6.5-4.5 6.5-8.1V4.8z"></path><path d="M7 10l2.2 2.2L13.5 8"></path></svg>
+      <p><b>Why a subscription rather than a one-off unlock.</b> Bands, thresholds, Class&nbsp;2 and 4 rates, student-loan plans and the MTD turnover limits all move every April. Keeping the figures right is recurring work, so it is honestly charged for recurringly. That is the whole promise — no server, no account, and nothing about your practice ever leaves the device.</p>
+    </div>
+  </section>
+
+  <!-- ============ 4. the January arithmetic ============ -->
+  <section>
+    <div class="sechead">
+      <h2>The one that catches people</h2>
+      <p>Ask a therapist in their second year what went wrong and it is almost always this. Once a year's bill passes £1,000, HMRC stops waiting for the next one — so the first big January is the year's tax <em>plus</em> half of it again, in advance.</p>
+    </div>
+
+    <div class="jan">
+      <div class="jan-head">
+        <h3>A worked January</h3>
+        <p>An illustration, not anyone's real figures — a practice whose tax for the year came to £3,200.</p>
+      </div>
+      <div class="sum">
+        <div class="sum-row"><span class="lbl">Balancing payment — <b>last year's</b> tax, settled</span><span class="amt">£3,200</span></div>
+        <div class="sum-row"><span class="lbl">First payment on account — 50% towards <b>this</b> year</span><span class="amt">£1,600</span></div>
+        <div class="sum-row total"><span class="lbl">Leaving the account on 31 January</span><span class="amt">£4,800</span></div>
+      </div>
+      <div class="sum-note"><b>A further £1,600 follows on 31 July.</b> Nobody budgets for £4,800 having mentally set aside £3,200 — and the letter arrives four weeks before the money is due. GroundWork sees it coming from the previous spring, because it already knows what you have been paid.</div>
+    </div>
+  </section>
+
+  <!-- ============ 5. MTD comparison ============ -->
+  <section>
+    <div class="sechead">
+      <h2>Making Tax Digital, without a second subscription</h2>
+      <p>From April 2026, sole traders over £50,000 turnover file four updates a year instead of one return — £30,000 from 2027, £20,000 from 2028. The usual answer is a monthly bookkeeping package. For a practice with no stock, no payroll and one kind of income, that is a lot of software for one job.</p>
+    </div>
+
+    <figure class="figbox">
+      <div class="figscroll">
+        <svg viewBox="0 0 900 330" role="img" aria-label="Two routes to filing a quarterly update. The usual route re-types figures by hand into a monthly bookkeeping package. The GroundWork route exports a CSV file into a submission tool. Both reach HMRC.">
+          <defs>
+            <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" fill="currentColor"></path>
+            </marker>
+            <marker id="ar2Sage" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" class="f-sage"></path>
+            </marker>
+            <marker id="ar2Clay" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" class="f-clay"></path>
+            </marker>
+          </defs>
+
+          <!-- row A: the usual route -->
+          <text x="20" y="30" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" letter-spacing="1.3" fill="currentColor" opacity=".6">THE USUAL ROUTE</text>
+          <rect x="20" y="42" width="200" height="72" rx="5" fill="none" class="s-line" stroke-width="1"></rect>
+          <text x="120" y="72" text-anchor="middle" font-family="Public Sans, sans-serif" font-size="13.5" font-weight="600" fill="currentColor">Your sessions</text>
+          <text x="120" y="93" text-anchor="middle" font-family="Public Sans, sans-serif" font-size="11.5" fill="currentColor" opacity=".7">a diary, a spreadsheet</text>
+
+          <line x1="220" y1="78" x2="310" y2="78" class="s-clay" stroke-width="2" marker-end="url(#ar2Clay)"></line>
+          <text x="265" y="66" text-anchor="middle" font-family="Public Sans, sans-serif" font-size="11.5" font-weight="600" class="f-clay">re-typed</text>
+          <text x="265" y="96" text-anchor="middle" font-family="Public Sans, sans-serif" font-size="10.5" class="f-clay" opacity=".85">by hand</text>
+
+          <rect x="315" y="42" width="215" height="72" rx="5" fill="none" class="s-line" stroke-width="1"></rect>
+          <text x="422" y="72" text-anchor="middle" font-family="Public Sans, sans-serif" font-size="13.5" font-weight="600" fill="currentColor">Bookkeeping package</text>
+          <text x="422" y="93" text-anchor="middle" font-family="Public Sans, sans-serif" font-size="11.5" fill="currentColor" opacity=".7">a monthly subscription</text>
+
+          <!-- row B: the GroundWork route -->
+          <text x="20" y="200" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" letter-spacing="1.3" class="f-sage">WITH GROUNDWORK PLUS</text>
+          <rect x="20" y="212" width="200" height="72" rx="5" fill="none" class="s-sage" stroke-width="2"></rect>
+          <text x="120" y="242" text-anchor="middle" font-family="Public Sans, sans-serif" font-size="13.5" font-weight="700" class="f-sage">Your sessions</text>
+          <text x="120" y="263" text-anchor="middle" font-family="Public Sans, sans-serif" font-size="11.5" class="f-sage">logged as you go</text>
+
+          <line x1="220" y1="248" x2="310" y2="248" class="s-sage" stroke-width="2" marker-end="url(#ar2Sage)"></line>
+          <text x="265" y="236" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" font-weight="600" class="f-sage">.csv</text>
+          <text x="265" y="266" text-anchor="middle" font-family="Public Sans, sans-serif" font-size="10.5" class="f-sage">a file, not retyping</text>
+
+          <rect x="315" y="212" width="215" height="72" rx="5" fill="none" class="s-sage" stroke-width="2"></rect>
+          <text x="422" y="242" text-anchor="middle" font-family="Public Sans, sans-serif" font-size="13.5" font-weight="700" class="f-sage">Submission tool</text>
+          <text x="422" y="263" text-anchor="middle" font-family="Public Sans, sans-serif" font-size="11.5" class="f-sage">or your accountant</text>
+
+          <!-- both converge on HMRC -->
+          <polyline points="530,78 585,78 585,142" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></polyline>
+          <polyline points="530,248 585,248 585,184" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></polyline>
+          <line x1="585" y1="163" x2="672" y2="163" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar2)"></line>
+          <text x="628" y="152" text-anchor="middle" font-family="Public Sans, sans-serif" font-size="11" fill="currentColor" opacity=".7">submits</text>
+
+          <rect x="678" y="127" width="200" height="72" rx="5" fill="none" stroke="currentColor" stroke-width="2"></rect>
+          <text x="778" y="157" text-anchor="middle" font-family="Public Sans, sans-serif" font-size="13.5" font-weight="700" fill="currentColor">HMRC</text>
+          <text x="778" y="178" text-anchor="middle" font-family="Public Sans, sans-serif" font-size="11.5" fill="currentColor" opacity=".7">quarterly update</text>
+
+          <text x="20" y="316" font-family="Public Sans, sans-serif" font-size="12" fill="currentColor" opacity=".62">Same destination. The difference is which step you are paying a monthly subscription to perform — and whether a figure gets retyped.</text>
+        </svg>
+      </div>
+      <figcaption><b>The rules ask for a digital link.</b> Figures are meant to travel electronically from your records to HMRC; reading a total off a screen and typing it in somewhere else breaks that chain, which is exactly why bridging software — the kind that submits from a spreadsheet — exists. HMRC publishes the list of recognised software, and there are free and low-cost products on it. GroundWork produces the file; something on that list presses Submit.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ 6. honest limits ============ -->
+  <section>
+    <div class="limits">
+      <h3>What it does not do</h3>
+      <dl>
+        <div>
+          <dt>It cannot file your return, or your quarterly update.</dt>
+          <dd>Submitting needs software HMRC has recognised, which needs a server GroundWork deliberately does not have. It keeps the records and adds them up; the filing stays with you or your accountant.</dd>
+        </div>
+        <div>
+          <dt>The figures are estimates, not tax advice.</dt>
+          <dd>They are worked from what you have entered, using published rates. They cannot see a salary, a partner's position, dividends, capital allowances, or anything HMRC has agreed with you directly. Once you have filed, the real figures go in and replace them everywhere.</dd>
+        </div>
+        <div>
+          <dt>It makes no claim about your compliance.</dt>
+          <dd>Whether a particular set of tools meets the rules in your circumstances is a question for your accountant. Start with <a href="https://www.gov.uk/guidance/find-software-that-works-with-making-tax-digital-for-income-tax" target="_blank" rel="noopener">HMRC's own list of software</a> rather than a recommendation from anyone selling you something.</dd>
+        </div>
+        <div>
+          <dt>It is one device at a time.</dt>
+          <dd>There is no account and no sync, which is why nothing about your practice ever leaves your phone — and also why the phone and the laptop cannot both be live at once. Backups move by hand, and they always will be free.</dd>
+        </div>
+      </dl>
+    </div>
+  </section>
+
+  <footer>
+    <span>GroundWork · practice records for UK sole-trader therapists</span>
+    <span>Offline · no account · September 2026</span>
+  </footer>
+
+</div>

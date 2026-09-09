@@ -70,12 +70,49 @@ itself and `ios/App/App/public/` is a gitignored copy rebuilt on every sync. Ful
   lock.
 - **`sw.js` is skipped on native** (service workers do not register on Capacitor's scheme and the
   bundle is already local) and pruned from the copied app, along with `icon-ideas/`.
+- **Two Swift files are wired by `scripts/add-native-plugin.mjs`**, not one:
+  `GroundWorkNativePlugin.swift` (the `@objc` surface) and `GroundWorkRecordsFolder.swift` (the
+  records folder's bookmark and file IO). Adding a third means adding it to that script's `FILES`
+  list, and `npm run check` asserts both are in the Xcode target.
 
-### Automatic backups on the phone (Aug 2026)
-Desktop Chrome/Edge auto-saves an encrypted backup silently through the File System Access API.
-That API does not exist on iOS, so the only safety net there was the nag banner and a manual
-share sheet. Behind the native guard, **every `commit()` also writes a copy into the app's
-Documents folder**, 2s debounced:
+### The records folder (Sep 2026) — where the data actually lives on iOS
+**The counsellor picks a folder, normally in iCloud Drive, and every save is rewritten into it.**
+The same idea as GroundWork Notes, which has always kept records in a folder the counsellor owns;
+the point is that there is nothing to remember. Settings › This iPhone › *Where your records are
+saved*. Native half is `ios/App/App/GroundWorkRecordsFolder.swift` (document picker +
+security-scoped bookmark + coordinated IO); full detail in **`docs/ios-native.md` § The records
+folder**.
+
+- **It is NOT a rewrite of the store and NOT sync.** `S` is still one object read synchronously
+  from IndexedDB on every render; the folder holds the durable copy. Export/Restore are untouched
+  and are still how records move between devices — "Multi-tab / multi-device writes" below is
+  unchanged.
+- **The folder is never overwritten blind.** `checkFolder()` compares the live file's modification
+  date to the one this device last wrote (`tt_folder_status.mtime`, `FOLDER_SLACK` of 4s for a
+  file provider's clock). A date it did not write pauses folder writes (`_folderHeld`) and asks
+  which copy wins. IndexedDB saving carries on regardless, so "Decide later" loses nothing.
+- **A failed folder write falls back to the Documents copy.** `retireDeviceCopy()` runs only after
+  a folder write has landed, and `tt_autobk_retired` is cleared the moment one fails. A save that
+  cannot reach the folder must never be a save with no copy at all.
+- **`markBackedUp()` is called only when the folder is in iCloud Drive** (`RecordsFolder.isInICloud`,
+  which answers no whenever it cannot tell). That is the one change to the manual-backup nag, and
+  the whole point of the feature. A folder under "On My iPhone" is not off this phone, so the
+  reminder stays on and the card says why.
+- **Reading back goes through `importFromText()`** — `importJSON()` minus the file input, split out
+  for exactly this. Same passphrase prompt, same `validateImport`, same two tiers of
+  `restoreConfirm`. Never add a shortcut past it.
+- The offer to pick a folder is made **once** (`tt_folder_asked`), 5s after launch, to somebody
+  with 3+ sessions — deliberately not a setup-wizard step.
+- **`npm run test:folder`** (`scripts/check-records-folder.mjs`) drives all of it in a real browser
+  with a fake Capacitor, 22 assertions including the conflict → restore → resume path. Needs
+  `npm i --no-save playwright`. **The Swift has never been compiled** — same caveat as the watch
+  app; `npm run check` asserts the two halves still name the same methods.
+
+### Automatic backups on the phone (Aug 2026) — the fallback since Sep 2026
+What an iPhone with **no records folder chosen** gets, and what comes back if the chosen folder
+stops answering. Desktop Chrome/Edge auto-saves an encrypted backup silently through the File
+System Access API; that API does not exist on iOS, so behind the native guard **every `commit()`
+also writes a copy into the app's Documents folder**, 2s debounced:
 - `backupPayload()` (near `exportJSON`) is now the **single** backup envelope — `exportJSON`,
   `encPayload` and the native auto-backup all build their file from it. Adding a field in one
   place is the whole point; don't reintroduce a second literal.
@@ -94,9 +131,10 @@ Documents folder**, 2s debounced:
 - **`flushAutoBackup()` runs on backgrounding.** iOS suspends the WebView, and a pending 2s timer
   suspends with it — logging a session then putting the phone straight down is exactly the case
   this exists for.
-- **`markBackedUp()` is deliberately untouched.** A copy on the same phone is no protection for
-  someone with iCloud Backup off, so the manual-export nag is unchanged; the banner detail line
-  only appends "(an automatic copy is kept on this iPhone)".
+- **`markBackedUp()` is deliberately untouched by this path.** A copy on the same phone is no
+  protection for someone with iCloud Backup off, so the manual-export nag is unchanged; the banner
+  detail line only appends "(an automatic copy is kept on this iPhone)". A *records folder in
+  iCloud Drive* is the only thing that answers that nag.
 - `UIFileSharingEnabled` + `LSSupportsOpeningDocumentsInPlace` in `Info.plist` are what make that
   folder visible in the Files app. Without them the files exist but nobody can reach them.
 
@@ -410,6 +448,9 @@ Six collapsible `<details class="sgrp">` groups (**business / app** / data / rec
 - **A past due date with no record is `unknown`, not overdue** (`PAY_GRACE_DAYS`, 60). Someone arriving with three years of history has almost certainly paid those bills; counting them would poison every pot figure. Inside the grace window "not ticked" still means owed, and a row can be marked `{unpaid:true}` to count it back in.
 - **`taxPot()`** answers two separate questions and keeps them separate: what should be put by *today* (tax **already earned** + unpaid bills from years that have **ended** + a buffer the therapist chose) and what has to be there by a *date* (`byNext`). Tax on money not yet earned is deliberately excluded. `rate` is projected tax over **projected income**, not profit — it is a share of money arriving in the account. Working it out from tax-to-date over full-year net is what used to display **0%** early in a year while the table showed thousands.
 - **MTD.** `mtdQuarters()`/`mtdPeriod()`/`mtdExport()`. **The quarters must reconcile to `tyNet` on both bases** — a regression here means a cost was added to the ledger but not to an SA103 box (per-session room fees were exactly that bug). Submission is deliberately out of scope: it needs an OAuth secret, fraud-prevention headers and HMRC recognition, none of which fit an offline PWA.
+  - **`mtdRows(ty)` is the one shape both exports render** (Sep 2026). `mtdExport(ty,fmt)` dispatches to `mtdExportJSON` or `mtdExportCSV`, and both build their file from `mtdRows` — same rule as `backupPayload()`, and for the same reason: two files built from two literals eventually disagree, and the one place that would surface is somebody's quarterly update. The no-argument call still writes the `.json`, because `scripts/check-drift.mjs` asserts `function mtdExport(` exists and stays free of `plusLocked()`.
+  - **The CSV is long/tidy and carries a UTF-8 BOM.** One row per figure with a `section` column (income / expense / total), not one row per quarter with the boxes spread across columns — a therapist's boxes differ between quarters, so a wide sheet would be mostly blanks and would need its columns recomputed from the union of all four. The BOM is load-bearing: without it Excel on Windows reads the quarter labels' en-dashes in the system codepage and prints `â€“`. The three older CSV exports do not have one and were deliberately left alone.
+  - **The screen sells the route, not the feature.** Tax › Making Tax Digital's "Filing these" card exists because the old copy ended on *"this app cannot file for you"* — true, and a dead end. It states the three parts, marks the two GroundWork has already done, and links to HMRC's own software list. It must never name a vendor, promise a free option exists for this reader, or rule on whether their setup satisfies the rules; `mtd-what` / `mtd-route` / `mtd-exports` carry the detail. The full claims guard-rail list is `docs/tax-positioning-2026-09.md` §2.
 
 ### Tax moments & guided flows (added Aug 2026)
 `taxMoments()` is a **pure** function returning the seasonal cards that are live *today* — zero of them for most of the year. It adds no arithmetic: everything comes from `today()`, `curTaxYear()`, `prevTY`, `taxYearRec`, `nextTaxPayment`, `taxPot` and `mtdQuarters`.

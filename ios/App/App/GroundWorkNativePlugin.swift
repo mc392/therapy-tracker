@@ -22,6 +22,11 @@ import WebKit
 ///    hidden-iframe receipt flow in `printReceipt()` silently does nothing on iOS.
 ///    Rendering the same markup to a real PDF and handing it to `UIActivityViewController`
 ///    gives back printing (via AirPrint) *and* adds Files, Mail and Messages.
+///  * **The records folder** — a folder the user picks, normally in iCloud Drive, that every
+///    save is written into. A browser cannot keep a durable grant to a folder on iOS at all;
+///    a security-scoped bookmark can, which is what turns "remember to export a backup" into
+///    "the records are already in your own Files". The mechanics live in
+///    `GroundWorkRecordsFolder.swift`; the methods here are thin wrappers over them.
 ///
 /// The web app feature-detects this plugin and keeps its browser paths untouched when it
 /// is absent, so nothing here changes how the PWA behaves. See `docs/ios-native.md`.
@@ -38,8 +43,113 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "plusPurchase", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "plusRestore", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "plusRedeem", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "plusManage", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "plusManage", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "folderInfo", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "folderPick", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "folderForget", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "folderWrite", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "folderRead", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "folderList", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "folderDelete", returnType: CAPPluginReturnPromise)
     ]
+
+    // MARK: - The records folder
+
+    /// File work never runs on the main thread: an iCloud file that is still a placeholder is
+    /// downloaded and waited on, and a spinner that has frozen is worse than a slow one.
+    private static let fileQueue = DispatchQueue(label: "uk.co.charlottebloortherapy.groundwork.records", qos: .utility)
+
+    /// Held for the life of one presentation — see `RecordsFolderPicker`.
+    private var folderPicker: RecordsFolderPicker?
+
+    /// Where the app keeps its own copies inside the chosen folder. Passed in from the web layer
+    /// rather than hardcoded here, so the names stay defined in exactly one place.
+    private func paths(_ call: CAPPluginCall) -> (live: String, alt: String) {
+        (call.getString("live") ?? "GroundWork records.json",
+         call.getString("alt") ?? "GroundWork records.enc.json")
+    }
+
+    @objc func folderInfo(_ call: CAPPluginCall) {
+        let (live, alt) = paths(call)
+        Self.fileQueue.async { call.resolve(RecordsFolder.describe(livePath: live, altPath: alt)) }
+    }
+
+    /// Presents the folder picker. Resolves `{cancelled:true}` rather than rejecting when the
+    /// sheet is dismissed — changing your mind is a normal outcome, not a failure.
+    @objc func folderPick(_ call: CAPPluginCall) {
+        let (live, alt) = paths(call)
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let vc = self.bridge?.viewController else {
+                call.reject("No view controller to present from"); return
+            }
+            let picker = RecordsFolderPicker { [weak self] url in
+                self?.folderPicker = nil
+                guard let url else { call.resolve(["picked": false, "cancelled": true]); return }
+                Self.fileQueue.async {
+                    do {
+                        try RecordsFolder.remember(url)
+                        var out = RecordsFolder.describe(livePath: live, altPath: alt)
+                        out["picked"] = true
+                        call.resolve(out)
+                    } catch {
+                        call.resolve(["picked": false, "error": error.localizedDescription])
+                    }
+                }
+            }
+            self.folderPicker = picker
+            picker.present(from: vc)
+        }
+    }
+
+    /// Forgets the folder. The files already in it are left exactly where they are: they are the
+    /// user's records in the user's own folder, and this app has no business deleting them.
+    @objc func folderForget(_ call: CAPPluginCall) {
+        RecordsFolder.forget()
+        call.resolve(["set": false])
+    }
+
+    @objc func folderWrite(_ call: CAPPluginCall) {
+        guard let path = call.getString("path"), let data = call.getString("data") else {
+            call.reject("path and data are required"); return
+        }
+        Self.fileQueue.async {
+            do {
+                let when = try RecordsFolder.write(path, text: data)
+                call.resolve(["ok": true, "modifiedAt": when.timeIntervalSince1970 * 1000])
+            } catch {
+                call.resolve(["ok": false, "error": error.localizedDescription])
+            }
+        }
+    }
+
+    @objc func folderRead(_ call: CAPPluginCall) {
+        guard let path = call.getString("path") else { call.reject("path is required"); return }
+        Self.fileQueue.async {
+            do {
+                let r = try RecordsFolder.read(path)
+                call.resolve(["found": true, "data": r.text,
+                              "modifiedAt": (r.modifiedAt?.timeIntervalSince1970 ?? 0) * 1000])
+            } catch {
+                call.resolve(["found": false, "error": error.localizedDescription])
+            }
+        }
+    }
+
+    @objc func folderList(_ call: CAPPluginCall) {
+        let path = call.getString("path") ?? ""
+        Self.fileQueue.async {
+            do { call.resolve(["files": try RecordsFolder.list(path)]) }
+            catch { call.resolve(["files": [String](), "error": error.localizedDescription]) }
+        }
+    }
+
+    @objc func folderDelete(_ call: CAPPluginCall) {
+        guard let path = call.getString("path") else { call.reject("path is required"); return }
+        Self.fileQueue.async {
+            do { try RecordsFolder.delete(path); call.resolve(["ok": true]) }
+            catch { call.resolve(["ok": false, "error": error.localizedDescription]) }
+        }
+    }
 
     // MARK: - GroundWork Plus (StoreKit 2)
 

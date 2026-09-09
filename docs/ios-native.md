@@ -74,26 +74,135 @@ the copied bundle (5.8MB that has no business in an app binary).
 | **Daily reminders** | the Attention feed, which cannot speak while the app is shut | `@capacitor/local-notifications` |
 | **Share sheet for exports** | `<a download>`, which does nothing in a WKWebView | `@capacitor/filesystem` + `@capacitor/share` |
 | **Receipts as real PDFs** | `window.print()`, a no-op in a WKWebView | custom Swift plugin |
-| **Automatic backups** | the File System Access API, which iOS does not have | `@capacitor/filesystem` |
+| **The records folder** | the File System Access API, which iOS does not have | custom Swift plugin |
+| **Automatic backups** | the same, for anyone with no folder chosen | `@capacitor/filesystem` |
 
 Two of those replace things that were **silently broken** on iOS rather than merely
 missing: an installed PWA on an iPhone has always had a dead Export button and a dead
 Generate & print button. The wrapper is what makes them work.
 
-Device settings (`tt_lock`, `tt_lock_grace`, `tt_notify`, and the automatic-backup bookkeeping
-`tt_autobk_day` / `tt_autobk_status`) live in localStorage, not in `S`. `S` travels in backups,
-and restoring a backup onto a different phone must not silently switch that phone's lock off —
-or tell it that a copy it has never written was saved five minutes ago.
+Device settings (`tt_lock`, `tt_lock_grace`, `tt_notify`, the records-folder bookkeeping
+`tt_folder_*`, and the automatic-backup bookkeeping `tt_autobk_day` / `tt_autobk_status`) live in
+localStorage, not in `S`. `S` travels in backups, and restoring a backup onto a different phone
+must not silently switch that phone's lock off, tell it that a copy it has never written was
+saved five minutes ago, or point it at a folder it has no permission to open.
 
-## Automatic backups
+## The records folder
 
-On desktop Chrome/Edge an encrypted backup auto-saves silently through the File System Access
-API. iOS has no such API, so until now the only safety net on the platform this app actually
-ships on was a nag banner and a manual share sheet: a lost or broken phone lost everything since
-the customer last bothered.
+**The feature this section exists for: your practice is kept in a folder you own, and there is
+nothing to remember.** GroundWork Notes has always worked this way — the counsellor picks a
+folder, normally inside her own iCloud Drive, and the app writes into it — and it is the thing
+people notice about that app. This is the same idea in GroundWork.
 
-Every `commit()` — the app's single save choke point — now also writes a backup file, debounced
-2s, into the app's own **Documents** directory:
+Pick a folder once, in **Settings › This iPhone › Where your records are saved**, and every save
+from then on rewrites the whole practice into it. A folder in iCloud Drive is *off this phone*:
+lose the phone and the records are still there, and setting up a new one is choosing the same
+folder again.
+
+```
+iCloud Drive/GroundWork/
+  GroundWork records.json          ← rewritten on every save …
+  GroundWork records.enc.json      ← … or this one, if a passphrase is set
+  Previous versions/
+    GroundWork 2026-09-08.json     ← one dated copy a day, newest 7 kept
+```
+
+### What it is not
+
+It is **not** a rewrite of the store, and it is not sync. `S` is one object read synchronously
+from IndexedDB on every render, and it stays that way; the folder holds the durable copy of it.
+Export and Restore are untouched and are still how records move between devices — which is what
+the "Multi-tab / multi-device writes" limitation in `CLAUDE.md` still says, unchanged.
+
+### Native side — `GroundWorkRecordsFolder.swift`
+
+A browser cannot hold a durable grant to a folder on iOS at all, which is why this needs Swift.
+`UIDocumentPickerViewController(forOpeningContentTypes: [.folder])` gets the grant and a
+**security-scoped bookmark** in `UserDefaults` makes it durable across launches — the same
+mechanism, and the same traps, as `VaultBookmark` and `RosterBookmark` in GroundWork Notes.
+
+- **The security scope must be held while the bookmark is made.** A picked URL is unusable
+  outside a balanced `startAccessingSecurityScopedResource()` pair, and `bookmarkData` is a use
+  like any other; called outside one it fails with "the file couldn't be opened because it
+  doesn't exist", which is the sandbox refusing rather than the folder being missing. Every read
+  and write goes through one `withFolder` helper so there is a single place that can forget to
+  balance the pair.
+- **A stale bookmark is refreshed and re-saved, never thrown away.** The folder being renamed, or
+  iCloud rebuilding its local copy, must not present as "your records are gone".
+- **Reads and writes are coordinated** (`NSFileCoordinator`) and atomic. The folder is very
+  likely a file-provider folder with another process watching it, and an uncoordinated write can
+  be uploaded half-finished — which for a whole-state file is the difference between a backup and
+  a brick.
+- **iCloud placeholders are downloaded and waited on** before a read, and the "is it there?"
+  check comes *after* the download for the reason the notes app documents: an un-downloaded file
+  is not at the path the user picked, it is beside it as `.name.icloud`, so testing the path
+  first calls every un-downloaded file gone.
+- **No iCloud entitlement and no container.** The user picks the folder; the sandbox grants access
+  to exactly that folder. Nothing here needs to be provisioned in App Store Connect.
+- **`isInICloud()` answers "no" whenever it cannot tell.** It decides whether the manual-backup
+  nag is silenced, and a wrongly silenced backup reminder is the one failure this app must not
+  have.
+- **Forgetting the folder drops the bookmark and deletes nothing.** Those are the user's files in
+  the user's folder.
+
+### Web side — inside the native guard
+
+Four rules the JS depends on. Breaking any of them is silent.
+
+- **The folder is never overwritten blind.** `checkFolder()` runs at launch, and on return after
+  a minute or more away, and compares the live file's modification date against the one this
+  device last wrote (`tt_folder_status.mtime`, with `FOLDER_SLACK` for a file provider whose
+  clock is not this device's). A date it did not write means something else has been in there —
+  a second device, a restored phone, a new install pointed at an existing folder — so folder
+  writes **pause** (`_folderHeld`) and the reader is asked which copy wins. Saving to IndexedDB
+  carries on untouched throughout, so nothing is lost while the question is open, and "Decide
+  later" is a safe answer: the folder is not written and the question comes back next launch.
+- **A folder write that fails falls back to the copy on the phone.** The Documents copy below is
+  retired only *after* a folder write has actually landed, and comes straight back if the folder
+  stops answering. A save that cannot reach the folder must never be a save with no copy at all.
+- **`markBackedUp()` is called only for a folder in iCloud Drive.** This is the single change to
+  the manual-backup nag and it is the whole point of the feature. A folder under "On My iPhone"
+  is not off this phone, so the reminder stays on and the settings card says why.
+- **Reading the folder back goes through `importFromText()`** — `importJSON()` minus the file
+  input, split out for this. Same passphrase prompt, same `validateImport`, same two tiers of
+  `restoreConfirm`. A folder is a friendlier source than a download, not a safer one.
+
+The offer to pick a folder is made **once**, five seconds after a launch, to somebody who already
+has at least three sessions (`tt_folder_asked`). It is deliberately not a setup-wizard step: a
+fourth question about storage before the first session is logged is one question too many, and
+the same offer sits in Settings for ever.
+
+### What is tested, and what is not
+
+`npm run test:folder` (`scripts/check-records-folder.mjs`) drives all of the above in a real
+browser against the real `index.html`, with a fake Capacitor installed by `addInitScript`: a fake
+folder and a fake Documents directory, both kept in localStorage so they survive the reload that
+the launch-time conflict check needs. Twenty-two assertions, including the whole conflict →
+restore → resume path and the fallback when the folder refuses a write. It needs Playwright,
+which is deliberately not a dependency:
+
+```bash
+npm i --no-save playwright
+npm run test:folder
+```
+
+**The Swift half has never been compiled** — there is no Xcode here, the same caveat as the watch
+app. What the harness pins down is the *contract* between the two halves: which methods are
+called, in what order, and what the web layer does with each answer. `npm run check:drift`
+asserts that the plugin declares and implements every one of them and that the web layer still
+calls it. Before shipping, the checklist is: pick a folder in iCloud Drive on a device; confirm
+the file appears in Files; make an edit and watch it rewrite; delete the app, reinstall, pick the
+same folder and confirm the records come back; and edit from a second device to see the
+two-copies question.
+
+## Automatic backups — the copy on the phone itself
+
+What every iPhone got before there was a records folder, and still what an iPhone with **no
+folder chosen** gets. It is the fallback, in both senses: it is what you have if you never pick a
+folder, and it is what comes back if the folder you picked stops answering.
+
+Every `commit()` — the app's single save choke point — also writes a backup file, debounced 2s,
+into the app's own **Documents** directory:
 
 ```
 On My iPhone/GroundWork/
@@ -131,10 +240,16 @@ Two Info.plist keys are what make any of this reachable by a human: `UIFileShari
 `LSSupportsOpeningDocumentsInPlace`. Without them the files are written and nobody can ever open
 them. With them, the folder appears in the Files app under On My iPhone.
 
-**The manual-backup nag is deliberately unchanged.** `markBackedUp()` is still tied to explicit
-exports only, because a copy sitting on the same phone protects nobody who has iCloud Backup
-switched off — which is exactly the person the banner is for. The banner's detail line just
-appends "(an automatic copy is kept on this iPhone)"; the thresholds and the clock are untouched.
+**This copy never answers the manual-backup nag.** A copy sitting on the same phone protects
+nobody who has iCloud Backup switched off — which is exactly the person the banner is for — so
+`markBackedUp()` is not called here, and the banner's detail line just appends "(an automatic
+copy is kept on this iPhone)". A **records folder in iCloud Drive** is the thing that answers it.
+
+**Once a records folder is in use, the live file here is deleted.** It would be a strictly worse
+copy of the same data, and two GroundWork backups in Files is how somebody restores the wrong
+one. Only the live file goes: the dated copies under `auto-backups/` are restore points that
+cannot be re-created and age out on their own within the week. `tt_autobk_retired` records it,
+and is cleared the moment the folder fails a write.
 
 ## The watch app
 

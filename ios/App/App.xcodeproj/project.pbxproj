@@ -24,6 +24,7 @@
 		DAB22BA8814E44FD9E61299B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E972105B64914890AA74C7B0 /* SettingsView.swift */; };
 		F651EC3DDF7E4EAC9B159B3F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 159A93FD43DC40D0A099A998 /* Assets.xcassets */; };
 		30F01D08F9A948139B55DCB1 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = AAEDFFC48CEF4061B59DD245 /* Info.plist */; };
+		FA2919DE3F9C4537B40FC56E /* GroundWorkRecordsFolder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0891D3A221DD4118963BD4CC /* GroundWorkRecordsFolder.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -46,6 +47,7 @@
 		E972105B64914890AA74C7B0 /* SettingsView.swift */ = {isa = PBXFileReference; name = "SettingsView.swift"; path = "GroundWorkWatch/SettingsView.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
 		159A93FD43DC40D0A099A998 /* Assets.xcassets */ = {isa = PBXFileReference; name = "Assets.xcassets"; path = "GroundWorkWatch/Assets.xcassets"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = folder.assetcatalog; explicitFileType = undefined; includeInIndex = 0; };
 		AAEDFFC48CEF4061B59DD245 /* Info.plist */ = {isa = PBXFileReference; name = "Info.plist"; path = "GroundWorkWatch/Info.plist"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = text.plist.xml; explicitFileType = undefined; includeInIndex = 0; };
+		0891D3A221DD4118963BD4CC /* GroundWorkRecordsFolder.swift */ = {isa = PBXFileReference; name = "GroundWorkRecordsFolder.swift"; path = "GroundWorkRecordsFolder.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -99,6 +101,7 @@
 				2FAD9762203C412B000D30F8 /* config.xml */,
 				50B271D01FEDC1A000F3C39B /* public */,
 				67337F91789B4426BA87A545 /* GroundWorkNativePlugin.swift */,
+				0891D3A221DD4118963BD4CC /* GroundWorkRecordsFolder.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -228,6 +231,7 @@
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				6FB7794003174A7C89089B66 /* GroundWorkNativePlugin.swift in Sources */,
+				FA2919DE3F9C4537B40FC56E /* GroundWorkRecordsFolder.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

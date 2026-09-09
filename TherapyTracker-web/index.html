@@ -465,6 +465,16 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
 .prev{font-size:11px;color:var(--muted);margin-top:3px}
 .acc-work{margin-top:10px;padding:11px 13px;border:1px solid var(--line);border-radius:12px;background:var(--soft);font-size:12.5px;line-height:1.75;color:var(--ink)}
 .acc-work div{margin:1px 0} .acc-work b{font-weight:700}
+/* The three steps of getting a quarter filed (Tax > Making Tax Digital). Two are already done
+   by the time the reader is looking at them and one is not ours to do, so the marker carries
+   that distinction: a tick in brand green against the outstanding step's outline. */
+.mtdstep{display:flex;gap:11px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--hair)}
+.mtdstep:first-of-type{border-top:0;padding-top:6px}
+.mtdstep>div{min-width:0;flex:1}
+.mtdn{flex:0 0 26px;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;margin-top:1px}
+.mtdn svg{width:15px;height:15px}
+.mtdstep.on>.mtdn{background:color-mix(in srgb,var(--brand) 16%,transparent);color:var(--brand)}
+.mtdstep.todo>.mtdn{border:1px dashed var(--line);color:var(--muted)}
 /* Settings groups: collapsed sections so the page opens as a short menu, not a wall of cards */
 .sgrp{background:color-mix(in srgb,var(--card) var(--glass),transparent);
   -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
@@ -1731,19 +1741,29 @@ function plusStatusLine(){
   return kind+who+(s.expiresAt?" \u00b7 renews "+esc(fmtD(String(s.expiresAt).slice(0,10))):" \u00b7 no expiry")+".";
 }
 
-/* ---- what Plus is, in the order it is worth paying for ---- */
+/* ---- what Plus is, in the order it is worth paying for ----
+   Ordered by what actually makes someone reach for a card, which is the January bill and not the
+   charts \u2014 docs/monetisation.md is blunt that Trends is tier filler, so it does not lead. The
+   MTD line is written to the "instead of, not as well as" reframe in
+   docs/tax-positioning-2026-09.md \u00a72: the point is that Plus plus a cheap submission tool
+   replaces a bookkeeping subscription, not that it sits alongside one. Plain text \u2014
+   openPlusSheet escapes these. */
 const PLUS_SELL=[
-  ["Tax","Estimates, the pot, payments on account and what HMRC actually assessed \u2014 kept current as the rates change each April."],
-  ["Costs & other income","What the practice costs you, taken off the profit the tax is worked out from."],
-  ["Making Tax Digital","Your four quarters, reconciled to the same figures, ready to file."],
-  ["Trends","Retention, attendance against the frequency you agreed, and what missed sessions cost."],
-  ["Accreditation hours","Clinical and supervision hours and the 1:6 ratio, for Form 3A."],
-  ["GroundWork Notes sync","Sends each client's cadence to the notes app so it knows what still needs writing up."],
-  ["Practice analytics","Twenty more views of your own records \u2014 who stays, what an hour is really worth, how full your weeks are."]
+  ["What to set aside","A running figure worked from money you have actually been paid \u2014 including the January that is half again bigger than people expect, months before it lands."],
+  ["Costs & other income","Insurance, room rent, supervision, CPD and the rest, taken off the profit your tax is worked out from. Bundled with tax because an estimate without them is one nobody should save against."],
+  ["Your pot, and what leaves it","Payments on account, the balancing payment, every due date in order, and what HMRC actually assessed once you have filed."],
+  ["Making Tax Digital","Your four quarters added up and exported as a file for your accountant, or for software that files. You are already keeping the records, so the only thing left to buy is the submission \u2014 and HMRC lists free ones."],
+  ["Trends","Twenty readings of your own history: who stays, who drifts, what an hour is really worth and what missed sessions cost."],
+  ["Accreditation hours","Clinical and supervision hours and the 1:6 ratio, in the shape Form 3A asks for."],
+  ["GroundWork Notes sync","Sends each client\u2019s cadence to the notes app so it knows what still needs writing up."]
 ];
+/* The annual promise, said in one sentence. It is the honest reason a subscription rather than a
+   one-off unlock: HMRC bands, thresholds, Class 2/4 rates and student-loan plans move every
+   April, and keeping ukTax() right is the recurring work being paid for. */
+const PLUS_PROMISE="Rates, bands and thresholds are kept current as they change each April.";
 const PLUS_REASONS={
   tax:"Tax is part of "+PLUS_NAME, finances:"Costs & other income is part of "+PLUS_NAME,
-  mtd:"The MTD export is part of "+PLUS_NAME, trends:"Trends is part of "+PLUS_NAME,
+  mtd:"The quarterly export is part of "+PLUS_NAME, trends:"Trends is part of "+PLUS_NAME,
   accreditation:"Accreditation hours are part of "+PLUS_NAME,
   notesSync:"Notes sync is part of "+PLUS_NAME, palettes:"More colour schemes are part of "+PLUS_NAME
 };
@@ -1760,8 +1780,10 @@ function openPlusSheet(reason){
     '<h2>'+esc(active?PLUS_NAME:(PLUS_REASONS[reason]||PLUS_NAME))+'</h2>'+
     '<p class="small muted">'+(active?plusStatusLine()
       :"Everything you already use stays free \u2014 logging sessions, receipts, and every backup and "+
-       "export. "+PLUS_NAME+" adds the parts that do the year-end work for you.")+'</p>'+
+       "export. "+PLUS_NAME+" adds the year-end work: what you will owe, what to keep back for it, "+
+       "and the figures already added up when it is time to file.")+'</p>'+
     '<div class="plfeat">'+PLUS_SELL.map(f=>'<div><b>'+esc(f[0])+'</b> \u2014 '+esc(f[1])+'</div>').join("")+'</div>'+
+    (active?'':'<p class="small muted">'+esc(PLUS_PROMISE)+'</p>')+
     (active?'<button class="btn sec full mt" id="plManage">Manage subscription</button>'
      :nat?'<p class="small muted mt" id="plPrice">'+(_plusPrice?esc(_plusPrice):"Checking the price\u2026")+'</p>'+
           '<button class="btn full" id="plBuy">Subscribe</button>'+
@@ -2222,7 +2244,9 @@ const GLYPH={supervision:'<path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h11A2.5 2.5 0 0 1 1
   plus:'<path d="M12 5v14M5 12h14"/>',
   close:'<path d="M6.4 6.4l11.2 11.2M17.6 6.4L6.4 17.6"/>',
   key:'<circle cx="8.2" cy="14.6" r="4.3"/><path d="M11.3 11.5 20 2.8"/><path d="M16.6 6.2l2.3 2.3M14.2 8.6l2.3 2.3"/>',
-  undo:'<path d="M4.5 9.5h9.8a5 5 0 0 1 0 10H8.4"/><path d="M8.2 5.4 4.1 9.5l4.1 4.1"/>'};
+  undo:'<path d="M4.5 9.5h9.8a5 5 0 0 1 0 10H8.4"/><path d="M8.2 5.4 4.1 9.5l4.1 4.1"/>',
+  folder:'<path d="M3 7.6A2.1 2.1 0 0 1 5.1 5.5h3.6a2.1 2.1 0 0 1 1.6.75l1 1.15H18.9A2.1 2.1 0 0 1 21 9.5v6.9a2.1 2.1 0 0 1-2.1 2.1H5.1A2.1 2.1 0 0 1 3 16.4z"/>',
+  cloud:'<path d="M7.2 18.5h9.4a3.6 3.6 0 0 0 .5-7.15 5.2 5.2 0 0 0-9.95-1.2A4 4 0 0 0 7.2 18.5z"/>'};
 function gi(name,cls){const p=GLYPH[name];if(!p)return "";
   return '<svg class="gi'+(cls?" "+cls:"")+'" viewBox="0 0 24 24" aria-hidden="true">'+p+'</svg>';}
 const SETTINGS_IC='<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
@@ -6250,18 +6274,22 @@ infoDef("backup-restore-detail","What a backup contains",
    failures, and only one of them is the one that matters. Spelling that out here rather than
    in three separate cards is the only way a reader can compare them. */
 infoDef("backups-explained","Backups: which is which",
-  '<p class="small">Three things here look like backups. Only the first is one you can rely on.</p>'+
-  '<div class="grp-h">1 \u00b7 Export backup (.json) \u2014 the real one</div>'+
+  '<p class="small">Four things here look like backups. They are not alternatives to each other.</p>'+
+  '<div class="grp-h">1 \u00b7 Your records folder (iPhone app) \u2014 where your records live</div>'+
+  '<p class="small">On the iPhone app you can pick a folder of your own \u2014 normally in <b>iCloud Drive</b> \u2014 and GroundWork rewrites your whole practice into it every time you change something. It is in <b>your</b> files, not inside the app, so you can see it, copy it and keep it without GroundWork being involved.</p>'+
+  '<p class="small">A folder in iCloud Drive is <b>off this phone</b>. Lose the phone and your practice is still there; set up a new one and you point it at the same folder. While that is working, the backup reminder below goes quiet, because there is nothing left for it to warn about.</p>'+
+  '<p class="small">A folder under <b>On My iPhone</b> is not off the phone, and the reminder stays on.</p>'+
+  '<div class="grp-h">2 \u00b7 Export backup (.json) \u2014 the portable one</div>'+
   '<p class="small">A single file with <b>everything</b> in it. You choose where it goes: iCloud, Drive, a memory stick, an email to yourself. <b>Restore from backup</b> reads it back and the app is exactly as it was.</p>'+
-  '<p class="small"><b>This is the only copy that survives losing the device.</b> If your phone goes in the sea, this file is your practice.</p>'+
-  '<div class="grp-h">2 \u00b7 Automatic backup \u2014 convenience, not insurance</div>'+
-  '<p class="small">The app quietly saves a copy after every change, without asking. On an iPhone it goes into GroundWork\u2019s own folder in the <b>Files</b> app; on desktop Chrome or Edge it overwrites a file you picked once.</p>'+
+  '<p class="small">This is how records move <b>between devices</b>, and it is the copy to take before anything drastic. If you have no records folder, it is also the only copy that survives losing the device \u2014 if your phone goes in the sea, this file is your practice.</p>'+
+  '<div class="grp-h">3 \u00b7 Automatic backup \u2014 convenience, not insurance</div>'+
+  '<p class="small">The app quietly saves a copy after every change, without asking. On an iPhone with <b>no</b> records folder chosen it goes into GroundWork\u2019s own folder in the <b>Files</b> app; on desktop Chrome or Edge it overwrites a file you picked once.</p>'+
   '<p class="small">It is excellent for the everyday accidents \u2014 deleting the wrong client, a restore you regret, an app that will not open. It is <b>the same device</b>, though, so it is no help at all if that device is lost, stolen or broken (unless iCloud Backup happens to be sweeping that folder up for you).</p>'+
-  '<p class="small">It also never speaks. It will not nag you, and the app still asks you to take a real export on a schedule \u2014 that reminder is deliberate and is not switched off by the automatic copy existing.</p>'+
-  '<div class="grp-h">3 \u00b7 Spreadsheet exports (.csv) \u2014 not backups at all</div>'+
+  '<p class="small">It also never speaks. It will not nag you, and without a records folder the app still asks you to take a real export on a schedule \u2014 that reminder is deliberate and is not switched off by the automatic copy existing.</p>'+
+  '<div class="grp-h">4 \u00b7 Spreadsheet exports (.csv) \u2014 not backups at all</div>'+
   '<p class="small">Extracts for a spreadsheet or an accountant. They are readable, partial, and <b>cannot be restored</b> \u2014 there is no button that takes one back in. Nothing that only exists in a CSV can be recovered into the app.</p>'+
   '<div class="grp-h">In short</div>'+
-  '<p class="small">Let the automatic copy do its job, and still export a real backup off this device regularly. The two are not alternatives.</p>');
+  '<p class="small">If you can have a records folder in iCloud Drive, have one \u2014 that is your practice kept safe without you thinking about it. Take an export as well before anything drastic, and whenever you are moving to another device.</p>');
 /* ---- how the figures are counted (cash vs accruals) ----
    The card lives in Settings \u203a Your practice: it is a decision about the business that gets made
    once, not a view toggle. Built here beside the tax engine so the wording and the engine that
@@ -6304,6 +6332,32 @@ infoDef("tax-region","Where you pay income tax",
   '<p class="small">Scotland sets its own income tax bands. Get this wrong and the estimate is simply wrong — there is no partial credit.</p>'+
   '<p class="small">National Insurance, Class 4 and student loan repayments are the same everywhere in the UK, so only the income tax part changes.</p>'+
   '<p class="small"><b>It applies from the tax year you set it in, forwards.</b> Earlier years keep the bands they were actually assessed under, so moving across the border never rewrites a return you have already filed.</p>');
+/* ---- Making Tax Digital ----
+   The claims discipline for these three is set out in docs/tax-positioning-2026-09.md §2: state
+   the mechanism, never issue the verdict. So they say what MTD asks for, what this app produces
+   and where the boundary is; they never say "compliant", never name a vendor, and never tell a
+   reader that their particular chain of tools satisfies the rules. */
+infoDef("mtd-what","What Making Tax Digital asks for",
+  '<p class="small">MTD for Income Tax replaces one return at the end of the year with <b>four summaries during it</b>, plus a final declaration. Same tax, same deadlines for paying — more check-ins.</p>'+
+  '<div class="acc-work"><div><b>Digital records</b> — your income and costs kept in software rather than on paper.</div>'+
+  '<div><b>A quarterly update</b> — totals for the period, sent through software HMRC has recognised.</div>'+
+  '<div><b>A final declaration</b> — after the year ends, the return proper.</div></div>'+
+  '<p class="small mt">It reaches you on turnover, not profit: over £50,000 from April 2026, over £30,000 from April 2027, over £20,000 from April 2028. Below that nothing changes for you yet.</p>'+
+  '<p class="small muted">The quarters run 6 Apr–5 Jul, 6 Jul–5 Oct, 6 Oct–5 Jan and 6 Jan–5 Apr, and each update is due about a month after its quarter closes.</p>');
+infoDef("mtd-route","Getting a quarter filed",
+  '<p class="small">Three parts, and this app does two of them.</p>'+
+  '<div class="acc-work"><div><b>1. The records.</b> Logging sessions here <i>is</i> keeping a digital record — dated, priced, and already sorted into the tax-return box each cost belongs in.</div>'+
+  '<div><b>2. The totals.</b> The quarterly table, on whichever basis you have set, reconciled to the same figures as the rest of the Tax tab.</div>'+
+  '<div><b>3. The submission.</b> Not this app. It needs software HMRC has recognised, which needs a server GroundWork deliberately does not have.</div></div>'+
+  '<p class="small mt"><b>Why export a file rather than copy the numbers.</b> MTD wants the figures to travel <i>digitally</i> from your records to HMRC — a <b>digital link</b>. Reading a total off one screen and typing it into another breaks that chain; moving a file does not. It is also simply less error-prone at the point where a typo becomes a wrong submission.</p>'+
+  '<p class="small">Software that takes figures from a spreadsheet and sends them is usually called <b>bridging software</b>. HMRC lists what is recognised, free options included, and that list is the place to look rather than any recommendation from here — it stays current and we would not.</p>'+
+  '<p class="small"><a href="https://www.gov.uk/guidance/find-software-that-works-with-making-tax-digital-for-income-tax" target="_blank" rel="noopener">HMRC’s list of software ›</a> · <a href="https://www.gov.uk/guidance/choose-the-right-software-for-making-tax-digital-for-income-tax" target="_blank" rel="noopener">Choosing between them ›</a></p>'+
+  '<p class="small muted">Whether a particular set of tools meets the rules in your circumstances is a question for your accountant. This app keeps records and adds them up; it makes no claim about your filing.</p>');
+infoDef("mtd-exports","Which file for what",
+  '<p class="small">Both files hold exactly the same figures — they are built from one shared shape, so they cannot drift apart. Only the wrapper differs.</p>'+
+  '<div class="acc-work"><div><b>.csv</b> — opens in Excel, Numbers or Google Sheets, and it is the format bridging software expects. One row per figure, with the quarter, the SA103 box and the amount, so it filters and pivots without being reshaped first. <b>Reach for this one.</b></div>'+
+  '<div><b>.json</b> — the same quarters as structured data, for an accountant’s system or anything that would rather parse than read.</div></div>'+
+  '<p class="small mt">Neither is a backup and neither can be restored. The one file that can is <b>Settings › Data &amp; backup › Export backup</b>. '+infoLink("backups-explained","Backups: which is which")+'</p>');
 infoDef("cancel-rules","How the notice periods work",
   '<p class="small">One line per notice period you honour. They are read <b>from most notice to least</b>, and a cancellation is charged by the first line it qualifies for.</p>'+
   '<div class="acc-work"><div>at least <b>48</b> hrs → <b>0</b>%</div><div>at least <b>24</b> hrs → <b>50</b>%</div><div class="muted">…anything less, or no date recorded → <b>100%</b></div></div>'+
@@ -6625,8 +6679,9 @@ VIEWS.tax=function(){
      estimates are worked out on a screen they cannot see yet. */
   if(plusLocked("tax")){
     v.innerHTML=plusLockHTML("tax","Tax",
-      "What to set aside, what to keep in the pot and when it leaves \u2014 payments on account, "+
-      "the January balancing payment, and the quarterly figures for MTD.");
+      "You are already logging the sessions. This turns them into what you will owe, what to keep "+
+      "back for it, and when it leaves \u2014 payments on account, the January balancing payment, "+
+      "and the quarterly figures for Making Tax Digital already added up.");
     plusWireLocks(v); return v;
   }
   /* Nothing is drawn until the disclaimer has been acknowledged. Existing installs never see
@@ -7382,16 +7437,64 @@ function mtdPeriod(q){
   const expTotal=Object.keys(boxes).reduce((a,k)=>a+boxes[k],0);
   return {q,turnover,other,boxes,expTotal,net:turnover+other-expTotal};
 }
-function mtdExport(ty){
+/* The ONE shape both exports render. Adding a figure here adds it to the .json and the .csv
+   together — the same reason backupPayload() is the single backup envelope. Two files that are
+   built from two literals are two files that eventually disagree, and the one place that would
+   surface is somebody's quarterly update. */
+function mtdRows(ty){
+  const p2=n=>Math.round(n*100)/100;
+  return mtdQuarters(ty).map(q=>{
+    const p=mtdPeriod(q);
+    return {period:q.n,label:q.label,from:isoD(q.from),to:isoD(q.to),
+      income:{turnover:p2(p.turnover),other:p2(p.other)},
+      expenses:Object.keys(p.boxes).sort((a,b)=>a-b)
+        .map(b=>({sa103Box:+b,name:SA103[b]||"",amount:p2(p.boxes[b])})),
+      expenseTotal:p2(p.expTotal),net:p2(p.net)};
+  });
+}
+const MTD_EXPORT_NOTE="Quarterly totals for MTD for Income Tax. Not a submission - GroundWork is not "+
+  "HMRC-recognised software and cannot file. Hand these to your accountant, or to software that files.";
+function mtdExportJSON(ty){
   const out={app:"GroundWork",generated:new Date().toISOString(),taxYear:ty,
-    basis:taxBasis(),note:"Quarterly totals for MTD for Income Tax. Not a submission - hand to your accountant or bridging software.",
-    periods:[]};
-  mtdQuarters(ty).forEach(q=>{const p=mtdPeriod(q);
-    out.periods.push({period:q.n,from:isoD(q.from),to:isoD(q.to),
-      income:{turnover:Math.round(p.turnover*100)/100,other:Math.round(p.other*100)/100},
-      expenses:Object.keys(p.boxes).sort((a,b)=>a-b).map(b=>({sa103Box:+b,name:SA103[b]||"",amount:Math.round(p.boxes[b]*100)/100}))});});
+    basis:taxBasis(),note:MTD_EXPORT_NOTE,periods:mtdRows(ty)};
   download("groundwork-mtd-"+ty.replace("/","-")+".json",JSON.stringify(out,null,2),"application/json");
-  toast("MTD figures downloaded");
+  toast("MTD figures downloaded (.json)");
+}
+/* Long/tidy, one row per figure — not one row per quarter with the boxes spread across columns.
+   A therapist's boxes change from quarter to quarter (a cost that only falls in Q2 exists in Q2
+   alone), so a wide sheet would need its columns recomputed from the union of every quarter and
+   would still hand a bridging tool a grid full of blanks. One row per figure survives a pivot
+   table, an accountant's filter, and a bridging tool's column mapping equally well.
+   `section` is what you filter on: income / expense / total. */
+function mtdExportCSV(ty){
+  const cols=["taxYear","basis","period","periodLabel","from","to","section","sa103Box","description","amount"];
+  const rows=[cols.join(",")];
+  const basis=taxBasis();
+  const put=(r,section,box,desc,amt)=>rows.push([ty,basis,r.period,r.label,r.from,r.to,
+    section,box==null?"":box,desc,amt.toFixed(2)].map(csvCell).join(","));
+  mtdRows(ty).forEach(r=>{
+    put(r,"income",null,"Turnover — session fees",r.income.turnover);
+    put(r,"income",null,"Other business income",r.income.other);
+    r.expenses.forEach(e=>put(r,"expense",e.sa103Box,e.name,e.amount));
+    put(r,"total",null,"Total expenses",r.expenseTotal);
+    put(r,"total",null,"Net for the quarter",r.net);
+  });
+  /* A trailing comment line would break a naive parser, so the caveat rides in a cell of its
+     own row instead — visible in a spreadsheet, and skipped by anything filtering on `section`. */
+  rows.push(cols.map(c=>csvCell(c==="description"?MTD_EXPORT_NOTE:"")).join(","));
+  /* LEADING BOM, and it is load-bearing for the one job this file has. Excel on Windows reads a
+     CSV in the system codepage unless a UTF-8 byte-order mark says otherwise, and these rows
+     carry en-dashes from the quarter labels ("6 Apr – 5 Jul") and pound signs from the SA103
+     names. Without it the therapist opens the file and every dash is "â€“". The
+     other three CSV exports predate this and are left alone deliberately — changing what an
+     existing export writes is a separate decision from what a new one writes. */
+  download("groundwork-mtd-"+ty.replace("/","-")+".csv","\uFEFF"+rows.join("\n"),"text/csv");
+  toast("MTD figures downloaded (.csv)");
+}
+/* Kept as the single named entry point: scripts/check-drift.mjs asserts this function exists and
+   stays free of plusLocked(), and the format argument defaults so any older caller still works. */
+function mtdExport(ty,fmt){
+  return fmt==="csv"?mtdExportCSV(ty):mtdExportJSON(ty);
 }
 
 /* ---- Tax > MTD ---- */
@@ -7710,23 +7813,45 @@ function drawMTD(host){
   const boxes=mtdExpenseBoxes(tyBounds(ty).start,tyBounds(ty).end);
   const boxRows=Object.keys(boxes).sort((a,b)=>a-b).map(b=>
     '<tr class="boxrow" data-box="'+b+'" style="cursor:pointer"><td><b>Box '+b+'</b></td><td>'+esc(SA103[b]||"")+'</td><td class="num">'+gbp(Math.round(boxes[b]))+'</td></tr>').join("");
-  host.innerHTML='<div class="card"><h2>Quarterly figures</h2>'+
+  host.innerHTML='<div class="card">'+cardHead("Quarterly figures","mtd-what")+
     '<p class="small muted">Making Tax Digital asks for a summary four times a year instead of one return at the end. These are your quarters for '+ty+', on the <b>'+esc(basisLabel().toLowerCase())+'</b>.</p>'+
     '<div class="rawscroll"><table><thead><tr><th>Quarter</th><th class="num">Income</th><th class="num">Costs</th><th class="num">Net</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     '<p class="small muted center" style="margin-top:6px">Tap a quarter to see exactly what is in it.</p>'+
-    '<button class="btn sec full mt" id="mtdExp">⤓ Export these figures (.json)</button>'+
-    '<p class="small muted mt"><b>This app cannot file for you.</b> Sending a quarterly update needs software HMRC has recognised. What it does do is help you keep a digital record directly linked to your session data, which gives you a useful estimate and helps you speed up and trust your actual submission.</p>'+
+    '</div>'+
+    /* The old version of this screen ended on "this app cannot file for you" -- true, and a dead
+       end. The sentence after it is the one that matters: you do not have to buy a whole
+       bookkeeping package to get these figures filed. See docs/tax-positioning-2026-09.md.
+       Note what this card is careful NOT to do. It describes the route and links to HMRC's own
+       list; it never names a product, never promises a free one exists for this reader, and
+       never rules on whether their particular setup satisfies the rules. That last one is a
+       question about their circumstances, which this app has said from the first screen it
+       does not know. */
+    '<div class="card">'+cardHead("Filing these","mtd-route")+
+    '<p class="small muted" style="margin:-2px 0 0">Three things have to happen. You have already done the first two.</p>'+
+    '<div class="mtdstep on"><span class="mtdn">'+gi("done")+'</span><div><b>A digital record of the work</b>'+
+      '<div class="small muted">Every session and cost you have logged, dated and sorted into the right tax-return box. This is the part that takes all year, and it is behind you.</div></div></div>'+
+    '<div class="mtdstep on"><span class="mtdn">'+gi("done")+'</span><div><b>The quarter added up</b>'+
+      '<div class="small muted">The table above. Export it as a file and hand it on \u2014 a file, rather than figures copied off a screen, is what '+infoLink("mtd-route","keeps the chain digital")+'.</div>'+
+      '<div class="row" style="gap:8px;flex-wrap:wrap;margin:10px 0 2px">'+
+        '<button class="btn sec sm" id="mtdExpCsv" style="flex:1 1 140px">'+gi("table")+' Export .csv</button>'+
+        '<button class="btn ghost sm" id="mtdExpJson" style="flex:1 1 140px">'+gi("export")+' Export .json</button></div>'+
+      '<div class="small muted">The <b>.csv</b> is the one to reach for: it opens in a spreadsheet and it is what bridging software reads. The .json carries the same figures for anything that prefers structured data. '+infoLink("mtd-exports","Which file for what")+'</div></div></div>'+
+    '<div class="mtdstep todo"><span class="mtdn">'+gi("plane")+'</span><div><b>Somebody presses Submit</b>'+
+      '<div class="small muted"><b>GroundWork cannot do this part, and is not trying to.</b> A quarterly update has to go through software HMRC has recognised. Your accountant can send it, or you can use a submission tool yourself \u2014 HMRC keeps the list, and there are free and low-cost ones on it built for exactly this, taking the figures from a spreadsheet.</div>'+
+      '<div class="small" style="margin-top:6px"><a href="https://www.gov.uk/guidance/find-software-that-works-with-making-tax-digital-for-income-tax" target="_blank" rel="noopener">HMRC\u2019s list of software \u203a</a></div></div></div>'+
     '</div>'+
     '<div class="card"><h2>'+ty+' by tax-return box</h2>'+
     '<p class="small muted">Where each cost lands on the self-employment pages (SA103).</p>'+
     (boxRows?'<div class="rawscroll"><table><thead><tr><th>Box</th><th>What HMRC calls it</th><th class="num">'+ty+'</th></tr></thead><tbody>'+boxRows+'</tbody></table></div>'
             :'<p class="muted small">No costs recorded for '+ty+' yet.</p>')+
-    '<p class="small muted mt">When MTD applies to you depends on turnover: over \u00a350,000 from April 2026, over \u00a330,000 from April 2027, over \u00a320,000 from April 2028.</p></div>';
+    '<p class="small muted mt">When MTD applies to you depends on turnover: over \u00a350,000 from April 2026, over \u00a330,000 from April 2027, over \u00a320,000 from April 2028. Under that you carry on filing one return a year \u2014 and these are still the year already added up, a quarter at a time.</p></div>';
   /* Redundant while the whole Tax tab is locked, and kept deliberately: the export is its own
      line in the tier, and this is the guard that survives Tax ever being unlocked separately.
-     Note it gates the BUTTON \u2014 mtdExport() itself stays pure, because tests call it. */
-  const b=host.querySelector("#mtdExp");
-  if(b)b.onclick=()=>{if(plusLocked("mtd"))return openPlusSheet("mtd");mtdExport(ty);};
+     Note it gates the BUTTONS \u2014 mtdExport() itself stays pure, because tests call it. */
+  const expBtn=(sel,fmt)=>{const b=host.querySelector(sel);
+    if(b)b.onclick=()=>{if(plusLocked("mtd"))return openPlusSheet("mtd");mtdExport(ty,fmt);};};
+  expBtn("#mtdExpCsv","csv"); expBtn("#mtdExpJson","json");
+  wireInfo(host);
   host.querySelectorAll(".qrow").forEach(tr=>tr.onclick=()=>{
     const q=mtdQuarters(ty).find(x=>x.n===+tr.dataset.q);
     periodBreakdownSheet("Quarter "+q.n+" \u00b7 "+q.label,q.from,q.to,
@@ -8146,9 +8271,12 @@ function plusSettingsCardHTML(){
   const active=plusActive();
   return '<div class="card"><h2>'+PLUS_NAME+'</h2>'+
     '<p class="small muted">'+plusStatusLine()+'</p>'+
-    '<p class="small muted">Tax, costs &amp; other income, the MTD export, Trends, accreditation '+
-      'hours, GroundWork Notes sync and the extra colour schemes. Logging, receipts and every '+
-      'backup and export stay free.</p>'+
+    /* Colour schemes were in this sentence until Sep 2026 and are now switched off entirely
+       (see PALETTES_ENABLED). A tier that lists something nobody can reach reads as padding,
+       which is the opposite of what this card is for. */
+    '<p class="small muted">What you will owe and what to keep back for it, costs &amp; other income, '+
+      'the quarterly figures for Making Tax Digital, Trends, accreditation hours and GroundWork '+
+      'Notes sync. Logging, receipts and every backup and export stay free.</p>'+
     '<button class="btn '+(active?"sec ":"")+'full mt" data-plus="settings">'+
       (active?"View details":"Unlock "+PLUS_NAME)+'</button></div>';
 }
@@ -10581,26 +10709,38 @@ async function restoreConfirm(o,st,rep){
     summary:"the "+d.sessions+" session"+(d.sessions===1?"":"s")+" on this device "+(d.sessions===1?"is":"are")+" replaced by the backup’s "+b2.sessions+".",
     phrase:"RESTORE",verb:"Restore backup"});
 }
-function importJSON(e){const f=e.target.files[0];if(!f)return;const rd=new FileReader();
-  rd.onload=async()=>{try{let o=JSON.parse(rd.result);
+/* The whole restore, from the TEXT of a backup rather than from a file input.
+   Split out of importJSON() so the iOS records folder can restore through exactly the same
+   path: the passphrase prompt, validateImport, and restoreConfirm's two tiers. A folder is a
+   friendlier place for a backup to come from, not a safer one, so it earns the same friction.
+   Returns true only when the data was actually replaced, so a caller can tell a completed
+   restore from one the reader cancelled. `label` is what the audit log and the restore point
+   are named after. */
+async function importFromText(text,label){
+  try{
+    let o=JSON.parse(text);
     if(o&&o.enc===1){
       const pass=await askPassphrase({title:"Encrypted backup",verb:"Unlock backup",
         msg:"This backup file is encrypted. Enter the passphrase it was saved with."});
-      if(!pass)return;
+      if(!pass)return false;
       try{
         const key=await encDeriveKey(pass,new Uint8Array(b64ToBuf(o.salt)));
         const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:new Uint8Array(b64ToBuf(o.iv))},key,b64ToBuf(o.data));
         o=JSON.parse(new TextDecoder().decode(pt));
-      }catch(err2){alert("Wrong passphrase or corrupted file — nothing changed.");return;}
+      }catch(err2){alert("Wrong passphrase or corrupted file — nothing changed.");return false;}
     }
     const st=o.state||o;
     const rep=validateImport(st);
     if(!rep.ok)throw new Error(rep.problems.join("; "));
-    if(!await restoreConfirm(o,st,rep))return;
+    if(!await restoreConfirm(o,st,rep))return false;
     S=normalize(st);
-    await commit("Restored backup ("+(S.sessions.length)+" sessions)");markBackedUp();
+    await commit((label||"Restored backup")+" ("+(S.sessions.length)+" sessions)");markBackedUp();
     applySettings();toast("Backup restored");go("home");
-  }catch(err){alert("Could not import: "+err.message)}};rd.readAsText(f);e.target.value="";}
+    return true;
+  }catch(err){alert("Could not import: "+err.message);return false}
+}
+function importJSON(e){const f=e.target.files[0];if(!f)return;const rd=new FileReader();
+  rd.onload=()=>{importFromText(rd.result);};rd.readAsText(f);e.target.value="";}
 async function showSnapshots(){if(!_db){toast("Restore points need storage");return}
   const snaps=await snapRecent(80); // newest first, straight off the cursor
   const body=el('<div></div>');
@@ -10624,7 +10764,7 @@ const FEATURES=[
   {k:"trends",       ic:gi("trends"), n:"Trends",                 d:"Retention funnel, attendance against expected frequency, missed sessions and how long clients stay. Lives inside Practice."},
   {k:"finances",     ic:gi("finances"), n:"Costs & other income",   d:"Business costs (insurance, wifi, monthly room rent) and income that isn’t a client session. Both feed your net income and tax figures.",dep:"money"},
   {k:"money",        ic:gi("money"), n:"Money",                  d:"Revenue charts, what is outstanding, and the month-by-month picture of what came in."},
-  {k:"tax",          ic:gi("tax"), n:"Tax",                    d:"Tax-year totals, UK sole-trader tax estimates and monthly take-home."},
+  {k:"tax",          ic:gi("tax"), n:"Tax",                    d:"What to set aside, when it falls due, monthly take-home, and the quarterly figures for Making Tax Digital."},
   {k:"raw",          ic:gi("table"), n:"Table view",             d:"A spreadsheet-style browser of every session, inside Money. Sortable columns and a column picker.",dep:"money"},
   {k:"receipts",     ic:gi("receipts"), n:"Receipts & statements",  d:"Printable statements for a client’s insurer, employer or their own records."},
   {k:"attention",    ic:gi("attention"), n:"Needs attention feed",   d:"A Home list of overdue payments, missing notes and clients you haven’t seen in a while."},
@@ -10650,7 +10790,7 @@ const REVEAL_STEPS=[
    sub:"Now that money is actually coming in, <b>Receipts &amp; statements</b> prints a dated statement of what a client has paid — for their insurer, their employer, or their own records."},
   {keys:["tax","finances"], when:st=>st.sessions.length>=10,
    emoji:gi("tax"), title:"Ready to think about tax?",
-   sub:"Ten sessions in. <b>Tax</b> turns them into a running estimate of what to set aside — including the January payment on account that catches people out — and <b>Costs &amp; other income</b> takes insurance, supervision, room rent and CPD off the profit it is worked out from. They arrive together because the estimate is wrong without the costs."},
+   sub:"Ten sessions in. <b>Tax</b> turns them into a running figure for what to set aside — including the first January, which is usually half again bigger than people expect because a payment on account sits on top of the bill — and <b>Costs &amp; other income</b> takes insurance, supervision, room rent and CPD off the profit it is worked out from. They arrive together because the estimate is wrong without the costs."},
   {keys:["gamify"],   when:st=>st.sessions.length>=15,
    emoji:gi("gamify"), title:"Want a bit of celebration?",
    sub:"Streaks, goal rings and the occasional confetti when you clear a backlog. Entirely cosmetic — plenty of people leave it off."},
@@ -11600,6 +11740,18 @@ const TIPS=[
      body:"It’s the difference between <i>probably</i> enough and <i>definitely</i> enough. Set it once, then everything outside it is genuinely yours to spend."},
     {emoji:gi("calendar"),h:"Why January is so big",sel:'[data-coach="due"]',
      body:"One 31 January is usually two years’ money at once — finishing off last year, and a payment towards this one. That’s the thing that catches people out, so these are listed by date."}]},
+  /* The MTD screen is the one screen whose BOUNDARY has to be understood before its figures are
+     any use: a reader who thinks the app files for them will miss a deadline believing they are
+     covered. So the tip leads on what it does not do, which is the opposite of how every other
+     tip here is written. */
+  {k:"tax-mtd",tab:"tax",seg:"mtd",ft:"tax",when:()=>taxAcked(),
+   steps:()=>[
+    {emoji:gi("tax"),h:"Four summaries instead of one return",
+     body:"Making Tax Digital asks for a total every quarter rather than one figure in January. If your turnover is under the threshold it doesn\u2019t reach you yet \u2014 but the quarters are still your year, added up as you go."},
+    {emoji:gi("plane"),h:"This app can\u2019t file \u2014 on purpose",
+     body:"Sending an update needs software HMRC has recognised, which needs a server. GroundWork keeps the records and does the adding up; something else presses Submit. <b>Filing these</b> shows the whole route and links to HMRC\u2019s own list."},
+    {emoji:gi("table"),h:"Export the file, don\u2019t retype the numbers",sel:"#mtdExpCsv",
+     body:"The figures are meant to travel digitally from your records to HMRC. Copying a total off this screen into something else breaks that; handing over the <b>.csv</b> doesn\u2019t \u2014 and it\u2019s what bridging software reads."}]},
   {k:"tax-allowances",tab:"tax",seg:"allowances",ft:"tax",when:()=>taxAcked(),
    steps:()=>[
     {emoji:gi("privacy"),h:"Set once, per tax year",sel:"#uohBar",
@@ -12244,19 +12396,162 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
     })();
   };
 
-  /* ================= Automatic backups =================
-     On desktop Chrome/Edge an encrypted backup auto-saves silently through the File System
-     Access API. That API does not exist on iOS, so on the platform this app is actually
-     shipping on the only safety net was a nag banner and a manual share sheet — a lost or
-     broken phone loses everything since the customer last bothered.
+  /* ================= Where your records are kept =================
+     GroundWork Notes keeps the counsellor's records in a folder she picks — normally inside her
+     own iCloud Drive — and the thing everyone notices about it is that there is nothing to
+     remember. The folder is off the phone, it survives losing the phone, setting up a new one is
+     choosing the same folder again, and it is all visible in Files without the app being
+     involved. This is that, for GroundWork.
 
-     Every save now also writes a copy into the app's own Documents folder: visible to the
-     user in the Files app (UIFileSharingEnabled in Info.plist) and carried by the phone's
-     own iCloud/device backup.
+     What it is NOT is a rewrite of the store. `S` is one object read synchronously from IndexedDB
+     on every render and it stays that way; the folder holds the durable copy, rewritten after
+     every save and read back when this device does not have the newest one. Export and Restore
+     are untouched and are still how records move between devices.
+
+     Four rules the code below depends on. Breaking any of them is silent.
+
+      * **The folder is never overwritten blind.** `checkFolder()` compares the live file's
+        modification date against the one this device last wrote. A date it did not write means
+        something else has been in there — a second device, a phone restored from a backup, a new
+        install pointed at an existing folder — so folder writes PAUSE (`_folderHeld`) until the
+        reader says which copy wins. Saving to IndexedDB carries on untouched throughout, so
+        nothing is lost while the question is open. There is no merge and there is not going to be
+        one; see CLAUDE.md, "Multi-tab / multi-device writes".
+      * **A folder write that fails falls back to the copy on the phone.** The Documents copy is
+        retired only after a folder write has actually landed, and comes straight back if the
+        folder stops answering. A save that cannot reach the folder must never be a save with no
+        copy at all.
+      * **`markBackedUp()` is called only for a folder in iCloud Drive.** That is the single
+        change to the manual-backup nag and it is the whole point of the feature: a copy in the
+        user's own iCloud is off this phone, so the reminder has nothing left to warn about. A
+        folder under "On My iPhone" is not off this phone and the reminder stays — see
+        `RecordsFolder.isInICloud`, which answers "no" whenever it cannot tell.
+      * **Reading the folder back goes through `importFromText()`**, which is `importJSON()` minus
+        the file input: validateImport, the passphrase prompt, and restoreConfirm's two tiers. A
+        folder is a friendlier source than a download, not a safer one. */
+
+  const FOLDER_LIVE     = "GroundWork records.json";
+  const FOLDER_LIVE_ENC = "GroundWork records.enc.json";
+  const FOLDER_HISTORY  = "Previous versions";
+  const FOLDER_KEEP     = 7;
+  /* How far past our own last write a modification date has to be before it counts as somebody
+     else's. A file provider's clock is not this device's clock and iCloud can restamp on upload,
+     so this is deliberately generous: a false positive costs a modal on a device that has lost
+     nothing, and a real second device is minutes or hours out, never seconds. */
+  const FOLDER_SLACK    = 15000;
+  const folderLiveName  = enc => enc ? FOLDER_LIVE_ENC : FOLDER_LIVE;
+  const folderDatedName = (enc, day) => FOLDER_HISTORY + "/GroundWork " + day + (enc ? ".enc.json" : ".json");
+  /* Both names travel to the native side rather than being hardcoded there, so a rename here is
+     the whole rename. */
+  const folderArgs      = () => ({ live:FOLDER_LIVE, alt:FOLDER_LIVE_ENC });
+  const encOn           = () => typeof encReady==="function" && !!encReady();
+  const LSdel           = k => { try{ localStorage.removeItem(k); }catch(e){} };
+
+  /* What this device knows about the folder without asking, seeded from localStorage so the first
+     paint after a cold start is already right; refreshFolder() then confirms it. Device state, so
+     tt_* and never S — a backup restored onto another phone must not point it at this one's
+     folder, which it has no permission to open anyway. */
+  let folder = { set:LSget("tt_folder_on","0")==="1", name:LSget("tt_folder_name",""),
+                 path:LSget("tt_folder_path",""), icloud:LSget("tt_folder_icloud","0")==="1",
+                 reachable:true, live:null, alt:null, error:"" };
+  let _folderHeld = false;      /* the folder holds a copy this device did not write */
+
+  function rememberFolder(info){
+    folder = {
+      set:       !!(info && info.set),
+      name:      (info && info.name) || "",
+      path:      (info && info.path) || "",
+      icloud:    !!(info && info.icloud),
+      reachable: info ? info.reachable !== false : true,
+      error:     (info && info.error) || "",
+      live:      (info && info.live) || null,
+      alt:       (info && info.alt) || null
+    };
+    LSset("tt_folder_on", folder.set ? "1" : "0");
+    LSset("tt_folder_name", folder.name);
+    LSset("tt_folder_path", folder.path);
+    LSset("tt_folder_icloud", folder.icloud ? "1" : "0");
+    return folder;
+  }
+  async function refreshFolder(){
+    if(!GW || !GW.folderInfo) return folder;
+    try{ return rememberFolder(await GW.folderInfo(folderArgs())); }
+    catch(e){ return folder; }
+  }
+  /* Whichever live file is actually there, newest first. Both exist only when a change of
+     passphrase mode failed to tidy the superseded one away. */
+  function folderNewest(){
+    const opts = [];
+    if(folder.live && folder.live.exists)
+      opts.push({ path:FOLDER_LIVE,     enc:false, at:+folder.live.modifiedAt || 0 });
+    if(folder.alt && folder.alt.exists)
+      opts.push({ path:FOLDER_LIVE_ENC, enc:true,  at:+folder.alt.modifiedAt  || 0 });
+    return opts.sort((a,b) => b.at - a.at)[0] || null;
+  }
+
+  function folderStatus(){ try{ return JSON.parse(LSget("tt_folder_status","null")) || null; }catch(e){ return null; } }
+  function setFolderStatus(o){
+    const prev = folderStatus();                   /* a failure must not erase what we last saw */
+    if(!o.ok && prev){ o.okAt = prev.ok ? prev.at : prev.okAt; if(o.mtime == null) o.mtime = prev.mtime; }
+    LSset("tt_folder_status", JSON.stringify(o));
+  }
+
+  /* Returns true/false and reports nothing itself: this runs behind whatever the reader is doing,
+     and a background save that interrupts them is worse than one that fails quietly. The Settings
+     button is the one caller that speaks. */
+  async function writeFolder(){
+    if(!folder.set || !GW || !GW.folderWrite) return false;
+    if(_folderHeld) return false;                  /* an unresolved conflict — never overwrite */
+    try{
+      const enc  = encOn();
+      const data = enc ? await encPayload() : JSON.stringify(await backupPayload());
+      const prev = folderStatus();
+      const r = await GW.folderWrite({ path:folderLiveName(enc), data:data });
+      if(!r || !r.ok) throw new Error((r && r.error) || "the folder would not accept the file");
+      setFolderStatus({ ok:true, at:Date.now(), enc:enc, mtime:+r.modifiedAt || Date.now() });
+      /* Turning a passphrase on must not leave yesterday's readable copy in the folder. Only on an
+         actual change of mode — otherwise this is a failing call on every single save. */
+      if(prev && prev.enc != null && !!prev.enc !== enc){
+        try{ await GW.folderDelete({ path:folderLiveName(!enc) }); }catch(e){}
+      }
+      /* The one place the manual-backup nag is answered by something other than an export. */
+      if(folder.icloud){ try{ markBackedUp(); }catch(e){} }
+      try{ await rotateFolder(enc, data); }
+      catch(e){ console.warn("Records folder: dated copy failed", e); }   /* the live copy landed */
+      return true;
+    }catch(e){
+      console.error("Records folder write failed", e);
+      setFolderStatus({ ok:false, at:Date.now(), msg:String((e && e.message) || e) });
+      return false;
+    }
+  }
+
+  /* One dated copy a day, newest seven kept — the same reasoning as the on-phone rotation. The
+     live file is overwritten on every save, so on its own it is one bad edit away from being no
+     backup at all, and a mistake noticed on Thursday needs Wednesday's file. Daily, not per-save:
+     seven copies from one afternoon are seven copies of the same afternoon. */
+  async function rotateFolder(enc, data){
+    const day = isoD(today());
+    if(LSget("tt_folder_day","") === day) return;
+    const w = await GW.folderWrite({ path:folderDatedName(enc, day), data:data });
+    if(!w || !w.ok) throw new Error((w && w.error) || "the dated copy would not write");
+    LSset("tt_folder_day", day);                   /* only after the write, so a failure retries */
+    const ls = await GW.folderList({ path:FOLDER_HISTORY });
+    const files = ((ls && ls.files) || [])
+      .filter(n => /^GroundWork \d{4}-\d{2}-\d{2}\.(enc\.)?json$/.test(n || ""))
+      .sort();                                     /* the date leads the name, so oldest-first */
+    for(const n of files.slice(0, Math.max(0, files.length - FOLDER_KEEP)))
+      await GW.folderDelete({ path:FOLDER_HISTORY + "/" + n });
+  }
+
+  /* ================= The copy on the phone itself =================
+     What every iPhone got before there was a records folder, and still what an iPhone with no
+     folder chosen gets: a copy in the app's own Documents folder, visible in the Files app
+     (UIFileSharingEnabled) and carried by the phone's own iCloud/device backup.
 
      It deliberately does NOT call markBackedUp(). A copy that lives on the same phone is no
-     protection at all for someone with iCloud Backup switched off, so the manual-export nag
-     stays exactly as it was — see the note in docs/ios-native.md. */
+     protection at all for someone with iCloud Backup switched off, so the manual-export nag stays
+     exactly as it was — a *records folder in iCloud Drive* is the thing that answers it. */
   const AUTO_DIR   = "auto-backups";
   const autoName   = enc => "GroundWork auto-backup" + (enc ? ".enc.json" : ".json");
   const autoDayName= (enc, day) => AUTO_DIR + "/GroundWork " + day + (enc ? ".enc.json" : ".json");
@@ -12269,20 +12564,15 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
     LSset("tt_autobk_status", JSON.stringify(o));
   }
 
-  /* Returns true/false rather than reporting anything itself: this runs behind whatever the
-     user is doing, and a background backup that interrupts them is worse than one that fails
-     quietly. The Settings button is the one caller that speaks up. */
   async function nativeAutoBackup(){
     const FS = P("Filesystem");
     if(!FS) return false;                            /* plugin absent — no-op, not an error */
     try{
-      const enc  = typeof encReady==="function" && !!encReady();
+      const enc  = encOn();
       const data = enc ? await encPayload() : JSON.stringify(await backupPayload());
       const prev = autoStatus();
       await FS.writeFile({ path:autoName(enc), data, directory:"DOCUMENTS", encoding:"utf8" });
       setAutoStatus({ ok:true, at:Date.now(), enc:enc });
-      /* Turning a passphrase on must not leave the readable copy sitting in Files. Only when the
-         mode has actually changed — otherwise this is a failing plugin call on every single save. */
       if(prev && prev.enc != null && !!prev.enc !== enc){
         try{ await FS.deleteFile({ path:autoName(!enc), directory:"DOCUMENTS" }); }catch(e){}
       }
@@ -12296,10 +12586,6 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
     }
   }
 
-  /* One dated copy a day, newest seven kept. The live file is overwritten on every save, so on
-     its own it is one bad edit away from being no backup at all — a mistake noticed on Thursday
-     needs Wednesday's file. Daily, not per-save, because seven copies from one afternoon are
-     seven copies of the same afternoon. */
   async function rotateAutoBackup(FS, enc, data){
     const day = isoD(today());
     if(LSget("tt_autobk_day","") === day) return;
@@ -12314,16 +12600,45 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
       await FS.deleteFile({ path:AUTO_DIR+"/"+n, directory:"DOCUMENTS" });
   }
 
+  /* Once a records folder is in use the on-phone live copy is a strictly worse version of the
+     same file, and two GroundWork backups in Files is how somebody restores the wrong one. Only
+     the LIVE file goes: the dated copies under auto-backups/ are restore points that cannot be
+     re-created and age out on their own within the week. */
+  async function retireDeviceCopy(){
+    if(LSget("tt_autobk_retired","0") === "1") return;
+    LSset("tt_autobk_retired","1");
+    const FS = P("Filesystem");
+    if(!FS) return;
+    for(const n of [autoName(true), autoName(false)]){
+      try{ await FS.deleteFile({ path:n, directory:"DOCUMENTS" }); }catch(e){}
+    }
+  }
+
+  /* ================= One save, whichever destinations are live =================
+     The folder is the record; the phone's own Documents folder is what is left when there is no
+     folder, or when the folder cannot be reached. Never nothing. */
+  async function saveCopies(){
+    if(folder.set){
+      if(await writeFolder()){ retireDeviceCopy(); return true; }
+      /* Unreachable, or paused on an unresolved conflict. Either way the copy on the phone is
+         what is left, and it is a different destination that cannot clobber the folder — so it
+         runs in BOTH cases. A device sitting on an unanswered question for a week must not be a
+         device with no copy anywhere. */
+      LSset("tt_autobk_retired","0");
+    }
+    return nativeAutoBackup();
+  }
+
   /* commit() is the single save choke point, so wrapping it covers every edit in the app.
      The original's return value is what callers check to know whether the write landed — it is
-     passed straight back, and the backup is fired and forgotten after it. A failed backup can
+     passed straight back, and the copies are fired and forgotten after it. A failed copy can
      therefore neither block a save nor mask a failed one: the red banner is raised by commit()
      itself, before this ever runs. */
   let _autoBkT = null, _autoBkPending = false;
   function scheduleAutoBackup(){
     _autoBkPending = true;
     clearTimeout(_autoBkT);
-    _autoBkT = setTimeout(() => { _autoBkPending = false; nativeAutoBackup(); }, 2000);
+    _autoBkT = setTimeout(() => { _autoBkPending = false; saveCopies(); }, 2000);
   }
   /* iOS suspends the WebView when the app is backgrounded and a pending timer suspends with it.
      Log a session, put the phone straight down, and the copy would never be written — which is
@@ -12331,7 +12646,7 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
   function flushAutoBackup(){
     if(!_autoBkPending) return;
     _autoBkPending = false; clearTimeout(_autoBkT);
-    nativeAutoBackup();
+    saveCopies();
   }
   const _commit = window.commit;
   window.commit = async function(){
@@ -12340,17 +12655,159 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
     return ok;
   };
 
-  /* The nag itself is untouched (see above); the banner may as well say the copy exists. */
-  const _updateBackupBanner = window.updateBackupBanner;
-  window.updateBackupBanner = function(){
-    const r = _updateBackupBanner.apply(this, arguments);
-    try{
-      const bar = document.getElementById("backupBanner"), d = document.getElementById("bkdetail"), st = autoStatus();
-      if(bar && d && st && st.ok && bar.classList.contains("show"))
-        d.textContent += " (an automatic copy is kept on this iPhone)";
-    }catch(e){}
-    return r;
-  };
+  /* ================= Does this device hold the newest copy? =================
+     The question that makes the folder a place records live rather than a place they are copied
+     to. It runs at launch and whenever the app comes back after a spell away. */
+  function folderIsForeign(){
+    const newest = folderNewest();
+    if(!newest) return null;                       /* empty folder — the next save fills it */
+    const st = folderStatus();
+    const seen = (st && +st.mtime) || 0;
+    return (!seen || newest.at > seen + FOLDER_SLACK) ? newest : null;
+  }
+
+  async function checkFolder(){
+    if(!GW || !GW.folderInfo) return;
+    const info = await refreshFolder();
+    if(!info.set || info.reachable === false) return;
+    const foreign = folderIsForeign();
+    if(!foreign){ _folderHeld = false; return; }
+    _folderHeld = true;                            /* nothing is written until this is settled */
+    whenIdle(() => askFolderCopy(foreign));
+  }
+
+  /* Setup, What's new, the guided flows and the lock screen each own the screen while they are
+     up, and a sheet opened on top of one replaces it. This question can wait: it is only asking,
+     and writes are already paused. */
+  function whenIdle(fn, tries){
+    const busy = () => {
+      try{
+        if(typeof _flow !== "undefined" && _flow) return true;
+        const ov = document.getElementById("ovRoot");
+        if(ov && ov.classList.contains("show")) return true;
+        const sh = document.getElementById("sheet");
+        if(sh && sh.classList.contains("open")) return true;
+        if(locked) return true;
+      }catch(e){}
+      return false;
+    };
+    const n = tries == null ? 90 : tries;
+    if(!busy()) return fn();
+    if(n <= 0) return;
+    setTimeout(() => whenIdle(fn, n - 1), 1000);
+  }
+
+  function folderWhen(t){
+    return t ? new Date(t).toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})
+             : "an unknown date";
+  }
+
+  /* Two copies, no merge: the reader picks one. "Decide later" leaves writes paused and the
+     question comes back next time — which is the safe answer, because the folder is untouched and
+     the phone is still saving to its own database exactly as it always does. */
+  async function askFolderCopy(newest){
+    const st    = folderStatus();
+    const first = !(st && st.mtime);                            /* never written here from here */
+    const empty = !(S && S.sessions && S.sessions.length) && !(S && S.clients && S.clients.length);
+    const where = esc(folder.name || "That folder");
+
+    const lead = empty
+      ? "<b>" + where + "</b> already holds GroundWork records, saved " + esc(folderWhen(newest.at)) +
+        ". There is nothing on this iPhone yet, so they can simply be loaded in."
+      : first
+        ? "<b>" + where + "</b> already holds GroundWork records, saved " + esc(folderWhen(newest.at)) +
+          ", and this iPhone has records of its own. They cannot be merged — one of them has to win."
+        : "The records in <b>" + where + "</b> were changed " + esc(folderWhen(newest.at)) +
+          ", and it was not this iPhone that changed them. Something else has written to the folder since this phone last did.";
+
+    const body = el('<div></div>');
+    body.innerHTML =
+      '<p class="small">' + lead + '</p>' +
+      '<p class="small muted">Nothing is being saved into the folder until you choose. Everything you do on this iPhone is still being saved on the iPhone.</p>' +
+      '<button class="btn full mt" id="fcLoad">Load the folder’s copy onto this iPhone</button>' +
+      (empty ? "" :
+      '<button class="btn ghost full mt" id="fcKeep">Keep this iPhone’s copy and write over the folder</button>') +
+      '<button class="btn ghost full mt" id="fcLater">Decide later</button>';
+
+    const choice = await sheetPromise(empty ? "Your records are in this folder" : "Two copies of your records", body, (b, fin) => {
+      b.querySelector("#fcLoad").onclick = () => fin("load");
+      const k = b.querySelector("#fcKeep"); if(k) k.onclick = () => fin("keep");
+      b.querySelector("#fcLater").onclick = () => fin(null);
+    });
+
+    if(choice === "load"){ await loadFromFolder(newest); return; }
+    if(choice === "keep"){
+      /* Adopt the folder's date as seen, or the next save asks the same question again. */
+      setFolderStatus({ ok:true, at:Date.now(), enc:newest.enc, mtime:newest.at });
+      _folderHeld = false;
+      scheduleAutoBackup();
+      toast("This iPhone’s copy will be saved into the folder");
+      return;
+    }
+    toast("Nothing has been written to the folder");
+  }
+
+  async function loadFromFolder(pick){
+    if(!GW || !GW.folderRead) return false;
+    const chosen = pick || folderNewest();
+    if(!chosen){ toast("There is nothing in that folder yet"); return false; }
+    toast("Reading the folder…");
+    let r = null;
+    try{ r = await GW.folderRead({ path:chosen.path }); }catch(e){}
+    if(!r || !r.found){ toast((r && r.error) || "Could not read that folder"); Sfx.error(); return false; }
+    const ok = await importFromText(r.data, "Loaded from your records folder");
+    if(ok){
+      setFolderStatus({ ok:true, at:Date.now(), enc:chosen.enc, mtime:+r.modifiedAt || chosen.at });
+      _folderHeld = false;
+      if(chosen.enc && !encOn()) whenIdle(warnPassphraseLost);
+    }
+    return ok;
+  }
+
+  /* The passphrase is device state — it is in this phone's own storage and has never travelled in
+     a backup — so a phone that has just restored an encrypted file cannot write another one. The
+     next save would replace the encrypted file in the folder with a readable one, which is a
+     thing to be told about rather than to discover. */
+  async function warnPassphraseLost(){
+    const body = el('<div></div>');
+    body.innerHTML =
+      '<div class="vmsg warn">'+gi("key")+' The file you just loaded was <b>encrypted</b>, but this iPhone does not have a backup passphrase set.</div>'+
+      '<p class="small">Your records are safely restored — the passphrase you typed unlocked them. But a passphrase lives on the phone that set it and never travels inside a backup, so this iPhone cannot write an encrypted file back.</p>'+
+      '<p class="small">Unless you set one, the next save will replace the encrypted file in your folder with a <b>readable</b> one.</p>'+
+      '<button class="btn full mt" id="pwGo">Set a passphrase now</button>'+
+      '<button class="btn ghost full mt" id="pwNo">Carry on without one</button>';
+    const go2 = await sheetPromise("Set your backup passphrase again?", body, (b, fin) => {
+      b.querySelector("#pwGo").onclick = () => fin(true);
+      b.querySelector("#pwNo").onclick = () => fin(null);
+    });
+    if(go2) setTimeout(() => { try{ encPromptSetup(() => scheduleAutoBackup()); }catch(e){} }, 250);
+  }
+
+  async function chooseFolder(){
+    if(!GW || !GW.folderPick){ toast("Not available in this build of the app"); return false; }
+    let r = null;
+    try{ r = await GW.folderPick(folderArgs()); }catch(e){}
+    if(!r || r.cancelled) return false;
+    if(!r.picked){ toast((r && r.error) || "Could not use that folder"); Sfx.error(); return false; }
+    rememberFolder(r);
+    /* A different folder is a different history: nothing in it has been seen from this device. */
+    LSdel("tt_folder_status"); LSdel("tt_folder_day");
+    _folderHeld = false;
+    const foreign = folderIsForeign();
+    if(foreign){ _folderHeld = true; await askFolderCopy(foreign); return true; }
+    if(await writeFolder()){ retireDeviceCopy(); Sfx.tick(); toast("Your records are now saved in " + (folder.name || "that folder")); }
+    else { Sfx.error(); toast("Could not save into that folder"); }
+    return true;
+  }
+
+  async function forgetFolder(){
+    try{ await GW.folderForget(); }catch(e){}
+    rememberFolder({ set:false });
+    LSdel("tt_folder_status"); LSdel("tt_folder_day");
+    LSset("tt_autobk_retired","0");     /* the copy on the phone takes over again */
+    _folderHeld = false;
+    scheduleAutoBackup();
+  }
 
   /* Same wording as the app's own "last backed up" line, so the two read as one idea. */
   function autoAgo(t){
@@ -12364,11 +12821,68 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
   const AUTO_WHERE = "kept in GroundWork’s folder in the Files app, and included in your iPhone’s own backup";
   function autoBkLine(){
     const st = autoStatus();
-    if(!st)    return "Automatic backup: nothing saved yet — the next change you make writes one.";
-    if(st.ok)  return "Automatic backup: last saved "+autoAgo(st.at)+" · "+AUTO_WHERE+".";
-    return "Automatic backup: the last attempt ("+autoAgo(st.at)+") failed — "+(st.msg||"unknown error")+". "+
+    if(!st)    return "Copy on this iPhone: nothing saved yet — the next change you make writes one.";
+    if(st.ok)  return "Copy on this iPhone: last saved "+autoAgo(st.at)+" · "+AUTO_WHERE+".";
+    return "Copy on this iPhone: the last attempt ("+autoAgo(st.at)+") failed — "+(st.msg||"unknown error")+". "+
       (st.okAt ? "The copy from "+autoAgo(st.okAt)+" is still on this iPhone." : "No copy has been saved on this iPhone yet.");
   }
+  function folderLine(){
+    if(!folder.set) return autoBkLine();
+    if(folder.reachable === false)
+      return "This folder cannot be reached — " + (folder.error || "choose it again below.");
+    if(_folderHeld)
+      return "Paused: the folder holds a copy this iPhone did not write, so nothing is being saved there until you choose which copy to keep.";
+    const st = folderStatus();
+    if(!st)    return "Nothing saved here yet — the next change you make writes your records into it.";
+    if(st.ok)  return "Last saved " + autoAgo(st.at) + "." + (st.enc ? " Encrypted with your passphrase." : "");
+    return "The last attempt (" + autoAgo(st.at) + ") failed — " + (st.msg || "unknown error") + ". " +
+      (st.okAt ? "The copy from " + autoAgo(st.okAt) + " is still in the folder. " : "Nothing has been saved into this folder yet. ") +
+      "A copy is being kept on this iPhone instead.";
+  }
+
+  /* Offered once, and only to somebody who has records to lose. A brand-new install is in the
+     setup wizard, where a fourth question about storage before the first session is logged would
+     be one question too many; the same offer is always sitting in Settings. */
+  const FOLDER_OFFER_AFTER = 3;      /* sessions */
+  async function maybeOfferFolder(){
+    if(folder.set || !GW || !GW.folderPick) return;
+    if(LSget("tt_folder_asked","0") === "1") return;
+    if(!S || !S.sessions || S.sessions.length < FOLDER_OFFER_AFTER) return;
+    LSset("tt_folder_asked","1");    /* asked, whatever the answer — nothing is offered twice */
+    const body = el('<div></div>');
+    body.innerHTML =
+      '<p class="small">GroundWork can keep your records in a folder of your own — normally in <b>iCloud Drive</b> — and rewrite them there every time you change something.</p>'+
+      '<p class="small">Your practice then lives in <b>your</b> files rather than only inside this app. It survives losing the phone, and setting up a new one is choosing the same folder again.</p>'+
+      '<p class="small muted">Exporting a backup still works exactly as it does now, and is still how you move your records to a different device.</p>'+
+      '<button class="btn full mt" id="ofGo">Choose a folder…</button>'+
+      '<button class="btn ghost full mt" id="ofNo">Not now</button>';
+    const yes = await sheetPromise("Keep your records in your own files", body, (b, fin) => {
+      b.querySelector("#ofGo").onclick = () => fin(true);
+      b.querySelector("#ofNo").onclick = () => fin(null);
+    });
+    if(yes) await chooseFolder();
+  }
+
+  /* The nag itself is untouched; the banner may as well say where the copies are. When an iCloud
+     records folder is working the banner is not up at all — writeFolder() has called
+     markBackedUp() — so the branches below are the cases where it still has something to say. */
+  const _updateBackupBanner = window.updateBackupBanner;
+  window.updateBackupBanner = function(){
+    const r = _updateBackupBanner.apply(this, arguments);
+    try{
+      const bar = document.getElementById("backupBanner"), d = document.getElementById("bkdetail");
+      if(!bar || !d || !bar.classList.contains("show")) return r;
+      if(_folderHeld)
+        d.textContent += " (saving to your records folder is paused — see Settings › This iPhone)";
+      else if(folder.set && !folder.icloud)
+        d.textContent += " (your records folder is on this iPhone, so it is not a copy off it)";
+      else if(!folder.set){
+        const st = autoStatus();
+        if(st && st.ok) d.textContent += " (an automatic copy is kept on this iPhone)";
+      }
+    }catch(e){}
+    return r;
+  };
 
   /* ================= Receipts become real PDFs =================
      window.print() is a no-op in WKWebView, so printReceipt()'s hidden iframe silently
@@ -12455,6 +12969,9 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
           else askUnlock();
         }
         rescheduleNotifications();
+        /* Long enough away that another device could have written to the folder. A quick flick to
+           the Files app and back is not worth a round trip to iCloud. */
+        if(Date.now() - lastHidden > 60000) checkFolder();
       }
     });
   }
@@ -12539,7 +13056,7 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
     const d = el(
       '<details class="sgrp" data-g="device"><summary>'+
         '<span class="sgt">This iPhone</span>'+
-        '<span class="sgs">Lock, reminders and sharing — settings that belong to this device</span>'+
+        '<span class="sgs">Where your records are saved, plus lock and reminders — settings that belong to this device</span>'+
       '</summary><div class="sgb">'+
       '<div class="card"><h2>Lock &amp; reminders</h2>'+
         '<p class="small muted">These are stored on this device only and are not part of a backup, '+
@@ -12552,12 +13069,9 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
           '<p class="prev">How long you can leave GroundWork before it asks again.</p>'
         : '<div class="vmsg warn mt">'+gi("lock")+' This iPhone has no passcode or Face ID set up, so the app lock is unavailable. Add one in the iPhone’s own Settings.</div>')+
       '</div>'+
-      '<div class="card">'+cardHead("Automatic backup","backups-explained")+
-        '<p class="small muted" style="margin:-2px 0 0">A copy kept in this app’s folder in the <b>Files</b> app, rewritten on every change.</p>'+
-        '<div class="vmsg warn mt">'+gi("warning")+' <b>It is on this iPhone.</b> No help if the phone is lost or broken — keep exporting a real backup somewhere else too.</div>'+
-        '<p class="small mt" id="natBkStatus" style="font-weight:600"></p>'+
-        '<p class="prev" id="natBkHint"></p>'+
-        '<button class="btn sec mt" id="natBkNow">Back up now</button>'+
+      '<div class="card">'+cardHead("Where your records are saved","backups-explained")+
+        '<p class="small muted" style="margin:-2px 0 0">Every change you make is written into a folder you choose — normally in <b>iCloud Drive</b> — so your practice lives in your own files rather than only inside this app.</p>'+
+        '<div class="mt" id="natFolder"></div>'+
       '</div>'+
       '</div></details>');
 
@@ -12610,30 +13124,61 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
       paint();
     }
 
-    /* Painted from the stored status, never by reading the folder back: that would put an
-       await on every Settings render for a line that only says when. */
-    const bkStat = d.querySelector("#natBkStatus"), bkHint = d.querySelector("#natBkHint"), bkNow = d.querySelector("#natBkNow");
-    function paintAutoBk(){
-      if(!P("Filesystem")){
-        bkStat.textContent = "Automatic backup: not available in this build of the app.";
-        bkHint.textContent = "Export a backup by hand from Data & backup instead.";
-        bkNow.style.display = "none";
-        return;
-      }
-      bkStat.textContent = autoBkLine();
-      bkHint.textContent = (typeof encReady==="function" && encReady())
-        ? "The copy is encrypted with your passphrase, the same as an encrypted export."
-        : "Set a passphrase under Data & backup and this copy is encrypted too.";
+    /* Built from what this device already knows, then repainted once the folder has answered:
+       an await on every Settings render, for a line that only says when, would show a blank card
+       for as long as iCloud takes to reply. */
+    const fdHost = d.querySelector("#natFolder");
+    function folderCardHTML(){
+      if(!GW || !GW.folderPick)
+        return '<p class="small" style="font-weight:600">A records folder is not available in this build of the app.</p>'+
+               '<p class="prev">'+esc(autoBkLine())+'</p>';
+      if(!folder.set)
+        return '<div class="vmsg warn">'+gi("warning")+' <b>No folder chosen.</b> Your records are being copied into GroundWork’s own folder in <b>Files</b>, which is still on this iPhone — no help at all if it is lost, stolen or broken.</div>'+
+               '<p class="small mt" style="font-weight:600">'+esc(autoBkLine())+'</p>'+
+               '<button class="btn full mt" id="fdPick">'+gi("folder")+' Choose a folder…</button>';
+      return '<p class="small" style="font-weight:600">'+gi(folder.icloud?"cloud":"phone")+' '+esc(folder.path || folder.name || "Your folder")+'</p>'+
+        (folder.icloud
+          ? '<p class="prev">This folder is in iCloud Drive, so a copy of your practice is off this iPhone. While it keeps working, the backup reminder stays quiet.</p>'
+          : '<div class="vmsg warn">'+gi("warning")+' This folder is <b>on this iPhone</b>, so it is not a copy off it. The backup reminder stays on. Choose a folder in iCloud Drive to change that.</div>')+
+        '<p class="small mt" style="font-weight:600">'+esc(folderLine())+'</p>'+
+        '<p class="prev">Kept here: <b>'+esc(folderLiveName(encOn()))+'</b>, rewritten on every change, plus one dated copy a day in <b>'+esc(FOLDER_HISTORY)+'</b> (the newest '+FOLDER_KEEP+' are kept).</p>'+
+        '<div class="row mt" style="flex-wrap:wrap;gap:8px">'+
+          '<button class="btn sec" id="fdNow">Save now</button>'+
+          '<button class="btn sec" id="fdLoad">Load from folder</button>'+
+          '<button class="btn ghost" id="fdPick">Change folder…</button>'+
+          '<button class="btn ghost" id="fdOff">Stop using it</button>'+
+        '</div>';
     }
-    bkNow.onclick = async () => {
-      bkNow.disabled = true; bkNow.textContent = "Backing up\u2026";
-      const ok = await nativeAutoBackup();
-      bkNow.disabled = false; bkNow.textContent = "Back up now";
-      paintAutoBk();
-      if(ok){ Sfx.tick(); toast("Copy saved on this iPhone"); }
-      else { Sfx.error(); toast("Could not save a copy on this iPhone"); }
-    };
-    paintAutoBk();
+    function paintFolder(){
+      fdHost.innerHTML = folderCardHTML();
+      const on = (id, fn) => { const b = fdHost.querySelector(id); if(b) b.onclick = fn; };
+      on("#fdPick", async () => { await chooseFolder(); paintFolder(); });
+      on("#fdNow", async e => {
+        const b = fdHost.querySelector("#fdNow");
+        b.disabled = true; b.textContent = "Saving…";
+        const ok = await writeFolder();
+        paintFolder();
+        if(ok){ Sfx.tick(); toast("Saved into your folder"); }
+        else { Sfx.error(); toast(_folderHeld ? "Paused until you choose which copy to keep" : "Could not save into your folder"); }
+      });
+      on("#fdLoad", async () => { await refreshFolder(); await loadFromFolder(); paintFolder(); });
+      on("#fdOff", async () => {
+        const body = el('<div></div>');
+        body.innerHTML =
+          '<p class="small">GroundWork stops writing into <b>'+esc(folder.name || "that folder")+'</b>. The files already in it are <b>left exactly where they are</b> — they are yours, in your folder.</p>'+
+          '<p class="small">Your records stay on this iPhone and copies go back to GroundWork’s own folder in Files. The backup reminder comes back on.</p>'+
+          '<button class="btn full mt" id="foGo">Stop using this folder</button>'+
+          '<button class="btn ghost full mt" id="foNo">Cancel</button>';
+        const yes = await sheetPromise("Stop saving into this folder?", body, (b, fin) => {
+          b.querySelector("#foGo").onclick = () => fin(true);
+          b.querySelector("#foNo").onclick = () => fin(null);
+        });
+        if(!yes) return;
+        await forgetFolder(); paintFolder(); toast("No longer saving into that folder");
+      });
+    }
+    paintFolder();
+    refreshFolder().then(() => { if(document.body.contains(fdHost)) paintFolder(); });
 
     /* VIEWS.settings wires open/close state for the groups it built itself; this one is
        appended afterwards, so it needs the same three lines to stay folded like the rest. */
@@ -12646,6 +13191,21 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
   }
 
   /* ================= Boot ================= */
+  /* The folder check needs S, which the app's own boot loads asynchronously in an earlier script
+     block. `S` is a top-level `let`, so this is the same binding, not a copy — waiting on it is
+     waiting on the app to be ready, and there is nothing else to hook. It gives up after ten
+     seconds rather than polling for ever behind a crash screen. */
+  function whenLoaded(){
+    return new Promise(res => {
+      let n = 100;
+      const tick = () => {
+        try{ if(typeof S !== "undefined" && S && Array.isArray(S.sessions)) return res(true); }catch(e){}
+        if(--n <= 0) return res(false);
+        setTimeout(tick, 100);
+      };
+      tick();
+    });
+  }
   (async function(){
     if(GW){
       try{ bio = await GW.biometricAvailable(); }catch(e){}
@@ -12653,6 +13213,9 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
     if(lockOn() && bio.available){ showLock(); askUnlock(); }
     else if(lockOn() && !bio.available) LSset("tt_lock","0");   /* passcode removed since */
     rescheduleNotifications();
+    if(!await whenLoaded()) return;
+    await checkFolder();
+    setTimeout(maybeOfferFolder, 5000);
   })();
 })();
 </script>
