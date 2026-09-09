@@ -89,6 +89,7 @@ built entirely on never having overstated anything.
 | "Free MTD filing" | "HMRC lists the recognised software, and some of it is free." — link, never a promise. |
 | Naming or recommending a bridging vendor in the app | Link to HMRC's own list. It stays current; we would not. |
 | "This satisfies the digital-link rule" | "Moving a file rather than re-typing figures is what keeps the chain digital." State the rule, not a verdict on their setup. |
+| "Imports straight into your bridging software" / naming the `hmrcField` column as a filing instruction | "Each row names its SA103 box and the matching field in HMRC's own developer documentation." The column exists to save the filer guessing which figure is which — it is a label, not a submission format, and **no GroundWork export has ever been tested against a real bridging tool**. Expect the consumer to map these columns onto their own. |
 
 The last row matters most. Whether a *particular* chain of tools satisfies the rules for a
 *particular* person is a question about their circumstances, and the app has said from the
@@ -151,7 +152,7 @@ claim about their situation.
 | Where | Change |
 |---|---|
 | Tax › Making Tax Digital | Rebuilt around the route. "What this does / what you still need", the digital-link point, and a link to HMRC's own software list. The old copy ended on *"this app cannot file for you"* — a true sentence and a dead end. |
-| MTD export | `.csv` alongside `.json`, both rendered from one `mtdRows()` shape so they cannot disagree. CSV leads: it is the format bridging software and accountants read. |
+| MTD export | `.csv` alongside `.json`, both rendered from one `mtdRows()` shape so they cannot disagree. CSV leads: it is the format bridging software and accountants read. Every quarter emits the same fixed set of rows (zeros included) and each row names its SA103 box and the matching HMRC API property, so a mapping set up once keeps working. |
 | Info topics | `mtd-what`, `mtd-route`, `mtd-exports` — the mechanism, the boundary and which file is for what, behind dots rather than on screen. |
 | Paywall (`PLUS_SELL`, `openPlusSheet`) | Reordered around what the tier is actually for, and led with the free/paid boundary rather than a feature list. The stale "extra colour schemes" line went with it. |
 | Settings card | Same copy, same order, no colour schemes. |

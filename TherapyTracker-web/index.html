@@ -5108,6 +5108,9 @@ const SA103={
   26:"Bank, credit card and other financial charges",
   28:"Accountancy, legal and other professional fees",
   30:"Other business expenses",
+  /* The two income boxes. Nothing routes a COST to these — they are here so the MTD export can
+     name the box each income figure belongs to, the same way it names them for every cost. */
+  15:"Your turnover",
   16:"Any other business income"
 };
 const EXP_CATS=[
@@ -6355,8 +6358,10 @@ infoDef("mtd-route","Getting a quarter filed",
   '<p class="small muted">Whether a particular set of tools meets the rules in your circumstances is a question for your accountant. This app keeps records and adds them up; it makes no claim about your filing.</p>');
 infoDef("mtd-exports","Which file for what",
   '<p class="small">Both files hold exactly the same figures — they are built from one shared shape, so they cannot drift apart. Only the wrapper differs.</p>'+
-  '<div class="acc-work"><div><b>.csv</b> — opens in Excel, Numbers or Google Sheets, and it is the format bridging software expects. One row per figure, with the quarter, the SA103 box and the amount, so it filters and pivots without being reshaped first. <b>Reach for this one.</b></div>'+
+  '<div class="acc-work"><div><b>.csv</b> — opens in Excel, Numbers or Google Sheets, which is what bridging software reads from. One row per figure, with the quarter, the SA103 box and the amount, so it filters and pivots without being reshaped first. <b>Reach for this one.</b></div>'+
   '<div><b>.json</b> — the same quarters as structured data, for an accountant’s system or anything that would rather parse than read.</div></div>'+
+  '<p class="small mt">Every quarter carries the <b>same rows in the same order</b>, including £0.00 ones, so a mapping set up once keeps working. Each row also names the <b>SA103 box</b> and the matching field in HMRC’s own developer documentation, so whoever files does not have to work out which figure is which.</p>'+
+  '<p class="small muted">Tools differ in what layout they want, so expect your accountant or your bridging software to map these columns onto their own — that is normal, and moving a file rather than retyping figures is the part that matters. The dates are the standard quarters; if you have elected calendar quarters, say so before using these.</p>'+
   '<p class="small mt">Neither is a backup and neither can be restored. The one file that can is <b>Settings › Data &amp; backup › Export backup</b>. '+infoLink("backups-explained","Backups: which is which")+'</p>');
 infoDef("cancel-rules","How the notice periods work",
   '<p class="small">One line per notice period you honour. They are read <b>from most notice to least</b>, and a cancellation is charged by the first line it qualifies for.</p>'+
@@ -7437,6 +7442,25 @@ function mtdPeriod(q){
   const expTotal=Object.keys(boxes).reduce((a,k)=>a+boxes[k],0);
   return {q,turnover,other,boxes,expTotal,net:turnover+other-expTotal};
 }
+/* Every expense box this app can ever produce, in box order. The export emits ALL of them every
+   quarter, zeros included -- see mtdRows. */
+const MTD_EXP_BOXES=[20,21,23,24,26,28,30];
+/* SA103 box -> the property name HMRC's own Self Employment Business API uses for that figure on
+   a quarterly update. Carried in both exports as a HINT for whoever does the submission, so they
+   are not left guessing which of fifteen expense properties "box 30" is. It is not a claim that
+   this file can be submitted, and nothing here submits anything.
+
+   Two caveats that live with this map permanently:
+     - Box 24 is "Advertising AND business entertainment"; the API splits those into
+       advertisingCosts and businessEntertainmentCosts. Every GroundWork category under box 24
+       (website, marketing) is advertising, so it maps there -- but anyone who has filed
+       entertainment under box 24 has to split it by hand.
+     - The API is versioned and its shape has changed between versions. THE BOX NUMBER IS THE
+       STABLE THING and is what an accountant actually works from; this is a convenience column.
+   The income side needs no map: HMRC calls those two figures turnover and other already. */
+const MTD_HMRC_FIELD={16:"other",20:"carVanTravelExpenses",21:"premisesRunningCosts",
+  23:"adminCosts",24:"advertisingCosts",26:"financeCharges",28:"professionalFees",
+  30:"otherExpenses"};
 /* The ONE shape both exports render. Adding a figure here adds it to the .json and the .csv
    together — the same reason backupPayload() is the single backup envelope. Two files that are
    built from two literals are two files that eventually disagree, and the one place that would
@@ -7445,15 +7469,30 @@ function mtdRows(ty){
   const p2=n=>Math.round(n*100)/100;
   return mtdQuarters(ty).map(q=>{
     const p=mtdPeriod(q);
+    /* THE FIXED SET, and the zeros are the point. Emitting only the boxes that happen to have a
+       figure means the rows move between quarters: a consumer that worked out "the third expense
+       row is box 21" from Q1 silently reads something else in Q2. A few £0.00 lines cost nothing
+       and make the shape predictable enough to map once and reuse. A zero is also a real answer
+       — "no premises costs this quarter" is a figure, not a gap.
+       Any box NOT in the fixed list is still appended rather than dropped: expenseTotal counts
+       every box mtdExpenseBoxes returned, so silently omitting one would hand somebody a file
+       whose own rows do not add up to its own total. */
+    const boxes=MTD_EXP_BOXES.slice();
+    Object.keys(p.boxes).forEach(b=>{if(boxes.indexOf(+b)<0)boxes.push(+b);});
+    boxes.sort((a,b)=>a-b);
     return {period:q.n,label:q.label,from:isoD(q.from),to:isoD(q.to),
       income:{turnover:p2(p.turnover),other:p2(p.other)},
-      expenses:Object.keys(p.boxes).sort((a,b)=>a-b)
-        .map(b=>({sa103Box:+b,name:SA103[b]||"",amount:p2(p.boxes[b])})),
+      expenses:boxes.map(b=>({sa103Box:b,name:SA103[b]||"",hmrcField:MTD_HMRC_FIELD[b]||"",
+        amount:p2(p.boxes[b]||0)})),
       expenseTotal:p2(p.expTotal),net:p2(p.net)};
   });
 }
 const MTD_EXPORT_NOTE="Quarterly totals for MTD for Income Tax. Not a submission - GroundWork is not "+
-  "HMRC-recognised software and cannot file. Hand these to your accountant, or to software that files.";
+  "HMRC-recognised software and cannot file. Hand these to your accountant, or to software that files. "+
+  "sa103Box is the box on the SA103 self-employment pages; hmrcField is the matching property name in "+
+  "HMRC's Self Employment Business API, offered to make mapping easier and not as a filing instruction. "+
+  "Amounts are in GBP. Periods are the standard MTD quarters (6 Apr - 5 Jul and so on); if you have "+
+  "elected calendar quarters these dates will not match yours.";
 function mtdExportJSON(ty){
   const out={app:"GroundWork",generated:new Date().toISOString(),taxYear:ty,
     basis:taxBasis(),note:MTD_EXPORT_NOTE,periods:mtdRows(ty)};
@@ -7461,23 +7500,27 @@ function mtdExportJSON(ty){
   toast("MTD figures downloaded (.json)");
 }
 /* Long/tidy, one row per figure — not one row per quarter with the boxes spread across columns.
-   A therapist's boxes change from quarter to quarter (a cost that only falls in Q2 exists in Q2
-   alone), so a wide sheet would need its columns recomputed from the union of every quarter and
-   would still hand a bridging tool a grid full of blanks. One row per figure survives a pivot
-   table, an accountant's filter, and a bridging tool's column mapping equally well.
-   `section` is what you filter on: income / expense / total. */
+   A wide sheet would need a column per box, and reading a figure out of it means knowing which
+   column that box landed in. One row per figure survives a pivot table, an accountant's filter
+   and a bridging tool's column mapping equally well.
+   `section` is what you filter on: income / expense / total.
+
+   The ROW SET IS FIXED (see mtdRows): every quarter emits the same figures in the same order,
+   zeros included. Long/tidy is what makes the file readable; the fixed set is what makes it
+   mappable once rather than re-checked every quarter. `sa103Box` and `hmrcField` are there so
+   whoever files can match a row to a box or an API property without reading the descriptions. */
 function mtdExportCSV(ty){
-  const cols=["taxYear","basis","period","periodLabel","from","to","section","sa103Box","description","amount"];
+  const cols=["taxYear","basis","period","periodLabel","from","to","section","sa103Box","hmrcField","description","amount"];
   const rows=[cols.join(",")];
   const basis=taxBasis();
-  const put=(r,section,box,desc,amt)=>rows.push([ty,basis,r.period,r.label,r.from,r.to,
-    section,box==null?"":box,desc,amt.toFixed(2)].map(csvCell).join(","));
+  const put=(r,section,box,field,desc,amt)=>rows.push([ty,basis,r.period,r.label,r.from,r.to,
+    section,box==null?"":box,field||"",desc,amt.toFixed(2)].map(csvCell).join(","));
   mtdRows(ty).forEach(r=>{
-    put(r,"income",null,"Turnover — session fees",r.income.turnover);
-    put(r,"income",null,"Other business income",r.income.other);
-    r.expenses.forEach(e=>put(r,"expense",e.sa103Box,e.name,e.amount));
-    put(r,"total",null,"Total expenses",r.expenseTotal);
-    put(r,"total",null,"Net for the quarter",r.net);
+    put(r,"income",15,"turnover","Turnover — session fees",r.income.turnover);
+    put(r,"income",16,"other","Other business income",r.income.other);
+    r.expenses.forEach(e=>put(r,"expense",e.sa103Box,e.hmrcField,e.name,e.amount));
+    put(r,"total",null,"","Total expenses",r.expenseTotal);
+    put(r,"total",null,"","Net for the quarter",r.net);
   });
   /* A trailing comment line would break a naive parser, so the caveat rides in a cell of its
      own row instead — visible in a spreadsheet, and skipped by anything filtering on `section`. */
