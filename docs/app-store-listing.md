@@ -164,10 +164,13 @@ tier. A free tier is bar 1, already there and already plain.
 **The middle tier now has its own image**, not a variant of this one:
 `TherapyTracker-web/icon-ideas/groundwork/subscription-business-1024.html` /
 `.png` — same plate, same regeneration command with the basename as an argument
-(`node scripts/render-subscription-image.mjs subscription-business-1024`), silver on bar 2
-instead of gold on bar 3, bar 3 back to the plain fade bar 1 carries. Name TBC — see
-`docs/monetisation.md`. Putting gold on every bar, or silver on more than one, would retire the
-ladder as a way of saying anything.
+(`node scripts/render-subscription-image.mjs subscription-business-1024`), a violet neon glow on
+bar 2 instead of gold on bar 3, bar 3 back to the plain fade bar 1 carries. Violet (not a second
+metal) because a cool silver tried first sat too close in lightness to the sage plate to read at
+this scale — see the in-app `--tier2-*` tokens in `index.html`, picked from the same comparison
+and used for the matching Business analytics accent. Name TBC — see `docs/monetisation.md`.
+Putting gold on every bar, or the glow on more than one, would retire the ladder as a way of
+saying anything.
 
 ## Subscription review screenshot
 
