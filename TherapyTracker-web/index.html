@@ -520,13 +520,16 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
 .sgrp .sgs{font-size:12.5px;color:var(--muted);padding-right:24px}
 .sgrp[open]>summary{border-bottom:1px solid var(--line)}
 .sgb{padding:2px 10px 10px}
-/* The group title, pinned once its own summary has scrolled behind the header — just the
-   title, not the subheading, so a long section never loses its own name. Sits in normal flow
-   (matching the summary's own spacing) until JS marks it .show; see mountSgrpSticky(). */
-.sgstick{position:sticky;z-index:5;background:var(--card);font-weight:700;font-size:15.5px;
-  padding:10px 16px;margin:-2px -10px 0;border-bottom:1px solid var(--hair);
-  opacity:0;pointer-events:none;transition:opacity .15s ease}
-.sgstick.show{opacity:1}
+/* One shared bar naming whichever open group's own title (never its subheading) has scrolled
+   behind the header, so a long expanded section never loses its own name. Deliberately
+   `position:fixed`, not `sticky`: the real title lives inside `.sgrp`, which is `overflow:hidden`
+   for its rounded corners (and blurred, for the glass effect) — a sticky child of that box is
+   clipped/misrendered on WebKit the moment it tries to stick past its parent's edge. Fixed sits
+   outside all of that, positioned and sized from JS against the real header and content box
+   (see wireSettingsSticky) rather than a guessed offset, the same reasoning as `.uohbar`. */
+.sgstick{position:fixed;z-index:20;background:var(--card);font-weight:700;font-size:15.5px;
+  padding:12px 16px;box-shadow:var(--shadow);border-bottom:1px solid var(--hair)}
+.sgstick[hidden]{display:none}
 .setsearchwrap{position:relative}
 .setsearchwrap input{padding-right:40px}
 .setsearchx{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:28px;height:28px;
@@ -2351,6 +2354,8 @@ function crashScreen(err,tab){
    that redraws the screen the user is already looking at (a Weekly/Monthly toggle, saving a
    row from a sheet) should pass it; only genuine navigation between tabs should scroll to top. */
 let _setGrpOpen={};   /* which Settings sections are open, this visit only — see VIEWS.settings */
+let _setStickyCleanup=null;   /* tears down the previous Settings sticky-title listeners — see go() */
+let _setStickyUpdate=null;    /* current wireSettingsSticky's update(), for deviceCard()'s toggle */
 function go(tab,opts){
   opts=opts||{};
   const rz=resolveTab(tab,opts.seg); tab=rz.tab;
@@ -2366,6 +2371,10 @@ function go(tab,opts){
   cur=tab;
   try{tyMemoClear();}catch(e){}
   try{renderTabs();applyBranding();}catch(e){console.error("Chrome render failed",e);}
+  /* Settings' sticky-title bar listens on window scroll/resize — never leave those attached to
+     a view that just got thrown away, whether the reader left Settings entirely or is only
+     seeing it redrawn (keepScroll re-render rebuilds it below). */
+  if(_setStickyCleanup){_setStickyCleanup();_setStickyCleanup=null;}
   const m=main();
   try{
     m.innerHTML="";m.appendChild(VIEWS[tab]());
@@ -8419,30 +8428,59 @@ function plusSettingsCardHTML(){
     '<button class="btn '+(active?"sec ":"")+'full mt" data-plus="settings">'+
       (active?"View details":"Unlock "+PLUS_NAME)+'</button></div>';
 }
-/* Pins a group's own title (never its subheading) at the top of the screen once the reader has
-   scrolled past it, so a long expanded section never loses its own name. The bar's text is read
-   straight off the group's own .sgt rather than typed again here, so it can never drift out of
-   step with the heading it mirrors. It sits in normal flow (invisible, right below the summary)
-   until an IntersectionObserver on the summary itself marks it .show — exactly when the summary
-   has scrolled behind the sticky header, using the header's own measured height rather than a
-   guessed offset (see the identical trick on .uohbar). */
-function mountSgrpSticky(d){
-  const summary=d.querySelector(':scope>summary'), sgt=summary&&summary.querySelector('.sgt'),
-        sgb=d.querySelector(':scope>.sgb');
-  if(!summary||!sgt||!sgb||sgb.querySelector('.sgstick'))return;
-  const bar=el('<div class="sgstick">'+esc(sgt.textContent)+'</div>');
-  sgb.insertBefore(bar,sgb.firstChild);
-  const hd=document.querySelector('header.top'), hh=(hd&&hd.offsetHeight)||0;
-  bar.style.top=hh+'px';
-  const io=new IntersectionObserver(([entry])=>{
-    bar.classList.toggle('show', d.open&&!entry.isIntersecting);
-  },{threshold:0,rootMargin:'-'+hh+'px 0px 0px 0px'});
-  io.observe(summary);
-  d.addEventListener('toggle',()=>{ if(!d.open)bar.classList.remove('show'); });
+/* Wires the one shared "which section am I in" bar for Settings. Driven by scroll position
+   rather than an IntersectionObserver on each group, because groups are independent <details>
+   (more than one can be open at once) and the answer is "whichever open group's box the header
+   line currently cuts through" — a plain geometry check against every open .sgrp, redone on each
+   scroll tick. Returns a cleanup function; go() calls it before rendering the next tab (or before
+   Settings re-renders itself) so the listeners never pile up across visits. */
+function wireSettingsSticky(v){
+  const bar=v.querySelector("#setStickyTitle");
+  if(!bar)return null;
+  const hd=document.querySelector("header.top");
+  const place=()=>{
+    const hh=(hd&&hd.offsetHeight)||0;
+    const r=v.getBoundingClientRect();
+    bar.style.top=hh+"px"; bar.style.left=r.left+"px"; bar.style.width=r.width+"px";
+    return hh;
+  };
+  const update=()=>{
+    const hh=place();
+    let match=null;
+    v.querySelectorAll(".sgrp").forEach(g=>{
+      if(match||!g.open)return;
+      const r=g.getBoundingClientRect();
+      if(r.top<hh&&r.bottom>hh)match=g;
+    });
+    if(match){
+      const sgt=match.querySelector(":scope>summary .sgt");
+      bar.textContent=sgt?sgt.textContent:"";
+      bar.hidden=false;
+    }else bar.hidden=true;
+  };
+  let ticking=false;
+  const onScroll=()=>{
+    if(ticking)return; ticking=true;
+    requestAnimationFrame(()=>{update();ticking=false;});
+  };
+  place();update();
+  window.addEventListener("scroll",onScroll,{passive:true});
+  window.addEventListener("resize",update);
+  v.querySelectorAll(".sgrp").forEach(g=>g.addEventListener("toggle",update));
+  /* The native "This iPhone" group is appended to v after this ran (see the VIEWS.settings wrap
+     in the native block), so it never got a toggle listener above; deviceCard() calls this
+     directly on its own toggle instead. `toggle` doesn't bubble, so delegation can't reach it. */
+  _setStickyUpdate=update;
+  return ()=>{
+    window.removeEventListener("scroll",onScroll);
+    window.removeEventListener("resize",update);
+    if(_setStickyUpdate===update)_setStickyUpdate=null;
+  };
 }
 VIEWS.settings=function(){
   const v=el('<div class="view active"></div>');
   v.innerHTML=`
+   <div class="sgstick" id="setStickyTitle" hidden></div>
    <div class="card" style="padding:10px 14px">
      <div class="setsearchwrap">
        <input id="setSearch" type="search" placeholder="Search settings…" style="width:100%">
@@ -8710,7 +8748,6 @@ VIEWS.settings=function(){
     const k=d.dataset.g;
     d.open=!!_setGrpOpen[k];
     d.addEventListener("toggle",()=>{_setGrpOpen[k]=d.open;});
-    mountSgrpSticky(d);
   });
   /* Search filters by card, not by group: a group stays visible whenever any card inside it
      matches, and opens automatically so the reader never has to expand a group by hand to see
@@ -8834,6 +8871,7 @@ VIEWS.settings=function(){
     v.querySelector("#auditWrap").innerHTML='<details><summary>Recent activity ('+a.length+')</summary>'+
       a.slice(0,60).map(r=>`<div class="audit-row"><b>${new Date(r.ts).toLocaleString("en-GB",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}</b> — ${esc(r.summary)}</div>`).join("")+'</details>';
   });
+  _setStickyCleanup=wireSettingsSticky(v);
   return v;
 };
 /* ============ Suggestions ============ */
@@ -13511,8 +13549,10 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
     /* VIEWS.settings wires open/close state for the groups it built itself; this one is
        appended afterwards, so it needs the same three lines to stay folded like the rest. */
     d.open = !!_setGrpOpen.device;
-    d.addEventListener("toggle", () => { _setGrpOpen.device = d.open; });
-    try{ mountSgrpSticky(d); }catch(e){}
+    d.addEventListener("toggle", () => {
+      _setGrpOpen.device = d.open;
+      if(_setStickyUpdate)_setStickyUpdate();
+    });
     /* This card is appended AFTER VIEWS.settings has already run its own wireInfo() pass, so its
        "how the three kinds of backup differ" link would never be clickable without this. */
     try{ wireInfo(d); }catch(e){}
