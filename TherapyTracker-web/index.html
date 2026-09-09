@@ -36,7 +36,14 @@ var n=localStorage.getItem('tt_practice');if(n)d.style.setProperty('--appname',J
   /* Header gradient: brand → brand-dark, the same construction every other palette uses. It is a
      shade darker than the icon's own top stop (#6A8B7C) on purpose — the 18px/700 header title
      falls just under the WCAG large-text threshold, and white on #6A8B7C is only 3.75:1. */
-  --gs1:#5C7A6D; --gs2:#3C4F44;}
+  --gs1:#5C7A6D; --gs2:#3C4F44;
+  /* The middle rung of the subscription-image tier ladder (see icon-ideas/groundwork/
+     subscription-business-1024.html) — a violet glow, not tied to any palette, the same way that
+     ladder's Plus gold isn't. Reused in-app for Business analytics, which sits on that rung.
+     Was a cool silver ramp; that read as barely-there at 13px and on the subscription icon's own
+     small bars, so it moved to a colour with actual contrast against sage instead of a lighter
+     neutral (see the "Accent Options" comparison this was picked from). */
+  --tier2-1:#F3E4FF; --tier2-2:#C084FC; --tier2-3:#7C3AED; --tier2-4:#E9D5FF; --tier2-glow:rgba(124,58,237,.6);}
 html[data-theme="dark"]{
   color-scheme:dark;
   --bg:#0C1512; --card:#16211E; --soft:#1E2C28; --ink:#E9F2EE; --muted:#93A8A1; --line:#243430;
@@ -363,17 +370,29 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .seg.fade-l::before,.seg.fade-r::after{opacity:.8}
 .seg button{border:0;background:transparent;padding:8px 13px;border-radius:9px;font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap;cursor:pointer}
 .seg button.on{background:var(--card);color:var(--brand-dark);box-shadow:0 1px 2px var(--ring),0 2px 8px -4px var(--ring)}
-/* The one tab in a bar that costs extra — a hairline brand border marks it out from its plain
-   siblings without introducing a colour the rest of the app doesn't use. Filled, not just
-   outlined, once it's the active tab, so "on" still reads as clearly "on" as every other segment. */
-.seg button.premium{border:1px solid color-mix(in srgb,var(--brand) 45%,transparent)}
-.seg button.premium.on{background:linear-gradient(135deg,var(--brand),var(--brand-dark));color:#fff;border-color:transparent;box-shadow:0 1px 2px var(--ring),0 2px 10px -4px color-mix(in srgb,var(--brand) 60%,transparent)}
-/* The frame around Business analytics itself, not just its tab — a thin brand-gradient rule
-   above the content, so the screen it opens onto still reads as the paid-for one once the reader
-   has already tapped in. */
+/* The one tab in a bar that costs extra — a violet glow marks it out from its plain siblings,
+   the same colour as the middle rung of the subscription-image tier ladder (see icon-ideas/
+   groundwork/subscription-business-1024.html) rather than one invented for this screen alone.
+   Was a cool silver ramp; against the sage plate and a white card it sat too close in lightness
+   to read at 13px, so it moved to violet — a genuine complementary contrast against sage that
+   can't wash out the way a neutral metal can, with a real drop-glow rather than a flat outline
+   so it still reads as "lit up" at icon scale. A gradient border needs a solid base to clip
+   against, hence the two-layer background — `padding-box` paints the button's own fill,
+   `border-box` paints the ramp into the border itself. */
+.seg button.premium{position:relative;border:1.5px solid transparent;border-radius:9px;
+  background:linear-gradient(var(--card),var(--card)) padding-box,
+    linear-gradient(135deg,var(--tier2-1),var(--tier2-2) 38%,var(--tier2-3) 72%,var(--tier2-4)) border-box;
+  box-shadow:0 0 7px var(--tier2-glow)}
+.seg button.premium.on{color:var(--brand-dark);
+  box-shadow:0 1px 2px var(--ring),0 2px 10px -4px var(--ring),0 0 9px var(--tier2-glow)}
+/* The frame around Business analytics itself, not just its tab — a thin violet-glow rule above
+   the content, so the screen it opens onto still reads as the paid-for one once the reader has
+   already tapped in. Alternating light/dark stops rather than a plain two-colour fade, for the
+   shimmer a single glow reads as. */
 #crbody.bizA{position:relative;padding-top:14px}
 #crbody.bizA::before{content:"";position:absolute;top:0;left:2px;right:2px;height:3px;border-radius:3px;
-  background:linear-gradient(90deg,var(--brand),var(--brand-dark),var(--brand))}
+  background:linear-gradient(90deg,var(--tier2-3),var(--tier2-1) 25%,var(--tier2-4) 50%,var(--tier2-1) 75%,var(--tier2-3));
+  box-shadow:0 0 8px var(--tier2-glow)}
 /* ===== use-of-home year strip =====
    Full-bleed inside its card and sticky under the header (JS sets `top` from the header's real
    height), so the year being edited stays on screen while the cost fields scroll past. */

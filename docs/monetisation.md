@@ -126,6 +126,19 @@ absolute.
   subscription self-evidently fair. If Plus ever struggles to justify its renewal, this is
   the thing to build, not more analytics.
 
+### A middle tier — not built, name TBC
+
+Not implemented. `PLUS_FEATURES` is still one flat list and `plusLocked()` still resolves to a
+single Plus/no-Plus check — there is no second entitlement to gate against, and adding one is a
+real change to §2.2 and §4.1, not just a name. What exists so far is the **subscription image**
+for it, one rung below Plus on the tier ladder the app-store asset already draws: Business
+analytics, accreditation and Notes sync, without the tax bundle (`tax`, `finances`, `mtd` stay
+Plus-only, per the reasoning in §3 for why those three are never sold apart). See
+`docs/app-store-listing.md` § Subscription image for the asset itself. Building the tier for
+real means picking apart `PLUS_FEATURES` into two lists and giving `plusLocked()` a level to
+check against — do that as its own decision, not as a side effect of wanting the icon to have
+somewhere to point.
+
 ---
 
 ## 4. Phase 1 — iOS (StoreKit, no accounts, no server)

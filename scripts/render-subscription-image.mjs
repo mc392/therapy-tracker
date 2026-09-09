@@ -5,7 +5,10 @@
    source is the same SVG geometry the app's own launch screen uses, so the mark cannot
    drift from the one shipping in index.html.
 
-   Usage: node scripts/render-subscription-image.mjs */
+   Usage: node scripts/render-subscription-image.mjs [basename]
+     basename defaults to subscription-plus-1024 (GroundWork Plus). Pass a different one — e.g.
+     subscription-business-1024, the middle tier's own source — to render that image instead;
+     it must exist as <basename>.html beside this file's default. */
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -26,8 +29,9 @@ try {
   process.exit(1);
 }
 
-const SRC = resolve("TherapyTracker-web/icon-ideas/groundwork/subscription-plus-1024.html");
-const OUT = resolve("TherapyTracker-web/icon-ideas/groundwork/subscription-plus-1024.png");
+const basename = process.argv[2] || "subscription-plus-1024";
+const SRC = resolve(`TherapyTracker-web/icon-ideas/groundwork/${basename}.html`);
+const OUT = resolve(`TherapyTracker-web/icon-ideas/groundwork/${basename}.png`);
 if (!existsSync(SRC)) throw new Error(`missing source: ${SRC}`);
 
 const browser = await chromium.launch();

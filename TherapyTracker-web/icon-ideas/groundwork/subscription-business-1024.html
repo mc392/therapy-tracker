@@ -1,0 +1,83 @@
+<!-- Source for subscription-business-1024.png — the App Store Connect image for the MIDDLE
+     GroundWork subscription tier (name TBC): the read-only side of Plus — Business analytics,
+     accreditation hours and GroundWork Notes sync — without the tax engine. See
+     docs/monetisation.md for exactly what stays Plus-only.
+
+     Regenerate rather than editing the PNG:
+       node scripts/render-subscription-image.mjs subscription-business-1024
+
+     THIS IS A SEPARATE FILE FROM subscription-plus-1024.html ON PURPOSE. That file's own
+     comment already reserved this: "A middle tier later takes bar 2 (silver, or a lighter gold)
+     without redrawing anything." Redrawing here, not there, is exactly what keeps that promise —
+     Plus's own image is untouched, and this one exists alongside it.
+
+     THE THREE BARS ARE STILL A TIER LADDER, read the same way in both files: bar 1 is free, bar
+     2 is this tier, bar 3 is Plus. The glow sits on bar 2 alone here — bar 3 is back to the plain
+     fade that bars 1 and 2 share in subscription-plus-1024.html, because gold marks the TOP
+     tier, and putting it on bar 3 in this image would claim a rung this subscription doesn't
+     sell. Do not brighten bar 3 to "look premium too" — that is what the gold file is for.
+
+     Bar 2 was silver first; at this size, against the same sage plate the gold image sits on, a
+     cool neutral sat too close in lightness to the plate and the bars either side of it to read
+     as anything but faint. Violet is the in-app colour too (see index.html's --tier2-* tokens,
+     picked from the same comparison this was) — a genuine complementary contrast against sage
+     rather than a lighter or darker version of the same neutral, so the two subscription images
+     and the in-app tab stay one visual story.
+
+     No text, same reasoning as subscription-plus-1024.html: Apple shows the subscription's own
+     name and description beside this image. Plate and bar colours are the same sample as that
+     file, so the two read as one ladder rather than two products: #6B8B7C → #3C4F44, #FBFDFB. -->
+<meta charset="utf-8">
+<style>
+  html,body{margin:0;padding:0;width:1024px;height:1024px;overflow:hidden;background:#3C4F44}
+  .plate{position:relative;width:1024px;height:1024px;
+    background:linear-gradient(180deg,#6B8B7C 0%,#5F7C6E 25%,#536D60 50%,#475E52 75%,#3C4F44 100%)}
+  /* A soft lift behind the leaf, so the top-right corner does not read as dead space and the
+     leaf separates from the ground it sits on. */
+  .glow{position:absolute;inset:0;
+    background:radial-gradient(52% 46% at 68% 22%,rgba(255,255,255,.16),rgba(255,255,255,0) 70%)}
+  svg{position:absolute;left:50%;top:52%;transform:translate(-50%,-50%);width:770px;height:719px}
+  /* The icon's own fade, sampled from it: #94A29A, #C2CCC6, #FBFDFB against this gradient —
+     bars 1 and 3 here, the two rungs this subscription is NOT selling. */
+  .b1{fill:#FBFDFB;opacity:.55}
+  .b3{fill:#FBFDFB;opacity:.78}
+  /* Violet on the middle rung — a real complementary contrast against the sage plate, not a
+     lighter/darker neutral. The stroke straddles the path, so bar 2 ends up a little wider than
+     bars 1 and 3 — the same trick subscription-plus-1024.html uses to draw the eye to the rung
+     being sold. */
+  .b2{fill:#FBFDFB;stroke:url(#violet);stroke-width:2.6}
+  .leaf{fill:#FBFDFB}
+  /* Thin, and short enough to stay well inside the leaf — at 3.4 it read as a slash across a
+     lens rather than a vein, and it touched the edges. */
+  .vein{fill:none;stroke:#5F7C6E;stroke-width:2.2;stroke-linecap:round}
+</style>
+<div class="plate">
+  <div class="glow"></div>
+  <svg viewBox="0 0 120 112" role="img" aria-label="GroundWork — middle tier (name TBC)">
+    <defs>
+      <!-- Same light-to-deep ramp construction as subscription-plus-1024.html's gold, violet
+           instead of warm gold — a rim catching the light, not a flat outline. -->
+      <linearGradient id="violet" x1="0" y1="0" x2="0.35" y2="1">
+        <stop offset="0%"   stop-color="#F3E4FF"/>
+        <stop offset="38%"  stop-color="#C084FC"/>
+        <stop offset="72%"  stop-color="#7C3AED"/>
+        <stop offset="100%" stop-color="#E9D5FF"/>
+      </linearGradient>
+      <!-- Stronger than the gold image's own glow (stdDeviation 2.6, opacity .55) — a neon read
+           needs the glow itself to carry more of the effect than a metal's does, or bar 2 reads
+           as merely a coloured outline rather than lit up. -->
+      <filter id="violetglow" x="-70%" y="-70%" width="240%" height="240%">
+        <feDropShadow dx="0" dy="0" stdDeviation="3.4" flood-color="#A855F7" flood-opacity=".7"/>
+      </filter>
+    </defs>
+    <rect class="b1" x="12" y="72" width="24" height="36" rx="12"/>
+    <g filter="url(#violetglow)"><rect class="b2" x="46" y="54" width="24" height="54" rx="12"/></g>
+    <rect class="b3" x="80" y="40" width="24" height="68" rx="12"/>
+    <!-- Lifted and nudged right of the splash mark's own placement: there the leaf all but
+         touches the tallest bar, which at this size reads as one shape rather than two. -->
+    <g transform="translate(95 13) rotate(35) scale(1.08)">
+      <path class="leaf" d="M0-17C10-9 10 9 0 17-10 9-10-9 0-17Z"/>
+      <path class="vein" d="M-3.6 5 3.6-5"/>
+    </g>
+  </svg>
+</div>
