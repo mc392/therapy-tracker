@@ -158,10 +158,16 @@ guessed: `#6B8B7C` → `#3C4F44`, bars at 55% / 78% / 100% white.
 It carries **no text** on purpose: Apple shows the subscription's name and description beside
 the image, so a word here would be redundant and could not be localised.
 
-**The three bars are a tier ladder.** Gold is on the third one alone because Plus is currently
-the only tier *and* the top tier. A middle tier later takes bar 2 without redrawing anything,
-and a free tier is bar 1, already there and already plain. Putting gold on all three would
-retire the ladder as a way of saying anything.
+**The three bars are a tier ladder.** Gold is on the third one alone because Plus is the top
+tier. A free tier is bar 1, already there and already plain.
+
+**The middle tier now has its own image**, not a variant of this one:
+`TherapyTracker-web/icon-ideas/groundwork/subscription-business-1024.html` /
+`.png` — same plate, same regeneration command with the basename as an argument
+(`node scripts/render-subscription-image.mjs subscription-business-1024`), silver on bar 2
+instead of gold on bar 3, bar 3 back to the plain fade bar 1 carries. Name TBC — see
+`docs/monetisation.md`. Putting gold on every bar, or silver on more than one, would retire the
+ladder as a way of saying anything.
 
 ## Subscription review screenshot
 
