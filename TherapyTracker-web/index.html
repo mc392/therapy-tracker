@@ -520,6 +520,19 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
 .sgrp .sgs{font-size:12.5px;color:var(--muted);padding-right:24px}
 .sgrp[open]>summary{border-bottom:1px solid var(--line)}
 .sgb{padding:2px 10px 10px}
+/* The group title, pinned once its own summary has scrolled behind the header — just the
+   title, not the subheading, so a long section never loses its own name. Sits in normal flow
+   (matching the summary's own spacing) until JS marks it .show; see mountSgrpSticky(). */
+.sgstick{position:sticky;z-index:5;background:var(--card);font-weight:700;font-size:15.5px;
+  padding:10px 16px;margin:-2px -10px 0;border-bottom:1px solid var(--hair);
+  opacity:0;pointer-events:none;transition:opacity .15s ease}
+.sgstick.show{opacity:1}
+.setsearchwrap{position:relative}
+.setsearchwrap input{padding-right:40px}
+.setsearchx{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:28px;height:28px;
+  border:0;border-radius:50%;background:var(--soft);color:var(--muted);font-size:13px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center}
+.setsearchx:active{transform:translateY(-50%) scale(.92)}
 .sgb>.card{border:1px solid var(--hair);border-radius:14px;margin:10px 0 0;background:color-mix(in srgb,var(--bg) 45%,transparent);backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:none}
 .svgwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:6px -4px 0}
 .svgwrap svg{display:block}
@@ -8406,11 +8419,35 @@ function plusSettingsCardHTML(){
     '<button class="btn '+(active?"sec ":"")+'full mt" data-plus="settings">'+
       (active?"View details":"Unlock "+PLUS_NAME)+'</button></div>';
 }
+/* Pins a group's own title (never its subheading) at the top of the screen once the reader has
+   scrolled past it, so a long expanded section never loses its own name. The bar's text is read
+   straight off the group's own .sgt rather than typed again here, so it can never drift out of
+   step with the heading it mirrors. It sits in normal flow (invisible, right below the summary)
+   until an IntersectionObserver on the summary itself marks it .show — exactly when the summary
+   has scrolled behind the sticky header, using the header's own measured height rather than a
+   guessed offset (see the identical trick on .uohbar). */
+function mountSgrpSticky(d){
+  const summary=d.querySelector(':scope>summary'), sgt=summary&&summary.querySelector('.sgt'),
+        sgb=d.querySelector(':scope>.sgb');
+  if(!summary||!sgt||!sgb||sgb.querySelector('.sgstick'))return;
+  const bar=el('<div class="sgstick">'+esc(sgt.textContent)+'</div>');
+  sgb.insertBefore(bar,sgb.firstChild);
+  const hd=document.querySelector('header.top'), hh=(hd&&hd.offsetHeight)||0;
+  bar.style.top=hh+'px';
+  const io=new IntersectionObserver(([entry])=>{
+    bar.classList.toggle('show', d.open&&!entry.isIntersecting);
+  },{threshold:0,rootMargin:'-'+hh+'px 0px 0px 0px'});
+  io.observe(summary);
+  d.addEventListener('toggle',()=>{ if(!d.open)bar.classList.remove('show'); });
+}
 VIEWS.settings=function(){
   const v=el('<div class="view active"></div>');
   v.innerHTML=`
    <div class="card" style="padding:10px 14px">
-     <input id="setSearch" type="search" placeholder="Search settings…" style="width:100%">
+     <div class="setsearchwrap">
+       <input id="setSearch" type="search" placeholder="Search settings…" style="width:100%">
+       <button type="button" id="setSearchClear" class="setsearchx" aria-label="Clear search" hidden>✕</button>
+     </div>
      <p class="small muted" id="setSearchNone" style="margin:8px 2px 0;display:none">No settings match that search.</p>
    </div>
    <details class="sgrp" data-g="business"><summary><span class="sgt">Your practice</span><span class="sgs">Decisions about the business: name, charging policy and how your figures are counted</span></summary><div class="sgb">
@@ -8673,13 +8710,15 @@ VIEWS.settings=function(){
     const k=d.dataset.g;
     d.open=!!_setGrpOpen[k];
     d.addEventListener("toggle",()=>{_setGrpOpen[k]=d.open;});
+    mountSgrpSticky(d);
   });
   /* Search filters by card, not by group: a group stays visible whenever any card inside it
      matches, and opens automatically so the reader never has to expand a group by hand to see
      why it's still here. Clearing the box restores each group to whatever _setGrpOpen already
      held, rather than closing everything again. */
-  const setSearch=v.querySelector("#setSearch"), setSearchNone=v.querySelector("#setSearchNone");
-  if(setSearch)setSearch.oninput=()=>{
+  const setSearch=v.querySelector("#setSearch"), setSearchNone=v.querySelector("#setSearchNone"),
+        setSearchClear=v.querySelector("#setSearchClear");
+  const runSetSearch=()=>{
     const q=setSearch.value.trim().toLowerCase();
     let anyGroup=false;
     v.querySelectorAll(".sgrp").forEach(g=>{
@@ -8694,6 +8733,13 @@ VIEWS.settings=function(){
       if(anyCard){g.open=true;anyGroup=true;}
     });
     if(setSearchNone)setSearchNone.style.display=(q&&!anyGroup)?"":"none";
+    if(setSearchClear)setSearchClear.hidden=!q;
+  };
+  if(setSearch)setSearch.oninput=runSetSearch;
+  if(setSearchClear)setSearchClear.onclick=()=>{
+    setSearch.value="";
+    runSetSearch();
+    setSearch.focus();
   };
   (async function paintStorage(){
     const stEl=v.querySelector("#stStatus"),hintEl=v.querySelector("#stHint"),askB=v.querySelector("#stAsk");
@@ -13466,6 +13512,7 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
        appended afterwards, so it needs the same three lines to stay folded like the rest. */
     d.open = !!_setGrpOpen.device;
     d.addEventListener("toggle", () => { _setGrpOpen.device = d.open; });
+    try{ mountSgrpSticky(d); }catch(e){}
     /* This card is appended AFTER VIEWS.settings has already run its own wireInfo() pass, so its
        "how the three kinds of backup differ" link would never be clickable without this. */
     try{ wireInfo(d); }catch(e){}
