@@ -363,6 +363,17 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .seg.fade-l::before,.seg.fade-r::after{opacity:.8}
 .seg button{border:0;background:transparent;padding:8px 13px;border-radius:9px;font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap;cursor:pointer}
 .seg button.on{background:var(--card);color:var(--brand-dark);box-shadow:0 1px 2px var(--ring),0 2px 8px -4px var(--ring)}
+/* The one tab in a bar that costs extra — a hairline brand border marks it out from its plain
+   siblings without introducing a colour the rest of the app doesn't use. Filled, not just
+   outlined, once it's the active tab, so "on" still reads as clearly "on" as every other segment. */
+.seg button.premium{border:1px solid color-mix(in srgb,var(--brand) 45%,transparent)}
+.seg button.premium.on{background:linear-gradient(135deg,var(--brand),var(--brand-dark));color:#fff;border-color:transparent;box-shadow:0 1px 2px var(--ring),0 2px 10px -4px color-mix(in srgb,var(--brand) 60%,transparent)}
+/* The frame around Business analytics itself, not just its tab — a thin brand-gradient rule
+   above the content, so the screen it opens onto still reads as the paid-for one once the reader
+   has already tapped in. */
+#crbody.bizA{position:relative;padding-top:14px}
+#crbody.bizA::before{content:"";position:absolute;top:0;left:2px;right:2px;height:3px;border-radius:3px;
+  background:linear-gradient(90deg,var(--brand),var(--brand-dark),var(--brand))}
 /* ===== use-of-home year strip =====
    Full-bleed inside its card and sticky under the header (JS sets `top` from the header's real
    height), so the year being edited stays on screen while the cost fields scroll past. */
@@ -528,7 +539,8 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
   background:linear-gradient(150deg,color-mix(in srgb,var(--brand) 14%,var(--card)),var(--card));
   display:flex;flex-direction:column;gap:1px;transition:transform .12s ease}
 .trtile:active{transform:scale(.97)}
-.trtile .tre{font-size:15px;line-height:1}
+.trtile .tre{line-height:1;display:inline-block}
+.trtile .tre .gi{width:17px;height:17px;color:var(--brand-dark)}
 .trtile .trv{font-size:21px;font-weight:750;color:var(--ink);line-height:1.15;margin-top:3px;font-variant-numeric:tabular-nums}
 .trtile .trl{font-size:12px;color:var(--muted)}
 .trtile .trs{font-size:11px;font-weight:700;color:var(--brand-dark);margin-top:5px;letter-spacing:.02em}
@@ -1753,7 +1765,7 @@ const PLUS_SELL=[
   ["Costs & other income","Insurance, room rent, supervision, CPD and the rest, taken off the profit your tax is worked out from. Bundled with tax because an estimate without them is one nobody should save against."],
   ["Your pot, and what leaves it","Payments on account, the balancing payment, every due date in order, and what HMRC actually assessed once you have filed."],
   ["Making Tax Digital","Your four quarters added up and exported as a file for your accountant, or for software that files. You are already keeping the records, so the only thing left to buy is the submission \u2014 and HMRC lists free ones."],
-  ["Trends","Twenty readings of your own history: who stays, who drifts, what an hour is really worth and what missed sessions cost."],
+  ["Business analytics","Twenty readings of your own history: who stays, who drifts, what an hour is really worth and what missed sessions cost."],
   ["Accreditation hours","Clinical and supervision hours and the 1:6 ratio, in the shape Form 3A asks for."],
   ["GroundWork Notes sync","Sends each client\u2019s cadence to the notes app so it knows what still needs writing up."]
 ];
@@ -1763,7 +1775,7 @@ const PLUS_SELL=[
 const PLUS_PROMISE="Rates, bands and thresholds are kept current as they change each April.";
 const PLUS_REASONS={
   tax:"Tax is part of "+PLUS_NAME, finances:"Costs & other income is part of "+PLUS_NAME,
-  mtd:"The quarterly export is part of "+PLUS_NAME, trends:"Trends is part of "+PLUS_NAME,
+  mtd:"The quarterly export is part of "+PLUS_NAME, trends:"Business analytics is part of "+PLUS_NAME,
   accreditation:"Accreditation hours are part of "+PLUS_NAME,
   notesSync:"Notes sync is part of "+PLUS_NAME, palettes:"More colour schemes are part of "+PLUS_NAME
 };
@@ -2558,11 +2570,13 @@ function setSeg(tab,seg){
   else if(tab==="money"&&["overview","costs","table"].indexOf(seg)>=0)moneySeg=seg;
   else if(tab==="tax"&&["now","estimate","payments","allowances","mtd"].indexOf(seg)>=0)taxSeg=seg;
 }
-/* A segment bar from [value,label] pairs. Renders nothing when there is only one segment. */
+/* A segment bar from [value,label] pairs, or [value,label,extraClass] when one segment needs to
+   stand out from its siblings (the "Business analytics" tab's premium accent). Renders nothing
+   when there is only one segment. */
 function segBar(id,segs,active){
   if(segs.length<2)return "";
   return '<div class="seg mb" id="'+id+'" style="display:inline-flex"><div class="segwrap">'+
-    segs.map(x=>'<button data-seg="'+esc(x[0])+'" class="'+(x[0]===active?"on":"")+'">'+esc(x[1])+'</button>').join("")+'</div></div>';
+    segs.map(x=>'<button data-seg="'+esc(x[0])+'" class="'+(x[0]===active?"on":"")+(x[2]?" "+esc(x[2]):"")+'">'+esc(x[1])+'</button>').join("")+'</div></div>';
 }
 /* Bring the selected chip into view. A strip wider than the screen scrolls, and after a re-render
    it is back at scrollLeft 0 — so the segment you are actually on can sit off the right edge with
@@ -3923,12 +3937,24 @@ function anaLatePayers(){
       then,now,drift,unpaid:g.unpaid,owed:Math.round(g.owed)};
   }).filter(r=>r.n>=2||r.unpaid);
   if(!rows.length)return {ready:false,need:"A few paid sessions with dates on them."};
-  /* Drift leads; a client with too little history to have one sorts below everyone who has,
-     ranked by how long they take. Debt is context on the row, never the ordering. */
+  /* Business focus is CURRENT clients (see trendsIsCurrent) — someone finished or long gone can
+     still have the sharpest drift on record, but it is nothing to act on today. A finished
+     client's row is kept, never dropped, but sorted after every current one regardless of how
+     far they moved. */
+  const lastSeen=lastSessionDates();
+  rows.forEach(r=>{
+    const cl=S.clients.find(c=>(c.code||"").toLowerCase()===r.code.toLowerCase());
+    r.current=trendsIsCurrent(cl,lastSeen[r.code.toLowerCase()]);
+  });
+  /* Current leads, then drift; a client with too little history to have one sorts below everyone
+     who has, ranked by how long they take. Debt is context on the row, never the ordering. */
   rows.sort((a,b)=>{
+    if(a.current!==b.current)return a.current?-1:1;
     const ad=a.drift==null?-1e9:a.drift, bd=b.drift==null?-1e9:b.drift;
     return bd-ad || (b.typical||0)-(a.typical||0) || b.owed-a.owed;});
-  const trended=rows.filter(r=>r.drift!=null);
+  /* The headline counts are the business question — "who, of the people I see now, is drifting"
+     — so a finished client's old trend does not pad or muddy them. */
+  const trended=rows.filter(r=>r.drift!=null&&r.current);
   return {ready:true,rows,trended,
     slowing:trended.filter(r=>r.drift>=ANA_LP_DRIFT),
     improving:trended.filter(r=>r.drift<=-ANA_LP_DRIFT),
@@ -4151,7 +4177,7 @@ function anaCPD(){
 function trendsHeadFig(seg){
   try{
     if(seg==="clients"){const d=anaDrifting();
-      if(d&&d.rows.length)return {fig:String(d.rows.length),lab:"drifting away",e:"\ud83c\udf31"};
+      if(d&&d.rows.length)return {fig:String(d.rows.length),lab:"drifting away",e:"sprout"};
       /* Nobody drifting is the good case, and it should not leave the section unnamed. Distinct
          people actually seen in the last twelve months — not the all-time count the section's own
          KPI shows, so the two are not the same fact printed twice. */
@@ -4159,16 +4185,16 @@ function trendsHeadFig(seg){
       const seen=new Set(anaDer().filter(x=>x.dt>from&&x.dt<=t&&!isCancelled(x.s))
         .map(x=>(x.s.client||"").toLowerCase()).filter(Boolean));
       if(!seen.size)return null;
-      return {fig:String(seen.size),lab:"seen this year",e:"\ud83c\udf31"};}
+      return {fig:String(seen.size),lab:"seen this year",e:"sprout"};}
     if(seg==="money"){const f=anaFloor();
       if(!f.ready)return null;
-      return {fig:gbp(f.median),lab:"typical month",e:"\ud83d\udcb7"};}
+      return {fig:gbp(f.median),lab:"typical month",e:"money"};}
     if(seg==="time"){const h=anaHourlyRate();
       if(!h.ready)return null;
-      return {fig:gbp(h.rate),lab:"an hour, all in",e:"\u23f1\ufe0f"};}
+      return {fig:gbp(h.rate),lab:"an hour, all in",e:"clock"};}
     if(seg==="you"){const c=anaCPD();
       if(!c.ready)return null;
-      return {fig:c.total+(c.total===1?" hr":" hrs"),lab:"CPD this year",e:"\ud83c\udf93"};}
+      return {fig:c.total+(c.total===1?" hr":" hrs"),lab:"CPD this year",e:"cpd"};}
   }catch(e){console.error("Trends headline",seg,e);}
   return null;
 }
@@ -4176,7 +4202,7 @@ function trendsHeadline(active){
   const tiles=TREND_SEGS.filter(x=>x[0]!==active).map(x=>{
     const f=trendsHeadFig(x[0]); if(!f)return "";
     return '<button type="button" class="trtile" data-jump="'+esc(x[0])+'">'+
-      '<span class="tre">'+f.e+'</span>'+
+      '<span class="tre">'+gi(f.e)+'</span>'+
       '<span class="trv">'+f.fig+'</span>'+
       '<span class="trl">'+esc(f.lab)+'</span>'+
       '<span class="trs">'+esc(x[1])+' \u203a</span></button>';}).filter(Boolean);
@@ -4529,13 +4555,15 @@ function trendsYouHTML(){
 
 VIEWS.practice=function(){
   const v=el('<div class="view active"></div>');
-  /* Trends sits last. The first three are places you go to DO something — add a client, check a
-     room, log supervision — and Trends is where you go to read. Putting the reading between two
-     of the doing screens meant scrolling past it on the way to Rooms every time. */
+  /* Business analytics sits last. The first three are places you go to DO something — add a
+     client, check a room, log supervision — and Business analytics is where you go to read.
+     Putting the reading between two of the doing screens meant scrolling past it on the way to
+     Rooms every time. The "premium" class gives its own tab a small accent — it is the one part
+     of Practice this practice pays extra for. */
   const segs=[["clients","Clients"]];
   segs.push(["rooms","Rooms"]);
   if(feat("supervision"))segs.push(["supervision","Supervision"]);
-  if(feat("trends"))segs.push(["trends","Trends"]);
+  if(feat("trends"))segs.push(["trends","Business analytics","premium"]);
   if(pracTab==="supervision"&&!feat("supervision"))pracTab="clients";
   if(pracTab==="trends"&&!feat("trends"))pracTab="clients";
   v.innerHTML=segBar("crtab",segs,pracTab)+'<div id="crbody"></div>';
@@ -4864,7 +4892,7 @@ VIEWS.practice=function(){
 
     /* ---- the sub-nav, and lazy section rendering ---- */
     body.innerHTML=segBar("trseg",TREND_SEGS,trendSeg)+
-      '<p class="small muted trendintro">Worked out from what you have already logged. '+infoDot("trends-sections","How Trends is organised")+'</p>'+
+      '<p class="small muted trendintro">Worked out from what you have already logged. '+infoDot("trends-sections","How Business analytics is organised")+'</p>'+
       '<div id="trbody"></div>';
     const host=body.querySelector("#trbody");
     const draw=()=>{
@@ -4909,8 +4937,12 @@ VIEWS.practice=function(){
   /* Supervision keeps its own inner Log / Peer / Insights bar - mounted whole rather than
      rebuilt, so peer supervision, CPD and accreditation all come across unchanged. */
   function renderSupervision(){body.innerHTML="";body.appendChild(supervisionPanel());}
-  const route=()=>pracTab==="rooms"?renderRooms():pracTab==="trends"?renderMetrics()
-    :pracTab==="supervision"?renderSupervision():renderClients();
+  /* `.bizA` is the premium accent frame around Business analytics only — set here, alongside
+     everywhere else the segment changes, rather than inside renderMetrics itself, so it never
+     lingers on `body` after a switch to Clients or Rooms. */
+  const route=()=>{body.classList.toggle("bizA",pracTab==="trends");
+    return pracTab==="rooms"?renderRooms():pracTab==="trends"?renderMetrics()
+    :pracTab==="supervision"?renderSupervision():renderClients();};
   wireSegBar(v,"crtab","practice",route);
   route();return v;
 };
@@ -6409,7 +6441,7 @@ infoDef("data-health","Data health",
   '<p class="small">Reads every session and flags what looks wrong: two clients booked at the same time, a duplicate session number, a payment dated before the session it pays for, a room fee that does not match the room.</p>'+
   '<p class="small">It changes nothing. Every result is a link to the session so you can judge it yourself — some will be perfectly fine and you can ignore them.</p>');
 infoDef("working-week","Your working week",
-  '<p class="small">Sessions are counted; hours are not. These three numbers are what turn one into the other, and they are used <b>only</b> in Trends — nothing about your fees, tax or records changes.</p>'+
+  '<p class="small">Sessions are counted; hours are not. These three numbers are what turn one into the other, and they are used <b>only</b> in Business analytics — nothing about your fees, tax or records changes.</p>'+
   '<div class="acc-work"><div><b>Session length</b> — the therapy hour you actually work. 50 minutes almost everywhere.</div>'+
   '<div><b>Admin per session</b> — notes, invoicing, emails, rearranging.</div>'+
   '<div><b>A full week</b> — how many sessions a busy-but-sustainable week holds for you.</div></div>'+
@@ -6420,7 +6452,7 @@ infoDef("admin-mins","Admin per session",
   '<p class="small muted">Fifteen minutes is the default. Most people who actually time it find they were optimistic.</p>');
 infoDef("full-week","A full week for you",
   '<p class="small">Not the most sessions you could physically fit in — the number that a good, busy, sustainable week holds. Only you know it.</p>'+
-  '<p class="small"><b>Leave it blank</b> and Trends uses the busiest week you have actually worked in the last six months instead, and says so. That is a fact rather than a target, which is the safer default.</p>');
+  '<p class="small"><b>Leave it blank</b> and Business analytics uses the busiest week you have actually worked in the last six months instead, and says so. That is a fact rather than a target, which is the safer default.</p>');
 infoDef("getting-paid","Getting paid",
   '<p class="small">Two things, both practice-wide. <b>How you like to be paid</b> is printed on every invoice under "How to pay", and offered inside every payment reminder you copy. <b>Payment terms</b> is how many days an invoice gives before it is due.</p>'+
   '<p class="small">It is free text on purpose. "Bank transfer to \u2026, reference your initials", "card at the end of the session" and "your insurer settles directly with me" are all real answers, and none of them fits a set of boxes.</p>'+
@@ -6432,7 +6464,7 @@ infoDef("admin-comment","Admin comments",
   '<p class="small muted">It is cleared if you ever anonymise a client, because free text can name people.</p>');
 infoDef("referral-source","How they found you",
   '<p class="small">Optional. Pick from the list, or choose <b>Something else…</b> and type your own — whatever words you would use. Anything you type joins the list for the next client, so the same source is spelled the same way every time.</p>'+
-  '<p class="small">Fill it in and <b>Practice › Trends › Clients</b> can tell you which sources bring people who stay, rather than just who enquires. It is the one thing in the app that can change what you do about finding clients.</p>'+
+  '<p class="small">Fill it in and <b>Practice › Business analytics › Clients</b> can tell you which sources bring people who stay, rather than just who enquires. It is the one thing in the app that can change what you do about finding clients.</p>'+
   '<p class="small muted">It is cleared if you ever anonymise a client, because free text can name people.</p>');
 
 infoDef("ana-funnel","The retention funnel",
@@ -6493,7 +6525,8 @@ infoDef("ana-late","Who pays late",
   '<p class="small">The per-client version of days-to-payment, because "31 days on average" is made of people. It reports the <b>direction of travel</b>, not today’s balance.</p>'+
   '<p class="small">Each client’s payments are cut in half — their own earlier half against their own recent half — and the chip is how far the recent half moved. Halves of their own record rather than a fixed number of months, because a fortnightly client and a weekly one cover very different ground in the same six months. It takes '+ANA_LP_MIN+' payments before anyone gets a trend at all, and '+ANA_LP_DRIFT+' days of movement before it is called a change rather than noise.</p>'+
   '<p class="small">Payments settled <b>on or before the day</b> are counted separately (the "up front" figure) and kept out of the waiting time, for the same reason as on the days-to-payment card: averaging same-day payments in makes everyone look identical and hides the ones who really do take a month.</p>'+
-  '<p class="small">What is outstanding today is shown on the row for context, but it does <b>not</b> set the order — it used to, which made this a debt list that happened to live under Trends. Chasing is a job with its own screen: Sessions › Unpaid.</p>'+
+  '<p class="small">What is outstanding today is shown on the row for context, but it does <b>not</b> set the order — it used to, which made this a debt list that happened to live under Business analytics. Chasing is a job with its own screen: Sessions › Unpaid.</p>'+
+  '<p class="small">Clients you are still seeing are listed first, whatever their drift — someone finished or long gone can still have the sharpest trend on record, but it is nothing to act on today, so they sort after everyone current.</p>'+
   '<p class="small muted">Nothing here changes a fee or sends anything. It is for deciding who to ask for payment up front.</p>');
 infoDef("ana-costratio","What the practice costs to run",
   '<p class="small">Costs as a share of everything that came in, over the last twelve months, against the twelve before that.</p>'+
@@ -6521,7 +6554,7 @@ infoDef("ana-load","Your load",
 infoDef("ana-cpd","CPD trajectory",
   '<p class="small">Your rolling twelve-month total against your target, plus the <b>pace</b> you are currently going at.</p>'+
   '<p class="small">Pace comes from the last 90 days, annualised — not from the whole year. Someone who did twenty hours last spring and nothing since is not two-thirds of the way there; they have stopped, and a running total would hide that until it was too late to fix.</p>');
-infoDef("trends-sections","How Trends is organised",
+infoDef("trends-sections","How Business analytics is organised",
   '<p class="small">Four questions, one per section.</p>'+
   '<div class="acc-work"><div><b>Clients</b> — who stays, who drifts, and where they came from.</div>'+
   '<div><b>Money</b> — what arrives, when, and what it costs to run.</div>'+
@@ -8275,7 +8308,7 @@ function plusSettingsCardHTML(){
        (see PALETTES_ENABLED). A tier that lists something nobody can reach reads as padding,
        which is the opposite of what this card is for. */
     '<p class="small muted">What you will owe and what to keep back for it, costs &amp; other income, '+
-      'the quarterly figures for Making Tax Digital, Trends, accreditation hours and GroundWork '+
+      'the quarterly figures for Making Tax Digital, Business analytics, accreditation hours and GroundWork '+
       'Notes sync. Logging, receipts and every backup and export stay free.</p>'+
     '<button class="btn '+(active?"sec ":"")+'full mt" data-plus="settings">'+
       (active?"View details":"Unlock "+PLUS_NAME)+'</button></div>';
@@ -8290,7 +8323,7 @@ VIEWS.settings=function(){
      <button class="btn full mt" id="setNameSave">Save practice details</button>
    </div>
    <div class="card">${cardHead("Your working week","working-week")}
-     <p class="small muted" style="margin:-2px 0 0">Turns session counts into hours, for <b>Practice › Trends</b>. Nothing else uses them.</p>
+     <p class="small muted" style="margin:-2px 0 0">Turns session counts into hours, for <b>Practice › Business analytics</b>. Nothing else uses them.</p>
      <div class="field2">
        <div><label>Session length (mins)</label><input type="number" min="10" max="180" step="5" id="setSessMins" value="${esc(sessionMins())}"></div>
        <div><label>Admin per session (mins) ${infoDot("admin-mins","Admin per session")}</label><input type="number" min="0" max="120" step="5" id="setAdminMins" value="${esc(adminMinsPerSession())}"></div>
@@ -8873,8 +8906,15 @@ function suggestFor(code){
 /* ============ Session form ============ */
 function sessionForm(s,o){
   o=o||{};
-  const isNew=!s; const m=s?clone(s):{_id:uid(),client:"",num:"",date:o.date||isoD(today()),time:"10:00",mode:"In-person",location:"At home",room:"",invoice:"",paidDate:"",receipt:"",notes:"",roomPaid:"",roomPaidDate:"",lateCancel:false};
+  const isNew=!s; const m=s?clone(s):{_id:uid(),client:o.presetClient||"",num:"",date:o.date||isoD(today()),time:"10:00",mode:"In-person",location:"At home",room:"",invoice:"",paidDate:"",receipt:"",notes:"",roomPaid:"",roomPaidDate:"",lateCancel:false};
   const lockDate=isNew&&!!o.date; // came from the calendar's "add this day" — keep that date
+  /* Came straight back from creating a new client mid-form (see f_newClient below) — pre-fill
+     exactly as picking them from the dropdown would have. */
+  if(isNew&&o.presetClient){
+    const sg=suggestFor(o.presetClient);
+    Object.assign(m,{num:sg.num,time:sg.time,mode:sg.mode,location:sg.location,room:sg.room});
+    if(!lockDate)m.date=sg.date;
+  }
   const clients=clientList();
   const locs=S.rooms.map(r=>r.location);
   const body=el('<div></div>');
@@ -8891,6 +8931,7 @@ function sessionForm(s,o){
     body.innerHTML=`
      <label>Client</label>
      <select id="f_client">${clientSelectHTML(m.client)}</select>
+     <div class="prev" style="margin-top:4px"><span class="taxlink" id="f_newClient">+ Add a new client ›</span></div>
      <div id="sugHint"></div>
      <div class="field2">
        <div><label>Date</label><input type="date" id="f_date" value="${esc(m.date)}">${P(l=>fmtDshort(l.date))}</div>
@@ -8913,8 +8954,11 @@ function sessionForm(s,o){
      <label class="colchk" style="margin-top:16px"><input type="checkbox" id="f_notes"${notesDone(m)?" checked":""}> My notes for this session are written up</label>
      <label>Admin comment <span class="muted small">(optional)</span> ${infoDot("admin-comment","About admin comments")}</label>
      <textarea id="f_admin" rows="2" placeholder="e.g. “invoice goes to her employer”, “moved from Tuesday”">${esc(m.adminNote||"")}</textarea>
-     <label style="margin-top:14px">Did it go ahead?</label>
-     <select id="f_attend">${opts2([["","Yes — attended"],["late","Late cancellation"],["dna","Did not attend (DNA)"]],attendVal(m))}</select>
+     <div id="f_attendWrap">
+       <label style="margin-top:14px">Did it go ahead?</label>
+       <select id="f_attend">${opts2([["","Yes — attended"],["late","Late cancellation"],["dna","Did not attend (DNA)"]],attendVal(m))}</select>
+     </div>
+     <p class="small muted" id="f_attendFuture" style="display:none;margin-top:14px">You’ll be able to record whether this session went ahead once its date has arrived.</p>
      <div id="f_cxWrap" style="display:none">
        <div class="field2">
          <div><label>Cancelled on <span class="muted small">(optional)</span></label><input type="date" id="f_cxOn" value="${esc(m.cancelledAt||"")}"></div>
@@ -8954,6 +8998,13 @@ function sessionForm(s,o){
         if(!lockDate)m.date=sg.date;}
       draw();
       if(isNew&&code)body.querySelector("#sugHint").innerHTML='<div class="hint">✨ Pre-filled from this client’s last session — adjust anything, then Save.</div>';};
+    /* Opening the client form replaces this sheet's contents (openSheet swaps #sheetBody), so
+       whatever is unsaved here would go with it — same guard as the chase-payment link below. */
+    g("#f_newClient").onclick=()=>{
+      if(dirty&&!confirm("Leave this session without saving your changes?"))return;
+      closeSheet();
+      clientForm(null,{onCreated:code=>sessionForm(null,{presetClient:code})});
+    };
     /* The session form used to ask "Room fee paid?" on every single session. It is the wrong
        screen for the question twice over: it interrupts logging a session with a bookkeeping
        decision, and an unanswered dropdown left the session sitting in the Incomplete worklist
@@ -8995,6 +9046,19 @@ function sessionForm(s,o){
        while the date was unknown would silently stick even once the notice was known. Typing in
        the box clears the mark and the number is then left alone. */
     const paintCancel=()=>{
+      /* "Did it go ahead?" asks about something that has already happened — a session dated
+         tomorrow can't have gone ahead OR been cancelled yet, so the question doesn't make sense
+         to ask and is hidden until the date arrives. Blank (attended) is what a future session
+         already reads as, so nothing needs resetting on save — just don't let a future date carry
+         a cancellation kind forward from an earlier, later-moved date. */
+      const isFuture=g("#f_date").value>isoD(today());
+      g("#f_attendWrap").style.display=isFuture?"none":"";
+      g("#f_attendFuture").style.display=isFuture?"":"none";
+      if(isFuture){
+        if(g("#f_attend").value)g("#f_attend").value="";
+        g("#f_cxWrap").style.display="none";
+        refreshHint();return;
+      }
       const kind=g("#f_attend").value;
       g("#f_cxWrap").style.display=kind?"":"none";
       if(!kind){refreshHint();return;}
@@ -9108,7 +9172,11 @@ function wireSourcePicker(body){
   };
   return ()=>pick.value===SRC_OTHER?(free.value||"").trim():pick.value;
 }
-function clientForm(c){
+function clientForm(c,cfOpts){
+  /* Deliberately not called `opts` — that name is already the global opts(arr,sel) helper this
+     form calls throughout to build <option> lists, and a local param of the same name would
+     shadow it silently. */
+  cfOpts=cfOpts||{};
   const isNew=!c; const m=c?clone(c):{_id:uid(),code:"",status:"Ongoing",frequency:"Weekly",insurance:"N",notes:"",created:isoD(today())};
   const statuses=[...new Set(S.clientCategories.map(x=>x.status).concat(["Ongoing","Paused","Finished"]))];
   const body=el('<div></div>');
@@ -9181,7 +9249,11 @@ function clientForm(c){
       m.rate=rate;S.clients.push(m);
       S.rateHistory.push({_id:uid(),client:m.code,effectiveFrom:isoD(today()),rate:rate});
       await commit("Added client: "+m.code+" @ "+gbp(rate));
-      closeSheet();go(cur);celebrateNewClient(m);return;
+      closeSheet();
+      /* Reached from the session form's "Add a new client" link — hand the new code straight
+         back to it instead of navigating to Practice. */
+      if(cfOpts.onCreated)cfOpts.onCreated(m.code);else go(cur);
+      celebrateNewClient(m);return;
     }else{const ex=S.clients.find(x=>x._id===m._id);Object.assign(ex,m);await commit("Edited client: "+m.code);}
     closeSheet();toast("Saved");go(cur);
   };
@@ -10761,7 +10833,7 @@ const FEATURES=[
   {k:"supervision",  ic:gi("supervision"), n:"Supervision",            d:"A tab for logging supervision sessions, costs and which clients you discussed."},
   {k:"accreditation",ic:gi("accreditation"), n:"Accreditation hours",    d:"Clinical vs supervision hours and the 1:6 ratio, for BACP Form 3A. Lives inside Supervision › Insights.",dep:"supervision"},
   {k:"peer",         ic:gi("peer"), n:"Peer supervision",       d:"A separate log for peer supervision hours — added to your total accreditation hours, kept out of the 1:6 ratio.",dep:"supervision"},
-  {k:"trends",       ic:gi("trends"), n:"Trends",                 d:"Retention funnel, attendance against expected frequency, missed sessions and how long clients stay. Lives inside Practice."},
+  {k:"trends",       ic:gi("trends"), n:"Business analytics",      d:"Retention funnel, attendance against expected frequency, missed sessions and how long clients stay. Lives inside Practice."},
   {k:"finances",     ic:gi("finances"), n:"Costs & other income",   d:"Business costs (insurance, wifi, monthly room rent) and income that isn’t a client session. Both feed your net income and tax figures.",dep:"money"},
   {k:"money",        ic:gi("money"), n:"Money",                  d:"Revenue charts, what is outstanding, and the month-by-month picture of what came in."},
   {k:"tax",          ic:gi("tax"), n:"Tax",                    d:"What to set aside, when it falls due, monthly take-home, and the quarterly figures for Making Tax Digital."},
@@ -10796,7 +10868,7 @@ const REVEAL_STEPS=[
    sub:"Streaks, goal rings and the occasional confetti when you clear a backlog. Entirely cosmetic — plenty of people leave it off."},
   {keys:["trends"],   when:st=>st.sessions.length>=20,
    emoji:gi("trends"), title:"Enough history to see a pattern",
-   sub:"Twenty sessions is about where <b>Practice › Trends</b> starts telling you something true: who stays, who drifts, how attendance holds up against the frequency you agreed, and what missed sessions are costing."},
+   sub:"Twenty sessions is about where <b>Practice › Business analytics</b> starts telling you something true: who stays, who drifts, how attendance holds up against the frequency you agreed, and what missed sessions are costing."},
   {keys:["raw"],      when:st=>st.sessions.length>=40&&(st.settings.features||{}).money!==false,
    emoji:gi("tabs"), title:"Every session in one table",
    sub:"Enough history to be worth browsing as a spreadsheet — sortable columns, a column picker and a filtered CSV export."}
@@ -11486,7 +11558,7 @@ function whatsNewSteps(){
     ])});
   st.push({emoji:"\ud83e\udded", h:"Where things moved", sub:"Nothing was deleted \u2014 it is all still here, just grouped more sensibly.",
     html:ovPoints([
-      ["\ud83d\udc65","Practice","Clients, Trends, Rooms and Supervision in one place. Peer supervision, CPD hours and the accreditation card are all still inside Supervision, exactly as they were."],
+      ["\ud83d\udc65","Practice","Clients, Business analytics, Rooms and Supervision in one place. Peer supervision, CPD hours and the accreditation card are all still inside Supervision, exactly as they were."],
       ["\ud83d\udcb7","Money","Your revenue charts, what is outstanding, and your costs and other income. The old <b>Table</b> is a section in here now."],
       ["\ud83e\uddfe","Tax","Take-home, the tax-year table, and everything new below."]
     ])});
@@ -11715,7 +11787,7 @@ const TIPS=[
   {k:"practice",tab:"practice",
    steps:()=>[
     {emoji:gi("peer"),h:"Your people and places",sel:"#crtab",
-     body:"<b>Clients</b> and their profiles, <b>Trends</b> for how things are going, <b>Rooms</b> and what each costs you, <b>Supervision</b> and your CPD hours."},
+     body:"<b>Clients</b> and their profiles, <b>Business analytics</b> for how things are going, <b>Rooms</b> and what each costs you, <b>Supervision</b> and your CPD hours."},
     {emoji:gi("fees"),h:"Put fee changes on a date",
      body:"Use <b>Change rate</b> rather than editing the number. Old sessions keep the fee you actually charged — and that’s what your tax figures are built on. Rooms work the same way."}]},
   {k:"money",tab:"money",ft:"money",

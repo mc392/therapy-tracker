@@ -192,19 +192,28 @@ async function inPage() {
     ok("no gap means nothing was written off", fe.gap > 0 || fe.lost === 0);
   }
 
-  /* ===== Who pays late: drift, not debt ===== */
+  /* ===== Who pays late: drift, not debt — current clients lead, ex-clients trail ===== */
   const lp = anaLatePayers();
   if (!lp.ready) skip("late-payer checks", lp.need);
   else {
-    const trended = lp.rows.filter((r) => r.drift != null);
+    /* "Trended" is the business question — current clients with enough history for a trend — so
+       it is recomputed from the raw per-row fields (drift, current), not lifted from lp.trended. */
+    const trended = lp.rows.filter((r) => r.drift != null && r.current);
     ok("clients with enough history get a trend", trended.length > 0, trended.length);
     ok("nobody below the minimum gets one",       trended.every((r) => r.n >= lp.minPays));
     ok("drift is the later half minus the earlier", trended.every((r) => r.drift === r.now - r.then));
-    ok("the list is ordered by drift, worst first",
-      trended.every((r, i) => i === 0 || trended[i - 1].drift >= r.drift));
+    ok("current clients lead the list, then drift worst first",
+      lp.rows.every((r, i) => {
+        if (i === 0) return true;
+        const prev = lp.rows[i - 1];
+        if (prev.current !== r.current) return prev.current === true;
+        const pd = prev.drift == null ? -Infinity : prev.drift, rd = r.drift == null ? -Infinity : r.drift;
+        return pd >= rd;
+      }));
+    const currentRows = lp.rows.filter((r) => r.current);
     ok("owing money does not push a client to the top",
-      trended.every((r) => r.owed === 0) || lp.rows[0].drift == null ||
-      lp.rows.every((r) => r.drift == null || lp.rows[0].drift >= r.drift));
+      currentRows.every((r) => r.owed === 0) || currentRows[0].drift == null ||
+      currentRows.every((r) => r.drift == null || currentRows[0].drift >= r.drift));
   }
   return out;
 }
