@@ -8759,7 +8759,13 @@ VIEWS.settings=function(){
     const q=setSearch.value.trim().toLowerCase();
     let anyGroup=false;
     v.querySelectorAll(".sgrp").forEach(g=>{
-      if(!q){g.hidden=false;g.open=!!_setGrpOpen[g.dataset.g];return;}
+      if(!q){
+        g.hidden=false;g.open=!!_setGrpOpen[g.dataset.g];
+        /* A previous search may have hidden individual cards inside this group; clearing the
+           box has to bring them back too, or every group re-opens looking empty. */
+        g.querySelectorAll(':scope>.sgb>.card').forEach(c=>{c.hidden=false;});
+        return;
+      }
       let anyCard=false;
       g.querySelectorAll(':scope>.sgb>.card').forEach(c=>{
         const hit=c.textContent.toLowerCase().includes(q);
