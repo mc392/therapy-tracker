@@ -1181,7 +1181,7 @@ const MAX_SNAP=120;
 /* Data schema version, stamped on state and on every backup. Bump when a change would be
    misread by an older build, and add the matching step to migrate(). Data with no stamp is v1
    (everything written before versioning existed). */
-const SCHEMA_VERSION=7;
+const SCHEMA_VERSION=8;
 function stateSchemaVersion(st){const v=st&&st.meta&&+st.meta.schemaVersion;return v>0?v:1;}
 
 function clone(o){return JSON.parse(JSON.stringify(o))}
@@ -1226,6 +1226,13 @@ function normalize(st){
      mid-accreditation would lose them the one screen they're keeping records for. */
   if(sg.features.accreditation==null)sg.features.accreditation=hasData?true:false;
   if(sg.cpdTarget==null)sg.cpdTarget=30;
+  /* v8: does supervision count toward the CPD target? Both default TRUE, which is exactly what
+     the app did before the question could be asked, so no existing install's figure moves. It is
+     genuinely contested — some bodies count clinical supervision as CPD, some count it only in
+     part, some not at all — and an app that quietly decides for the therapist is an app that
+     gives her a number she cannot defend to her accrediting body. */
+  if(sg.cpdCountSupervision==null)sg.cpdCountSupervision=true;
+  if(sg.cpdCountPeer==null)sg.cpdCountPeer=true;
   /* HMRC's default for sole traders since 2024/25 is the CASH basis: income counted when it is
      received and costs when they are paid. Accruals is now the opt-out election, not the norm. */
   if(sg.taxBasis==null)sg.taxBasis="cash";
@@ -1309,7 +1316,11 @@ function normalize(st){
   st.otherIncome.forEach(x=>{if(x&&x.cat==null)x.cat=migrateCat("inc",x.category);});
   /* peer supervision: counts toward total accreditation hours, excluded from the 1:6 ratio */
   st.peerSupervision=st.peerSupervision||[];
-  ["roomRentHistory","expenses","otherIncome","peerSupervision"].forEach(k=>st[k].forEach(x=>{if(x&&!x._id)x._id=uid()}));
+  /* v8: CPD that is not supervision. Deliberately a log of HOURS and nothing else — what a
+     workshop cost is a business cost, and ledgerBetween is the only place costs are totalled.
+     A `cost` here would be a second one, and the MTD quarters would stop reconciling to tyNet. */
+  st.cpd=st.cpd||[];
+  ["roomRentHistory","expenses","otherIncome","peerSupervision","cpd"].forEach(k=>st[k].forEach(x=>{if(x&&!x._id)x._id=uid()}));
   st.rooms.forEach(r=>{if(r&&r.billing==null)r.billing="session"}); // absent billing mode = per-session, the only mode before v3
   /* accreditation hours (Form 3A): supervision totals are entered manually; clinical hours come from logged sessions */
   st.accreditation=st.accreditation||{}; const ac=st.accreditation;
@@ -1387,6 +1398,12 @@ function normalize(st){
      v5 → v6 dates the whole-practice tax settings (region, student loan) to a tax year and adds
      the record of what HMRC actually asked for and what has been paid. A v6 backup can say
      "Plan 2 until 2025-26, none after" and "HMRC assessed 2025-26 at £4,310, two payments on
+     v7 → v8 adds S.cpd, the log of CPD that is not supervision — a workshop, a book, a
+     podcast — and the two switches that say whether supervision counts toward the target at
+     all. A v8 backup can hold twenty hours of workshops and "supervision does not count for
+     me"; a v7 build has neither, so it would drop every one of those hours, put supervision
+     back into the total, and save both losses back. Hence the bump.
+
      account of £1,900 already made"; a v5 build has neither field, so it would apply one loan
      plan to every year and show its own estimate in place of the real assessment — a wrong
      figure presented as the true one. Hence the bump.
@@ -1563,19 +1580,30 @@ function derive(s){
      The last one uses the DATED rate, not the room's rate today: a room that charged £15 back
      when the session happened still has that £15 to account for, however it bills now. */
   const roomPaidNA = !room || roomBilling(room)==="monthly" || !(roomRate>0);
+  /* A session with a per-session room fee RAISES that fee as a liability, tagged to this session,
+     the moment it is logged. Nobody is asked to confirm it: blank has always meant "not settled
+     yet" to `roomDue`, and it now means that everywhere. `roomPaid==="n/a"` is the one deliberate
+     escape hatch, written from the settle screen for a fee that turns out not to be owed at all;
+     it is a decision about a bill, so it is made where bills are managed and never in the session
+     form. */
+  const roomOwed = !roomPaidNA && roomRate>0 && s.roomPaid!=="Y" && s.roomPaid!=="n/a";
   let roomDue="n/a";
-  if(roomRate>0 && s.roomPaid!=="Y" && !roomPaidNA && d){
+  if(roomOwed && d){
     const next=schedNext(roomSchedule(room),d);            /* first payment date on/after the session */
     if(next)roomDue = (next < t)?"Y":"N";
   }
   const cl=S.clients.find(c=>(c.code||"").toLowerCase()===(s.client||"").toLowerCase());
   const status=cl?cl.status:""; const category=cl?cl.category:"";
-  const complete = notesDone(s) && (roomPaidNA || (s.roomPaid&&String(s.roomPaid).trim()));
+  /* `complete` is the WRITE-UP tick and nothing else. It used to also demand a room-paid answer,
+     which put a bookkeeping question inside a clinical worklist: a session could not be "done"
+     until the therapist had said whether she had paid her landlord for it. Those are two
+     different jobs on two different clocks, and the room half now lives in Money. */
+  const complete = notesDone(s);
   let cancelBy=null,canCancel=false;
   if(d){ const tm=(s.time||"00:00").split(":"); const dt=new Date(d); dt.setHours(+tm[0]||0,+tm[1]||0);
     cancelBy=addDays(dt,-3); canCancel=cancelBy>new Date(); }
   return {rate,fullRate,cancelPct,cancelKind:(s.cancelKind||(isLateCancel(s)?"late":null)),
-    roomRate,due,roomPaidNA,clientPaid,past,overdue,roomBooked,roomDue,status,category,complete,cancelBy,canCancel,
+    roomRate,due,roomPaidNA,roomOwed,clientPaid,past,overdue,roomBooked,roomDue,status,category,complete,cancelBy,canCancel,
     week:d?weekNum(d):"",year:d?d.getFullYear():"",taxYear:d?taxYear(d):""};
 }
 
@@ -2415,7 +2443,7 @@ VIEWS.home=function(){
   const st=computeStreak(), goals=gameGoals(), rec=ensureGame().records;
   const goalsCard=!feat("gamify")?'':'<div class="card"><h2>Goals</h2><div class="rings">'+
     ringSVG(goals.paidPct,goals.over>0?(goals.over+" payment"+(goals.over===1?"":"s")+" overdue"):"All payments in ✓")+
-    ringSVG(goals.compPct,goals.incomplete>0?(goals.incomplete+" session"+(goals.incomplete===1?"":"s")+" to complete"):"Notes & room all done ✓")+
+    ringSVG(goals.compPct,goals.incomplete>0?(goals.incomplete+" session"+(goals.incomplete===1?"":"s")+" to complete"):"Every session written up ✓")+
     '</div>'+((goals.over>0||goals.incomplete>0)?'<p class="small muted center" style="margin:10px 0 0">'+(goals.over>0?'<span class="taxlink" id="goPay">Collect payments ›</span>':"")+(goals.over>0&&goals.incomplete>0?' &nbsp;·&nbsp; ':"")+(goals.incomplete>0?'<span class="taxlink" id="goInc">Complete sessions ›</span>':"")+'</p>':"")+'</div>';
   const mk=(emoji,val,lab,locked)=>'<div class="bdg'+(locked?" locked":"")+'"><span class="be">'+emoji+'</span><div><div class="bv">'+val+'</div><div class="bl">'+lab+'</div></div></div>';
   const cCounts=clientSessionCounts();
@@ -2753,9 +2781,11 @@ function payChip(s,d){return d.clientPaid?'<span class="chip y">paid '+fmtDM(s.p
    written still reads correctly and `derive().complete` is untouched. This is the single place
    that decides what counts as written up; the form now only ever writes "Y" or "". */
 function notesDone(s){return !!(s&&s.notes&&String(s.notes).trim());}
+/* What is missing from the RECORD of a session. Room fees were on this list until Sep 2026 and
+   should not have been: an unsettled room fee is a bill outstanding, not an incomplete session,
+   and it is raised, listed and ticked off in Money › Costs & income like every other bill. */
 function missingReasons(s){const m=[];
   if(!notesDone(s))m.push("notes");
-  if(!derive(s).roomPaidNA&&!(s.roomPaid&&String(s.roomPaid).trim()))m.push("room-paid status");
   return m;}
 /* ===== Missed sessions =====
    Two kinds, and the difference matters to the client's bill but never to the clinical record:
@@ -2813,12 +2843,52 @@ function clinicalStats(){const t=today();let inP=0,onl=0;
    their annual CPD requirement. Supervision and peer supervision both count toward it. The Form 3A
    ratio below is a separate, narrower question that only matters while working toward accreditation,
    so it only appears when that's switched on. */
+/* The kinds of CPD that are not supervision. Keyed, like EXP_CATS, so a stored entry keeps
+   meaning what it meant even if the wording on screen changes; `other` is the catch-all and an
+   entry whose key this build has never heard of falls back to it rather than vanishing. */
+const CPD_KINDS={
+  workshop:  {n:"Workshop or training day", e:"\ud83e\uddf0"},
+  course:    {n:"Course or qualification",  e:"\ud83c\udf93"},
+  conference:{n:"Conference or seminar",    e:"\ud83c\udfdb\ufe0f"},
+  webinar:   {n:"Webinar or online talk",   e:"\ud83d\udcbb"},
+  elearning: {n:"E-learning module",        e:"\ud83d\uddb1\ufe0f"},
+  reading:   {n:"Reading",                  e:"\ud83d\udcd6"},
+  podcast:   {n:"Podcast or audio",         e:"\ud83c\udfa7"},
+  personal:  {n:"Personal therapy",         e:"\ud83e\udeb4"},
+  reflection:{n:"Reflective practice",      e:"\u270d\ufe0f"},
+  other:     {n:"Something else",           e:"\u2795"}
+};
+function cpdKind(k){return CPD_KINDS[k]||CPD_KINDS.other;}
+/* Whether supervision counts toward the CPD target is the therapist's call, not the app's --
+   accrediting bodies genuinely differ. Absent means yes, which is what the app did before the
+   question existed, so upgrading never moves anybody's number. */
+function cpdCountsSup(){return settings().cpdCountSupervision!==false;}
+function cpdCountsPeer(){return settings().cpdCountPeer!==false;}
+/* CPD hours over a rolling 12 months, reported as its COMPOSITION rather than one figure.
+   A bare total cannot answer the question every therapist actually has in front of a renewal
+   form -- "how much of this is supervision, and how much is everything else?" -- and it hides
+   the case where a target is met entirely by turning up to supervision. `sup` and `peer` are
+   always the hours that EXIST; `supCounted`/`peerCounted` are the hours allowed into `total`. */
 function cpdYearHours(){
   const t=today(), from=addYears(t,-1);
   const inWin=d=>{const x=d?parseD(d):null;return x&&x>from&&x<=t;};
   const sup=(S.supervision||[]).filter(s=>inWin(s.date)).length;          /* 1 hr each, as before */
   const peer=feat("peer")?(S.peerSupervision||[]).reduce((a,p)=>a+(inWin(p.date)?(+p.hours||0):0),0):0;
-  return {sup,peer,total:sup+peer,from,to:t};
+  const byKind={};
+  let own=0;
+  (S.cpd||[]).forEach(c=>{if(!c||!inWin(c.date))return;
+    const h=+c.hours||0; if(!(h>0))return;
+    const k=CPD_KINDS[c.kind]?c.kind:"other";
+    byKind[k]=(byKind[k]||0)+h; own+=h;});
+  const supCounted=cpdCountsSup()?sup:0, peerCounted=cpdCountsPeer()?peer:0;
+  const parts=[];
+  if(supCounted)parts.push({k:"supervision",n:"Clinical supervision",e:"\ud83d\udcac",hrs:supCounted});
+  if(peerCounted)parts.push({k:"peer",n:"Peer supervision",e:"\ud83e\udd1d",hrs:peerCounted});
+  Object.keys(byKind).sort((a,b)=>byKind[b]-byKind[a])
+    .forEach(k=>parts.push({k,n:cpdKind(k).n,e:cpdKind(k).e,hrs:byKind[k]}));
+  return {sup,peer,supCounted,peerCounted,own,byKind,parts,
+    excluded:(sup-supCounted)+(peer-peerCounted),
+    total:supCounted+peerCounted+own,from,to:t};
 }
 function cpdTarget(){const v=+(settings().cpdTarget);return v>0?v:30;}
 function mountCPD(host){
@@ -2826,31 +2896,111 @@ function mountCPD(host){
   const c=cpdYearHours(), target=cpdTarget(), r1=x=>Math.round(x*10)/10;
   const pct=Math.max(0,Math.min(100,Math.round(c.total/target*100)));
   const short=Math.max(0,target-c.total);
-  host.innerHTML='<div class="card"><h2>CPD hours</h2>'+
-    '<p class="small muted" style="margin:0 0 4px">Continuing professional development in the last 12 months. '+infoLink("cpd-window")+'</p>'+
+  const maxPart=c.parts.reduce((a,p)=>Math.max(a,p.hrs),0);
+  /* WHERE the hours came from, not just how many. A therapist filling in a renewal form is
+     asked to show a spread of activity, and a bar that is 30 hours of one thing is a different
+     answer from a bar that is six kinds of thing -- which a single total cannot tell her. */
+  const parts=c.parts.length
+    ? c.parts.map(pt=>anaBarRow(pt.e+" "+esc(pt.n),r1(pt.hrs)+" hr"+(pt.hrs===1?"":"s"),
+        maxPart?Math.round(pt.hrs/maxPart*100):0)).join("")
+    : '<p class="small muted">Nothing counted in the last 12 months yet.</p>';
+  host.innerHTML='<div class="card">'+cardHead("CPD hours","cpd-window")+
+    '<p class="small muted" style="margin:0 0 4px">Continuing professional development in the last 12 months.</p>'+
     '<div class="kpis mt">'+
       '<div class="kpi'+(c.total>=target?' good':'')+'"><div class="v">'+r1(c.total)+'</div><div class="l">hrs in 12 months</div></div>'+
-      '<div class="kpi"><div class="v">'+r1(c.sup)+'</div><div class="l">from supervision</div></div>'+
-      (feat("peer")?'<div class="kpi"><div class="v">'+r1(c.peer)+'</div><div class="l">from peer</div></div>':'')+
+      '<div class="kpi"><div class="v">'+r1(c.own)+'</div><div class="l">not supervision</div></div>'+
+      '<div class="kpi"><div class="v">'+r1(c.supCounted+c.peerCounted)+'</div><div class="l">from supervision</div></div>'+
       '<div class="kpi"><div class="v">'+target+'</div><div class="l">your target</div></div>'+
     '</div>'+
     '<div class="fbar" style="margin-top:12px"><i style="width:'+pct+'%"></i></div>'+
     (c.total>=target
-      ? '<div class="vmsg ok" style="margin-top:10px">✓ '+r1(c.total)+' hrs logged — you’re at your '+target+'-hour target.</div>'
+      ? '<div class="vmsg ok" style="margin-top:10px">\u2713 '+r1(c.total)+' hrs logged \u2014 you\u2019re at your '+target+'-hour target.</div>'
       : '<div class="vmsg warn" style="margin-top:10px">'+r1(short)+' hr'+(short===1?'':'s')+' short of '+target+'. Anything you log from here counts.</div>')+
-    '<label style="margin-top:14px">Annual CPD target (hours)</label>'+
-    '<input type="number" min="1" max="200" step="1" id="cpdT" value="'+target+'">'+
-    '<p class="small muted">BACP asks accredited members for 30 hours a year; other bodies differ. Set whatever yours requires.</p>'+
+    /* The awkward case a bare total hides: the target is met, but only because supervision is
+       being counted. Some accrediting bodies will not accept that, and it is far better said
+       out loud than discovered on a renewal form. */
+    (c.total>=target&&c.own<target&&(c.supCounted+c.peerCounted)>0
+      ? '<p class="small muted" style="margin:8px 0 0">Without supervision you would be on <b>'+r1(c.own)+' hrs</b> \u2014 '+
+        (c.own>=target?'still at target.':'below your '+target+'-hour target. Worth knowing if your body counts supervision separately.')+'</p>'
+      : '')+
+    (c.excluded>0?'<p class="small muted" style="margin:8px 0 0">'+r1(c.excluded)+' hr'+(c.excluded===1?'':'s')+
+      ' of supervision '+(c.excluded===1?'is':'are')+' logged but not counted, because you\u2019ve said supervision doesn\u2019t count toward your target.</p>':'')+
+    '<div class="grp-h" style="margin-top:14px">Where your hours came from</div>'+parts+
+    '<div class="row mt" style="gap:8px">'+
+      '<button class="btn sm sec" id="cpdOpts">Target &amp; what counts</button></div>'+
     '</div>';
   wireInfo(host);
-  const inp=host.querySelector("#cpdT");
-  inp.onchange=async()=>{
-    const v=Math.max(1,Math.min(200,Math.round(+inp.value||0)));
-    inp.value=v;
-    if(v===cpdTarget())return;
-    settings().cpdTarget=v;
-    await commit("CPD target: "+v+" hrs/yr");
+  const opt=host.querySelector("#cpdOpts"); if(opt)opt.onclick=()=>cpdSettingsSheet();
+}
+/* Target and the two "does supervision count" switches. In a sheet rather than on the card
+   because they are set once and then read every month, and three controls under a progress bar
+   is three controls between the reader and the figure they came for. */
+function cpdSettingsSheet(){
+  const body=el('<div></div>');
+  const w={target:cpdTarget(),sup:cpdCountsSup(),peer:cpdCountsPeer()};
+  body.innerHTML='<label>Annual CPD target (hours)</label>'+
+    '<input type="number" min="1" max="200" step="1" id="cpdT" value="'+w.target+'">'+
+    '<p class="small muted">BACP asks accredited members for 30 hours a year; other bodies differ. Set whatever yours requires.</p>'+
+    '<div class="grp-h" style="margin-top:14px">Does supervision count toward it?</div>'+
+    '<div id="cpdSup"></div>'+
+    '<p class="small muted">Accrediting bodies differ, and some count supervision only in part. Switching one off leaves the hours logged and on your records \u2014 it only takes them out of the target above.</p>'+
+    '<button class="btn full mt savebig ready" id="cpdSave">Save</button>';
+  /* Same switch the Settings feature rows use, so this reads as one app rather than as a second
+     kind of toggle invented for one sheet. `.sw` is a button, not a checkbox — it carries its
+     state in a class and is wired by click, exactly as wireFeatures does. */
+  const rows=body.querySelector("#cpdSup");
+  rows.innerHTML=ovToggleRow("cpdSup",gi("supervision"),"Clinical supervision","One hour for each session you log",w.sup)+
+    (feat("peer")?ovToggleRow("cpdPeer",gi("peer"),"Peer supervision","The hours you log against each entry",w.peer):"");
+  [["cpdSup","sup"],["cpdPeer","peer"]].forEach(pair=>{
+    const sw=rows.querySelector('[data-sw="'+pair[0]+'"]'), row=rows.querySelector('[data-row="'+pair[0]+'"]');
+    if(!sw)return;
+    sw.onclick=()=>{w[pair[1]]=!w[pair[1]];sw.classList.toggle("on",w[pair[1]]);
+      row.classList.toggle("off",!w[pair[1]]);Sfx.tick();};});
+  body.querySelector("#cpdSave").onclick=async()=>{
+    const v=Math.max(1,Math.min(200,Math.round(+body.querySelector("#cpdT").value||0)));
+    if(!(v>=1)){toast("Enter a target between 1 and 200 hours");Sfx.error();return;}
+    const sg=settings();
+    const changed=(v!==cpdTarget())||(w.sup!==cpdCountsSup())||(w.peer!==cpdCountsPeer());
+    sg.cpdTarget=v; sg.cpdCountSupervision=!!w.sup; sg.cpdCountPeer=!!w.peer;
+    if(changed)await commit("CPD: "+v+" hrs/yr target, supervision "+(w.sup?"counts":"doesn\u2019t count"));
+    closeSheet(); if(changed)toast("Saved");
     go(cur,{keepScroll:true});};
+  openSheet("CPD target & what counts",body);
+}
+/* One CPD entry. Hours and what it was -- no cost field, deliberately: what a course cost is a
+   business cost, ledgerBetween is the only place costs are totalled, and a second one here would
+   be counted twice or not at all. The form says so and links across. */
+function cpdForm(rec){
+  const isNew=!rec;
+  const m=rec?clone(rec):{_id:uid(),date:isoD(today()),hours:1,kind:"workshop",title:"",provider:"",notes:""};
+  const body=el('<div></div>');
+  body.innerHTML='<div class="field2"><div><label>Date</label><input type="date" id="c_date" value="'+esc(m.date)+'"></div>'+
+      '<div><label>Hours</label><input type="number" min="0" step="0.25" id="c_hrs" value="'+esc(m.hours)+'"></div></div>'+
+    '<label>What kind</label><select id="c_kind">'+Object.keys(CPD_KINDS).map(k=>
+      '<option value="'+k+'"'+(m.kind===k?" selected":"")+'>'+CPD_KINDS[k].e+' '+esc(CPD_KINDS[k].n)+'</option>').join("")+'</select>'+
+    '<label>What was it <span class="muted small">(title, book, episode)</span></label><input id="c_title" maxlength="80" value="'+esc(m.title||"")+'">'+
+    '<label>Who by <span class="muted small">(optional)</span></label><input id="c_prov" maxlength="60" value="'+esc(m.provider||"")+'">'+
+    '<label>Notes <span class="muted small">(optional \u2014 what you took from it)</span></label><textarea id="c_notes" rows="2" maxlength="300">'+esc(m.notes||"")+'</textarea>'+
+    '<p class="small muted">Hours only. If it cost you anything, put that in <span class="taxlink" id="c_cost">Money \u203a Costs &amp; income \u203a</span> under CPD &amp; training, where it comes off your tax.</p>'+
+    '<button class="btn full mt" id="cSave">Save</button>'+
+    (isNew?"":'<button class="btn danger full mt" id="cDel">Delete</button>');
+  const g=q=>body.querySelector(q);
+  g("#c_cost").onclick=()=>{closeSheet();go("money",{seg:"costs"});};
+  g("#cSave").onclick=async()=>{
+    m.date=g("#c_date").value; m.hours=+g("#c_hrs").value||0; m.kind=g("#c_kind").value;
+    m.title=g("#c_title").value.trim(); m.provider=g("#c_prov").value.trim(); m.notes=g("#c_notes").value.trim();
+    if(!m.date){toast("Pick a date");Sfx.error();return;}
+    if(!(m.hours>0)){toast("Enter how many hours");Sfx.error();return;}
+    if(!m.title){toast("Say what it was");Sfx.error();return;}
+    S.cpd=S.cpd||[];
+    const ex=S.cpd.find(x=>x._id===m._id);
+    if(ex)Object.assign(ex,m); else S.cpd.push(m);
+    await commit((ex?"Edited":"Added")+" CPD: "+m.title+" ("+m.hours+" hr)");
+    closeSheet();toast("Saved");go(cur,{keepScroll:true});};
+  if(!isNew)g("#cDel").onclick=async()=>{
+    S.cpd=(S.cpd||[]).filter(x=>x._id!==m._id);
+    await commit("Deleted CPD: "+(m.title||m.date));closeSheet();toast("Deleted");go(cur,{keepScroll:true});};
+  openSheet(isNew?"Log CPD":"Edit CPD",body);
 }
 /* Form 3A accreditation card: clinical hrs (from sessions) vs supervision hrs (manual), ratio must stay ≤ 6 */
 function mountAccreditation(host){if(!host||!feat("accreditation"))return;
@@ -2940,7 +3090,9 @@ function validateSession(m){
   /* WARN: room-paid vs room fee */
   const chargeable=(d.roomRate||0)>0;
   if(m.roomPaid==="Y"&&!chargeable)warnings.push({code:"roompaidnofee",msg:"Marked room paid, but "+esc(m.location||"this location")+" has no room fee"});
-  if(m.roomPaid==="n/a"&&chargeable)warnings.push({code:"roomnafee",msg:"Room marked n/a, but "+esc(m.location||"this room")+" charges "+gbp(d.roomRate)});
+  /* "Room marked n/a but the room charges" used to be flagged here. It is now a deliberate answer
+     rather than a contradiction — the settle screen writes it for a fee that turns out not to be
+     owed — so warning about it would flag the therapist's own decision back at her. */
   /* WARN: £0 / missing rate where the client normally charges */
   if(m.client&&(d.rate||0)===0){const charges=cl&&((cl.rate||0)>0||(S.rateHistory||[]).some(r=>(r.client||"").toLowerCase()===(m.client||"").toLowerCase()&&(r.rate||0)>0));
     if(charges)warnings.push({code:"zerorate",msg:"Rate is £0 although "+esc(m.client)+" normally charges — check rate history"});}
@@ -3084,56 +3236,48 @@ VIEWS.sessions=function(){
   }
   function renderIncomplete(container,rows,refresh){
     const td=isoD(today());
-    if(!rows.length){container.innerHTML='<div class="center" style="padding:30px 10px"><div style="font-size:48px">🌟</div><p class="muted" style="margin-top:6px">Every past session is complete — notes and room all sorted. Spotless!</p></div>';return}
+    /* Notes only. Room fees were ticked off here as well until Sep 2026, which mixed a clinical
+       worklist ("which write-ups do I still owe?") with a bookkeeping one ("which bills have I
+       paid?") — two jobs on two different clocks. Room fees are raised by the session and settled
+       in Money › Costs & income, beside the rent and everything else the practice pays for. */
+    if(!rows.length){container.innerHTML='<div class="center" style="padding:30px 10px"><div style="font-size:48px">🌟</div><p class="muted" style="margin-top:6px">Every past session is written up. Spotless!</p></div>';return}
     rows.sort((a,b)=>parseD(b.s.date)-parseD(a.s.date));
-    container.innerHTML='<div class="bulkbar"><div class="hint" style="margin-top:4px">Catch up on missing <b>notes</b> and <b>room payments</b> in bulk — tick what\'s done, then Save.</div>'+
-      '<div class="bbtns"><button class="btn sm sec" id="allNotes">✓ All notes done</button><button class="btn sm sec" id="allRoom">✓ All room paid</button>'+
-      '<input type="date" id="allRD" value="'+td+'" style="width:140px"><button class="btn sm sec" id="setRD">Apply date</button></div>'+
-      '<button class="btn full savebig" id="saveInc">Save (0)</button></div><div id="irows"></div>';
+    container.innerHTML='<div class="bulkbar"><div class="hint" style="margin-top:4px">Sessions you haven’t marked as written up — tick the ones that are done, then Save.</div>'+
+      '<div class="bbtns"><button class="btn sm sec" id="allNotes">✓ All notes done</button></div>'+
+      '<button class="btn full savebig" id="saveInc">Save (0)</button></div><div id="irows"></div>'+
+      '<p class="small muted" style="margin:10px 2px 0">Room fees aren’t here any more — a session raises its fee automatically and you settle it in <span class="taxlink" id="incRoomGo">Money › Room fees ›</span></p>';
     const irw=container.querySelector("#irows");
     const stage={};
-    irw.innerHTML=rows.map(x=>{const s=x.s,d=x.d;const miss=missingReasons(s);
-      const needNotes=miss.includes("notes"), needRoom=miss.includes("room-paid status");
-      const chargeable=(d.roomRate||0)>0;
-      stage[s._id]={notes:false,room:false,rdate:td,chargeable:chargeable};
-      const notesCtl=needNotes?'<button class="tgl" data-k="notes" data-id="'+s._id+'"><span class="tbox"></span>Notes done</button>':'<span class="chip y">✓ notes</span>';
-      /* Only a session that really does carry a per-session fee can be missing a room-paid answer
-         now — derive() calls every other case n/a — so there is no "No room fee" branch left. */
-      const roomCtl=needRoom?'<button class="tgl" data-k="room" data-id="'+s._id+'"><span class="tbox"></span>Room paid</button>'
-        :(d.roomPaidNA?'<span class="chip na">no room fee to settle</span>':'<span class="chip y">✓ room</span>');
-      const rdInput=needRoom?'<input type="date" class="rinp pdate2" data-id="'+s._id+'" value="'+td+'" style="display:none">':'';
-      return '<div class="irow" data-id="'+s._id+'"><div class="itop"><div><span class="ittl">'+esc(s.client)+'</span> <span class="isub">'+fmtDshort(s.date)+' · #'+esc(s.num)+(chargeable?' · room '+gbp(d.roomRate):'')+'</span></div><div class="li-right small muted">'+gbp(d.rate)+'</div></div><div class="ctrls">'+notesCtl+roomCtl+rdInput+'</div></div>';
+    irw.innerHTML=rows.map(x=>{const s=x.s,d=x.d;
+      stage[s._id]={notes:false};
+      return '<div class="irow" data-id="'+s._id+'"><div class="itop"><div><span class="ittl">'+esc(s.client)+'</span> <span class="isub">'+fmtDshort(s.date)+' · #'+esc(s.num)+'</span></div><div class="li-right small muted">'+gbp(d.rate)+'</div></div>'+
+        '<div class="ctrls"><button class="tgl" data-k="notes" data-id="'+s._id+'"><span class="tbox"></span>Notes done</button></div></div>';
     }).join("");
+    const rg=container.querySelector("#incRoomGo");
+    if(rg)rg.onclick=()=>go("money",{seg:"costs",focus:"roomFeesCard"});
     const sbtn=container.querySelector("#saveInc");
-    const count=()=>{let n=0;Object.keys(stage).forEach(id=>{if(stage[id].notes)n++;if(stage[id].room)n++;});return n;};
+    const count=()=>Object.keys(stage).filter(id=>stage[id].notes).length;
     const upd=()=>{const n=count();sbtn.textContent="Save ("+n+")";sbtn.classList.toggle("ready",n>0);};
     function setTgl(btn,on){const id=btn.dataset.id,k=btn.dataset.k;if(stage[id][k]===on)return;stage[id][k]=on;
       btn.classList.toggle("on",on);btn.classList.remove("pop");void btn.offsetWidth;if(on)btn.classList.add("pop");
-      const row=irw.querySelector('.irow[data-id="'+id+'"]');
-      if(k==="room"){const ri=row.querySelector('.rinp');if(ri)ri.style.display=on?"block":"none";}
       Sfx.pop();upd();}
     irw.querySelectorAll(".tgl").forEach(b=>b.onclick=()=>setTgl(b,!stage[b.dataset.id][b.dataset.k]));
     container.querySelector("#allNotes").onclick=()=>irw.querySelectorAll('.tgl[data-k="notes"]').forEach(b=>setTgl(b,true));
-    container.querySelector("#allRoom").onclick=()=>irw.querySelectorAll('.tgl[data-k="room"]').forEach(b=>setTgl(b,true));
-    container.querySelector("#setRD").onclick=()=>{const dv=container.querySelector("#allRD").value;
-      irw.querySelectorAll('.rinp').forEach(ri=>ri.value=dv);Object.keys(stage).forEach(id=>{if(stage[id].room)stage[id].rdate=dv;});};
-    irw.querySelectorAll('.rinp').forEach(ri=>ri.onchange=()=>{stage[ri.dataset.id].rdate=ri.value;});
     sbtn.onclick=async()=>{
-      const ids=Object.keys(stage).filter(id=>stage[id].notes||stage[id].room);
+      const ids=Object.keys(stage).filter(id=>stage[id].notes);
       if(!ids.length){toast("Tick something first");Sfx.error();return}
-      let nNotes=0,nRoom=0,cleared=0;
-      ids.forEach(id=>{const stg=stage[id];const ss=S.sessions.find(z=>z._id===id);if(!ss)return;
+      let cleared=0;
+      ids.forEach(id=>{const ss=S.sessions.find(z=>z._id===id);if(!ss)return;
         const wasComplete=derive(ss).complete;
-        if(stg.notes){ss.notes="Y";nNotes++;}
-        if(stg.room){ss.roomPaid="Y";const ri=irw.querySelector('.rinp[data-id="'+id+'"]');ss.roomPaidDate=(ri&&ri.value)||stg.rdate||td;nRoom++;}
+        ss.notes="Y";
         if(!wasComplete&&derive(ss).complete)cleared++;});
-      const batch=nNotes+nRoom;
+      const batch=ids.length;
       const f=gameNoteBatch({cleared:cleared});
-      await commit("Catch-up: "+nNotes+" notes, "+nRoom+" room paid");renderTabs();
+      await commit("Catch-up: "+batch+" session"+(batch===1?"":"s")+" written up");renderTabs();
       const remaining=S.sessions.filter(s=>{const d=derive(s);return d.past&&!d.complete;}).length;
-      gameShow({batch:batch,completed:cleared>0,toast:"Updated "+batch+" field"+(batch===1?"":"s")+" 🎉",
-        allClear:remaining===0,allClearEmoji:"🌟",allClearTitle:"Everything's complete!",allClearSub:"All past sessions have notes & room sorted.",
-        bigEffort:cleared>=5,bigEffortSub:cleared+" sessions fully completed in one sweep"},f);
+      gameShow({batch:batch,completed:cleared>0,toast:"Updated "+batch+" session"+(batch===1?"":"s")+" 🎉",
+        allClear:remaining===0,allClearEmoji:"🌟",allClearTitle:"Everything's written up!",allClearSub:"No past session is waiting on notes.",
+        bigEffort:cleared>=5,bigEffortSub:cleared+" sessions completed in one sweep"},f);
       refresh();};
   }
   function renderCal(){
@@ -3179,6 +3323,7 @@ function supervisionPanel(){
   const v=el('<div class="view active"></div>');
   v.innerHTML='<div class="seg mb" id="suptab" style="display:inline-flex"><button data-st="log" class="'+(supTab==="log"?"on":"")+'">Log</button>'+
     (feat("peer")?'<button data-st="peer" class="'+(supTab==="peer"?"on":"")+'">Peer</button>':'')+
+    '<button data-st="cpd" class="'+(supTab==="cpd"?"on":"")+'">CPD</button>'+
     '<button data-st="metrics" class="'+(supTab==="metrics"?"on":"")+'">Insights</button></div><div id="supbody"></div>';
   const sb=v.querySelector("#supbody");
   {
@@ -3211,6 +3356,31 @@ function supervisionPanel(){
       sb.querySelector("#addPeer").onclick=()=>peerForm(null);
       sb.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>peerForm((S.peerSupervision||[]).find(p=>p._id===li.dataset.id)));
     }
+    /* CPD gets a screen of its own rather than a card on Insights. Supervision is one input to
+       a CPD target and, for many therapists, not the largest one -- workshops, reading, podcasts
+       and courses were simply not recordable here before, so the figure on the card could only
+       ever be an undercount presented as a total. */
+    function drawCPD(){
+      const log=(S.cpd||[]).slice().filter(c=>c&&c.date).sort((a,b)=>parseD(b.date)-parseD(a.date));
+      const c=cpdYearHours();
+      const inWin=d=>{const x=d?parseD(d):null;return x&&x>c.from&&x<=c.to;};
+      const row=x=>'<div class="list-item" data-id="'+esc(x._id)+'"><div class="li-main">'+
+        '<div class="li-title">'+cpdKind(x.kind).e+' '+esc(x.title||cpdKind(x.kind).n)+
+          (inWin(x.date)?'':' <span class="chip na">over a year ago</span>')+'</div>'+
+        '<div class="li-sub">'+fmtDshort(x.date)+' · '+esc(cpdKind(x.kind).n)+
+          (x.provider?' · '+esc(x.provider):'')+'</div></div>'+
+        '<div class="li-right">'+(Math.round((+x.hours||0)*10)/10)+' hr'+((+x.hours)===1?'':'s')+'</div></div>';
+      sb.innerHTML='<div id="cpdMount"></div>'+
+        '<div class="toolbar"><button class="btn sm" id="addCpd">＋ Log CPD</button></div>'+
+        '<div class="card" style="padding:4px 12px">'+(log.length?log.map(row).join("")
+          :'<p class="muted small center" style="padding:18px">No CPD logged yet. Workshops, courses, reading, podcasts — anything that counts toward your hours.</p>')+'</div>'+
+        (log.length?'<p class="small muted center">'+log.length+' '+(log.length===1?'entry':'entries')+' logged · '+
+          (Math.round(c.own*10)/10)+' hr'+(c.own===1?'':'s')+' of it in the last 12 months.</p>':'')+
+        '<div class="card"><h2>What goes here</h2><p class="small muted" style="margin:0">Everything that is <b>not</b> supervision — a training day, a book, a podcast episode, an e-learning module, your own therapy. Supervision is logged on its own tabs and added to the total above, unless you\u2019ve said it shouldn\u2019t count.</p></div>';
+      mountCPD(sb.querySelector("#cpdMount"));
+      sb.querySelector("#addCpd").onclick=()=>cpdForm(null);
+      sb.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>cpdForm((S.cpd||[]).find(x=>x._id===li.dataset.id)));
+    }
     function drawMetrics(){
       const t=today();
       const sup=(S.supervision||[]).slice().filter(s=>s.date).sort((a,b)=>parseD(a.date)-parseD(b.date));
@@ -3228,7 +3398,10 @@ function supervisionPanel(){
         return {code:c.code,date:ld||null,days:ld?Math.floor((t-ld)/86400000):null};})
         .sort((a,b)=>{if(a.days==null&&b.days==null)return a.code.localeCompare(b.code);if(a.days==null)return -1;if(b.days==null)return 1;return b.days-a.days;});
       const recencyChip=r=>r.days==null?'<span class="chip n">never</span>':r.days>56?'<span class="chip n">'+r.days+'d</span>':r.days>28?'<span class="chip f">'+r.days+'d</span>':'<span class="chip y">'+r.days+'d</span>';
-      sb.innerHTML='<div id="cpdMount"></div><div id="accMount"></div><div class="kpis mb">'+
+      /* The CPD card moved to its own tab (above). Insights is now the accreditation view --
+         Form 3A and the discussion-recency table -- which is a narrower question for a narrower
+         group, and the two were never really the same screen. */
+      sb.innerHTML='<div id="accMount"></div><div class="kpis mb">'+
         '<div class="kpi"><div class="v">'+totalSess+'</div><div class="l">Sessions logged</div></div>'+
         '<div class="kpi"><div class="v">'+gbp(Math.round(totalCost))+'</div><div class="l">Total spent</div></div>'+
         '<div class="kpi"><div class="v">'+(Math.round(totalHrs*10)/10)+'</div><div class="l">Client-hrs reviewed</div></div>'+
@@ -3237,11 +3410,10 @@ function supervisionPanel(){
         '<div class="card"><h2>Client discussion recency</h2><p class="small muted" style="margin:0 0 6px">Time since each active client was last discussed in supervision'+(avgGap!=null?' · avg '+avgGap+' days between supervisions':'')+'.</p>'+
         (rows.length?'<div style="padding:0 2px">'+rows.map(r=>'<div class="list-item"><div class="li-main"><div class="li-title">'+esc(r.code)+'</div><div class="li-sub">'+(r.date?'Last discussed '+fmtD(r.date):'Not yet discussed in supervision')+'</div></div><div class="li-right">'+recencyChip(r)+'</div></div>').join("")+'</div>':'<p class="muted small">No active clients to show.</p>')+
         '<div class="legend" style="margin-top:10px"><span class="lgi"><i style="background:var(--good)"></i>≤4 wks</span><span class="lgi"><i style="background:var(--accent)"></i>4–8 wks</span><span class="lgi"><i style="background:var(--bad)"></i>8+ wks / never</span></div></div>';
-      mountCPD(sb.querySelector("#cpdMount"));
       mountAccreditation(sb.querySelector("#accMount"));
     }
     if(supTab==="peer"&&!feat("peer"))supTab="log";   // feature switched off since it was last open
-    const route=()=>supTab==="metrics"?drawMetrics():supTab==="peer"?drawPeer():drawLog();
+    const route=()=>supTab==="metrics"?drawMetrics():supTab==="cpd"?drawCPD():supTab==="peer"?drawPeer():drawLog();
     v.querySelector("#suptab").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{supTab=bt.dataset.st;
       v.querySelector("#suptab").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));route();});
     route();
@@ -3639,26 +3811,47 @@ function anaSources(){
 
 /* DAYS TO PAYMENT — how long money takes to arrive, and whether that is getting worse.
    Dated on the SESSION, not the payment: a session in March paid in June belongs to March's
-   figure, or a slow month would look fine simply because nothing had landed yet. */
+   figure, or a slow month would look fine simply because nothing had landed yet.
+
+   THE ADVANCE-PAYMENT PROBLEM (fixed Sep 2026). The gap used to be clamped at zero and every
+   payment averaged together, which is wrong for the way most therapy is actually paid for. A
+   practice where people pay at the session, or by standing order the week before, is a practice
+   whose gaps are mostly 0 and whose median is therefore 0 or 1 — a flat line at the bottom of a
+   chart, month after month, saying nothing. Worse, it hides the only part of the question worth
+   asking: of the ones that were NOT settled up front, how long did they take? Averaging fifty
+   zeroes against three sixty-day waits reports "typically 0 days" about a practice with a real
+   collection problem.
+   So the rows are split at the session date. `upfront` is paid before or on the day, and its
+   headline is a PERCENTAGE — that is what "everyone pays at the session" looks like as a figure.
+   `after` is everything else, and every wait figure on the card is computed from that group
+   alone and labelled as such. The two are never averaged together again.
+   Nothing is clamped any more either, so paying a fortnight ahead reads as a fortnight ahead
+   rather than as "same day". */
 function anaDaysToPay(){
-  const months=18, t=today(), series=[];
+  const months=18, t=today();
   const rows=anaPast(anaDer(),t).filter(x=>x.s.paidDate&&parseD(x.s.paidDate))
-    .map(x=>({dt:x.dt,days:Math.max(0,Math.round((parseD(x.s.paidDate)-x.dt)/86400000))}));
+    .map(x=>({dt:x.dt,days:Math.round((parseD(x.s.paidDate)-x.dt)/86400000)}));
   if(rows.length<8)return {ready:false,need:"Eight paid sessions with a payment date. You have "+rows.length+"."};
-  /* Every figure comes from `rows`, not from the buckets. The month loop used to run i=18..1 —
-     last month back to eighteen months back — so sessions in the month IN PROGRESS fell outside
-     every bucket while still counting towards the eight that unlock the card. A practice whose
-     paid sessions were all from this month therefore passed the readiness test and then printed
-     a nought-day typical wait against an empty chart, having quietly measured nothing at all.
-     The current month is now a bucket of its own (i=0), and the headline figures are computed
-     from all the rows regardless of which month they land in. */
+  const after=rows.filter(x=>x.days>0);          /* settled after the session — the only real wait */
+  const onDay=rows.filter(x=>x.days===0);
+  const advance=rows.filter(x=>x.days<0);        /* paid before it happened */
+  const upfront=advance.length+onDay.length;
+  const pct=n=>Math.round(n/rows.length*100);
+  /* One bucket per month, INCLUDING the month in progress (i=0). The loop used to start at last
+     month while the readiness test counted every paid session, so a practice whose payments were
+     all from this month passed the gate and then printed a nought-day wait against an empty
+     chart. Each month carries both figures: the typical wait of the sessions that were not
+     settled up front, and the share that were. */
+  const series=[];
   for(let i=months;i>=0;i--){
     const from=anaMonthStart(t,i), to=anaMonthStart(t,i-1);
-    const inM=rows.filter(x=>x.dt>=from&&x.dt<to).map(x=>x.days);
-    series.push({l:ANA_MONTHS[from.getMonth()],from,partial:i===0,
-      v:inM.length?Math.round(inM.reduce((a,b)=>a+b,0)/inM.length):null,n:inM.length});
+    const inM=rows.filter(x=>x.dt>=from&&x.dt<to);
+    const late=inM.filter(x=>x.days>0).map(x=>x.days);
+    series.push({l:ANA_MONTHS[from.getMonth()],from,partial:i===0,n:inM.length,nLate:late.length,
+      v:late.length?Math.round(anaMedian(late)):null,
+      up:inM.length?Math.round((inM.length-late.length)/inM.length*100):null});
   }
-  const all=rows.map(x=>x.days);
+  const lateDays=after.map(x=>x.days);
   /* Then vs now needs two windows that do not overlap. slice(-6) against slice(0,6) shared five
      of their six months on a short history, which made "arriving four days slower than a year
      ago" a comparison of a period against itself. */
@@ -3666,27 +3859,81 @@ function anaDaysToPay(){
   const half=Math.min(6,Math.floor(rated.length/2));
   const mean=a=>a.length?Math.round(a.reduce((x,y)=>x+y.v,0)/a.length):null;
   const recent=half>=3?rated.slice(-half):[], older=half>=3?rated.slice(0,half):[];
-  return {ready:true,series,avg:Math.round(anaMedian(all)),
-    mean:Math.round(all.reduce((a,b)=>a+b,0)/all.length),
-    recentAvg:mean(recent),olderAvg:mean(older),compareMonths:half,n:all.length,
-    worst:all.reduce((a,b)=>Math.max(a,b),0),over30:all.filter(d=>d>30).length};
+  return {ready:true,series,
+    n:rows.length,nLate:after.length,nUpfront:upfront,nAdvance:advance.length,nOnDay:onDay.length,
+    upfrontPct:pct(upfront),advancePct:pct(advance.length),
+    /* Median days EARLY, as a positive number, for a practice that is paid ahead. */
+    advanceAvg:advance.length?Math.round(Math.abs(anaMedian(advance.map(x=>x.days)))):null,
+    /* Every wait figure below describes the `after` group and nothing else. */
+    avg:lateDays.length?Math.round(anaMedian(lateDays)):null,
+    mean:lateDays.length?Math.round(lateDays.reduce((a,b)=>a+b,0)/lateDays.length):null,
+    worst:lateDays.length?lateDays.reduce((a,b)=>Math.max(a,b),0):0,
+    over30:lateDays.filter(d=>d>30).length,
+    recentAvg:mean(recent),olderAvg:mean(older),compareMonths:half};
 }
 
-/* WHO PAYS LATE — the per-client version, because "31 days on average" is made of people. */
+/* WHO PAYS LATE — the per-client version, because "31 days on average" is made of people.
+
+   This card used to be a debt list: sorted by what each client owed RIGHT NOW, headed by whoever
+   happened to have an unpaid session this week. That is a worklist, and the app already has one
+   — Sessions › Unpaid, with a Chase button on it. Reproducing it under a Trends heading answered
+   a question nobody came to Trends to ask, and buried the one they did: is this person's paying
+   getting worse?
+   So it reports BEHAVIOUR OVER TIME. Each client's paid sessions are split into an older and a
+   newer half of their own history, and `drift` is how many days the newer half moved. Sorted by
+   drift, worst first, so the client who has quietly gone from paying on the day to paying three
+   weeks late is at the top even though nothing of theirs is overdue today. Current debt is still
+   shown on the row — it is useful context — but it no longer decides the order.
+
+   Same split as the days-to-payment card, and for the same reason: a client who pays at the
+   session has gaps of zero, and averaging those in makes every up-front payer look identical.
+   `typical` describes the payments that came in AFTER the session; `upfrontPct` says how often
+   they did not have to. */
+const ANA_LP_MIN=4;                 /* payments needed before a client's own trend means anything */
+const ANA_LP_DRIFT=5;               /* days of movement before it is worth calling a change */
 function anaLatePayers(){
   const t=today(), by={};
   anaPast(anaDer(),t).forEach(x=>{
     const k=(x.s.client||"").toLowerCase(); if(!k)return;
-    const g=by[k]||(by[k]={code:x.s.client,days:[],unpaid:0,owed:0});
-    if(x.s.paidDate&&parseD(x.s.paidDate))g.days.push(Math.max(0,Math.round((parseD(x.s.paidDate)-x.dt)/86400000)));
+    const g=by[k]||(by[k]={code:x.s.client,pays:[],unpaid:0,owed:0});
+    if(x.s.paidDate&&parseD(x.s.paidDate))
+      g.pays.push({dt:x.dt,days:Math.round((parseD(x.s.paidDate)-x.dt)/86400000)});
     else if(x.d.overdue){g.unpaid++;g.owed+=x.d.rate||0;}
   });
-  const rows=Object.keys(by).map(k=>by[k]).filter(g=>g.days.length>=2||g.unpaid)
-    .map(g=>({code:g.code,n:g.days.length,avg:g.days.length?Math.round(anaMedian(g.days)):null,
-      over30:g.days.filter(d=>d>30).length,unpaid:g.unpaid,owed:Math.round(g.owed)}))
-    .sort((a,b)=>(b.owed-a.owed)||((b.avg||0)-(a.avg||0)));
+  const rows=Object.keys(by).map(k=>{
+    const g=by[k];
+    g.pays.sort((a,b)=>a.dt-b.dt);                       /* oldest first — the halves need order */
+    const late=g.pays.filter(x=>x.days>0).map(x=>x.days);
+    const upfront=g.pays.length-late.length;
+    /* Split the client's own history in two. Halves of their own record, not a fixed window:
+       a fortnightly client and a weekly one cover very different spans in the same six months,
+       and a calendar window would compare one against a period the other had barely entered. */
+    let drift=null,then=null,now=null;
+    if(g.pays.length>=ANA_LP_MIN){
+      const h=Math.floor(g.pays.length/2);
+      const older=g.pays.slice(0,h).map(x=>Math.max(0,x.days));
+      const newer=g.pays.slice(-h).map(x=>Math.max(0,x.days));
+      if(older.length&&newer.length){
+        then=Math.round(anaMedian(older)); now=Math.round(anaMedian(newer)); drift=now-then;}
+    }
+    return {code:g.code,n:g.pays.length,nLate:late.length,
+      upfrontPct:g.pays.length?Math.round(upfront/g.pays.length*100):null,
+      typical:late.length?Math.round(anaMedian(late)):null,
+      over30:late.filter(d=>d>30).length,
+      then,now,drift,unpaid:g.unpaid,owed:Math.round(g.owed)};
+  }).filter(r=>r.n>=2||r.unpaid);
   if(!rows.length)return {ready:false,need:"A few paid sessions with dates on them."};
-  return {ready:true,rows,slow:rows.filter(r=>(r.avg||0)>30||r.unpaid)};
+  /* Drift leads; a client with too little history to have one sorts below everyone who has,
+     ranked by how long they take. Debt is context on the row, never the ordering. */
+  rows.sort((a,b)=>{
+    const ad=a.drift==null?-1e9:a.drift, bd=b.drift==null?-1e9:b.drift;
+    return bd-ad || (b.typical||0)-(a.typical||0) || b.owed-a.owed;});
+  const trended=rows.filter(r=>r.drift!=null);
+  return {ready:true,rows,trended,
+    slowing:trended.filter(r=>r.drift>=ANA_LP_DRIFT),
+    improving:trended.filter(r=>r.drift<=-ANA_LP_DRIFT),
+    steady:trended.filter(r=>Math.abs(r.drift)<ANA_LP_DRIFT),
+    driftMin:ANA_LP_DRIFT,minPays:ANA_LP_MIN};
 }
 
 /* COST RATIO — what share of turnover the practice costs to run, this year against last.
@@ -3746,25 +3993,53 @@ function anaCostRatio(){
     takeHome:Math.round(now.income-now.costs)};
 }
 
-/* FEE EROSION — the fee you actually average against the fee you think you charge.
-   Reduced cancellation charges, clients still on an old rate and a shifting mix all pull the
-   effective figure below the headline, and a practice can raise its headline rate while its
-   real average falls. Nothing else in the app would show that. */
+/* WHAT A SESSION ACTUALLY EARNS — and what the gap between that and the fee schedule is made of.
+
+   This card was called "fee erosion" and was not clear about what it measured, so here is the
+   arithmetic in full. derive() gives every session a `fullRate` (the fee in force for that client
+   on that date) and a `rate` (`fullRate` × the cancellation charge stamped on it). The card's two
+   lines are Σrate and ΣfullRate over the same sessions. Since `rate` differs from `fullRate` in
+   exactly one way, THE WHOLE GAP IS FEE WRITTEN OFF ON MISSED SESSIONS — nothing else can put a
+   pound in it. The old copy claimed the gap was also made of "clients still on an older rate" and
+   "a mix that has shifted", which is untrue: those move the fee schedule line itself, not the
+   distance between the two lines. Naming the gap for what it is, and counting the sessions behind
+   it, is the whole change.
+
+   Three figures, because a therapist asks three different questions and they have three different
+   answers: what an average booked slot earned (`eff`, over every session including the ones that
+   did not happen), what a session that went ahead earned (`att`), and what the fee schedule said
+   those slots were worth (`head`). The trend is each line's own first half against its own last
+   half, so a practice that raised its fees while its take stood still can see exactly that. */
 function anaFeeErosion(){
   const months=anaMonthlySeries(18).filter(m=>m.n>0);
   if(months.length<6)return {ready:false,need:"Six months with sessions in them. You have "+months.length+"."};
   const series=months.map(m=>({l:m.l,from:m.from,
-    eff:Math.round(m.revenue/m.n*100)/100, head:Math.round(m.full/m.n*100)/100, n:m.n}));
+    eff:Math.round(m.revenue/m.n*100)/100, head:Math.round(m.full/m.n*100)/100,
+    n:m.n, attended:m.attended}));
+  const sum=(a,f)=>a.reduce((x,y)=>x+f(y),0);
+  const nAll=sum(months,m=>m.n), nAtt=sum(months,m=>m.attended);
+  const rev=sum(months,m=>m.revenue), full=sum(months,m=>m.full);
+  const r2=x=>Math.round(x*100)/100;
+  /* Window averages, not last month's. One month of a small practice is a handful of sessions,
+     and a headline that jumps every time a single client cancels is not a headline. */
+  const eff=nAll?r2(rev/nAll):0, head=nAll?r2(full/nAll):0, att=nAtt?r2(rev/nAtt):0;
+  /* The missed sessions behind the gap, over exactly the span the figures cover. */
+  const from=months[0].from, to=months[months.length-1].to;
+  const rows=anaPast(anaDer(),today()).filter(x=>x.dt>=from&&x.dt<to&&isCancelled(x.s));
+  const missedCharged=rows.filter(x=>(x.d.cancelPct||0)>0).length;
+  const missedFree=rows.length-missedCharged;
   const half=Math.floor(series.length/2);
-  const mean=a=>a.length?a.reduce((x,y)=>x+y.eff,0)/a.length:0;
-  const firstH=mean(series.slice(0,half)), lastH=mean(series.slice(-half));
-  const last=series[series.length-1];
-  return {ready:true,series,
-    eff:last.eff,head:last.head,
-    gap:Math.round((last.head-last.eff)*100)/100,
-    gapPct:last.head>0?Math.round((last.head-last.eff)/last.head*100):0,
-    change:Math.round((lastH-firstH)*100)/100,
-    changePct:firstH>0?Math.round((lastH-firstH)/firstH*100):0};
+  const mean=(a,k)=>a.length?a.reduce((x,y)=>x+y[k],0)/a.length:0;
+  const firstE=mean(series.slice(0,half),"eff"), lastE=mean(series.slice(-half),"eff");
+  const firstH=mean(series.slice(0,half),"head"), lastH=mean(series.slice(-half),"head");
+  return {ready:true,series,months:series.length,
+    eff,head,att,
+    sessions:nAll,attended:nAtt,missed:rows.length,missedCharged,missedFree,
+    gap:r2(head-eff), gapPct:head>0?Math.round((head-eff)/head*100):0,
+    lost:Math.round(full-rev),
+    change:r2(lastE-firstE), changePct:firstE>0?Math.round((lastE-firstE)/firstE*100):0,
+    headChange:r2(lastH-firstH), headChangePct:firstH>0?Math.round((lastH-firstH)/firstH*100):0,
+    halfMonths:half};
 }
 
 /* ============ 1.5 · Am I all right? ============ */
@@ -3843,11 +4118,20 @@ function anaCPD(){
   if(!feat("supervision"))return {ready:false,need:"Supervision is switched off, so there are no CPD hours to count."};
   const c=cpdYearHours(), target=cpdTarget(), t=today(), from=addDays(t,-90);
   const inWin=d=>{const x=d?parseD(d):null;return x&&x>from&&x<=t;};
-  const recent=(S.supervision||[]).filter(s=>inWin(s.date)).length
-    +(feat("peer")?(S.peerSupervision||[]).reduce((a,p)=>a+(inWin(p.date)?(+p.hours||0):0),0):0);
+  /* The pace has to be built from exactly what the TARGET counts, or the two figures on the card
+     answer different questions: counting supervision into the pace while the therapist has said
+     it does not count toward her target reads as "you are fine" against a total that says she is
+     not. */
+  const recent=(cpdCountsSup()?(S.supervision||[]).filter(s=>inWin(s.date)).length:0)
+    +((feat("peer")&&cpdCountsPeer())?(S.peerSupervision||[]).reduce((a,p)=>a+(inWin(p.date)?(+p.hours||0):0),0):0)
+    +(S.cpd||[]).reduce((a,x)=>a+(inWin(x&&x.date)?(+x.hours||0):0),0);
   const pace=recent/90*365;                                  /* hours a year at the current rate */
   return {ready:true,total:Math.round(c.total*10)/10,target,
     sup:c.sup,peer:c.peer,
+    own:Math.round(c.own*10)/10,
+    fromSup:Math.round((c.supCounted+c.peerCounted)*10)/10,
+    parts:c.parts.map(x=>({n:x.n,e:x.e,hrs:Math.round(x.hrs*10)/10})),
+    countsSup:cpdCountsSup(),
     pace:Math.round(pace*10)/10,recent:Math.round(recent*10)/10,
     onTrack:pace>=target,
     shortfall:Math.max(0,Math.round((target-pace)*10)/10),
@@ -3997,44 +4281,105 @@ function trendsMoneyHTML(){
 
   const fe=anaFeeErosion();
   out+= fe.ready
-    ? anaCard("Fee erosion","ana-erosion",
-        anaKpis([[gbp(fe.eff),"Average fee actually billed"],
-                 [gbp(fe.head),"If everything billed in full"],
-                 [(fe.gap>0?"−":"")+gbp(Math.abs(fe.gap)),"The gap · "+fe.gapPct+"%",fe.gap>0?"bad":""]])+
+    ? anaCard("What a session actually earns","ana-erosion",
+        anaKpis([[gbp(fe.eff),"Per session booked"],
+                 [gbp(fe.att),"Per session that went ahead","good"],
+                 [gbp(fe.head),"What your fees say"],
+                 [(fe.gap>0?"\u2212":"")+gbp(Math.abs(fe.gap)),"The gap \u00b7 "+fe.gapPct+"%",fe.gap>0?"bad":""]])+
         anaGapChart(fe.series)+
-        '<p class="small muted" style="margin:8px 0 0">Over these '+fe.series.length+' months your effective fee '+
-          (fe.change>0?'rose by <b>'+gbp(fe.change)+'</b> ('+fe.changePct+'%)':fe.change<0?'<b>fell</b> by '+gbp(Math.abs(fe.change))+' ('+Math.abs(fe.changePct)+'%)':'held steady')+'.</p>',
-        {lead:"Solid line is what you billed. Dashed is what full fees would have come to."})
-    : anaWaiting("Fee erosion","ana-erosion",fe.need);
+        /* Name the gap for what it is and count what is behind it. "Fee erosion · 14%" told a
+           reader that something was wrong without telling them what, and the old explanation
+           listed two causes that arithmetically cannot appear in this figure at all. */
+        '<p class="small muted" style="margin:8px 0 0">'+
+          (fe.gap>0
+            ? 'The gap is <b>fee written off on sessions that didn\u2019t happen</b> \u2014 and nothing else. Over these '+
+              fe.months+' months '+plural(fe.missed,"session")+' of '+fe.sessions+' were missed, costing <b>'+gbp(fe.lost)+'</b>'+
+              (fe.missedCharged?' after the '+fe.missedCharged+' you did charge for':'')+'.'
+            : 'Every session you booked was billed in full \u2014 nothing was written off.')+'</p>'+
+        /* Two trends, not one. A practice can raise its fees and watch its take stand still, and
+           that is the sentence this card exists to be able to write. */
+        '<p class="small muted" style="margin:4px 0 0">Over these '+fe.months+' months what you <b>earn</b> per session '+
+          (fe.change>0?'rose by <b>'+gbp(fe.change)+'</b> ('+fe.changePct+'%)':fe.change<0?'<b>fell</b> by '+gbp(Math.abs(fe.change))+' ('+Math.abs(fe.changePct)+'%)':'held steady')+
+          ', while your fees themselves '+
+          (fe.headChange>0?'rose by '+gbp(fe.headChange):fe.headChange<0?'fell by '+gbp(Math.abs(fe.headChange)):'held steady')+
+          '.'+(fe.headChange-fe.change>0.5?' Some of the rise is not reaching you.':'')+'</p>',
+        {lead:"Averages over "+fe.months+" months. Solid line is what you billed, dashed is what the same slots were worth at full fee \u2014 the figures beside the lines are the latest month."})
+    : anaWaiting("What a session actually earns","ana-erosion",fe.need);
 
   const dtp=anaDaysToPay();
+  /* Two different practices, two different cards. One is paid up front and wants to know how
+     firmly that holds; one waits and wants to know how long. Printing "typically 0 days" at the
+     first and a chart of zeroes at both is how this card came to say nothing to anybody. */
+  const dtpWait=dtp.ready&&dtp.nLate>=3;
   out+= dtp.ready
     ? anaCard("Days to payment","ana-dtp",
-        anaKpis([[dtp.avg+"d","Typical wait"],
-                 [dtp.recentAvg!=null?dtp.recentAvg+"d":"—","Last "+(dtp.compareMonths||6)+" months",(dtp.recentAvg!=null&&dtp.olderAvg!=null&&dtp.recentAvg>dtp.olderAvg+3)?"bad":""],
-                 [dtp.over30,"Payments over 30 days"]])+
-        chartLine(dtp.series.filter(x=>x.v!=null).map(x=>({l:x.l,v:x.v})))+
-        '<p class="small muted" style="margin:8px 0 0">'+plural(dtp.n,"payment")+' with a date on '+(dtp.n===1?'it':'them')+', typically '+dtp.avg+' day'+(dtp.avg===1?'':'s')+' — longest '+dtp.worst+'.</p>'+
-        (dtp.recentAvg!=null&&dtp.olderAvg!=null
+        anaKpis([[dtp.upfrontPct+"%","Settled on the day or before",dtp.upfrontPct>=80?"good":""],
+                 [dtpWait?dtp.avg+"d":"—","Typical wait on the rest",
+                   dtpWait?(dtp.avg>30?"bad":dtp.avg>14?"":"good"):""],
+                 [dtpWait&&dtp.recentAvg!=null?dtp.recentAvg+"d":"—","Last "+(dtp.compareMonths||6)+" months",
+                   (dtpWait&&dtp.recentAvg!=null&&dtp.olderAvg!=null&&dtp.recentAvg>dtp.olderAvg+3)?"bad":""],
+                 [dtp.over30,"Waits over 30 days",dtp.over30?"bad":""]])+
+        /* The chart plots ONLY the sessions that were not settled up front. A month in which
+           everybody paid on the day has no wait to draw and is simply absent, which is the
+           honest answer — a nought would read as "instant" rather than "nothing to measure". */
+        (dtpWait?chartLine(dtp.series.filter(x=>x.v!=null).map(x=>({l:x.l,v:x.v}))):"")+
+        '<p class="small muted" style="margin:8px 0 0">'+
+          plural(dtp.nUpfront,"payment")+' of '+dtp.n+' arrived on the day or before'+
+          (dtp.nAdvance?' \u2014 '+dtp.nAdvance+' of them genuinely in advance, typically '+
+            dtp.advanceAvg+' day'+(dtp.advanceAvg===1?'':'s')+' early':'')+'.'+
+          (dtpWait?' The other '+plural(dtp.nLate,"payment")+' took '+dtp.avg+' day'+(dtp.avg===1?'':'s')+
+            ' at the median, longest '+dtp.worst+'.':'')+'</p>'+
+        (!dtpWait
+          ? '<p class="small muted" style="margin:4px 0 0">'+(dtp.nLate
+              ? 'Only '+plural(dtp.nLate,"payment")+' came in after the session, which is too few to read a trend from. On this evidence you are paid as you go.'
+              : '<b>Every payment was settled by the day of the session.</b> There is no waiting time to chart.')+'</p>'
+          : (dtp.recentAvg!=null&&dtp.olderAvg!=null
           ? '<p class="small muted" style="margin:4px 0 0">'+(dtp.recentAvg>dtp.olderAvg
-              ? 'Money is arriving <b>'+(dtp.recentAvg-dtp.olderAvg)+' days slower</b> than in the '+plural(dtp.compareMonths,"month")+' before that.'
+              ? 'Of those, money is arriving <b>'+(dtp.recentAvg-dtp.olderAvg)+' days slower</b> than in the '+plural(dtp.compareMonths,"month")+' before that.'
               : dtp.recentAvg<dtp.olderAvg
-              ? 'Money is arriving <b>'+(dtp.olderAvg-dtp.recentAvg)+' days faster</b> than in the '+plural(dtp.compareMonths,"month")+' before that.'
-              : 'Steady against the '+plural(dtp.compareMonths,"month")+' before that.')+'</p>':""),
-        {lead:"From the session happening to the money landing. The month in progress is included, so a practice that only started logging this month still sees itself."})
+              ? 'Of those, money is arriving <b>'+(dtp.olderAvg-dtp.recentAvg)+' days faster</b> than in the '+plural(dtp.compareMonths,"month")+' before that.'
+              : 'Steady against the '+plural(dtp.compareMonths,"month")+' before that.')+'</p>':"")),
+        {lead:"How much of your work is paid up front, and how long the rest takes."})
     : anaWaiting("Days to payment","ana-dtp",dtp.need);
 
   const lp=anaLatePayers();
+  /* One row per client, headed by the direction of travel rather than by a balance. The chip is
+     the DRIFT — how their recent paying compares with their own earlier paying — because that is
+     the thing this card exists to surface and the thing no other screen shows. */
+  const lpChip=r=>r.drift==null
+      ? '<span class="chip na">too few to say</span>'
+      : r.drift>=lp.driftMin?'<span class="chip n">+'+r.drift+'d slower</span>'
+      : r.drift<=-lp.driftMin?'<span class="chip y">'+Math.abs(r.drift)+'d faster</span>'
+      : '<span class="chip f">steady</span>';
+  const lpRow=r=>'<div class="list-item" data-code="'+esc(r.code)+'"><div class="li-main">'+
+      '<div class="li-title">'+esc(r.code)+' '+lpChip(r)+'</div>'+
+      '<div class="li-sub">'+
+        (r.drift!=null?'was '+r.then+'d, now '+r.now+'d'
+          :r.n?plural(r.n,"payment")+' so far':'nothing settled yet')+
+        (r.upfrontPct!=null&&r.upfrontPct>0?' · '+r.upfrontPct+'% up front':'')+
+        (r.over30?' · '+r.over30+' over 30d':'')+'</div></div>'+
+      '<div class="li-right">'+(r.owed?'<b style="color:var(--bad)">'+gbp(r.owed)+'</b>'
+        :r.typical!=null?'<span class="small muted">'+r.typical+'d</span>':'<span class="small muted">up to date</span>')+
+      '</div></div>';
   out+= lp.ready
     ? anaCard("Who pays late","ana-late",
-        (lp.rows.length
-          ? lp.rows.slice(0,12).map(r=>'<div class="list-item" data-code="'+esc(r.code)+'"><div class="li-main">'+
-              '<div class="li-title">'+esc(r.code)+' '+(r.avg!=null?'<span class="chip '+(r.avg>30?"n":r.avg>14?"f":"y")+'">'+r.avg+'d</span>':'')+'</div>'+
-              '<div class="li-sub">'+(r.n?plural(r.n,"payment")+' · typically '+r.avg+' days':'nothing settled yet')+
-                (r.over30?' · '+r.over30+' over 30d':'')+'</div></div>'+
-              '<div class="li-right">'+(r.owed?'<b style="color:var(--bad)">'+gbp(r.owed)+'</b>':'<span class="small muted">up to date</span>')+'</div></div>').join("")
-          : '<p class="muted small">Everyone is up to date.</p>'),
-        {lead:"Sorted by what is outstanding, then by how long they take."})
+        (lp.trended.length
+          ? anaKpis([[lp.slowing.length,"Getting slower",lp.slowing.length?"bad":"good"],
+                     [lp.steady.length,"Holding steady"],
+                     [lp.improving.length,"Getting faster",lp.improving.length?"good":""]])
+          : '')+
+        (lp.slowing.length
+          ? '<div class="vmsg warn" style="margin:10px 0">'+gi("downtrend")+' <b>'+
+            (lp.slowing.length===1?esc(lp.slowing[0].code)+' has'
+              :plural(lp.slowing.length,"client")+' have')+
+            '</b> slipped by '+lp.driftMin+' days or more against their own earlier record.</div>'
+          : lp.trended.length
+          ? '<div class="vmsg ok" style="margin:10px 0">\u2713 Nobody is paying meaningfully slower than they used to.</div>'
+          : '')+
+        lp.rows.slice(0,12).map(lpRow).join("")+
+        (lp.rows.length>12?'<p class="small muted" style="margin:8px 0 0">Showing the 12 with the most movement, of '+lp.rows.length+'.</p>':'')+
+        '<p class="small muted" style="margin:8px 0 0">Chasing what is outstanding <i>today</i> is a job, not a trend \u2014 that lives on <span class="taxlink" id="lpUnpaid">Sessions \u203a Unpaid \u203a</span> with a Chase button on it.</p>',
+        {lead:"Whether each client\u2019s paying is drifting, measured against their own earlier record \u2014 not against a calendar."})
     : anaWaiting("Who pays late","ana-late",lp.need);
 
   const cr=anaCostRatio();
@@ -4158,8 +4503,15 @@ function trendsYouHTML(){
     ? anaCard("CPD trajectory","ana-cpd",
         anaKpis([[cp.total,"Hours in 12 months",cp.total>=cp.target?"good":""],
                  [cp.pace,"Hours a year at your current pace",cp.onTrack?"good":"bad"],
+                 [cp.own,"Of it, not supervision"],
                  [cp.target,"Your target"]])+
         anaBarRow("Logged against target",cp.total+" of "+cp.target+" hrs",cp.pct)+
+        /* Composition, not just the total. A year made entirely of supervision and a year made
+           of six kinds of activity are different answers to a renewal form, and only one figure
+           on this card could ever tell them apart. */
+        (cp.parts.length>1?'<div class="grp-h" style="margin-top:10px">Where it came from</div>'+
+          cp.parts.map(pt=>anaBarRow(pt.e+" "+esc(pt.n),pt.hrs+" hr"+(pt.hrs===1?"":"s"),
+            Math.round(pt.hrs/cp.parts[0].hrs*100))).join(""):"")+
         /* Four states, not two: whether the last twelve months cleared the target and whether the
            current pace would clear it again are separate questions, and the awkward one — target
            met, pace since dropped — is exactly the case a running total hides. */
@@ -4527,6 +4879,10 @@ VIEWS.practice=function(){
       host.querySelectorAll(".list-item[data-code]").forEach(li=>li.onclick=()=>{
         const c=S.clients.find(x=>(x.code||"").toLowerCase()===(li.dataset.code||"").toLowerCase());
         if(c)clientForm(c);});
+      /* The one link out of Trends into a worklist: "who pays late" is a trend, chasing today's
+         debt is a job, and the card says so rather than doing both badly. */
+      const lpu=host.querySelector("#lpUnpaid");
+      if(lpu)lpu.onclick=e=>{e.stopPropagation();sessFilter.view="list";sessFilter.seg="unpaid";go("sessions");};
       /* folded rows are built the first time each block is opened, not now */
       wireAgedFolds(host,built.folds);
       wireInfo(host);
@@ -4565,7 +4921,7 @@ VIEWS.practice=function(){
 function roomBilling(rm){return (rm&&rm.billing==="monthly")?"monthly":"session";}
 /* Does this practice pay for a room per session AT ALL? A therapist working from home, or one
    whose rooms are all on a monthly rent, never has a per-session room fee to settle — so the
-   session form drops that whole pair of controls rather than explaining itself once per session.
+   Room fees card stays away entirely rather than explaining its own emptiness.
    Read against today's rates: this answers "is this a thing I do", not "did this session cost". */
 function anyPerUseRoom(){
   const iso=isoD(today());
@@ -4939,6 +5295,89 @@ function wirePaymentsDue(v){
     b.disabled=true;
     const ok=await setChargePaid(b.dataset.pay,on?null:isoD(today()),b.dataset.lbl);
     if(ok){toast(on?"Marked unpaid":"Marked paid");if(!on)Sfx.pop();}
+    go("money",{seg:"costs",keepScroll:true});});
+  wireInfo(v);
+}
+/* ===== Room fees the sessions have raised =====
+   A session in a room you hire by the hour is a bill, and until Sep 2026 the only place that bill
+   existed was a dropdown inside the session form — so logging a session meant answering a
+   bookkeeping question, and not answering it left the session permanently "incomplete". The
+   session now RAISES the fee (derive().roomOwed, tagged to that session's `_id`) and this card is
+   where the fee is managed, next to the monthly rent and every other cost the practice pays.
+
+   It is deliberately OUTSIDE feat("finances") and outside the Plus gate. The fee is a liability
+   the therapist has actually incurred and the sessions that raised it are her own records —
+   switching a preference off, or not subscribing, must never make money she owes disappear. */
+function roomFeeRows(){
+  const t=today();
+  return S.sessions.map(s=>({s,d:derive(s)})).filter(x=>x.d.roomOwed)
+    .map(x=>{const dt=parseD(x.s.date);
+      /* Due when the room's own payment schedule says it is, exactly as derive() computes it —
+         a fee accrued yesterday for a room paid at month end is not late. */
+      return {s:x.s,d:x.d,dt,loc:x.s.location||"?",amt:x.d.roomRate||0,due:x.d.roomDue==="Y"};})
+    .sort((a,b)=>a.dt-b.dt);
+}
+function roomFeeSettled(days){
+  const t=today(), from=addDays(t,-(days||14));
+  return S.sessions.map(s=>({s,d:derive(s)}))
+    .filter(x=>(x.d.roomRate||0)>0&&!x.d.roomPaidNA&&(x.s.roomPaid==="Y"||x.s.roomPaid==="n/a"))
+    .filter(x=>{const p=x.s.roomPaidDate?parseD(x.s.roomPaidDate):null;return p&&p>=from&&p<=t;})
+    .sort((a,b)=>parseD(b.s.roomPaidDate)-parseD(a.s.roomPaidDate));
+}
+function roomFeesCard(){
+  const rows=roomFeeRows(), settled=roomFeeSettled(14);
+  const anyPerUse=anyPerUseRoom();
+  const monthlyRooms=S.rooms.filter(r=>roomBilling(r)==="monthly");
+  /* Nothing outstanding and no room ever charged by the session: the card is noise, not
+     reassurance — a therapist who works from home has no room fees and never will. */
+  if(!rows.length&&!settled.length&&!anyPerUse)return "";
+  const grp={};
+  rows.forEach(r=>{const g=grp[r.loc]||(grp[r.loc]={loc:r.loc,n:0,amt:0,dueN:0,dueAmt:0,min:null,max:null});
+    g.n++;g.amt+=r.amt;if(r.due){g.dueN++;g.dueAmt+=r.amt;}
+    if(!g.min||r.dt<g.min)g.min=r.dt; if(!g.max||r.dt>g.max)g.max=r.dt;});
+  const groups=Object.keys(grp).map(k=>grp[k]).sort((a,b)=>b.dueAmt-a.dueAmt||b.amt-a.amt);
+  const totalDue=groups.reduce((a,g)=>a+g.dueAmt,0), totalAll=groups.reduce((a,g)=>a+g.amt,0);
+  const groupRow=g=>{
+    const rng=g.min?(fmtDM(g.min)+(g.max&&+g.max!==+g.min?" – "+fmtDM(g.max):"")):"";
+    return '<div class="list-item"><div class="li-main">'+
+      '<div class="li-title">'+esc(g.loc)+' '+
+        (g.dueN?'<span class="chip n">'+g.dueN+' due</span>':'<span class="chip na">not due yet</span>')+'</div>'+
+      /* The due figure leads: this line is CSS-truncated to one row, and "£2,085 of it due now"
+         is the half a reader needs when a long date range would otherwise push it off the end. */
+      '<div class="li-sub">'+(g.dueN&&g.dueN<g.n?gbp(Math.round(g.dueAmt))+' due now · ':'')+
+        plural(g.n,"session")+' · '+esc(rng)+'</div></div>'+
+      '<div class="li-right" style="display:flex;align-items:center;gap:8px">'+gbp(Math.round(g.amt))+
+        '<button class="btn sm '+(g.dueN?'sec':'ghost')+'" data-settle="'+esc(g.loc)+'">Settle</button></div></div>';
+  };
+  const settledRow=x=>'<div class="list-item"><div class="li-main">'+
+      '<div class="li-title">'+esc(x.s.client||"—")+' · '+fmtDshort(x.s.date)+' '+
+        (x.s.roomPaid==="n/a"?'<span class="chip na">not owed</span>':'<span class="chip y">✓</span>')+'</div>'+
+      '<div class="li-sub">'+esc(x.s.location||"?")+' · '+(x.s.roomPaid==="n/a"?'written off':'paid')+' '+fmtDshort(x.s.roomPaidDate)+'</div></div>'+
+    '<div class="li-right" style="display:flex;align-items:center;gap:8px">'+gbp(x.d.roomRate||0)+
+      '<button class="btn sm ghost" data-unsettle="'+esc(x.s._id)+'">Undo</button></div></div>';
+  return '<div class="card" id="roomFeesCard">'+cardHead("Room fees","room-fees-raised")+
+    '<p class="small muted">What your sessions have run up in rooms you pay for by the hour. Every session raises its own fee — you settle them here.</p>'+
+    (rows.length
+      ? '<div class="kpis mt" style="grid-template-columns:1fr 1fr">'+
+          '<div class="kpi'+(totalDue?' bad':'')+'"><div class="v">'+gbp(Math.round(totalDue))+'</div><div class="l">due now</div></div>'+
+          '<div class="kpi"><div class="v">'+gbp(Math.round(totalAll))+'</div><div class="l">outstanding in total</div></div></div>'+
+        '<div style="padding:0 2px;margin-top:8px">'+groups.map(groupRow).join("")+'</div>'
+      : '<p class="muted small mt">'+(anyPerUse?'Every room fee is settled.':'You don’t pay for a room by the session.')+'</p>')+
+    (settled.length?'<details class="dz" style="margin-top:10px"><summary>Settled in the last fortnight ('+settled.length+')</summary>'+
+      '<div style="padding:0 2px">'+settled.map(settledRow).join("")+'</div></details>':'')+
+    (monthlyRooms.length?'<p class="small muted" style="margin-top:8px">'+esc(monthlyRooms.map(r=>r.location).join(", "))+
+      (monthlyRooms.length===1?' is':' are')+' on a monthly rent, so nothing here is raised for '+(monthlyRooms.length===1?'it':'them')+
+      ' — that rent is in <b>Payments due</b> above.</p>':'')+
+    '</div>';
+}
+function wireRoomFees(v){
+  v.querySelectorAll("[data-settle]").forEach(b=>b.onclick=()=>roomDueSheet(b.dataset.settle));
+  v.querySelectorAll("[data-unsettle]").forEach(b=>b.onclick=async()=>{
+    const ss=S.sessions.find(z=>z._id===b.dataset.unsettle); if(!ss)return;
+    b.disabled=true;
+    ss.roomPaid=""; ss.roomPaidDate="";
+    const ok=await commit("Room fee reopened: "+(ss.client||"?")+" "+fmtDshort(ss.date));
+    if(ok!==false)toast("Back on the outstanding list");
     go("money",{seg:"costs",keepScroll:true});});
   wireInfo(v);
 }
@@ -5801,13 +6240,20 @@ infoDef("carryforward","Why nothing needs changing most years",
   '<p class="small">It also means a change only ever moves <b>this year and the ones after it</b>. The year you finish repaying a loan, or move to or from Scotland, every earlier year keeps the figures it was actually assessed on \u2014 including returns you have already filed.</p>');
 infoDef("cpd-window","How your CPD hours are counted",
   '<p class="small">This is a rolling last 12 months, not the current tax year or calendar year \u2014 the window moves forward every time you check.</p>'+
-  '<p class="small">Clinical supervision counts one hour per logged session. Peer supervision counts the hours you have logged for it, when that\u2019s switched on.</p>');
+  '<p class="small">Three things feed it. <b>Anything you log on the CPD tab</b> \u2014 workshops, courses, reading, podcasts, e-learning, your own therapy \u2014 counts the hours you enter. <b>Clinical supervision</b> counts one hour per logged session. <b>Peer supervision</b> counts the hours on each entry, when that\u2019s switched on.</p>'+
+  '<p class="small"><b>Whether supervision counts at all is your decision</b>, under <i>Target &amp; what counts</i>. Accrediting bodies genuinely differ, and some count it only in part. Switching it off leaves every hour logged and on your records \u2014 it only takes them out of this total, so you can see what you have without it.</p>'+
+  '<p class="small muted">Hours only. What a course cost you is a business cost, entered in Money \u203a Costs &amp; income under CPD &amp; training, where it comes off your tax \u2014 it is deliberately not asked for twice.</p>');
 infoDef("form3a-mechanics","How these hours are worked out",
   '<p class="small"><b>Clinical hours</b> are your logged client sessions, each counted as 1 hour (50-minute minimum). Any session flagged as a late cancellation is excluded, in line with the rule that missed sessions don\u2019t count.</p>'+
   '<p class="small"><b>Supervision hours</b> are each logged supervision session (1 hour), plus the training and placement totals below.</p>');
 infoDef("retention-rationale","How long, and why",
   '<p class="small">When a client passes one of these dates they appear below, and you decide what happens next.</p>'+
   '<p class="small">Six years each is the common default: the BACP complaint window is around three years, and insurers often ask for six. Your own insurer or supervisor may say otherwise \u2014 this is your call, not the app\u2019s.</p>');
+infoDef("room-fees-raised","How room fees get here",
+  '<p class="small">Every session in a room you pay for <b>by the session</b> raises a fee of its own, at the rate that room charged <b>on the day of that session</b> — not the rate it charges now. Nothing is asked of you when you log the session; the fee simply appears here.</p>'+
+  '<p class="small"><b>Due now</b> means the room’s own payment date has passed. A fee from yesterday for a room you settle at month end is outstanding but not late, and it is listed separately so the two are never confused.</p>'+
+  '<p class="small">Settling a fee here records <b>when you paid it</b>. It does not move the cost between tax years — a room fee belongs to the tax year of the session that ran it up, ticked or not.</p>'+
+  '<p class="small muted"><b>Not owed</b> is for a fee the room never actually charged you. It clears the row without recording a payment, and you can undo it from the settled list underneath.</p>');
 infoDef("payments-due-ticking","What ticking a payment does",
   '<p class="small">Ticking one off changes nothing in your tax figures \u2014 a cost still counts in the year it fell due, whether or not it has been ticked here.</p>');
 infoDef("business-costs-detail","How business costs work",
@@ -6038,23 +6484,30 @@ infoDef("ana-sources","Where clients come from",
   '<p class="small">The column that matters is not how many enquired — it is the <b>median sessions</b> and how many are <b>still current</b>. A directory that sends ten people who each come twice is worth much less than a colleague who sends two who each stay a year, and enquiry counts alone say the opposite.</p>'+
   '<p class="small muted">Clients with nothing filled in appear as <b>Unknown</b>, always last and never merged into a real source: never asked is a different fact from found us themselves. They are shown rather than left out so the table adds up to your whole practice — a source list that quietly omits half the clients invites the wrong conclusion from the half it shows.</p>');
 infoDef("ana-dtp","Days to payment",
-  '<p class="small">The gap between a session happening and the money arriving, averaged by month.</p>'+
+  '<p class="small"><b>Two questions, kept apart.</b> How much of your work is settled by the day of the session — at the session, or in advance — and, for everything else, how long you actually waited.</p>'+
+  '<p class="small">They are never averaged together. Most therapy is paid at the session, so mixing fifty same-day payments in with three sixty-day waits reports "typically 0 days" about a practice with a real collection problem, and draws a flat line along the bottom of the chart every month. <b>Every waiting figure on this card describes only the payments that came in after the session.</b></p>'+
   '<p class="small">Dated on the <b>session</b>, not the payment. A March session paid in June belongs to March’s figure — dating it to June would make a slow month look fine simply because nothing had landed yet.</p>'+
   '<p class="small">The month in progress is included. Only sessions you have entered a <b>payment date</b> against are counted at all, so if this looks thin the answer is usually that payments are being ticked without a date.</p>'+
   '<p class="small">The median is used, so one client who took nine months does not swamp the month they were in. A number that is creeping up is usually an invoicing habit rather than a client problem.</p>');
 infoDef("ana-late","Who pays late",
-  '<p class="small">The per-client version of days-to-payment, because "31 days on average" is made of people.</p>'+
-  '<p class="small">Sorted by what is actually outstanding first, then by how slowly they pay. <b>Over 30 days</b> counts how many of their payments took longer than a month.</p>'+
+  '<p class="small">The per-client version of days-to-payment, because "31 days on average" is made of people. It reports the <b>direction of travel</b>, not today’s balance.</p>'+
+  '<p class="small">Each client’s payments are cut in half — their own earlier half against their own recent half — and the chip is how far the recent half moved. Halves of their own record rather than a fixed number of months, because a fortnightly client and a weekly one cover very different ground in the same six months. It takes '+ANA_LP_MIN+' payments before anyone gets a trend at all, and '+ANA_LP_DRIFT+' days of movement before it is called a change rather than noise.</p>'+
+  '<p class="small">Payments settled <b>on or before the day</b> are counted separately (the "up front" figure) and kept out of the waiting time, for the same reason as on the days-to-payment card: averaging same-day payments in makes everyone look identical and hides the ones who really do take a month.</p>'+
+  '<p class="small">What is outstanding today is shown on the row for context, but it does <b>not</b> set the order — it used to, which made this a debt list that happened to live under Trends. Chasing is a job with its own screen: Sessions › Unpaid.</p>'+
   '<p class="small muted">Nothing here changes a fee or sends anything. It is for deciding who to ask for payment up front.</p>');
 infoDef("ana-costratio","What the practice costs to run",
   '<p class="small">Costs as a share of everything that came in, over the last twelve months, against the twelve before that.</p>'+
   '<p class="small">This is <b>business</b> reporting, not tax: no bands, no allowances, nothing jurisdiction-specific. It answers "of every pound that arrives, how much leaves again before I see it".</p>'+
   '<p class="small">Everything the practice spends is in it, not only what you typed into Costs &amp; income: <b>room fees charged against individual sessions</b> and <b>supervision</b> both count, because they are bills the practice pays even though they are entered elsewhere. For a therapist hiring a room by the hour the room is usually the largest line of the year.</p>'+
   '<p class="small">A ratio drifting upward while income is flat is the early warning. The category list underneath says which line did it.</p>');
-infoDef("ana-erosion","Fee erosion",
-  '<p class="small">Two numbers per month: what you <b>would</b> have billed at full fee, and what you <b>actually</b> billed.</p>'+
-  '<p class="small">The gap is made of reduced cancellation charges, clients still on an older rate, and a mix that has shifted towards your cheaper work. None of it is visible in a headline rate.</p>'+
-  '<p class="small">A practice can raise its advertised fee and watch its real average fall at the same time. This is the only place in the app that would show you that.</p>');
+infoDef("ana-erosion","What a session actually earns",
+  '<p class="small">Three different questions, because they have three different answers.</p>'+
+  '<div class="acc-work"><div><b>Per session booked</b> — everything you billed, divided by every session in the diary, <i>including</i> the ones that were cancelled or not attended. This is what an hour of your week is really worth.</div>'+
+  '<div><b>Per session that went ahead</b> — the same money divided by the sessions that actually happened.</div>'+
+  '<div><b>What your fees say</b> — the same slots priced at the full fee in force for that client on that date. Not one advertised rate: it follows each client\u2019s own fee history.</div></div>'+
+  '<p class="small"><b>The gap is one thing only: fee written off on sessions that didn\u2019t happen.</b> Every session carries the fee in force and the cancellation charge you stamped on it, and the difference between the two lines is that charge and nothing else. A fee rise, or a mix that has shifted towards cheaper work, moves the fee line itself — it cannot appear in the gap. (This card used to say otherwise; it was wrong.)</p>'+
+  '<p class="small">Both trends are shown, because a practice can raise its fees and watch its take stand still. If your fees rose more than your earnings did, the difference went somewhere — usually to missed sessions you chose not to charge for.</p>'+
+  '<p class="small muted">Eighteen months, whole months only, and the headline figures are averages over the whole span rather than last month alone — one month of a small practice is a handful of sessions, and a headline that swings on a single cancellation is not a headline.</p>');
 infoDef("ana-supcadence","Supervision cadence",
   '<p class="small">Clinical hours for every hour of supervision, by quarter, against the 1:6 guideline.</p>'+
   '<p class="small"><b>This is not the accreditation ratio.</b> Form 3A, in Supervision › Insights, counts different things over a different window for a different purpose. This is the everyday version: is the gap between supervision quietly widening?</p>'+
@@ -6131,13 +6584,17 @@ VIEWS.money=function(){
       return '<tr><td>'+m.toLocaleDateString("en-GB",{month:"short",year:"2-digit"})+'</td><td class="num">'+rs.length+'</td><td class="num">'+gbp(billed)+'</td><td class="num">'+gbp(rec)+'</td><td class="num">'+(billed-rec?gbp(billed-rec):"–")+'</td></tr>';}).join("");
     const byClient=S.clients.map(c=>{const rs=der.filter(x=>(x.s.client||"").toLowerCase()===c.code.toLowerCase()&&x.d.overdue);
       return{code:c.code,n:rs.length,amt:sum(rs,x=>x.d.rate)}}).filter(x=>x.amt>0).sort((a,b)=>b.amt-a.amt);
+    /* Room fees are SETTLED on Costs & income now, beside the rent and the rest of the bills.
+       This stays a read-out — Overview is the "where did the money go" screen — and hands over to
+       the one card that manages them, rather than growing a second set of controls that would
+       have to be kept in step with it. */
     const due=der.filter(x=>x.d.roomDue==="Y");
+    const roomNotYet=der.filter(x=>x.d.roomDue==="N");
     const roomGrp={}; due.forEach(x=>{const k=x.s.location||"?";const g=roomGrp[k]||(roomGrp[k]={n:0,amt:0,min:null,max:null});
       g.n++;g.amt+=x.d.roomRate||0;const d=parseD(x.s.date);if(!g.min||d<g.min)g.min=d;if(!g.max||d>g.max)g.max=d;});
     const roomRows=Object.keys(roomGrp).map(k=>{const g=roomGrp[k];
       const rng=g.min?(fmtDM(g.min)+(g.max&&+g.max!==+g.min?" – "+fmtDM(g.max):"")):"";
-      return '<tr><td>'+esc(k)+'</td><td class="num">'+g.n+'</td><td>'+rng+'</td><td class="num">'+gbp(g.amt)+'</td>'+
-        '<td class="num"><button class="btn sm sec" data-settle="'+esc(k)+'">Settle</button></td></tr>';}).join("");
+      return '<tr><td>'+esc(k)+'</td><td class="num">'+g.n+'</td><td>'+rng+'</td><td class="num">'+gbp(g.amt)+'</td></tr>';}).join("");
     const fc=incomeForecast();
     const fcCard='<div class="card"><h2>This month &amp; year at a glance</h2>'+
       '<div class="kpis mt">'+
@@ -6157,9 +6614,12 @@ VIEWS.money=function(){
       '<div class="small muted mt" style="font-weight:600">Clients seen per '+statGran+'</div><div id="chCli"></div></div>'+
       '<div class="card"><h2>Last 12 months</h2><table><thead><tr><th>Month</th><th class="num">Sess</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Open</th></tr></thead><tbody>'+mTable+'</tbody></table></div>'+
       '<div class="card"><h2>Outstanding by client</h2>'+(byClient.length?'<table><thead><tr><th>Client</th><th class="num">Sessions</th><th class="num">Amount</th></tr></thead><tbody>'+byClient.map(x=>'<tr><td>'+esc(x.code)+'</td><td class="num">'+x.n+'</td><td class="num">'+gbp(x.amt)+'</td></tr>').join("")+'</tbody></table>':'<p class="muted small">Nothing outstanding 🎉</p>')+'</div>'+
-      '<div class="card" id="roomDueCard"><h2>Room payments due</h2>'+(roomRows?'<div class="rawscroll"><table><thead><tr><th>Room</th><th class="num">Sessions</th><th>Dates</th><th class="num">Total</th><th></th></tr></thead><tbody>'+roomRows+'</tbody></table></div>':'<p class="muted small">No room payments outstanding.</p>')+
+      '<div class="card" id="roomDueCard"><h2>Room payments due</h2>'+(roomRows?'<div class="rawscroll"><table><thead><tr><th>Room</th><th class="num">Sessions</th><th>Dates</th><th class="num">Total</th></tr></thead><tbody>'+roomRows+'</tbody></table></div>':'<p class="muted small">No room payments outstanding.</p>')+
+        (roomNotYet.length?'<p class="small muted" style="margin-top:8px">Another '+plural(roomNotYet.length,"session")+' has raised a fee that has not fallen due yet.</p>':'')+
+        '<button class="btn sm sec mt" id="roomManage">Manage room fees ›</button>'+
         (S.rooms.some(r=>roomBilling(r)==="monthly")?'<p class="small muted" style="margin-top:8px">Rooms on a monthly rent aren’t listed here — their rent is counted in <b>Costs &amp; income</b>, not per session.</p>':'')+'</div>';
-    body.querySelectorAll("[data-settle]").forEach(b=>b.onclick=()=>roomDueSheet(b.dataset.settle));
+    const rmg=body.querySelector("#roomManage");
+    if(rmg)rmg.onclick=()=>go("money",{seg:"costs",focus:"roomFeesCard"});
     let sel=null;
     /* Redrawing replaces the .svgwrap, which resets its horizontal scroll — so tapping a bar used
        to fling the chart back to the oldest period, hiding the very breakdown it just opened.
@@ -6177,17 +6637,22 @@ VIEWS.money=function(){
     body.querySelector("#gran").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{statGran=bt.dataset.g;go("money",{keepScroll:true});});
   }
   function drawCosts(){
+    /* Room fees come FIRST and come unconditionally. They are money already owed to a landlord
+       for sessions that have happened, raised from the therapist's own records — neither a
+       preference she switched off nor a subscription she has not bought may make them vanish.
+       Everything below this line is the ledger proper, which is both gated and lockable. */
+    const rooms=roomFeesCard();
     /* Locked and switched-off are different states and must say different things: one is a
        purchase, the other is a preference the reader set themselves. */
     if(plusLocked("finances")){
-      body.innerHTML=plusLockHTML("finances","Costs & other income",
+      body.innerHTML=rooms+plusLockHTML("finances","Costs & other income",
         "Insurance, room rent, CPD and everything else the practice costs you \u2014 taken off the "+
         "profit your tax is worked out from.");
-      plusWireLocks(body); return;
+      plusWireLocks(body); wireRoomFees(body); return;
     }
-    body.innerHTML=feat("finances")?financeCards()
-      :'<div class="card"><h2>Costs &amp; other income</h2><p class="small muted">Switched off in ⚙ Settings › Features. Turn it back on there and your costs reappear — nothing was deleted.</p></div>';
-    wireFinance(body); wirePaymentsDue(body);
+    body.innerHTML=rooms+(feat("finances")?financeCards()
+      :'<div class="card"><h2>Costs &amp; other income</h2><p class="small muted">Switched off in ⚙ Settings › Features. Turn it back on there and your costs reappear — nothing was deleted.</p></div>');
+    wireFinance(body); wirePaymentsDue(body); wireRoomFees(body);
   }
   function drawTable(){body.innerHTML="";body.appendChild(rawPanel());}
   const route=()=>moneySeg==="costs"?drawCosts():moneySeg==="table"?drawTable():drawOverview();
@@ -8444,13 +8909,7 @@ function sessionForm(s,o){
      <input type="date" id="f_paid" value="${esc(m.paidDate||"")}">
      ${(!isNew&&d.overdue&&(d.rate||0)>0)?`<div class="prev"><span class="taxlink" id="f_chase">Chase this payment \u203a</span> — a message to copy into an email.</div>`:""}
      <label>Invoice #</label><input id="f_inv" value="${esc(m.invoice||"")}">
-     <div id="f_rpWrap">
-       <div class="field2">
-         <div><label>Room fee paid?</label><select id="f_rp">${opts(["","Y","N","n/a"],m.roomPaid||"")}</select></div>
-         <div><label>Paid on</label><input type="date" id="f_rpd" value="${esc(m.roomPaidDate||"")}"></div>
-       </div>
-     </div>
-     <p class="small muted" id="f_rpNote" style="display:none"></p>
+     <p class="small muted" id="f_rpNote"></p>
      <label class="colchk" style="margin-top:16px"><input type="checkbox" id="f_notes"${notesDone(m)?" checked":""}> My notes for this session are written up</label>
      <label>Admin comment <span class="muted small">(optional)</span> ${infoDot("admin-comment","About admin comments")}</label>
      <textarea id="f_admin" rows="2" placeholder="e.g. “invoice goes to her employer”, “moved from Tuesday”">${esc(m.adminNote||"")}</textarea>
@@ -8469,7 +8928,11 @@ function sessionForm(s,o){
     const g=id=>body.querySelector(id);
     const sync=()=>{m.client=g("#f_client").value;m.date=g("#f_date").value;m.time=g("#f_time").value;m.mode=g("#f_mode").value;
       m.num=g("#f_num").value;m.location=g("#f_loc").value;m.room=g("#f_room").value;m.paidDate=g("#f_paid").value;
-      m.invoice=g("#f_inv").value;m.roomPaid=g("#f_rp").value;m.roomPaidDate=g("#f_rpd").value;
+      /* `roomPaid` / `roomPaidDate` are deliberately NOT read back here. The form no longer owns
+         them — the room fee this session raises is settled in Money — and reading them from
+         controls that no longer exist is exactly how a saved session would blank its own
+         settlement. They ride through untouched on the clone. */
+      m.invoice=g("#f_inv").value;
       /* `notes` stays the string it has always been so every downstream reader — derive().complete,
          missingReasons, the raw table, older backups — is untouched. It is simply only ever "Y"
          or "" now, because the box that used to hold prose is a tickbox. */
@@ -8491,28 +8954,34 @@ function sessionForm(s,o){
         if(!lockDate)m.date=sg.date;}
       draw();
       if(isNew&&code)body.querySelector("#sugHint").innerHTML='<div class="hint">✨ Pre-filled from this client’s last session — adjust anything, then Save.</div>';};
-    /* Three ways this session has no room fee to settle, and in none of them is "Room fee paid?"
-       a question worth putting on the screen — a therapist working from home would answer it,
-       identically, on every session she ever logs.
-       Hiding it is not enough on its own: an unanswered dropdown would leave the session sitting
-       in the Incomplete worklist forever, so the state is stamped "n/a" as the controls go away.
-       The select stays in the DOM (hidden) precisely so sync() keeps reading it as it always has. */
+    /* The session form used to ask "Room fee paid?" on every single session. It is the wrong
+       screen for the question twice over: it interrupts logging a session with a bookkeeping
+       decision, and an unanswered dropdown left the session sitting in the Incomplete worklist
+       for ever. Logging a session now RAISES the fee — tagged to this session — and this line
+       reports where that fee stands, read-only, with a way through to the screen that settles it
+       alongside the rent and every other bill. Nothing here writes. */
     const paintRoomPaid=()=>{
       const loc=g("#f_loc").value, rm=roomFor(loc);
       const monthly=!!rm&&roomBilling(rm)==="monthly";
       const feeToday=effRoomRate(loc,g("#f_date").value||isoD(today()));
       const na=!rm||monthly||!(feeToday>0);
-      g("#f_rpWrap").style.display=na?"none":"";
-      const note=g("#f_rpNote"); note.style.display=na?"":"none";
-      if(!na)return;
-      const sel=g("#f_rp"), dt=g("#f_rpd");
-      if(sel.value!=="n/a")sel.value="n/a";
-      if(dt.value)dt.value="";
-      note.innerHTML = monthly
-        ? "🏠 <b>"+esc(rm.location)+"</b> is on a monthly rent, so there is nothing to settle for this session. Tick the rent off each month in <b>Money › Costs &amp; income</b>."
-        : !anyPerUseRoom()
-        ? "🏠 You don’t pay for a room by the session, so there is nothing to track here."
-        : "🏠 <b>"+esc(loc||"This location")+"</b> costs you nothing per session, so there is nothing to settle.";
+      const note=g("#f_rpNote");
+      if(na){
+        note.innerHTML = monthly
+          ? gi("rooms")+" <b>"+esc(rm.location)+"</b> is on a monthly rent, so this session raises nothing of its own. The rent is ticked off each month in <b>Money › Costs &amp; income</b>."
+          : !anyPerUseRoom()
+          ? gi("rooms")+" You don’t pay for a room by the session, so there is no room fee to track."
+          : gi("rooms")+" <b>"+esc(loc||"This location")+"</b> costs you nothing per session, so this session raises no room fee.";
+        return;
+      }
+      const settled=m.roomPaid==="Y", notOwed=m.roomPaid==="n/a";
+      note.innerHTML=gi("rooms")+" This session raises a room fee of <b>"+gbp(feeToday)+"</b> for "+esc(loc)+" — "+
+        (settled?('<b>settled</b>'+(m.roomPaidDate?" on "+fmtDshort(m.roomPaidDate):""))
+         :notOwed?'marked <b>not owed</b>'
+         :'<b>not settled yet</b>')+
+        '. <span class="taxlink" id="f_rpGo">Room fees ›</span>';
+      const lnk=note.querySelector("#f_rpGo");
+      if(lnk)lnk.onclick=()=>{closeSheet();go("money",{seg:"costs",focus:"roomFeesCard"});};
     };
     paintRoomPaid();
     const refreshHint=()=>{const d=derive(m);
@@ -8560,7 +9029,7 @@ function sessionForm(s,o){
       if(!cl){toast("No client record to chase");Sfx.error();return;}
       if(dirty&&!confirm("Leave this session without saving your changes?"))return;
       closeSheet();chaseSheet(cl);};
-    ["#f_date","#f_loc","#f_paid","#f_rp"].forEach(id=>g(id).addEventListener("change",()=>{sync();paintRoomPaid();paintCancel();}));
+    ["#f_date","#f_loc","#f_paid"].forEach(id=>g(id).addEventListener("change",()=>{sync();paintRoomPaid();paintCancel();}));
     g("#save").onclick=async()=>{sync();
       if(!m.client){toast("Choose a client");Sfx.error();return}
       if(!m.date){toast("Add a date");Sfx.error();return}
@@ -8802,54 +9271,71 @@ function peerForm(p){
 function curTab(){return cur;}
 
 /* ===== Settling per-session room fees =====
-   "Room fees due" used to be a read-only table at the bottom of Money, and the Home prompt that
-   raised it dropped the reader at the top of that screen with nothing to press. The only place a
-   per-session fee could actually be ticked off was one session at a time, or the Incomplete
-   worklist — which never sees a session whose room fee is recorded as "N", because answering the
-   question makes the session complete.
-   Writes exactly what the session form and the bulk editor write (`roomPaid`/`roomPaidDate`) so
-   every downstream reader — derive(), the SA103 boxes, the MTD quarters — is untouched. */
+   The sheet the Room fees card opens. It lists everything that room still owes — fees that have
+   fallen due AND fees that have only accrued — because a therapist paying her landlord for the
+   month wants to clear the month, not the subset the schedule has caught up with. Only the ones
+   actually due are ticked when it opens, so the default action is still "settle what is owed".
+   It writes exactly what the bulk editor always wrote (`roomPaid` / `roomPaidDate`), so derive(),
+   the SA103 boxes and the MTD quarters are untouched.
+   "Not owed" is the escape hatch that used to be the session form's "n/a" dropdown: a fee raised
+   by a room rate that turns out not to apply to that session has to have somewhere to go, or it
+   sits on the outstanding list for ever. It is a decision about a bill, so it is made here. */
 function roomDueSheet(loc){
   const td=isoD(today());
-  const rows=S.sessions.map(x=>({s:x,d:derive(x)}))
-    .filter(x=>x.d.roomDue==="Y"&&(x.s.location||"?")===loc)
-    .sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
+  const rows=roomFeeRows().filter(x=>x.loc===loc);
   if(!rows.length){toast("Nothing outstanding for "+loc);return;}
+  const nDue=rows.filter(x=>x.due).length;
   const body=el('<div></div>');
-  const stage={}; rows.forEach(x=>stage[x.s._id]=true);
-  const total=()=>rows.reduce((a,x)=>a+(stage[x.s._id]?(x.d.roomRate||0):0),0);
-  body.innerHTML='<p class="small muted">These sessions carried a room fee that has fallen due and has not been marked paid. Untick any you have not settled yet.</p>'+
+  /* Tick what is actually due; leave the rest for the therapist to add deliberately. */
+  const stage={}; rows.forEach(x=>stage[x.s._id]=x.due);
+  const total=()=>rows.reduce((a,x)=>a+(stage[x.s._id]?x.amt:0),0);
+  body.innerHTML='<p class="small muted">Room fees these sessions have run up at <b>'+esc(loc)+'</b>. '+
+      (nDue?plural(nDue,"fee")+' '+(nDue===1?'has':'have')+' fallen due and '+(nDue===1?'is':'are')+' ticked; ':'')+
+      'anything not yet due is listed but left unticked.</p>'+
     '<label>Paid on</label><input type="date" id="rdDate" value="'+esc(td)+'">'+
-    '<div class="row mt" style="gap:8px"><button class="btn sm sec" id="rdAll">Tick all</button><button class="btn sm sec" id="rdNone">Untick all</button></div>'+
+    '<div class="row mt" style="gap:8px"><button class="btn sm sec" id="rdDue">Tick what’s due</button>'+
+      '<button class="btn sm sec" id="rdAll">Tick all</button><button class="btn sm sec" id="rdNone">Untick all</button></div>'+
     '<div id="rdRows" class="mt"></div>'+
-    '<button class="btn full mt savebig" id="rdSave"></button>';
+    '<button class="btn full mt savebig" id="rdSave"></button>'+
+    '<button class="btn full sec mt" id="rdNA">Mark ticked as not owed</button>'+
+    '<p class="small muted" style="margin-top:6px">Not owed takes a fee off this list without recording a payment — for a session the room didn’t actually charge you for.</p>';
   const rw=body.querySelector("#rdRows");
   const paint=()=>{
     rw.innerHTML=rows.map(x=>'<label class="colchk rdrow"><input type="checkbox" data-id="'+x.s._id+'"'+(stage[x.s._id]?" checked":"")+'>'+
       '<span><b>'+esc(x.s.client||"—")+'</b> · '+fmtDshort(x.s.date)+
       (x.s.room&&x.s.room!=="-"?' · room '+esc(x.s.room):'')+
-      ' <span class="muted">'+gbp(x.d.roomRate||0)+'</span></span></label>').join("");
+      ' <span class="muted">'+gbp(x.amt)+'</span>'+
+      (x.due?'':' <span class="chip na">not due yet</span>')+'</span></label>').join("");
     rw.querySelectorAll("input").forEach(i=>i.onchange=()=>{stage[i.dataset.id]=i.checked;upd();});
   };
-  const btn=body.querySelector("#rdSave");
+  const btn=body.querySelector("#rdSave"), naBtn=body.querySelector("#rdNA");
   const upd=()=>{const n=rows.filter(x=>stage[x.s._id]).length;
     btn.textContent=n?("Mark "+n+" paid · "+gbp(total())):"Nothing ticked";
-    btn.classList.toggle("ready",n>0);};
+    btn.classList.toggle("ready",n>0);
+    naBtn.style.display=n?"":"none";
+    naBtn.textContent="Mark "+n+" as not owed";};
   paint();upd();
-  body.querySelector("#rdAll").onclick=()=>{rows.forEach(x=>stage[x.s._id]=true);paint();upd();};
-  body.querySelector("#rdNone").onclick=()=>{rows.forEach(x=>stage[x.s._id]=false);paint();upd();};
-  btn.onclick=async()=>{
+  const setAll=v=>{rows.forEach(x=>stage[x.s._id]=(v==="due"?x.due:v));paint();upd();};
+  body.querySelector("#rdDue").onclick=()=>setAll("due");
+  body.querySelector("#rdAll").onclick=()=>setAll(true);
+  body.querySelector("#rdNone").onclick=()=>setAll(false);
+  /* Both buttons write the same two fields and differ only in what they write, so they share one
+     path — two near-identical copies is how the paid and the written-off case drift apart. */
+  const apply=async(mode)=>{
     const when=body.querySelector("#rdDate").value||td;
     const picked=rows.filter(x=>stage[x.s._id]);
     if(!picked.length){toast("Tick something first");Sfx.error();return;}
     let amt=0;
     picked.forEach(x=>{const ss=S.sessions.find(z=>z._id===x.s._id);if(!ss)return;
-      ss.roomPaid="Y"; ss.roomPaidDate=when; amt+=x.d.roomRate||0;});
-    const ok=await commit("Marked "+picked.length+" room fee"+(picked.length===1?"":"s")+" paid at "+loc);
+      ss.roomPaid=(mode==="na")?"n/a":"Y"; ss.roomPaidDate=when; amt+=x.amt;});
+    const ok=await commit((mode==="na"?"Wrote off ":"Marked ")+picked.length+" room fee"+(picked.length===1?"":"s")+
+      (mode==="na"?" as not owed at ":" paid at ")+loc);
     closeSheet();
-    if(ok!==false){toast(gbp(amt)+" marked paid");Sfx.tick();}
-    go("money",{keepScroll:true});
+    if(ok!==false){toast(mode==="na"?(picked.length+" written off"):(gbp(amt)+" marked paid"));Sfx.tick();}
+    go("money",{seg:"costs",keepScroll:true});
   };
+  btn.onclick=()=>apply("paid");
+  naBtn.onclick=()=>apply("na");
   openSheet("Room fees · "+loc,body);
 }
 
@@ -8864,11 +9350,11 @@ function attentionItems(){
       sub:oldest?("oldest "+fmtDM(oldest)):"",btn:"Collect",act:()=>{sessFilter.view="list";sessFilter.seg="unpaid";go("sessions");}});}
   const inc=der.filter(x=>x.d.past&&!x.d.complete);
   if(inc.length)items.push({cls:"warn",e:gi("notes"),msg:"<b>"+inc.length+" session"+(inc.length===1?"":"s")+" incomplete</b>",
-    sub:"notes or room-paid missing",btn:"Catch up",act:()=>{sessFilter.view="list";sessFilter.seg="incomplete";go("sessions");}});
+    sub:"notes not written up yet",btn:"Catch up",act:()=>{sessFilter.view="list";sessFilter.seg="incomplete";go("sessions");}});
   const rd=der.filter(x=>x.d.roomDue==="Y");
   if(rd.length){const amt=rd.reduce((a,x)=>a+(x.d.roomRate||0),0);
     items.push({cls:"warn",e:gi("rooms"),msg:"<b>Room fees due</b> · "+gbp(amt)+" across "+rd.length+" session"+(rd.length===1?"":"s"),
-      sub:"tap to tick them off",btn:"Settle",act:()=>go("money",{seg:"overview",focus:"roomDueCard"})});}
+      sub:"tap to tick them off",btn:"Settle",act:()=>go("money",{seg:"costs",focus:"roomFeesCard"})});}
   const sups=(S.supervision||[]).filter(s=>s.date&&parseD(s.date)<=t).sort((a,b)=>parseD(b.date)-parseD(a.date));
   if(sups.length){const days=Math.floor((t-parseD(sups[0].date))/86400000);
     if(days>35)items.push({cls:"acc",e:gi("supervision"),msg:"<b>Supervision due</b> · last was "+days+" days ago",
@@ -9557,7 +10043,8 @@ function validateImport(st){
   if(dups)problems.push(dups+" duplicate internal id(s)");
   return {ok:true,problems,counts:{sessions:st.sessions.length,clients:st.clients.length,
     supervision:(st.supervision||[]).length,rooms:(st.rooms||[]).length,
-    peer:(st.peerSupervision||[]).length,expenses:(st.expenses||[]).length,otherIncome:(st.otherIncome||[]).length}};
+    peer:(st.peerSupervision||[]).length,cpd:(st.cpd||[]).length,
+    expenses:(st.expenses||[]).length,otherIncome:(st.otherIncome||[]).length}};
 }
 function exportCSV(){
   const cols=["client","num","date","time","mode","location","room","invoice","paidDate","notes","adminNote","roomPaid","rate","fullRate","attended","cancelCharge","clientPaid","overdue","roomRate","roomDue","status","taxYear","week"];
@@ -9573,6 +10060,8 @@ function csvCell(v){v=v==null?"":String(v);return /[",\n]/.test(v)?'"'+v.replace
 function exportSupervisionCSV(){
   /* peer rows ride along with a type column — leaving them out would silently lose hours
      from the one export a therapist takes to their accreditation paperwork */
+  /* CPD rides along too, for the same reason peer rows do: this is the export that goes to the
+     accreditation paperwork, and hours left out of it are hours the therapist cannot evidence. */
   const cols=["type","date","supervisor","clientHrsReviewed","hours","cost","clientsDiscussed","taxYear"];
   const rows=[cols.join(",")];
   const out=[];
@@ -9582,6 +10071,10 @@ function exportSupervisionCSV(){
   (S.peerSupervision||[]).forEach(p=>out.push({type:"peer",date:p.date||"",supervisor:p.with||"",
     clientHrsReviewed:"",hours:(+p.hours||0),cost:(+p.cost||0),
     clientsDiscussed:p.notes||"",taxYear:p.date?taxYear(p.date):""}));
+  (S.cpd||[]).forEach(x=>out.push({type:"cpd:"+(CPD_KINDS[x.kind]?x.kind:"other"),date:x.date||"",
+    supervisor:x.provider||"",clientHrsReviewed:"",hours:(+x.hours||0),cost:"",
+    clientsDiscussed:[x.title||"",x.notes||""].filter(Boolean).join(" \u2014 "),
+    taxYear:x.date?taxYear(x.date):""}));
   out.sort((a,b)=>parseD(a.date)-parseD(b.date)).forEach(rec=>rows.push(cols.map(c=>csvCell(rec[c])).join(",")));
   download("groundwork-supervision-"+isoD(today())+".csv",rows.join("\n"),"text/csv");toast("Supervision CSV downloaded")}
 /* Costs and other income, with each recurring row expanded into the months it actually covers

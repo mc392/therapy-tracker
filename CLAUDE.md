@@ -237,6 +237,7 @@ S = {
   sessions: [],         // therapy sessions
   supervision: [],      // clinical supervision (counts toward the 1:6 ratio)
   peerSupervision: [],  // peer supervision (total hours only, never the ratio — added Aug 2026)
+  cpd: [],              // CPD that is not supervision (v8) — {date, hours, kind, title, provider, notes}
   rateHistory: [],      // therapist fee history
   roomRateHistory: [],  // per-room per-session rate history
   roomRentHistory: [],  // per-room monthly rent history (added Aug 2026)
@@ -255,6 +256,8 @@ S = {
     features: {},       // key → false to disable; absent/true = on
     retention: {},      // {notesYears:6, financeYears:6, endedStatuses:[]} — review flags only
     cpdTarget,          // annual CPD hours target (default 30)
+    cpdCountSupervision,// does clinical supervision count toward cpdTarget? (v8, default true)
+    cpdCountPeer,       // ditto peer supervision (v8, default true)
     studentLoanYears:{},// tax year → plan key, carried forward (v6)
     taxRegionYears: {}, // tax year → "rUK"|"scotland", carried forward (v6)
     taxYears: {},       // tax year → what HMRC actually assessed / set / a claim to reduce (v6)
@@ -282,7 +285,8 @@ Key functions:
 - **`tyNet()` and `tyIncome()` are memoised** (`tyMemo`, cleared in `go()`, `commit()` and `normalize()`). Each walks every session and runs `ledgerBetween` twice; the Payments screen asks for several years at once and each year's schedule reaches into the year either side, so uncached the call count grows quadratically with history. Anything that mutates `S` outside those three entry points must call `tyMemoClear()`.
 
 ### Schema versioning
-`SCHEMA_VERSION` (currently `7`) is stamped on `S.meta.schemaVersion` and on every backup envelope. Unstamped data is treated as v1.
+`SCHEMA_VERSION` (currently `8`) is stamped on `S.meta.schemaVersion` and on every backup envelope. Unstamped data is treated as v1.
+- **v8 (Sep 2026)** added `S.cpd` — CPD that is not supervision — and `settings.cpdCountSupervision` / `cpdCountPeer`. A v8 backup can hold twenty hours of workshops plus "supervision doesn't count for me"; a v7 build has neither field, so it would drop every one of those hours, put supervision back into the total, and save both losses back.
 - **v7 (Sep 2026)** split the old free-text "Notes done?" box into a boolean tick and a separate `adminNote`. A v7 backup can hold "invoice goes to her employer" in `adminNote`; a v6 build has no such field and would drop every one of those comments, then save the loss back. See **Notes vs admin comments** below.
 - **v6 (Aug 2026)** dated the whole-practice tax settings to a tax year (`studentLoanYears`, `taxRegionYears`) and added the record of what HMRC actually assessed (`taxYears`), what has been paid (`taxPaid`) and the pot's own settings (`taxPot`). A v6 backup can say "Plan 2 until 2025-26, none after" and "HMRC assessed 2025-26 at £4,310"; a v5 build has neither field, so it would apply one loan plan to every year and show its own estimate in place of the real assessment.
 - **v5 (Aug 2026)** stamped a cancellation charge percentage on every missed session and added `settings.cancelRules` + `settings.reveal`. A v5 backup can hold a session charged at 50%; a v4 build has no such field and would bill it in full.
@@ -305,19 +309,45 @@ Key functions:
 - `S.paidCharges` is a tick-list, **not accounting**: `ledgerBetween()` ignores it entirely, because a cost belongs to the year it fell due whether or not it's been settled.
 - Paid rows stay in the list for a fortnight **after being ticked** (not after falling due), or settling an old overdue charge would make the row vanish mid-tap with no undo.
 
-### Room billing and the session form
-`derive().roomPaidNA` is the single answer to "is there a per-session room fee to settle here?", and it is **false only when there genuinely is one**. Three cases make it true:
-- no room record for the location at all;
-- the room is on a monthly rent (settled once a month in Costs & income);
-- **the room charged £0 per session on that session's date** — "At home", or any room in a practice that bills monthly. Added Sep 2026; before it, a therapist working from home was asked "room paid?" on every session she ever logged and every one of them sat in the Incomplete worklist until she answered a question that had no answer.
+### Room fees: raised by the session, settled in Money (reworked Sep 2026)
+A session in a room hired by the hour **raises a fee**, tagged to that session, the moment it is
+logged. Nobody is asked to confirm it. Until Sep 2026 the only place that fee existed was a "Room
+fee paid?" dropdown inside the session form, and leaving it blank left the session permanently
+*incomplete* — a bookkeeping question inside a clinical worklist, on a session that could not be
+"done" until the therapist had said whether she had paid her landlord for it.
 
-It uses the **dated** rate (`effRoomRate(loc, s.date)`), never the room's rate today: a room that charged £15 when the session happened still has that £15 to account for however it bills now.
+- **`derive().complete` is the write-up tick and nothing else**, and `missingReasons()` returns
+  notes only. The Incomplete worklist and the attention feed are notes-only to match.
+- **`derive().roomOwed`** is the liability: a per-session rate applies, and `roomPaid` is neither
+  `"Y"` nor `"n/a"`. **Blank means "not settled yet"** — which is what `roomDue` always took it to
+  mean. `roomDue` still splits that into `"Y"` (the room's own payment date has passed) and `"N"`
+  (accrued, not yet due), so an unpaid fee from yesterday is not reported as late.
+- **`roomPaid === "n/a"` now means "deliberately not owed"**, written from the settle screen for a
+  fee the room never actually charged. The `roomnafee` validation warning was removed with it —
+  it would flag the therapist's own decision back at her. Historical `"n/a"` rows, which the old
+  form stamped where `roomPaidNA` was true, are excluded by `roomPaidNA` anyway.
+- **The session form writes neither field.** `sync()` deliberately does not read them back; a form
+  that read controls it no longer renders is exactly how a save would blank a settlement. A
+  read-only line says what the session raised and where it stands, and links across.
+- **`roomFeesCard()` / `wireRoomFees()` on Money › Costs & income** is the management surface,
+  beside Payments due and the rest of the bills. Due now vs merely accrued, grouped by room, a
+  fortnight of settled fees behind a fold with Undo on each. It renders **before, and outside,
+  both `feat("finances")` and `plusLocked("finances")** — money already owed for sessions that
+  happened is neither a preference nor a purchase. Money › Overview keeps a read-out that hands
+  over to it (`go("money",{seg:"costs",focus:"roomFeesCard"})`), which is also where Home's prompt
+  and the attention feed now land.
+- `roomDueSheet(loc)` lists accrued fees as well as due ones (ticking only the due ones), and its
+  two buttons — paid, and not owed — share one write path so the two cases cannot drift apart.
+- **Storage is unchanged**: `roomPaid` / `roomPaidDate`, exactly what the bulk editor always wrote,
+  so `derive()`, the SA103 boxes and the MTD quarters are untouched. It still uses the **dated**
+  rate (`effRoomRate(loc, s.date)`), never the room's rate today: a room that charged £15 when the
+  session happened still has that £15 to account for however it bills now.
 
-`missingReasons()`, `derive().complete`, the Incomplete worklist and the session form (`paintRoomPaid`) all read it, so those sessions never show up as incomplete for a question that doesn't apply. `paintRoomPaid` also **stamps `roomPaid="n/a"` as it hides the controls** — hiding alone would leave the dropdown unanswered and the session incomplete forever. The select stays in the DOM so `sync()` keeps reading it exactly as it always has.
-
-`anyPerUseRoom()` answers the practice-wide version ("do I ever pay for a room by the session?") and only picks the wording for the explanatory note.
-
-**Settling them** (Sep 2026): the "Room fees due" table on Money › Overview gives each room a **Settle** button opening `roomDueSheet(loc)`, and the Home prompt now lands on that card via `focus`. Before this the prompt dropped the reader at the top of Money with nothing to press, and the Incomplete worklist never saw these sessions either — recording a fee as `"N"` answers the question, which makes the session `complete`. The sheet writes exactly what the session form and the bulk editor write (`roomPaid`/`roomPaidDate`), so `derive()`, the SA103 boxes and the MTD quarters are untouched.
+`derive().roomPaidNA` is still the single answer to "is there a per-session room fee here at all?",
+false only when there genuinely is one. Three cases make it true: no room record; the room is on a
+monthly rent; or the room charged £0 per session **on that session's date** ("At home", or any room
+in a practice that bills monthly). `anyPerUseRoom()` answers the practice-wide version and decides
+whether the Room fees card appears at all.
 
 ### Notes vs admin comments (v7, Sep 2026)
 The session "Notes done?" box was one free-text field doing two unrelated jobs: a tick that the write-up was finished, and — for anyone who used it that way — a scratchpad. Now:
@@ -327,8 +357,37 @@ The session "Notes done?" box was one free-text field doing two unrelated jobs: 
 - `anonymiseClients()` clears `adminNote` — it is free text a human wrote and may name people.
 - The spreadsheet importer splits a sheet's "Notes" column the same way, and still reads the **raw** column for `impLateCancel`.
 
-### CPD vs accreditation (added Aug 2026)
-`mountCPD()` is the card everyone sees: supervision + peer hours over a rolling 12 months against `settings.cpdTarget`. `mountAccreditation()` (Form 3A, the 1:6 ratio) is gated behind the `accreditation` feature, which `normalize()` defaults **off for new installs and on for anyone who already has data** — pulling it from someone mid-accreditation would lose them the screen they keep records for. `stepCPD()` asks in setup.
+### CPD: composition, not a total (reworked Sep 2026)
+`mountCPD()` is the card everyone sees: CPD hours over a rolling 12 months against
+`settings.cpdTarget`. It lives on its own **CPD sub-tab** under Practice › Supervision
+(Log / Peer / **CPD** / Insights) together with `cpdForm()`'s log.
+
+- **`S.cpd` is CPD that is not supervision** — `CPD_KINDS` keys it (workshop, course, conference,
+  webinar, e-learning, reading, podcast, personal therapy, reflective practice, other) so a stored
+  entry keeps its meaning if the wording changes; an unknown key falls back to `other`.
+- **Hours only — there is deliberately no `cost` field.** What a course cost is a business cost,
+  `ledgerBetween` is the only place costs are totalled, and a second source here would be
+  double-counted or missed, breaking the MTD-reconciles-to-`tyNet` invariant. `cpdForm` says so
+  and links to Costs & income.
+- **`cpdYearHours()` returns the composition**, not one number: `sup`/`peer` (hours that exist),
+  `supCounted`/`peerCounted` (hours allowed into `total`), `own`, `byKind`, and the ordered `parts`
+  list both the card and the Trends chart draw from. A bare total cannot answer the question in
+  front of a renewal form — how much of this is supervision?
+- **`cpdCountsSup()` / `cpdCountsPeer()` are the therapist's call, defaulting true**, which is what
+  the app did before the question could be asked, so upgrading moves nobody's figure. Accrediting
+  bodies genuinely differ. Set in `cpdSettingsSheet()`. Switching one off leaves every hour logged
+  — it only takes them out of the target — and when the target is met *only* because supervision
+  counts, the card says what the figure would be without it.
+- **`anaCPD()`'s pace is built from exactly what the target counts.** Counting supervision into the
+  pace while the therapist has excluded it from her target makes the two figures on one card answer
+  different questions.
+- CPD rows ride along in `exportSupervisionCSV()` — that export goes to the accreditation
+  paperwork, and hours left out of it are hours that cannot be evidenced.
+
+`mountAccreditation()` (Form 3A, the 1:6 ratio) is unchanged and stays on **Insights**, gated behind
+the `accreditation` feature, which `normalize()` defaults **off for new installs and on for anyone
+who already has data** — pulling it from someone mid-accreditation would lose them the screen they
+keep records for. `stepCPD()` asks in setup.
 
 ### Scrolling rules
 - **`go(tab,{focus:"cardId"})`** scrolls a named card into view and flashes it once. A prompt that says "room fees are due" and then lands the reader at the top of a long money screen has not taken them anywhere. `focusCard()` fires on rAF *and* on a timer, for the same reason `scrollChart()` does: rAF may never fire on a backgrounded tab, and a section can be drawn a beat after the view is attached.
@@ -351,7 +410,7 @@ Six collapsible `<details class="sgrp">` groups (**business / app** / data / rec
 
 ## Tabs (restructured Aug 2026)
 **Home · Sessions · Practice · Money · Tax.** `TAB_ALIAS` maps the old names (`clients`, `supervision`, `income`, `raw`) onto the new tab **and a segment**, so old deep links land somewhere meaningful; `go(tab,{seg})` sets it. A plain tab tap stays on whatever segment the reader last used.
-- **Practice** — Clients / Rooms / Supervision / **Trends, last** (Sep 2026: the first three are places you go to *do* something, Trends is where you go to read, and reading sat between two of the doing screens). `supervisionPanel()` and `rawPanel()` are panels, not views: they are mounted whole so their inner sub-tabs keep working.
+- **Practice** — Clients / Rooms / Supervision / **Trends, last** (Sep 2026: the first three are places you go to *do* something, Trends is where you go to read, and reading sat between two of the doing screens). `supervisionPanel()` and `rawPanel()` are panels, not views: they are mounted whole so their inner sub-tabs keep working. Supervision's own sub-tabs are Log / Peer / **CPD** / Insights.
 - **Money** — Overview / Costs & income / Table.
 - **Tax** — Now / Estimate / Pot & payments / Per year / Making Tax Digital (renamed from "Quarterly (MTD)", Sep 2026). **Now** is the default (`taxSeg`) and the only screen most of the year: the standing disclaimer, any live seasonal moments, then three numbers — on track to owe (`taxLiability`), keep in your pot (`taxPot`), next payment (`nextTaxPayment`) — each tapping through to the screen that owns its detail. It **summarises, never replaces**: the pot *summary* card moved off Estimate onto it, so **Estimate** now carries the take-home, the basis and the by-year table, while everything about paying — the buffer, the balance, every due date, and what HMRC actually assessed — still lives on **Pot & payments**, so no figure appears twice with two different explanations behind it. **Per year** is "things set per tax year" (renamed from "Allowances" in T6 — student loan and region aren't allowances): one year strip at the top governs every card below it (`taxYearStripStatus`), then student loan, then use of home. Region is *not* here — it moved to Settings.
 - The old `income` feature flag became `money` + `tax`; `normalize()` carries `income:false` across to both rather than switching a hidden tab back on.
@@ -433,7 +492,18 @@ npm i --no-save playwright   # deliberately NOT a dependency: npm ci runs on the
 npm run testdata             # regenerate the eight (deterministic — same bytes every run)
 npm run test:review          # Trends + Tax over all eight, invariants asserted, exits non-zero
 npm run test:tax             # tests/tax-tests.js in a headless browser instead of by hand
+npm run test:behaviour       # opens the sheets, clicks Save, asserts what landed in S
 ```
+
+**`scripts/check-behaviour.mjs` is the only test that presses a button.** The tax suite checks the
+engine, `review-test-data` checks the engines against whole practices, and neither would have
+caught the failure mode that made it necessary: when room-fee settling moved out of the session
+form, `sync()` had to *stop* reading `roomPaid` from a control the form no longer renders. Had it
+gone on reading it, every save would have silently blanked a settlement — no error, no failing
+engine test, no crash, just a field quietly emptied. Only opening the form, clicking Save and
+looking at the record afterwards finds that. Its expectations are recomputed from the documented
+rule, never pasted from what the function returned — the same discipline, for the same reason, as
+the tax suite.
 
 - **The fixtures are ANCHORED to a date** (`ANCHOR` in `scripts/make-test-data.mjs`, currently
   2026-09-05) and the engines read the real clock. Once the real date has moved a season on, the
@@ -456,6 +526,10 @@ npm run test:tax             # tests/tax-tests.js in a headless browser instead 
   not fail first, it is not testing anything.
 - Two profiles carry no `settings.taxAck`, so the Tax tab shows its disclaimer gate rather than any
   figures. That is the gate under test, not an empty screen.
+- **`online-only` is the practice that is paid in advance** (`payLagDays: [-7, 3]`, ~71% of sessions
+  settled on or before the day). A negative lag means paid before the session. Until Sep 2026 no
+  profile did this, so the whole corpus could not exercise `anaDaysToPay`'s up-front path — which is
+  the shape most therapy is actually paid in, and the one the card was rebuilt for.
 - `groundwork-testdata-scotland-high.json` assumes a pension that is **not in the file** —
   `pensionPcm()` reads `localStorage.tt_pension`, which no backup carries. It is recorded under
   `testData.device` and applied by the harness. See the review, finding 7.
@@ -570,7 +644,7 @@ Three rules every one of them follows — a wrong figure here is worse than no f
 ### The four sections
 `TREND_SEGS` / `trendSeg`, with its own segment bar inside the view, and above the cards a **headline strip** (`trendsHeadline`) carrying one real figure from each of the three sections you are *not* reading, each tapping through to it — navigation as much as decoration. Same contract as everything else here: `trendsHeadFig()` returns `null` rather than invent one, the tile is left out, and if none of the three is ready the strip does not render. **Sections are built only when opened** — `clientAttendance()` across a whole client list and `anaCohorts()` are both real work, and changing section redraws `#trbody` only, never `go()`, so the reader is not thrown to the top of Practice.
 - **Clients** — retention funnel, drifting away, review status, attendance, cohort retention, episode length, referral sources, long-term.
-- **Money** — seasonality, your floor, fee erosion, days to payment, who pays late, cost ratio, missed sessions.
+- **Money** — seasonality, your floor, what a session actually earns, days to payment, who pays late, cost ratio, missed sessions.
 - **Time** — effective hourly rate, capacity, slot reliability, weeks actually worked.
 - **You** — supervision cadence, load, CPD trajectory.
 
@@ -578,7 +652,10 @@ Three rules every one of them follows — a wrong figure here is worse than no f
 - **`clientCategory(status)`, never `catOf(status)`.** `catOf(kind,key)` is the *expenses/income* category lookup and takes two arguments; called with a client status it returns an object and the comparison is silently always false. `anaDrifting` and `anaEpisodes` both did this, which put finished clients on a list headed "clients you have **not** marked as finished" and counted every ongoing client as completed work. Fixed Sep 2026 — there is no other status→category helper, so reach for that name.
 - **`anaEpisodes()` reports two numbers, and the second one is not optional.** `median` counts FINISHED work only — a client still being seen has a length that has not happened yet. But short work finishes first, so the finished pile is permanently over-supplied with it while the long-running clients sit on the books: a practice whose ongoing work is much longer reads as one that does shorter work than it does. `floor` is the median with the in-progress clients counted at the length they have reached so far — those can only grow, so the true answer is at or above it. `beyond` counts the ongoing clients already past `median`, which is the sentence that says the headline is being dragged down. Show both or the card is misleading.
 - **`anaCohorts()` ripeness is the WHOLE cohort, not whoever is old enough.** A milestone is answered only when every member has had those weeks. Measuring on the ripe subset built a percentage out of the early joiners alone, and a group with nobody old enough could still land on a red 0% — the exact misreading the dash exists to prevent. A dash means "not yet"; a nought means "nobody stayed", and the table must never confuse the two.
+- **`anaDaysToPay()` never averages up-front payments in with real waits** (Sep 2026). The gap used to be clamped at zero and every payment averaged together, which is wrong for the way most therapy is paid for: a practice paid at the session, or by standing order the week before, has gaps of mostly 0, a median of 0 or 1, and a flat line along the bottom of the chart every month. It also hid the only part worth asking about — fifty same-day payments averaged against three sixty-day waits reports "typically 0 days" about a practice with a real collection problem. Rows are split at the session date: **`upfrontPct` is a percentage** (that is what "everyone pays at the session" looks like as a figure) and **every waiting figure — `avg`, `worst`, `over30`, `recentAvg`/`olderAvg` — describes the `after` group alone.** Nothing is clamped, so paying a fortnight ahead reads as a fortnight ahead. The chart plots only genuine waits; a month where everyone paid on the day is *absent* rather than plotted as a nought, which would read as "instant" instead of "nothing to measure". Fewer than three real waits gets its own card, not a chart of zeroes.
 - **`anaDaysToPay()` dates on the SESSION, not the payment.** A March session paid in June belongs to March, or a slow month looks fine simply because nothing has landed yet. **The month in progress is a bucket (`i=0`)** — the loop used to start at last month while the readiness test counted every paid session, so a practice whose payments were all from this month passed the gate and then printed a 0-day wait against an empty chart. All the headline figures come from the rows, not the buckets, for the same reason. The then/now windows must not overlap (`compareMonths`): `slice(-6)` against `slice(0,6)` shared five months on a short history and compared a period against itself.
+- **`anaLatePayers()` reports drift, not debt** (Sep 2026). It was sorted by what each client owed *today*, which made it a worklist — and the app already has that one, on Sessions › Unpaid with a Chase button. Under a Trends heading it answered a question nobody came to Trends to ask and buried the one they did. Each client's payments are now split into **their own** earlier and later half (`ANA_LP_MIN` = 4 payments before anyone gets a trend, `ANA_LP_DRIFT` = 5 days before movement is called a change), and `drift` sorts the list, so the client who has quietly gone from paying on the day to paying three weeks late leads it with nothing overdue. **Halves of their own record, never a calendar window** — a fortnightly client and a weekly one cover very different ground in the same six months. Up-front payments are kept out of the waiting figure for the same reason as above. Current debt stays on the row as context and must not be put back in the sort.
+- **`anaFeeErosion()`'s gap is written-off fee on missed sessions and NOTHING else** (Sep 2026). `derive()` gives every session a `fullRate` and a `rate`, and `rate` differs from `fullRate` in exactly one way — the cancellation charge stamped on it — so the distance between the card's two lines can only be that charge. The card used to claim the gap was also made of "clients still on an older rate" and "a mix that has shifted": those move the fee line *itself* and arithmetically cannot appear in the gap. It is now titled **"What a session actually earns"**, carries three figures because the reader has three questions (per session booked, per session that went ahead, what the fees say), names the gap for what it is and counts the missed sessions behind it. **Headlines are averages over the whole span, not last month alone** — one month of a small practice is a handful of sessions, and the old last-month headline read −£8.64/14% on the established fixture where the real 18-month figure is −£1.48/2%.
 - **Drifting away and Review status are one ladder, not two views of the same names.** `anaDrifting()` returns `rows` (1.5×–3× their own interval: text them) and `review` (past 3×: their status is wrong), split on `clientAttendance(c).currentPause` — the same predicate the Review status card reads, so the two cannot disagree about which side of the line somebody is on. Don't render `rows.concat(review)`.
 - **`anaCostRatio()` must count the costs that hang off a session.** Per-session room fees (`derive().roomRate`) and supervision never reach `ledgerBetween` — it only knows about entered costs, monthly rent and use of home — and `tyNet` subtracts both by hand for that reason. For a therapist hiring a room by the hour the room is the largest line of the year, and leaving it out understated "what the practice costs to run" by most of it. Rooms on a monthly rent carry a per-session rate of £0, so they arrive via `led.roomRent` and are not double-counted. **Do not add `led.useOfHome` on top of `led.expenses`** either — `ledgerBetween` folds the use-of-home claim into `expenses` before it returns, so counting it again inflates the ratio and is why the itemised categories stopped adding up to the headline figure. Found Sep 2026 by the whole-practice corpus.
 - **`SLOT_DAYS` holds lowercase matcher keys, not display text** — `anaSlots()` renders through `SLOT_DAY_NAMES` or every row says "sun".
@@ -696,7 +773,7 @@ The tour used to be eight full-screen `.ov` cards describing controls the reader
 | `renderHome()` | Dashboard / KPIs |
 | `renderClients()` | Clients list |
 | `renderSessions()` | Sessions (includes Incomplete sub-tab) |
-| `renderIncomplete()` | Bulk room-paid + notes editor |
+| `renderIncomplete()` | Bulk notes editor (room fees moved to Money, Sep 2026) |
 | `renderUnpaid()` | Bulk unpaid session payment screen |
 | `renderCalendar()` | Calendar view |
 | `renderRooms()` | Room management (per-session or monthly billing) |

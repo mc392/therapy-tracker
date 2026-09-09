@@ -15,7 +15,7 @@ again reproduces the same files byte for byte.
 |---|---|---|---|---|
 | `…-day-one.json` | one client, one session, two days in | 1 session | cash | the floor — every engine has to survive it |
 | `…-newcomer.json` | three months in, works at home | 42 sessions, 4 clients | cash | the readiness gates: most trends should decline politely, and the tax disclaimer is **not** yet acknowledged |
-| `…-online-only.json` | online only, 17 months, most features switched off | 257 sessions, 11 clients | cash | simple reveal mode — Money and Tax are off, so the tabs fall back |
+| `…-online-only.json` | online only, 17 months, **paid in advance**, most features switched off | 257 sessions, 11 clients | cash | simple reveal mode — Money and Tax are off, so the tabs fall back. The up-front payer: ~71% of sessions settled on the day or before, which is what days-to-payment is built to separate |
 | `…-part-time.json` | ~£4.6k profit, under the personal allowance | 272 sessions, 6 clients | **accruals** | no income tax, no Class 4, Class 2 paid **voluntarily**, use of home at the £18 band |
 | `…-chaotic-payments.json` | untidy: a third never paid, tick-list barely used | 419 sessions, 14 clients | **accruals** | cancellations at 0/50/75/100%, badly overdue clients, no referral sources |
 | `…-established.json` | four years, room hired **per session** | 1,183 sessions, 27 clients | cash | the volume case: a fee rise mid-history, a room rate rise, holidays, a client discharged last week |
