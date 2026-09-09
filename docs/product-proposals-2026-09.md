@@ -219,6 +219,11 @@ not been walked through.
 
 ## 4. Selling seats to training courses and therapy organisations
 
+> **Superseded, Sept 2026.** This section is kept as the original sketch. The working plan is
+> **`docs/institutional-partnerships-2026-09.md`**, which audits the gap between the app and
+> what institutions actually require, and stages the build. Where the two disagree, that one
+> wins.
+
 The most commercially interesting idea in the round, and the one that needs the most care.
 
 ### What the buyer is actually buying
