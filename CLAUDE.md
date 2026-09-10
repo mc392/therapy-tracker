@@ -255,7 +255,7 @@ S = {
   cpd: [],              // CPD that is not supervision (v8) — {date, hours, kind, title, provider, notes}
   rateHistory: [],      // therapist fee history
   roomRateHistory: [],  // per-room per-session rate history
-  roomRentHistory: [],  // per-room monthly rent history (added Aug 2026)
+  roomRentHistory: [],  // per-room rent history — {location,effectiveFrom,amount,freq?,endDate?} (v9)
   expenses: [],         // {desc, amount, date, recurrence (see FREQS), endDate, category}
   otherIncome: [],      // as expenses + scope:"practice"|"personal"
   paidCharges: {},      // "kind:ref|dueDate" -> date settled. Reminders only, never the tax figures
@@ -300,7 +300,8 @@ Key functions:
 - **`tyNet()` and `tyIncome()` are memoised** (`tyMemo`, cleared in `go()`, `commit()` and `normalize()`). Each walks every session and runs `ledgerBetween` twice; the Payments screen asks for several years at once and each year's schedule reaches into the year either side, so uncached the call count grows quadratically with history. Anything that mutates `S` outside those three entry points must call `tyMemoClear()`.
 
 ### Schema versioning
-`SCHEMA_VERSION` (currently `8`) is stamped on `S.meta.schemaVersion` and on every backup envelope. Unstamped data is treated as v1.
+`SCHEMA_VERSION` (currently `9`) is stamped on `S.meta.schemaVersion` and on every backup envelope. Unstamped data is treated as v1.
+- **v9 (Sep 2026)** gave a room-rent step its own **rhythm** (`freq`) and its own **end date** (`endDate`) — "£150 every week from 1 June until 31 August" rather than "£150, monthly, for ever". Both are optional and their absence means what it always meant, so nothing migrates in place. The bump is for the other direction and it matters twice: a v8 build reading a weekly rent charges it 12 times a year instead of 52, and goes on charging a rent that ended two years ago — then saves both wrong figures back. See **Room rent** below.
 - **v8 (Sep 2026)** added `S.cpd` — CPD that is not supervision — and `settings.cpdCountSupervision` / `cpdCountPeer`. A v8 backup can hold twenty hours of workshops plus "supervision doesn't count for me"; a v7 build has neither field, so it would drop every one of those hours, put supervision back into the total, and save both losses back.
 - **v7 (Sep 2026)** split the old free-text "Notes done?" box into a boolean tick and a separate `adminNote`. A v7 backup can hold "invoice goes to her employer" in `adminNote`; a v6 build has no such field and would drop every one of those comments, then save the loss back. See **Notes vs admin comments** below.
 - **v6 (Aug 2026)** dated the whole-practice tax settings to a tax year (`studentLoanYears`, `taxRegionYears`) and added the record of what HMRC actually assessed (`taxYears`), what has been paid (`taxPaid`) and the pot's own settings (`taxPot`). A v6 backup can say "Plan 2 until 2025-26, none after" and "HMRC assessed 2025-26 at £4,310"; a v5 build has neither field, so it would apply one loan plan to every year and show its own estimate in place of the real assessment.
@@ -319,10 +320,56 @@ Key functions:
 
 ### Payment schedules & what's been paid (added Aug 2026)
 `FREQS` is the one vocabulary for repeats (once / weekly / fortnightly / monthly / quarterly / annually), and `freqStep(anchor,freq,n)` is the only place the maths lives — used by both `moneyOccurrences()` and `schedNext()`.
-- **A schedule never moves an accrual date.** `roomRentOccurrences()` anchors each charge to the rent history's own day and attaches the payment date separately as `due`. Letting `room.pay` drive the accrual date silently shifted historical rent between tax years — don't reintroduce it.
+- **A schedule never moves an accrual date.** `roomRentOccurrences()` anchors each charge to the rent history's own day and attaches the payment date separately as `due`. Letting `room.pay` drive the accrual date silently shifted historical rent between tax years — don't reintroduce it. The one thing that legitimately re-anchors is a change of **rhythm** — see **Room rent** below.
 - `roomSchedule(rm)` reads the legacy `due` field (`EOM` → monthly/last, `EOW` → weekly/Sunday) when `pay` is absent, so old rooms keep working. `roomForm` writes both.
 - `S.paidCharges` is a tick-list, **not accounting**: `ledgerBetween()` ignores it entirely, because a cost belongs to the year it fell due whether or not it's been settled.
 - Paid rows stay in the list for a fortnight **after being ticked** (not after falling due), or settling an old overdue charge would make the row vanish mid-tap with no undo.
+
+### Room rent: a rhythm, a date range, and outside the gate (reworked Sep 2026)
+A rent step is `{location, effectiveFrom, amount, freq?, endDate?}` — the last two added in v9. It
+was previously an amount and a start date, always read as monthly and never ending, while a
+*separate* "when do you pay for this room?" picker on the room claimed a frequency the charge
+itself ignored. A £500 rent paid weekly therefore said "£500 / month" beside "every Monday" and
+billed £500 a month; and there was no way to say a tenancy had ended short of setting the rent to
+zero. The three answers are now one arrangement:
+
+- **`freq` lives on the STEP, not on the room**, because it is dated history exactly like the
+  amount. Going from monthly to weekly must not rewrite the months already accrued at the old
+  rhythm, for the same reason a rise from £450 to £500 does not rewrite them. `rentFreqOf()`
+  reads it (absent = monthly, which is every step ever written before v9) and `rentFreqSet()`
+  answers the different question of whether anybody actually *chose* one.
+- **`roomRentOccurrences()` is one timeline per room, split into regimes by frequency change.**
+  An **amount** change dated mid-cycle corrects the money and never moves the day a charge lands
+  on — that is the tax-year rule above. A **rhythm** change is the one thing that re-anchors:
+  "£150 a week from 1 June" cannot be paid on the old monthly day, so each frequency runs from the
+  step that introduced it. Legacy data has exactly one regime — monthly, from the first step —
+  which is precisely what the old month-by-month loop did, and `npm run test:rent` asserts it.
+- **`rentSyncSchedule()` is the only writer of `room.pay` for a room on a rent**, and the rent
+  form is the only caller. A step whose rhythm was chosen is **due on the day it is charged**; a
+  legacy step still reads the room's own schedule, so nobody's existing reminder dates move.
+  The room form therefore renders no payment picker for a rent room, and `roomForm`'s save
+  deliberately does not read one — the same rule that stopped the session form writing `roomPaid`.
+- **`endDate` is enforced in `rentAmountOn()`**, which every read goes through (`effRoomRent`,
+  `rentSummary`, the occurrence loop). A rent that has ended is not a rent of £0 — but it charges
+  the same, and one place knows the difference.
+- **Never seed a rent at `RATE_EPOCH`.** The setup wizard did, copying what it does for a
+  per-session rate, where the epoch is a *floor* that makes a fee resolve for sessions logged
+  before the app existed. A rent is not a price, it is a charge on a rhythm: dated at the epoch it
+  bills every month back to the year 2000 and puts thousands of pounds of imaginary cost into
+  every past tax year. It starts at the top of the current month, and the room screen is where a
+  real start date is set.
+- **What a room costs is OUTSIDE the Plus gate and outside `feat("finances")`** — `roomRentCard()`
+  renders beside `roomFeesCard()`, before the lock, on Money › Costs & income. Being able to set a
+  room up for free and then unable to see, tick off or chase what it owes was worse than not
+  having the feature: the app knew money was owed to a landlord and would not say so. `Payments
+  due` (gated) now deliberately excludes `kind:"rent"`, and both cards read the same
+  `dueListRows()` window and `chargeRow()` renderer so they can never disagree about what is
+  overdue.
+- **`npm run test:rent`** (`scripts/check-room-rent.mjs`) is 43 assertions in a real browser: the
+  legacy shape, the anchor rule, every rhythm, the end date, the ledger totals, the form writing
+  what it showed, and the card rendering with tickable rows while the ledger beside it is locked.
+  Expectations are derived from the rule — a tax year holds **53** weekly rents when it starts on
+  the rent's own weekday, and the test computes that rather than assuming 52.
 
 ### Room fees: raised by the session, settled in Money (reworked Sep 2026)
 A session in a room hired by the hour **raises a fee**, tagged to that session, the moment it is
@@ -413,6 +460,18 @@ The session "Notes done?" box was one free-text field doing two unrelated jobs: 
 the `accreditation` feature, which `normalize()` defaults **off for new installs and on for anyone
 who already has data** — pulling it from someone mid-accreditation would lose them the screen they
 keep records for. `stepCPD()` asks in setup.
+
+### Charts
+- **`.cbar` reveals itself with a keyframe animation, never with JS.** Every bar used to be
+  written `style="transform:scaleY(0)"` and flipped back by a `requestAnimationFrame` in the
+  **Trends** renderer — which meant the Revenue & net income chart on Money, drawn by a different
+  function, painted every bar at zero height and showed nothing but the net line. An animation
+  beats an inline style in the cascade, so it plays wherever a chart is drawn and no render site
+  has to remember to reveal anything. `chartCombo` marks its bars `.still` when a selection is
+  set, because a redraw from tapping a bar would otherwise replay the whole grow-in every time
+  somebody opened a tooltip.
+- **`moneyShort()` puts the sign outside the symbol** — a month that cost more than it earned
+  reads `−£500`, not `£-500`.
 
 ### Scrolling rules
 - **`go(tab,{focus:"cardId"})`** scrolls a named card into view and flashes it once. A prompt that says "room fees are due" and then lands the reader at the top of a long money screen has not taken them anywhere. `focusCard()` fires on rAF *and* on a timer, for the same reason `scrollChart()` does: rAF may never fire on a backgrounded tab, and a section can be drawn a beat after the view is attached.
@@ -521,6 +580,7 @@ npm run testdata             # regenerate the eight (deterministic — same byte
 npm run test:review          # Trends + Tax over all eight, invariants asserted, exits non-zero
 npm run test:tax             # tests/tax-tests.js in a headless browser instead of by hand
 npm run test:behaviour       # opens the sheets, clicks Save, asserts what landed in S
+npm run test:rent            # room rent: rhythms, date ranges, the ledger, and the ungated card
 ```
 
 **`scripts/check-behaviour.mjs` is the only test that presses a button.** The tax suite checks the
@@ -736,6 +796,10 @@ Three rules the code depends on. Breaking any of them is silent.
 Gated: `tax`, `finances`, `mtd`, `trends`, `accreditation`, `notesSync` (`PLUS_FEATURES`). **`palettes` was dropped in Sep 2026** when colour schemes were switched off entirely — see Setup wizard § Palettes.
 
 - **Trends is a sneak peek, not a wall** (Sep 2026). `renderMetrics()` computes the retention funnel first and only then branches on `plusLocked("trends")`: under the gate the funnel renders **in full on real numbers**, and the other three sections are named underneath with **one real figure each from this practice** (`.peekrow` / `.peekfig`). The old behaviour — `plusLockHTML()` describing four charts nobody had seen — was a poor advert for data that belongs to the reader. The lock is a `return` partway through the function, not a mode: everything below it is untouched. **Deliberately not extended to Tax** — a partial tax figure is a wrong tax figure, and `taxAcked()` exists to stop people acting on numbers they were not walked through.
+- **What a room costs is never gated** (Sep 2026). Room fees were already free; room *rent* was not, because its charges only existed inside the gated Payments due card. Both now render above the lock — see **Room rent**. `PLUS_SELL`'s "Costs & other income" line was reworded at the same time: the paywall must not sell something the reader already has.
+- **Every lock wears the tier's edge.** `.card.plusgate` carries the violet ring and glow built from `--tier2-*`, the same ramp as the Business analytics tab and its `#crbody.bizA` rule, drawn as a `::before` because `.card` is a translucent glass surface and a gradient border would have to repaint the fill. `--tier2-ink` is the only one of that ramp redefined for dark, because it is the only one used as **text** (the funnel's "This one is yours to keep", the `.plmark`).
+- **The locked funnel's footer is passed in, not spliced in.** It used to be added with `funnelCard.replace('</div></div>', …)`, which matched the end of the *first* funnel row — so "This one is yours to keep" appeared under "In therapy" and read as a caption for that one tier. `funnelCard(foot)` takes it as an argument.
+- **The launch screen wears the tier too.** A pre-paint script in `<head>` reads `tt_plus` and stamps `data-plus` on `<html>`, so a subscriber's splash never starts plain and changes its mind; `applyPlusChrome()` keeps it honest after a purchase, restore or lapse. It is a deliberately simplified copy of `plusActive()` — it decides a decoration, nothing is unlocked by it, and anything it cannot read simply leaves the mark off.
 - Palettes were dropped from the tier and from the app in Sep 2026; the reasoning is `docs/product-proposals-2026-09.md` §2.
 Free: everything else, including `receipts`, the spreadsheet import (it is the switching-cost
 remover — gate it and nobody ever reaches the paywall) and encrypted/automatic backups.

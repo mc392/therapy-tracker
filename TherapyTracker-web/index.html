@@ -10,6 +10,15 @@
 <script>(function(){var d=document.documentElement;try{var t=localStorage.getItem('tt_theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';}d.setAttribute('data-theme',t);
 d.setAttribute('data-palette','sage'); /* colour schemes are off — see PALETTES_ENABLED. Was: localStorage.getItem('tt_palette')||'sage' */
 var n=localStorage.getItem('tt_practice');if(n)d.style.setProperty('--appname',JSON.stringify('⬡ '+n));
+/* Does this device hold a live GroundWork Plus entitlement? Read here, in the pre-paint
+   script, because the launch screen is painted before any of the app's own code runs and a
+   subscriber's splash must not start plain and change its mind a second later. Deliberately
+   a simplified copy of plusActive() — it decides a decoration, nothing is unlocked by it,
+   and anything it cannot read simply leaves the mark off. applyPlusChrome() keeps it in
+   step from then on. */
+try{var p=JSON.parse(localStorage.getItem('tt_plus')||'null');
+  if(p&&p.active){var x=p.expiresAt?Date.parse(p.expiresAt):NaN;
+    if(!p.expiresAt||isNaN(x)||Date.now()<=x+7*864e5)d.setAttribute('data-plus','1');}}catch(e2){}
 }catch(e){d.setAttribute('data-theme','light');d.setAttribute('data-palette','sage');}})();</script>
 <style>
 /* ====== Design tokens ======
@@ -43,7 +52,10 @@ var n=localStorage.getItem('tt_practice');if(n)d.style.setProperty('--appname',J
      Was a cool silver ramp; that read as barely-there at 13px and on the subscription icon's own
      small bars, so it moved to a colour with actual contrast against sage instead of a lighter
      neutral (see the "Accent Options" comparison this was picked from). */
-  --tier2-1:#F3E4FF; --tier2-2:#C084FC; --tier2-3:#7C3AED; --tier2-4:#E9D5FF; --tier2-glow:rgba(124,58,237,.6);}
+  --tier2-1:#F3E4FF; --tier2-2:#C084FC; --tier2-3:#7C3AED; --tier2-4:#E9D5FF; --tier2-glow:rgba(124,58,237,.6);
+  /* The ramp above is for edges and glows. --tier2-ink is the one that has to stay READABLE
+     as text on a card, so unlike the rest of the ladder it IS redefined for dark. */
+  --tier2-ink:#6D28D9;}
 html[data-theme="dark"]{
   color-scheme:dark;
   --bg:#0C1512; --card:#16211E; --soft:#1E2C28; --ink:#E9F2EE; --muted:#93A8A1; --line:#243430;
@@ -54,7 +66,8 @@ html[data-theme="dark"]{
   --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -10px rgba(0,0,0,.6);
   --shadow-lg:0 2px 8px rgba(0,0,0,.5),0 24px 56px -14px rgba(0,0,0,.75);
 
-  --gs1:#5C7A6D; --gs2:#3C4F44;}
+  --gs1:#5C7A6D; --gs2:#3C4F44;
+  --tier2-ink:#C9AEFF;}
 /* ====== Colour schemes ======
    Chosen in Setup / Settings, applied as data-palette on <html>. "sage" is the built-in default
    above, so it needs no block here. Each other scheme overrides the light values, then the
@@ -487,6 +500,10 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
 .x{font-size:22px;color:var(--muted);background:none;border:0;cursor:pointer;padding:4px 8px}
 .suggest{font-size:11px;color:var(--accent-ink);font-weight:700;margin-left:6px}
 .hint{background:color-mix(in srgb,var(--brand) 10%,transparent);border:1px solid color-mix(in srgb,var(--brand) 24%,transparent);border-radius:14px;padding:10px 12px;font-size:13px;color:var(--brand-dark);margin:10px 0}
+/* A hint that carries a button gives it a column of its own. It used to be floated, so a
+   second line of text ran underneath it and the button sat on top of the words. */
+.hint.withbtn{display:flex;gap:10px;align-items:flex-start;justify-content:space-between}
+.hint.withbtn>.btn{flex:none}
 .vbanner{margin:10px 0 2px}
 .vmsg{border-radius:14px;padding:10px 13px;font-size:13px;margin-bottom:8px;font-weight:650;line-height:1.35}
 .vmsg.err{background:color-mix(in srgb,var(--bad) 14%,var(--card));border:1px solid color-mix(in srgb,var(--bad) 45%,transparent);color:var(--bad)}
@@ -805,8 +822,20 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:0
    baseline via a transform (not height/y), which animates reliably across browsers without
    fighting each chart's own stacking maths. .top is for bars stacked downward from a zero line
    (chartCombo's room/supervision/costs), whose fixed edge is their top, not their bottom. */
-.cbar{transform-box:fill-box;transform-origin:center bottom;transition:transform .65s cubic-bezier(.2,.85,.25,1)}
+/* Bars grow in from the baseline. This is a KEYFRAME animation, not a transition waiting for
+   somebody to flip an inline transform. Every bar used to be written with style="transform:
+   scaleY(0)" and only the Trends renderer ever set it back to scaleY(1) — so the Revenue & net
+   income chart on Money drew every bar at zero height and showed nothing but the net line.
+   An animation beats an inline style in the cascade and needs no wiring, so it plays wherever a
+   chart is drawn and no render site has to remember to reveal anything.
+   `.still` opts out: a redraw triggered by tapping a bar (chartCombo with a selection) would
+   otherwise replay the whole grow-in every time the reader opened a tooltip. */
+@keyframes cbarIn{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+.cbar{transform-box:fill-box;transform-origin:center bottom;
+  animation:cbarIn .65s cubic-bezier(.2,.85,.25,1) both}
 .cbar.top{transform-origin:center top}
+.cbar.still{animation:none}
+@media (prefers-reduced-motion:reduce){.cbar{animation-duration:.01ms}}
 
 /* ===== grouped client chips (supervision clients-discussed) ===== */
 .cgrp{margin-top:9px}
@@ -852,6 +881,17 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:0
 #splash .sp-word{font-size:min(9.2vw,40px);font-weight:800;letter-spacing:-.012em;line-height:1}
 #splash .sp-word b{color:#3C4F44;font-weight:800}
 #splash .sp-word span{color:#5C7A6D}
+/* Subscribers get their tier on the launch screen. Hidden unless the pre-paint script found
+   a live entitlement, so it costs a non-subscriber nothing but a few bytes. The mark itself
+   and the wordmark are untouched — this is the same product, wearing its tier, not a
+   second brand — and the violet is the subscription ladder's own, hard-coded like every
+   other colour on this screen rather than read from a token. */
+#splash .sp-plus{display:none;font-style:normal;font-size:.36em;font-weight:800;
+  letter-spacing:.02em;vertical-align:.85em;margin-left:.28em;padding:.28em .58em;
+  border-radius:999px;color:#FFFFFF;
+  background:linear-gradient(135deg,#8B5CF6,#7C3AED 55%,#6D28D9);
+  box-shadow:0 0 14px rgba(124,58,237,.55)}
+html[data-plus] #splash .sp-plus{display:inline-block}
 @keyframes spRise{from{opacity:0;transform:translateY(calc(-3vh + 14px))}to{opacity:1;transform:translateY(-3vh)}}
 html[data-theme="dark"] #splash{background:linear-gradient(155deg,#496256 0%,#38493F 48%,#26332B 100%)}
 html[data-theme="dark"] #splash .sp-bars .b1{fill:#8FA396}
@@ -1026,8 +1066,19 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
   border-radius:999px;margin-left:5px;background:color-mix(in srgb,var(--brand) 16%,transparent);color:var(--brand-dark)}
 /* GroundWork Plus — the paywall sheet and the in-place lock that replaces a paid view. */
 .plusgate{text-align:center;padding:4px 2px 2px}
+/* A lock card wears the same violet edge and glow as the Business analytics accent, so the
+   paid tier looks like one thing wherever it is met — the tab, the screen it opens, and the
+   card that stands in for a screen not bought yet. The ring is a ::before rather than a
+   gradient border, because .card is a translucent glass surface and a border-box gradient
+   would have to repaint the fill and lose the blur behind it. */
+.card.plusgate{position:relative;overflow:hidden;
+  border-color:color-mix(in srgb,var(--tier2-3) 40%,var(--hair));
+  box-shadow:var(--shadow),inset 0 1px 0 var(--hair),0 0 15px -3px var(--tier2-glow)}
+.card.plusgate::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,var(--tier2-3),var(--tier2-1) 25%,var(--tier2-4) 50%,var(--tier2-1) 75%,var(--tier2-3));
+  box-shadow:0 0 8px var(--tier2-glow)}
 .plusgate .plmark{width:46px;height:46px;margin:0 auto 10px;border-radius:14px;display:grid;place-items:center;
-  background:color-mix(in srgb,var(--brand) 14%,transparent);color:var(--brand)}
+  background:color-mix(in srgb,var(--tier2-3) 13%,transparent);color:var(--tier2-ink)}
 .plusgate .plmark .gi{width:24px;height:24px}
 .plusgate h2{margin:0 0 4px;font-size:17px}
 .plusgate .plfeat{text-align:left;margin-top:14px}
@@ -1044,6 +1095,13 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
   font-variant-numeric:tabular-nums;line-height:1.35}
 .peekh{font-size:13.5px;font-weight:700;color:var(--ink);line-height:1.35}
 .peeks{font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.45}
+/* "This one is yours to keep" under the funnel the gate does NOT take away. In the tier's
+   own violet with a soft glow, so it reads as a promise from the paid tier rather than as a
+   caption somebody forgot to style. */
+.plkeep{display:flex;align-items:center;justify-content:center;gap:6px;margin:14px 0 0;
+  font-size:12.5px;font-weight:800;letter-spacing:.01em;color:var(--tier2-ink);
+  text-shadow:0 0 12px var(--tier2-glow)}
+.plkeep .gi{width:15px;height:15px}
 /* ---- Trends ---- */
 .trendintro{display:flex;align-items:center;gap:6px;margin:-4px 0 12px}
 /* A card that is waiting for more history says so in a sentence. Deliberately not styled as a
@@ -1135,7 +1193,7 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
         <path class="vein" d="M-5 7 5-7"/>
       </g>
     </svg>
-    <div class="sp-word"><b>Ground</b><span>Work</span></div>
+    <div class="sp-word"><b>Ground</b><span>Work</span><i class="sp-plus">Plus</i></div>
   </div>
 </div>
 <div class="app">
@@ -1235,7 +1293,7 @@ const MAX_SNAP=120;
 /* Data schema version, stamped on state and on every backup. Bump when a change would be
    misread by an older build, and add the matching step to migrate(). Data with no stamp is v1
    (everything written before versioning existed). */
-const SCHEMA_VERSION=8;
+const SCHEMA_VERSION=9;
 function stateSchemaVersion(st){const v=st&&st.meta&&+st.meta.schemaVersion;return v>0?v:1;}
 
 function clone(o){return JSON.parse(JSON.stringify(o))}
@@ -1457,6 +1515,20 @@ function normalize(st){
      place. Import refuses it outright (see validateImport); this path only guards the unlikely
      case of a newer build having written to this device's own database.
 
+     v8 → v9 gives a room-rent step its own rhythm and its own end date: "£150 every week
+     from 1 June until 31 August" rather than "£150, monthly, forever". Both fields are absent
+     in v8 data and their absence means exactly what it meant then (monthly, no end), so there
+     is nothing to rewrite in place. The bump is for the other direction, and it matters twice
+     over: a v8 build reading a weekly rent would charge it twelve times a year instead of
+     fifty-two, and would carry on charging a rent that ended two years ago — then save both
+     wrong figures back over good data. validateImport refuses that.
+
+     v7 → v8 adds S.cpd, the log of CPD that is not supervision — a workshop, a book, a
+     podcast — and the two switches that say whether supervision counts toward the target at
+     all. A v8 backup can hold twenty hours of workshops and "supervision does not count for
+     me"; a v7 build has neither, so it would drop every one of those hours, put supervision
+     back into the total, and save both losses back. Hence the bump.
+
      v6 → v7 splits the old free-text "Notes done?" box into a boolean tick (`notes`, now only
      ever "Y" or "") and a separate `adminNote` for practical comments. A v7 backup can hold
      "invoice goes to her employer" in adminNote; a v6 build has no such field, so restoring it
@@ -1465,12 +1537,6 @@ function normalize(st){
      v5 → v6 dates the whole-practice tax settings (region, student loan) to a tax year and adds
      the record of what HMRC actually asked for and what has been paid. A v6 backup can say
      "Plan 2 until 2025-26, none after" and "HMRC assessed 2025-26 at £4,310, two payments on
-     v7 → v8 adds S.cpd, the log of CPD that is not supervision — a workshop, a book, a
-     podcast — and the two switches that say whether supervision counts toward the target at
-     all. A v8 backup can hold twenty hours of workshops and "supervision does not count for
-     me"; a v7 build has neither, so it would drop every one of those hours, put supervision
-     back into the total, and save both losses back. Hence the bump.
-
      account of £1,900 already made"; a v5 build has neither field, so it would apply one loan
      plan to every year and show its own estimate in place of the real assessment — a wrong
      figure presented as the true one. Hence the bump.
@@ -1778,8 +1844,16 @@ const PLUS_KINDS={founding:"Founding member",comp:"Complimentary",gift:"Gift",
    else's phone must not carry a subscription with it. */
 function plusRead(){try{const raw=localStorage.getItem(PLUS_KEY);if(!raw)return null;
   const o=JSON.parse(raw);return (o&&typeof o==="object")?o:null;}catch(e){return null;}}
-function plusWrite(o){try{localStorage.setItem(PLUS_KEY,JSON.stringify(o));}catch(e){}}
-function plusClear(){try{localStorage.removeItem(PLUS_KEY);}catch(e){}}
+function plusWrite(o){try{localStorage.setItem(PLUS_KEY,JSON.stringify(o));}catch(e){}applyPlusChrome();}
+function plusClear(){try{localStorage.removeItem(PLUS_KEY);}catch(e){}applyPlusChrome();}
+/* The one thing the entitlement changes outside a view: the tier mark on the launch screen,
+   which is shown again on every resume and so has to be right for the rest of the session
+   as well as at boot. The pre-paint script in <head> sets this attribute first; this keeps
+   it honest after a purchase, a restore or a lapse, without anyone having to reload. */
+function applyPlusChrome(){try{
+  const d=document.documentElement;
+  if(plusActive())d.setAttribute("data-plus","1"); else d.removeAttribute("data-plus");
+}catch(e){}}
 /* Synchronous by design — this is called from render paths all over the file, so it must never
    await and must never throw. The cache is not the truth (StoreKit is); it is what lets the app
    work on a train. Every failure mode below fails OPEN, never shut. */
@@ -1819,7 +1893,7 @@ function plusStatusLine(){
    openPlusSheet escapes these. */
 const PLUS_SELL=[
   ["What to set aside","A running figure worked from money you have actually been paid \u2014 including the January that is half again bigger than people expect, months before it lands."],
-  ["Costs & other income","Insurance, room rent, supervision, CPD and the rest, taken off the profit your tax is worked out from. Bundled with tax because an estimate without them is one nobody should save against."],
+  ["Costs & other income","Insurance, supervision, CPD, travel and the rest, taken off the profit your tax is worked out from. Bundled with tax because an estimate without them is one nobody should save against. What your rooms cost you is free either way."],
   ["Your pot, and what leaves it","Payments on account, the balancing payment, every due date in order, and what HMRC actually assessed once you have filed."],
   ["Making Tax Digital","Your four quarters added up and exported as a file for your accountant, or for software that files. You are already keeping the records, so the only thing left to buy is the submission \u2014 and HMRC lists free ones."],
   ["Business analytics","Twenty readings of your own history: who stays, who drifts, what an hour is really worth and what missed sessions cost."],
@@ -2690,7 +2764,10 @@ function wireSegBar(v,id,tab,route){
 /* ===== analytics helpers (inline SVG charts) ===== */
 function monthKey(s){const d=parseD(s);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")}
 function weekStart(s){const d=parseD(s);const x=new Date(d);const dow=(x.getDay()+6)%7;x.setDate(x.getDate()-dow);return x}
-function moneyShort(n){n=Math.round(n);if(Math.abs(n)>=1000)return "£"+(n/1000).toFixed(n%1000===0?0:1)+"k";return "£"+n}
+/* The sign goes OUTSIDE the currency symbol: a month that cost more than it earned reads
+   "\u2212£500", not "£-500". A true minus rather than a hyphen, to match the rest of the app. */
+function moneyShort(n){n=Math.round(n);const sg=n<0?"\u2212":"";n=Math.abs(n);
+  if(n>=1000)return sg+"£"+(n/1000).toFixed(n%1000===0?0:1)+"k";return sg+"£"+n}
 function pkey(dstr,gran){if(gran==="week"){const ws=weekStart(dstr);return[isoD(ws),ws.toLocaleDateString("en-GB",{day:"2-digit",month:"short"})];}
   const k=monthKey(dstr);return[k,parseD(k+"-01").toLocaleDateString("en-GB",{month:"short",year:"2-digit"})];}
 function periodSeries(gran){
@@ -2743,7 +2820,7 @@ function chartBars(data,money){
   const h=180,padT=20,padB=36,padL=8,step=44,bw=26,n=data.length||1;
   const W=Math.max(n*step+padL*2,280),innerH=h-padT-padB,max=Math.max(1,...data.map(d=>d.v));
   const body=data.map((d,i)=>{const x=padL+i*step+(step-bw)/2,bh=Math.max(d.v?2:0,Math.round(innerH*d.v/max)),y=padT+innerH-bh;
-    return '<rect class="cbar" style="transform:scaleY(0)" x="'+x+'" y="'+y+'" width="'+bw+'" height="'+bh+'" rx="4" fill="var(--brand)"></rect>'+
+    return '<rect class="cbar" x="'+x+'" y="'+y+'" width="'+bw+'" height="'+bh+'" rx="4" fill="var(--brand)"></rect>'+
       '<text x="'+(x+bw/2)+'" y="'+(y-4)+'" text-anchor="middle" font-size="9" fill="var(--muted)">'+(d.v?(money?moneyShort(d.v):d.v):"")+'</text>'+
       '<text x="'+(x+bw/2)+'" y="'+(h-padB+16)+'" text-anchor="middle" font-size="9" fill="var(--muted)">'+esc(d.l)+'</text>';}).join("");
   return '<div class="svgwrap"><svg viewBox="0 0 '+W+' '+h+'" width="'+W+'" height="'+h+'"><line x1="'+padL+'" y1="'+padT+'" x2="'+(W-padL)+'" y2="'+padT+'" stroke="var(--line)"></line><text x="'+padL+'" y="'+(padT-5)+'" font-size="9" fill="var(--muted)">'+(money?moneyShort(max):max)+'</text>'+body+'</svg></div>';
@@ -2798,14 +2875,16 @@ function chartCombo(data,sel){
   const negMax=Math.max(1,...data.map(d=>d.room+d.sup+(d.costs||0)));
   const range=posMax+negMax;const zeroY=padT+innerH*posMax/range;
   const yOf=v=>zeroY-innerH*v/range;
+  /* A redraw from a tap (sel is set) draws the bars still; a fresh chart lets them grow in. */
+  const bc=(sel!=null)?"cbar still":"cbar", bct=bc+" top";
   const bars=data.map((d,i)=>{const x=padL+i*step+(step-bw)/2;let out="";
     let up=zeroY;                                            /* positives stack upward from zero */
-    const rh=innerH*d.revenue/range;if(rh>0){up-=rh;out+='<rect class="cbar" style="transform:scaleY(0)" x="'+x+'" y="'+up.toFixed(1)+'" width="'+bw+'" height="'+rh.toFixed(1)+'" fill="var(--brand)"></rect>';}
-    const oh=innerH*(d.oth||0)/range;if(oh>0){up-=oh;out+='<rect class="cbar" style="transform:scaleY(0)" x="'+x+'" y="'+up.toFixed(1)+'" width="'+bw+'" height="'+oh.toFixed(1)+'" fill="var(--good)"></rect>';}
+    const rh=innerH*d.revenue/range;if(rh>0){up-=rh;out+='<rect class="'+bc+'" x="'+x+'" y="'+up.toFixed(1)+'" width="'+bw+'" height="'+rh.toFixed(1)+'" fill="var(--brand)"></rect>';}
+    const oh=innerH*(d.oth||0)/range;if(oh>0){up-=oh;out+='<rect class="'+bc+'" x="'+x+'" y="'+up.toFixed(1)+'" width="'+bw+'" height="'+oh.toFixed(1)+'" fill="var(--good)"></rect>';}
     let y=zeroY;                                             /* negatives stack downward */
-    const rmh=innerH*d.room/range;if(rmh>0){out+='<rect class="cbar top" style="transform:scaleY(0)" x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+rmh.toFixed(1)+'" fill="var(--warn)"></rect>';y+=rmh;}
-    const sph=innerH*d.sup/range;if(sph>0){out+='<rect class="cbar top" style="transform:scaleY(0)" x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+sph.toFixed(1)+'" fill="var(--accent)"></rect>';y+=sph;}
-    const ch=innerH*(d.costs||0)/range;if(ch>0){out+='<rect class="cbar top" style="transform:scaleY(0)" x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+ch.toFixed(1)+'" fill="var(--bad)"></rect>';y+=ch;}
+    const rmh=innerH*d.room/range;if(rmh>0){out+='<rect class="'+bct+'" x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+rmh.toFixed(1)+'" fill="var(--warn)"></rect>';y+=rmh;}
+    const sph=innerH*d.sup/range;if(sph>0){out+='<rect class="'+bct+'" x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+sph.toFixed(1)+'" fill="var(--accent)"></rect>';y+=sph;}
+    const ch=innerH*(d.costs||0)/range;if(ch>0){out+='<rect class="'+bct+'" x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+ch.toFixed(1)+'" fill="var(--bad)"></rect>';y+=ch;}
     return out;}).join("");
   const npts=data.map((d,i)=>[padL+i*step+step/2,yOf(d.net)]);
   const nline=npts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
@@ -4318,7 +4397,7 @@ function anaRefChart(data,ref,opt){
     if(d.v==null)return '<text x="'+(x+bw/2)+'" y="'+(padT+innerH-4)+'" text-anchor="middle" font-size="9" fill="var(--muted)">–</text>';
     const y=yOf(d.v),bh=Math.max(2,padT+innerH-y);
     const over=opt.invert?(d.v<ref):(d.v>=ref);
-    return '<rect class="cbar" style="transform:scaleY(0)" x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+bh.toFixed(1)+'" rx="3" fill="'+(over?"var(--brand)":"var(--warn)")+'"></rect>'+
+    return '<rect class="cbar" x="'+x+'" y="'+y.toFixed(1)+'" width="'+bw+'" height="'+bh.toFixed(1)+'" rx="3" fill="'+(over?"var(--brand)":"var(--warn)")+'"></rect>'+
       '<text x="'+(x+bw/2)+'" y="'+(y-4).toFixed(1)+'" text-anchor="middle" font-size="9" font-weight="700" fill="var(--muted)">'+esc(String(opt.fmt?opt.fmt(d.v):d.v))+'</text>';
   }).join("");
   const labs=data.map((d,i)=>'<text x="'+(padL+i*step+step/2)+'" y="'+(h-padB+15)+'" text-anchor="middle" font-size="9" fill="var(--muted)">'+esc(d.l)+'</text>').join("");
@@ -4683,13 +4762,31 @@ VIEWS.practice=function(){
   function renderRooms(){
     body.innerHTML='<div class="toolbar"><button class="btn sm" id="addR">＋ New room / location</button></div><div id="rlist"></div>';
     const r=()=>{
+      /* The sub-line used to print the raw legacy code — "Payment due: EOM" — which meant
+         nothing to anybody. A rent says when it started and when it stops; a room paid by the
+         session says when you settle up. */
       body.querySelector("#rlist").innerHTML='<div class="card" style="padding:4px 12px">'+S.rooms.map(rm=>{
         const monthly=roomBilling(rm)==="monthly";
+        const rs=monthly?rentSummary(rm.location):null;   /* not `r` — that is the redraw above */
+        const sub=monthly
+          ? (!rs.step?'No rent set yet'
+             :rs.ended?('Rent ended '+fmtDshort(rs.end))
+             :(esc(rentEveryLabel(rs.freq)).replace(/^every/,"Every")+' since '+fmtDshort(rs.from)+
+               (rs.end?' \u00b7 ends '+fmtDshort(rs.end):'')))
+          : schedLabel(roomSchedule(rm));
         return '<div class="list-item" data-id="'+rm._id+'"><div class="li-main"><div class="li-title">'+esc(rm.location)+
-          (monthly?' <span class="chip f">monthly</span>':'')+'</div><div class="li-sub">Payment due: '+esc(rm.due||"n/a")+'</div></div>'+
+          (monthly?' <span class="chip f">rent</span>':'')+'</div><div class="li-sub">'+sub+'</div></div>'+
           '<div class="li-right">'+roomCostLabel(rm)+'</div></div>';}).join("")+'</div>'+
-        '<p class="small muted">Tap a room to edit it, change its cost from a date, or switch it between a per-session cost and a flat monthly rent (history is kept, like client rates).</p>';
+        '<p class="small muted">Tap a room to edit it, change what it costs from a date, or switch it between a per-session cost and a rent (history is kept, like client rates).</p>'+
+        (S.rooms.some(rm=>roomBilling(rm)==="monthly")||anyPerUseRoom()
+          ? '<button class="btn sec full mt" id="rGoMoney">What is owed on these rooms \u203a</button>'
+          : '');
       body.querySelectorAll("#rlist .list-item").forEach(li=>li.onclick=()=>roomForm(S.rooms.find(x=>x._id===li.dataset.id)));
+      /* Setting a room up and settling what it has cost are two different jobs, and the second
+         one lives on Money beside every other bill — so link across rather than grow a second
+         set of controls here that would have to be kept in step with it. */
+      const gm=body.querySelector("#rGoMoney");
+      if(gm)gm.onclick=()=>go("money",{seg:"costs",focus:"roomRentCard"});
     };
     body.querySelector("#addR").onclick=()=>roomForm(null); r();
   }
@@ -4707,9 +4804,13 @@ VIEWS.practice=function(){
     const tiers=[{t:1,l:"In therapy",d:"1+ sessions",e:"sprout"},{t:6,l:"Building",d:"6+ sessions",e:"sapling"},{t:12,l:"Established",d:"12+ sessions",e:"tree"},{t:20,l:"Long-term",d:"20+ sessions",e:"evergreen"}];
     const rows=tiers.map(tr=>{const n=withSess.filter(x=>x.n>=tr.t).length;const pct=base?Math.round(n/base*100):0;const w=Math.round(n/max*100);
       return '<div class="fr"><div class="ftop"><span>'+gi(tr.e)+' <b>'+tr.l+'</b> · '+tr.d+'</span><span>'+n+' '+(n===1?'client':'clients')+(tr.t>1&&base?' · '+pct+'%':'')+'</span></div><div class="fbar"><i data-w="'+w+'" style="width:0"></i></div></div>';}).join("");
-    const funnelCard='<div class="card">'+cardHead("Client retention funnel","ana-funnel")+
+    /* The locked view adds a line at the FOOT of this card. It used to be spliced in with
+       .replace('</div></div>', …), which matched the end of the FIRST funnel row — so the
+       reassurance landed under "In therapy" and read as a caption for that one tier. The
+       footer is passed in instead, and there is no string to match against. */
+    const funnelCard=foot=>'<div class="card">'+cardHead("Client retention funnel","ana-funnel")+
       '<p class="small muted" style="margin:-4px 0 10px">How your clients progress over time, by number of sessions.</p>'+
-      '<div class="funnel">'+rows+'</div></div>';
+      '<div class="funnel">'+rows+'</div>'+(foot||"")+'</div>';
     /* ---- the sneak peek ----
        A hard lock showed a paragraph describing charts nobody had seen, which is a poor advert
        and a slightly insulting one: the data is the therapist's own. So the retention funnel —
@@ -4726,7 +4827,7 @@ VIEWS.practice=function(){
       const peek=(head,fig,sub)=>'<div class="peekrow"><div class="peekfig">'+fig+'</div>'+
         '<div><div class="peekh">'+head+'</div><div class="peeks">'+sub+'</div></div></div>';
       body.innerHTML=
-        funnelCard.replace('</div></div>','</div><p class="small muted" style="margin:10px 0 0">This one is yours to keep.</p></div>')+
+        funnelCard('<p class="plkeep">'+gi("done")+' This one is yours to keep.</p>')+
         '<div class="card plusgate peek"><div class="plmark">'+gi("trends")+'</div>'+
           '<h2>Twenty more, from the same records</h2>'+
           '<p class="small muted">Nothing to set up and nothing to enter — all of it is worked out from sessions you have already logged. Here is what four of them currently say about your practice.</p>'+
@@ -4902,7 +5003,7 @@ VIEWS.practice=function(){
 
       const foldedTotal=attOld.length+deepOld.length+(attOkFold?attOk.length:0);
       const html=(foldedTotal?'<p class="small muted" style="margin:-2px 0 10px">Lists here lead with the clients worth a look. Anyone attending as expected, finished, or not seen for over a year folds into a ⌄ summary row — they still count in every total and chart. Tap one to see them.</p>':'')+
-        funnelCard+
+        funnelCard()+
         anaKpis([[base,"Clients seen"],[avg,"Avg sessions / client"]])+
         driftCard+reviewCard+attCard+cohortCard+epCard+srcCard+
         (deep.length?'<div class="card"><h2>Long-term clients</h2><p class="small muted" style="margin:0 0 6px">Clients seen for 20+ sessions.</p>'+
@@ -4996,7 +5097,8 @@ VIEWS.practice=function(){
       host.querySelectorAll(".svgwrap,.hmgrid").forEach(w=>scrollChart(w,null));
       requestAnimationFrame(()=>{
         if(built.funnel)host.querySelectorAll(".funnel .fbar>i").forEach(i=>{i.style.width=(+i.dataset.w)+"%";});
-        host.querySelectorAll(".cbar").forEach(b=>{b.style.transform="scaleY(1)";});
+        /* Bars reveal themselves now — see the .cbar keyframes. Only the funnel still needs
+           a width painted on, because its widths are per-row data rather than one animation. */
       });
     };
     wireInfo(body);
@@ -5043,17 +5145,47 @@ function anyPerUseRoom(){
 }
 function roomCostLabel(rm){
   const monthly=roomBilling(rm)==="monthly", iso=isoD(today());
-  const unit=monthly?" / month":" / session";
-  const now=monthly?effRoomRent(rm.location,iso):effRoomRate(rm.location,iso);
+  /* A rent says how often as well as how much: "£500 / week" and "£500 / month" are four times
+     apart and used to print the same. */
+  const rent=monthly?rentSummary(rm.location,iso):null;
+  const unit=monthly?rentUnit(rent.freq):" / session";
+  const now=monthly?rent.amount&&(rent.live?rent.amount:0):effRoomRate(rm.location,iso);
+  if(monthly&&rent.ended)
+    return gbp(rent.amount)+rentUnit(rent.freq)+' <span class="small muted">ended '+fmtDshort(rent.end)+'</span>';
   if(!now){
     /* a change dated in the future would otherwise read as "£0" until the day it lands */
     const arr=monthly?(S.roomRentHistory||[]):(S.roomRateHistory||[]);
     const next=arr.filter(h=>(h.location||"").toLowerCase()===(rm.location||"").toLowerCase()&&parseD(h.effectiveFrom)>today())
       .sort((a,b)=>parseD(a.effectiveFrom)-parseD(b.effectiveFrom))[0];
     const amt=next?(monthly?+next.amount:+next.rate):0;
-    if(amt)return gbp(amt)+unit+' <span class="small muted">from '+fmtDshort(next.effectiveFrom)+'</span>';
+    if(amt)return gbp(amt)+(monthly?rentUnit(next.freq):unit)+' <span class="small muted">from '+fmtDshort(next.effectiveFrom)+'</span>';
   }
   return gbp(now)+unit;
+}
+/* What a rent works out at a month, for the one sentence that answers "is £500 a week a lot?".
+   Never stored and never totalled — ledgerBetween counts the real occurrences, and this is a
+   reading aid beside the field the reader is typing in. */
+function rentPerMonth(amount,freq){
+  const a=+amount||0;
+  switch(rentFreqOf({freq:freq})){
+    case "weekly":      return a*52/12;
+    case "fortnightly": return a*26/12;
+    case "quarterly":   return a/3;
+    case "annually":    return a/12;
+    default:            return a;
+  }
+}
+/* The next few dates a rent is charged on, from its own start and rhythm. */
+function rentNextDates(fromISO,freq,n){
+  const start=parseD(fromISO); if(!start)return [];
+  const t=today(),out=[];
+  for(let i=0;i<4000&&out.length<(n||2);i++){
+    const d=freqStep(start,rentFreqOf({freq:freq}),i);
+    if(!d)break;
+    if(d>=t)out.push(d);
+    if(out.length>=(n||2))break;
+  }
+  return out;
 }
 /* Frequency + the day it lands on, in one control. Mutates the `sched` object it's handed and
    shows the next two real dates underneath, so "the 31st" in February is never a surprise. */
@@ -5091,54 +5223,149 @@ function mountSchedulePicker(host,sched,o){
 function roomForm(rm){
   const isNew=!rm; const m=rm?clone(rm):{_id:uid(),location:"",due:"n/a",billing:"session"};
   const body=el('<div></div>');
-  const mode=roomBilling(m);
-  const hist=(mode==="monthly"?(S.roomRentHistory||[]):(S.roomRateHistory||[]))
+  const mode=roomBilling(m), monthly=(mode==="monthly");
+  const t=today();
+  const hist=(monthly?(S.roomRentHistory||[]):(S.roomRateHistory||[]))
     .filter(r=>(r.location||"").toLowerCase()===(m.location||"").toLowerCase())
     .sort((a,b)=>parseD(b.effectiveFrom)-parseD(a.effectiveFrom));
+  const sched=roomSchedule(m);
+  /* Staged; nothing is written until Save. A new rent starts at the top of THIS month and the
+     date is editable — "it just starts on the day you entered it" was the complaint, and a rent
+     seeded at RATE_EPOCH the way a per-session rate is would bill every month back to 2000. */
+  const nw={freq:"monthly",from:isoD(new Date(t.getFullYear(),t.getMonth(),1))};
+  const dueV=sc=>(sc.freq==="monthly"&&String(sc.day)==="last")?"EOM":(sc.freq==="weekly")?"EOW":(sc.freq==="none")?"n/a":"EOM";
+
+  /* An existing room on a rent. Read-only here and changed from one place (roomRentSheet), for
+     the same reason the session form stopped writing room fees: a form that half-renders a
+     setting is how a save quietly blanks it. */
+  const rentBlock=()=>{
+    const r=rentSummary(m.location);
+    if(!r.step)return '<div class="hint withbtn"><div>No rent recorded for this room yet.</div>'+
+      '<button class="btn sm" id="chR">Set the rent</button></div>';
+    const per=(r.freq!=="monthly")?' \u00b7 about '+gbp(Math.round(rentPerMonth(r.amount,r.freq)))+' a month':'';
+    const nxt=r.live?rentNextDates(r.from,r.freq,1)[0]:null;
+    return '<div class="hint withbtn"><div>Rent <b>'+gbp(r.amount)+'</b> <b>'+esc(rentEveryLabel(r.freq))+'</b>'+per+
+      '<div class="small muted" style="margin-top:6px">'+
+        (r.ended?'Ended '+fmtD(r.end)
+                :'Started '+fmtD(r.from)+(r.end?' \u00b7 ends '+fmtD(r.end):' \u00b7 no end date'))+
+        (nxt?' \u00b7 next charge '+fmtD(nxt):'')+'</div></div>'+
+      '<button class="btn sm" id="chR">Change rent</button></div>'+
+      '<p class="small muted" style="margin:6px 0 0">Every charge is raised on that rhythm and ticked off under '+
+      '<b>Money \u203a Costs &amp; income</b>, beside the fees your sessions raise. '+
+      '<span class="taxlink" id="rGoRent">Rent payments \u203a</span></p>';
+  };
+  const sessBlock=()=>'<div id="r_sched"></div>'+
+    '<div class="hint withbtn"><div>Charged <b>per session</b> \u00b7 current <b>'+roomCostLabel(m)+'</b></div>'+
+      '<button class="btn sm" id="chR">Change cost</button></div>';
+
   body.innerHTML='<label>Location / room name</label><input id="r_loc" value="'+esc(m.location)+'">'+
-    (isNew?'<label>How is this room charged?</label>'+
-      '<div class="seg" id="r_bill" style="display:inline-flex"><button type="button" data-b="session" class="on">Per session</button><button type="button" data-b="monthly">Monthly rent</button></div>':'')+
-    '<div id="r_sched"></div>'+
-    (isNew?'<label id="r_amtL">Cost per session (£)</label><input type="number" id="r_rate" value="0">':
-      '<div class="hint">Charged <b>'+esc(mode==="monthly"?"monthly":"per session")+'</b> · current '+
-        '<b>'+roomCostLabel(m)+'</b> <button class="btn sm" id="chR" style="float:right">Change cost</button></div>'+
-      '<div id="rhist"></div>'+
-      '<button class="btn sec full mt" id="chB">⇄ Switch to '+(mode==="monthly"?"a per-session cost":"monthly rent")+'…</button>'+
-      '<p class="small muted" style="margin:5px 0 0">'+(mode==="monthly"
-        ? 'Sessions here would start carrying a per-session room cost again from the date you choose.'
-        : 'A flat monthly rent instead of a charge per session — sessions here stop carrying a room cost from the date you choose.')+'</p>')+
+    (isNew
+      ? '<label>How is this room charged?</label>'+
+        '<div class="seg" id="r_bill" style="display:inline-flex"><button type="button" data-b="session" class="on">Per session</button><button type="button" data-b="monthly">A rent</button></div>'+
+        '<div id="r_new"></div>'
+      : (monthly?rentBlock():sessBlock())+
+        '<div id="rhist"></div>'+
+        '<button class="btn sec full mt" id="chB">\u21c4 Switch to '+(monthly?"a per-session cost":"a rent")+'\u2026</button>'+
+        '<p class="small muted" style="margin:5px 0 0">'+(monthly
+          ? 'Sessions here would start carrying a per-session room cost again from the date you choose.'
+          : 'A rent you pay whether or not you use the room \u2014 sessions here stop carrying a room cost from the date you choose.')+'</p>')+
     '<button class="btn full mt" id="rSave">Save room</button>'+
     (isNew?"":'<button class="btn danger full mt" id="rDel">Delete room</button>');
-  const sched=roomSchedule(m);
-  mountSchedulePicker(body.querySelector("#r_sched"),sched,{
-    label:"When do you pay for this room?",
-    hint:"So the app can remind you before it’s due. Payments show up under <b>Revenue › Business costs</b>, where you tick them off."});
+
+  /* A new room: a per-session cost has a payment schedule of its own (you settle the hours you
+     used whenever the landlord asks); a rent IS its own schedule, so it asks how often and from
+     when instead of asking the same question twice and letting the two answers disagree. */
+  const drawNew=()=>{
+    const host=body.querySelector("#r_new"); if(!host)return;
+    const mo=(m.billing==="monthly");
+    host.innerHTML=mo
+      ? '<label>Rent (\u00a3)</label><input type="number" id="r_rate" value="0">'+
+        '<div class="field2"><div><label>Charged</label><select id="r_freq">'+
+          opts2(RENT_FREQS.map(f=>[f,rentEveryLabel(f)]),nw.freq)+'</select></div>'+
+          '<div><label>Starts</label><input type="date" id="r_from" value="'+esc(nw.from)+'"></div></div>'+
+        '<p class="small muted" id="r_prev"></p>'+
+        '<p class="small muted">An end date, and any change to what it costs, can be set from the room once it is saved.</p>'
+      : '<div id="r_sched"></div><label>Cost per session (\u00a3)</label><input type="number" id="r_rate" value="0">';
+    if(mo){
+      const prev=()=>{
+        const amt=+host.querySelector("#r_rate").value||0;
+        const ds=rentNextDates(nw.from,nw.freq,2).map(fmtD);
+        host.querySelector("#r_prev").innerHTML=
+          (ds.length?'Next charge <b>'+ds.join('</b>, then <b>')+'</b>':'')+
+          ((amt&&nw.freq!=="monthly")?' \u00b7 about <b>'+gbp(Math.round(rentPerMonth(amt,nw.freq)))+'</b> a month':'');
+      };
+      host.querySelector("#r_freq").onchange=ev=>{nw.freq=ev.target.value;prev();};
+      host.querySelector("#r_from").onchange=ev=>{nw.from=ev.target.value;prev();};
+      host.querySelector("#r_rate").oninput=prev;
+      prev();
+    }else{
+      mountSchedulePicker(host.querySelector("#r_sched"),sched,{
+        label:"When do you pay for this room?",
+        hint:"So the app can remind you before it\u2019s due. Payments show up under <b>Money \u203a Costs &amp; income</b>, where you tick them off."});
+    }
+  };
+
   if(isNew){
     const seg=body.querySelector("#r_bill");
     seg.querySelectorAll("button").forEach(b=>b.onclick=()=>{
       seg.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
-      m.billing=b.dataset.b;
-      body.querySelector("#r_amtL").textContent=(m.billing==="monthly")?"Monthly rent (£)":"Cost per session (£)";});
+      m.billing=b.dataset.b; drawNew();});
+    drawNew();
   }else{
-    body.querySelector("#rhist").innerHTML='<details><summary>Cost history ('+hist.length+')</summary>'+
-      (hist.length?hist.map(r=>'<div class="audit-row"><b>'+gbp(mode==="monthly"?r.amount:r.rate)+(mode==="monthly"?' / month':'')+'</b> from '+fmtD(r.effectiveFrom)+'</div>').join("")
+    if(!monthly)mountSchedulePicker(body.querySelector("#r_sched"),sched,{
+      label:"When do you pay for this room?",
+      hint:"So the app can remind you before it\u2019s due. Payments show up under <b>Money \u203a Costs &amp; income</b>, where you tick them off."});
+    body.querySelector("#rhist").innerHTML='<details><summary>'+(monthly?'Rent history':'Cost history')+' ('+hist.length+')</summary>'+
+      (hist.length?hist.map(r=>'<div class="audit-row"><b>'+gbp(monthly?r.amount:r.rate)+(monthly?rentUnit(r.freq):'')+'</b> from '+fmtD(r.effectiveFrom)+
+        (monthly&&r.endDate?' to '+fmtD(r.endDate):'')+'</div>').join("")
                   :'<div class="audit-row muted">Nothing recorded yet.</div>')+'</details>';
-    body.querySelector("#chR").onclick=()=>mode==="monthly"?roomRentChange(m.location):roomRateChange(m.location);
+    body.querySelector("#chR").onclick=()=>monthly?roomRentSheet(m.location):roomRateChange(m.location);
     body.querySelector("#chB").onclick=()=>roomBillingSwitch(m);
+    const gr=body.querySelector("#rGoRent");
+    if(gr)gr.onclick=()=>{closeSheet();go("money",{seg:"costs",focus:"roomRentCard"});};
   }
-  body.querySelector("#rSave").onclick=async()=>{const loc=body.querySelector("#r_loc").value.trim();
-    /* keep the legacy due field roughly in step so an older build still reads something sane */
-    const dueV=(sched.freq==="monthly"&&String(sched.day)==="last")?"EOM":(sched.freq==="weekly")?"EOW":(sched.freq==="none")?"n/a":"EOM";
+
+  body.querySelector("#rSave").onclick=async()=>{
+    const loc=body.querySelector("#r_loc").value.trim();
     if(!loc){toast("Enter a name");return}
-    if(isNew){if(S.rooms.find(x=>x.location.toLowerCase()===loc.toLowerCase())){toast("Already exists");return}
-      const amt=+body.querySelector("#r_rate").value||0;const monthly=(m.billing==="monthly");
-      m.location=loc;m.due=dueV;m.pay={freq:sched.freq,day:sched.day};m.rate=monthly?0:amt;S.rooms.push(m);
-      /* a monthly room still gets a 0 per-session step, so derive() never charges its sessions */
-      S.roomRateHistory.push({_id:uid(),location:loc,effectiveFrom:isoD(today()),rate:monthly?0:amt});
-      if(monthly)S.roomRentHistory.push({_id:uid(),location:loc,effectiveFrom:isoD(today()),amount:amt});
-      await commit("Added room: "+loc+" @ "+gbp(amt)+(monthly?"/month":"/session"));}
-    else{const ex=S.rooms.find(x=>x._id===m._id);ex.location=loc;ex.due=dueV;ex.pay={freq:sched.freq,day:sched.day};
-      await commit("Edited room: "+loc);}
+    if(isNew){
+      if(S.rooms.find(x=>x.location.toLowerCase()===loc.toLowerCase())){toast("Already exists");return}
+      const amt=+body.querySelector("#r_rate").value||0, mo=(m.billing==="monthly");
+      m.location=loc; m.rate=mo?0:amt;
+      if(mo){
+        const from=(body.querySelector("#r_from")||{}).value||"";
+        if(!from){toast("Enter the date the rent starts");return}
+        nw.from=from; nw.freq=(body.querySelector("#r_freq")||{}).value||nw.freq;
+        /* The rent's own rhythm is the payment schedule; nothing else may set it. */
+        rentSyncSchedule(m,nw.from,nw.freq);
+        S.rooms.push(m);
+        /* a room on a rent still gets a 0 per-session step, so derive() never charges its sessions */
+        S.roomRateHistory.push({_id:uid(),location:loc,effectiveFrom:isoD(today()),rate:0});
+        S.roomRentHistory.push({_id:uid(),location:loc,effectiveFrom:nw.from,amount:amt,freq:nw.freq});
+        await commit("Added room: "+loc+" @ "+gbp(amt)+rentUnit(nw.freq)+" from "+nw.from);
+      }else{
+        m.due=dueV(sched); m.pay={freq:sched.freq,day:sched.day};
+        S.rooms.push(m);
+        S.roomRateHistory.push({_id:uid(),location:loc,effectiveFrom:isoD(today()),rate:amt});
+        await commit("Added room: "+loc+" @ "+gbp(amt)+"/session");
+      }
+    }
+    else{const ex=S.rooms.find(x=>x._id===m._id); if(!ex){toast("Room not found");return}
+      const before=ex.location||"";
+      /* Every cost this room has ever charged is filed under its NAME, so a rename has to carry
+         the histories and the sessions with it — otherwise renaming a room silently orphans its
+         rent, its rates and every fee already raised. The setup wizard has always done this. */
+      if(before.toLowerCase()!==loc.toLowerCase()){
+        (S.roomRateHistory||[]).forEach(h=>{if((h.location||"").toLowerCase()===before.toLowerCase())h.location=loc;});
+        (S.roomRentHistory||[]).forEach(h=>{if((h.location||"").toLowerCase()===before.toLowerCase())h.location=loc;});
+        S.sessions.forEach(s=>{if((s.location||"").toLowerCase()===before.toLowerCase())s.location=loc;});
+      }
+      ex.location=loc;
+      /* A room on a rent has no separate payment picker on screen. Reading controls the form did
+         not render is exactly how a save blanks a setting — so don't. */
+      if(!monthly){ex.due=dueV(sched);ex.pay={freq:sched.freq,day:sched.day};}
+      await commit("Edited room: "+loc);
+    }
     closeSheet();toast("Saved");go("practice",{seg:"rooms",keepScroll:true});};
   if(!isNew)body.querySelector("#rDel").onclick=async()=>{if(!confirm("Delete room "+m.location+"? (sessions are kept)"))return;
     S.rooms=S.rooms.filter(x=>x._id!==m._id);await commit("Deleted room: "+m.location);closeSheet();toast("Deleted");go("practice",{seg:"rooms",keepScroll:true});};
@@ -5157,18 +5384,56 @@ function roomRateChange(loc){
     await commit("Room cost change: "+loc+" → "+gbp(amt)+" from "+dt);closeSheet();toast("Cost updated");go("practice",{seg:"rooms",keepScroll:true});};
   openSheet("Change cost · "+loc,body);
 }
-function roomRentChange(loc){
+/* ===== The rent, in one place =====
+   Amount, rhythm and the two dates that bracket it. Every one of those used to be either missing
+   or somewhere else: the amount was the only thing on offer, the rhythm was a separate "when do
+   you pay" picker that the charge itself ignored, the start was whatever day you happened to be
+   typing on, and there was no way to say a tenancy had ended short of setting the rent to zero.
+
+   Dated, like every other cost history here: charges already raised keep the rent that was in
+   force when they were raised, so correcting today never rewrites last year's tax figures. */
+function roomRentSheet(loc){
+  const cur=rentSummary(loc);
   const body=el('<div></div>');
-  body.innerHTML='<p class="muted small">Adds a new monthly rent from a date you choose. <b>Past months keep the old rent.</b></p>'+
-    '<label>Effective from</label><input type="date" id="rnD" value="'+isoD(today())+'">'+
-    '<label>New monthly rent (£)</label><input type="number" id="rnA" value="'+(effRoomRent(loc,isoD(today()))||0)+'">'+
-    '<p class="small muted">Rent is counted once a month, on the day of the month the rent started.</p>'+
-    '<button class="btn full mt" id="rnS">Apply new rent</button>';
-  body.querySelector("#rnS").onclick=async()=>{const dt=body.querySelector("#rnD").value;const amt=+body.querySelector("#rnA").value;
-    if(!dt||isNaN(amt)){toast("Enter date and amount");return}
-    S.roomRentHistory.push({_id:uid(),location:loc,effectiveFrom:dt,amount:amt});
-    await commit("Room rent change: "+loc+" → "+gbp(amt)+"/month from "+dt);closeSheet();toast("Rent updated");go("practice",{seg:"rooms",keepScroll:true});};
-  openSheet("Change rent · "+loc,body);
+  const w={amount:cur.amount||0,freq:cur.freq,from:cur.from||isoD(today()),end:cur.end||""};
+  body.innerHTML='<p class="muted small">What you pay for <b>'+esc(loc)+'</b>, from a date you choose. '+
+      '<b>Charges already raised keep the old rent.</b></p>'+
+    '<label>Rent (\u00a3)</label><input type="number" id="rnA" value="'+esc(String(w.amount))+'">'+
+    '<div class="field2"><div><label>Charged</label><select id="rnF">'+
+      opts2(RENT_FREQS.map(f=>[f,rentEveryLabel(f)]),w.freq)+'</select></div>'+
+      '<div><label>From</label><input type="date" id="rnD" value="'+esc(w.from)+'"></div></div>'+
+    '<label>Ends (leave blank if it is ongoing)</label><input type="date" id="rnE" value="'+esc(w.end)+'">'+
+    '<p class="small muted" id="rnPrev"></p>'+
+    '<button class="btn full mt" id="rnS">Save rent</button>';
+  const prev=()=>{
+    const amt=+body.querySelector("#rnA").value||0;
+    const ds=rentNextDates(w.from,w.freq,2).map(fmtD);
+    const endD=w.end?parseD(w.end):null;
+    body.querySelector("#rnPrev").innerHTML=
+      (ds.length?'Next charge <b>'+ds.join('</b>, then <b>')+'</b>':'Nothing further is charged.')+
+      ((amt&&w.freq!=="monthly")?' \u00b7 about <b>'+gbp(Math.round(rentPerMonth(amt,w.freq)))+'</b> a month':'')+
+      (endD?'<br>Nothing is charged after <b>'+fmtD(endD)+'</b>.':'');
+  };
+  body.querySelector("#rnF").onchange=ev=>{w.freq=ev.target.value;prev();};
+  body.querySelector("#rnD").onchange=ev=>{w.from=ev.target.value;prev();};
+  body.querySelector("#rnE").onchange=ev=>{w.end=ev.target.value;prev();};
+  body.querySelector("#rnA").oninput=prev;
+  prev();
+  body.querySelector("#rnS").onclick=async()=>{
+    const amt=+body.querySelector("#rnA").value, from=body.querySelector("#rnD").value, end=body.querySelector("#rnE").value;
+    if(!from||isNaN(amt)){toast("Enter an amount and a date");return}
+    if(end&&parseD(end)<parseD(from)){toast("The end date is before the rent starts");return}
+    const arr=S.roomRentHistory=S.roomRentHistory||[];
+    /* Same date = the same arrangement being corrected (adding an end date to what is already
+       there), not a new one. Anything else is a change from a date and becomes its own step. */
+    const ex=arr.find(h=>(h.location||"").toLowerCase()===(loc||"").toLowerCase()&&h.effectiveFrom===from);
+    if(ex){ex.amount=amt;ex.freq=w.freq;if(end)ex.endDate=end;else delete ex.endDate;}
+    else{const rec={_id:uid(),location:loc,effectiveFrom:from,amount:amt,freq:w.freq};
+      if(end)rec.endDate=end; arr.push(rec);}
+    rentSyncSchedule(roomFor(loc),from,w.freq);
+    await commit("Room rent: "+loc+" \u2192 "+gbp(amt)+rentUnit(w.freq)+" from "+from+(end?" to "+end:""));
+    closeSheet();toast("Rent updated");go("practice",{seg:"rooms",keepScroll:true});};
+  openSheet("Rent \u00b7 "+loc,body);
 }
 /* Switch a room between billing modes from a date. Both histories get a step, so the room is
    charged exactly one way on any given day and nothing already logged is rewritten. */
@@ -5176,29 +5441,39 @@ function roomBillingSwitch(rm){
   const to=roomBilling(rm)==="monthly"?"session":"monthly";
   const loc=rm.location;
   const body=el('<div></div>');
-  const suggest=to==="monthly"?(effRoomRent(loc,isoD(today()))||0):(effRoomRate(loc,isoD(today()))||0);
+  const cur=rentSummary(loc);
+  const suggest=to==="monthly"?(cur.amount||0):(effRoomRate(loc,isoD(today()))||0);
+  /* Switching TO a rent asks how often as well as how much — the same three answers the rent
+     sheet takes, because they are the same arrangement being described. */
+  const w={freq:cur.freq};
   body.innerHTML='<p class="muted small">'+(to==="monthly"
-      ? 'From this date <b>'+esc(loc)+'</b> costs a flat monthly rent, and sessions there stop carrying a per-session room cost.'
-      : 'From this date <b>'+esc(loc)+'</b> costs a set amount per session again, and the monthly rent stops.')+
+      ? 'From this date <b>'+esc(loc)+'</b> costs a flat rent, and sessions there stop carrying a per-session room cost.'
+      : 'From this date <b>'+esc(loc)+'</b> costs a set amount per session again, and the rent stops.')+
     ' <b>Sessions before it keep exactly what they cost at the time.</b></p>'+
     '<label>Effective from</label><input type="date" id="rbD" value="'+isoD(today())+'">'+
-    '<label>'+(to==="monthly"?"Monthly rent (£)":"Cost per session (£)")+'</label>'+
+    '<label>'+(to==="monthly"?"Rent (£)":"Cost per session (£)")+'</label>'+
     '<input type="number" id="rbA" value="'+suggest+'">'+
-    '<button class="btn full mt" id="rbS">Switch to '+(to==="monthly"?"monthly rent":"a per-session cost")+'</button>';
+    (to==="monthly"?'<label>Charged</label><select id="rbF">'+
+      opts2(RENT_FREQS.map(f=>[f,rentEveryLabel(f)]),w.freq)+'</select>':'')+
+    '<button class="btn full mt" id="rbS">Switch to '+(to==="monthly"?"a rent":"a per-session cost")+'</button>';
   body.querySelector("#rbS").onclick=async()=>{
     const dt=body.querySelector("#rbD").value, amt=+body.querySelector("#rbA").value;
     if(!dt||isNaN(amt)){toast("Enter date and amount");return}
     const ex=S.rooms.find(x=>x._id===rm._id); if(!ex){toast("Room not found");return}
     if(to==="monthly"){
+      const fq=(body.querySelector("#rbF")||{}).value||w.freq;
       S.roomRateHistory.push({_id:uid(),location:loc,effectiveFrom:dt,rate:0});
-      S.roomRentHistory.push({_id:uid(),location:loc,effectiveFrom:dt,amount:amt});
+      S.roomRentHistory.push({_id:uid(),location:loc,effectiveFrom:dt,amount:amt,freq:fq});
+      rentSyncSchedule(ex,dt,fq);
       ex.billing="monthly"; if(parseD(dt)<=today())ex.rate=0;
+      w.freq=fq;
     }else{
-      S.roomRentHistory.push({_id:uid(),location:loc,effectiveFrom:dt,amount:0});
+      /* A zero step ends the rent for good; anything already raised keeps its own amount. */
+      S.roomRentHistory.push({_id:uid(),location:loc,effectiveFrom:dt,amount:0,freq:cur.freq});
       S.roomRateHistory.push({_id:uid(),location:loc,effectiveFrom:dt,rate:amt});
       ex.billing="session"; if(parseD(dt)<=today())ex.rate=amt;
     }
-    await commit("Room billing: "+loc+" → "+(to==="monthly"?gbp(amt)+"/month":gbp(amt)+"/session")+" from "+dt);
+    await commit("Room billing: "+loc+" → "+(to==="monthly"?gbp(amt)+rentUnit(w.freq):gbp(amt)+"/session")+" from "+dt);
     closeSheet();toast("Billing updated");go("practice",{seg:"rooms",keepScroll:true});};
   openSheet("Switch billing · "+loc,body);
 }
@@ -5330,7 +5605,7 @@ function financeForm(kind,rec){
       const looksLikeRent=(g("#f_cat").value==="roomhire")||/rent/i.test(g("#f_desc").value);
       if(w){w.style.display=(looksLikeRent&&monthlyRooms.length)?"":"none";
         w.innerHTML="⚠️ "+esc(monthlyRooms.join(", "))+(monthlyRooms.length===1?" is":" are")+
-          " already billed as monthly rent from <b>Clients › Rooms</b>, and counted in your costs automatically. Only add rent here for a room the app doesn’t know about.";}
+          " already billed as rent from <b>Practice › Rooms</b>, and counted in your costs automatically. Only add rent here for a room the app doesn’t know about.";}
     }
     if(isInc)g("#f_scopeNote").innerHTML=finPersonal(m)
       ? "Kept out of your practice’s net income and tax estimate — a second job or tutoring is a separate trade, taxed on its own. It’s still logged and totalled here."
@@ -5361,14 +5636,14 @@ function financeForm(kind,rec){
     closeSheet();toast("Deleted");go("money",{seg:"costs",keepScroll:true});};
   openSheet((isNew?"New ":"Edit ")+(isInc?"other income":"business cost"),body);
 }
-/* ===== Payments due =====
-   The point of this card is not accounting — it's not missing a payment. Anything overdue or
-   landing in the next few weeks, newest first, each with one tap to tick it off. */
-function paymentsDueCard(){
-  if(!feat("finances"))return "";
+/* ===== What is due, and one rule for saying so =====
+   Two cards read this list — the rent, which is outside the Plus gate, and the rest of the
+   ledger, which is not. One window and one visibility rule between them, so they can never
+   disagree about whether the same charge is overdue. */
+function dueListRows(kinds){
   const t=today();
-  const from=addDays(t,-120), to=addDays(t,35);
-  const rows=chargesBetween(from,to).filter(c=>{
+  return chargesBetween(addDays(t,-120),addDays(t,35)).filter(c=>{
+    if(kinds&&kinds.indexOf(c.kind)<0)return false;
     if(c.personal)return false;                       /* separate work isn't the practice's diary */
     /* Keep it visible for a fortnight after it was TICKED, not after it fell due — otherwise
        settling an old overdue charge makes the row vanish the instant you tap it, with no ✓ and
@@ -5376,33 +5651,94 @@ function paymentsDueCard(){
     if(c.paidOn)return parseD(c.paidOn)>=addDays(t,-14);
     return true;
   });
+}
+function chargeRow(c){
+  const t=today();
+  const late=!c.paidOn&&c.due<t, days=Math.round((t-c.due)/86400000);
+  const when=c.paidOn?('paid '+fmtDshort(c.paidOn))
+    :late?(days===0?'due today':days+' day'+(days===1?'':'s')+' late')
+    :('due '+fmtD(c.due));
+  return '<div class="list-item"><div class="li-main">'+
+    '<div class="li-title">'+esc(c.label)+' '+
+      (c.kind==="inc"?'<span class="chip na">expected in</span>':'')+
+      (late?'<span class="chip n">overdue</span>':'')+
+      (c.paidOn?'<span class="chip y">✓</span>':'')+'</div>'+
+    /* Only LATE rows repeat the date: "3 days late · 07 Sept" says something the first half
+       does not, whereas "due 10 Sept · 10 Sept" is the same date twice. */
+    '<div class="li-sub">'+esc(when)+((late)?' · '+fmtD(c.due):'')+'</div></div>'+
+    '<div class="li-right" style="display:flex;align-items:center;gap:8px">'+gbp(c.amount)+
+      '<button class="btn sm '+(c.paidOn?'ghost':'sec')+'" data-pay="'+esc(c.key)+'" data-lbl="'+esc(c.label)+'" data-on="'+(c.paidOn?'1':'0')+'">'+
+        (c.paidOn?'Undo':(c.kind==="inc"?'Received':'Paid'))+'</button>'+
+    '</div></div>';
+}
+/* ===== Room rent — raised on the rent's own rhythm, settled here =====
+   Deliberately OUTSIDE feat("finances") and outside the Plus gate, exactly like the fees a
+   session raises in a room hired by the hour. Until Sep 2026 a room could be SET UP for free and
+   then not managed at all: the rent charges only ever appeared inside Payments due, behind the
+   gate, so the app knew money was owed to a landlord and would not say so unless the reader
+   subscribed. What is behind the gate is the rest of the ledger — the costs and the other income
+   that have nothing to do with a room.
+
+   It is a tick-list, not accounting: ledgerBetween counts a rent in the year it fell due whether
+   or not it has been ticked here (the footnote says so, because that is a fair question to have). */
+function roomRentCard(){
+  const t=today();
+  const rentRooms=S.rooms.filter(r=>roomBilling(r)==="monthly");
+  if(!rentRooms.length&&!(S.roomRentHistory||[]).some(h=>+h.amount>0))return "";
+  const rows=dueListRows(["rent"]);
+  const overdue=rows.filter(c=>!c.paidOn&&c.due<t);
+  const soon=rows.filter(c=>!c.paidOn&&c.due>=t);
+  const done=rows.filter(c=>c.paidOn);
+  const owed=overdue.reduce((a,c)=>a+c.amount,0);
+  const next=soon[0]||null;
+  /* Rooms whose rent has stopped, or has not started, still have a room record — say so rather
+     than printing an empty card that looks broken. */
+  const live=rentRooms.filter(r=>rentSummary(r.location).live);
+  const SOON_MAX=4;
+  const body=(overdue.length||soon.length||done.length)
+    ? (overdue.length?'<div class="grp-h" style="margin-top:10px">Overdue</div>'+overdue.map(chargeRow).join(""):'')+
+      (soon.length?'<div class="grp-h" style="margin-top:10px">Coming up</div>'+
+        soon.slice(0,SOON_MAX).map(chargeRow).join("")+
+        (soon.length>SOON_MAX?'<p class="small muted" style="margin:6px 2px 0">'+
+          plural(soon.length-SOON_MAX,"more charge")+' after that.</p>':''):'')+
+      (done.length?'<details class="dz" style="margin-top:10px"><summary>Settled in the last fortnight ('+done.length+')</summary>'+done.map(chargeRow).join("")+'</details>':'')
+    : '<p class="muted small mt">'+(live.length
+        ? 'Nothing due in the next few weeks.'
+        : 'No rent is being charged at the moment — set one on the room in <b>Practice › Rooms</b>.')+'</p>';
+  return '<div class="card" id="roomRentCard"><h2>Room rent</h2>'+
+    '<p class="small muted">Rooms you pay for whether or not you use them. Each charge is raised on the rent\u2019s own rhythm — tick it off when you pay. '+infoLink("payments-due-ticking")+'</p>'+
+    ((overdue.length||next)?'<div class="kpis mt" style="grid-template-columns:1fr 1fr">'+
+      '<div class="kpi'+(owed?' bad':'')+'"><div class="v">'+gbp(Math.round(owed))+'</div><div class="l">overdue</div></div>'+
+      '<div class="kpi"><div class="v">'+(next?gbp(Math.round(next.amount)):'\u2014')+'</div><div class="l">'+(next?'next, '+esc(fmtDshort(next.due)):'nothing scheduled')+'</div></div></div>':'')+
+    '<div style="padding:0 2px">'+body+'</div>'+
+    (live.length?'<p class="small muted" style="margin-top:10px">'+esc(live.map(r=>r.location+" · "+gbp(rentSummary(r.location).amount)+" "+rentEveryLabel(rentSummary(r.location).freq)).join(" · "))+
+      ' \u00b7 <span class="taxlink" id="rentGoRooms">change in Rooms \u203a</span></p>':'')+
+    '<p class="prev">Rent counts as a business cost in the tax year it falls due, whether or not it has been ticked off here.</p>'+
+    '</div>';
+}
+function wireRoomRent(v){
+  const g=v.querySelector("#rentGoRooms");
+  if(g)g.onclick=()=>go("practice",{seg:"rooms"});
+}
+/* ===== Payments due =====
+   The point of this card is not accounting — it's not missing a payment. Anything overdue or
+   landing in the next few weeks, newest first, each with one tap to tick it off. Room rent has
+   its own card, above and outside the gate, and is deliberately not repeated here. */
+function paymentsDueCard(){
+  if(!feat("finances"))return "";
+  const t=today();
+  const rows=dueListRows(["exp","inc"]);
   const overdue=rows.filter(c=>!c.paidOn&&c.due<t);
   const soon=rows.filter(c=>!c.paidOn&&c.due>=t);
   const done=rows.filter(c=>c.paidOn);
   const owed=overdue.filter(c=>c.kind!=="inc").reduce((a,c)=>a+c.amount,0);
-  const row=c=>{
-    const late=!c.paidOn&&c.due<t, days=Math.round((t-c.due)/86400000);
-    const when=c.paidOn?('paid '+fmtDshort(c.paidOn))
-      :late?(days===0?'due today':days+' day'+(days===1?'':'s')+' late')
-      :('due '+fmtD(c.due));
-    return '<div class="list-item"><div class="li-main">'+
-      '<div class="li-title">'+esc(c.label)+' '+
-        (c.kind==="inc"?'<span class="chip na">expected in</span>':'')+
-        (late?'<span class="chip n">overdue</span>':'')+
-        (c.paidOn?'<span class="chip y">✓</span>':'')+'</div>'+
-      '<div class="li-sub">'+esc(when)+(c.paidOn?'':' · '+fmtD(c.due))+'</div></div>'+
-      '<div class="li-right" style="display:flex;align-items:center;gap:8px">'+gbp(c.amount)+
-        '<button class="btn sm '+(c.paidOn?'ghost':'sec')+'" data-pay="'+esc(c.key)+'" data-lbl="'+esc(c.label)+'" data-on="'+(c.paidOn?'1':'0')+'">'+
-          (c.paidOn?'Undo':(c.kind==="inc"?'Received':'Paid'))+'</button>'+
-      '</div></div>';
-  };
   const body=(overdue.length||soon.length||done.length)
-    ? (overdue.length?'<div class="grp-h" style="margin-top:10px">Overdue</div>'+overdue.map(row).join(""):'')+
-      (soon.length?'<div class="grp-h" style="margin-top:10px">Coming up</div>'+soon.map(row).join(""):'')+
-      (done.length?'<details class="dz" style="margin-top:10px"><summary>Recently settled ('+done.length+')</summary>'+done.map(row).join("")+'</details>':'')
-    : '<p class="muted small mt">Nothing due. Costs and rents with a repeat show up here as their date approaches.</p>';
+    ? (overdue.length?'<div class="grp-h" style="margin-top:10px">Overdue</div>'+overdue.map(chargeRow).join(""):'')+
+      (soon.length?'<div class="grp-h" style="margin-top:10px">Coming up</div>'+soon.map(chargeRow).join(""):'')+
+      (done.length?'<details class="dz" style="margin-top:10px"><summary>Recently settled ('+done.length+')</summary>'+done.map(chargeRow).join("")+'</details>':'')
+    : '<p class="muted small mt">Nothing due. Costs with a repeat show up here as their date approaches.</p>';
   return '<div class="card"><h2>Payments due</h2>'+
-    '<p class="small muted">Room rent and repeating costs, so nothing slips. '+infoLink("payments-due-ticking")+'</p>'+
+    '<p class="small muted">Repeating costs and income you are expecting, so nothing slips. '+infoLink("payments-due-ticking")+'</p>'+
     (overdue.length?'<div class="vmsg warn" style="margin-top:10px">'+gi("warning")+' '+overdue.length+' payment'+(overdue.length===1?'':'s')+' overdue'+(owed?', '+gbp(Math.round(owed))+' outstanding':'')+'.</div>':'')+
     '<div style="padding:0 2px">'+body+'</div></div>';
 }
@@ -5483,8 +5819,8 @@ function roomFeesCard(){
     (settled.length?'<details class="dz" style="margin-top:10px"><summary>Settled in the last fortnight ('+settled.length+')</summary>'+
       '<div style="padding:0 2px">'+settled.map(settledRow).join("")+'</div></details>':'')+
     (monthlyRooms.length?'<p class="small muted" style="margin-top:8px">'+esc(monthlyRooms.map(r=>r.location).join(", "))+
-      (monthlyRooms.length===1?' is':' are')+' on a monthly rent, so nothing here is raised for '+(monthlyRooms.length===1?'it':'them')+
-      ' — that rent is in <b>Payments due</b> above.</p>':'')+
+      (monthlyRooms.length===1?' is':' are')+' on a rent, so nothing here is raised for '+(monthlyRooms.length===1?'it':'them')+
+      ' — that rent is under <b>Room rent</b>, just below.</p>':'')+
     '</div>';
 }
 function wireRoomFees(v){
@@ -5514,12 +5850,12 @@ function financeCards(){
     '<div class="li-right">'+gbp(x.amount)+(finRecurring(x)?'<span class="small muted">'+(per[x.recurrence]||"")+'</span>':'')+'</div></div>';
   const sortFin=a=>a.slice().sort((x,y)=>parseD(y.date)-parseD(x.date));
   const rentRows=rentRooms.map(r=>{
-    const amt=effRoomRent(r.location,isoD(today()));
+    const rs=rentSummary(r.location);
     const inTY=roomRentOccurrences(b.start,b.end).filter(o=>(o.location||"").toLowerCase()===(r.location||"").toLowerCase())
       .reduce((a,o)=>a+o.amount,0);
     return '<div class="list-item"><div class="li-main"><div class="li-title">'+esc(r.location)+' <span class="chip f">rent</span></div>'+
-      '<div class="li-sub">Set in Clients › Rooms · '+gbp(inTY)+' this tax year</div></div>'+
-      '<div class="li-right">'+gbp(amt)+'<span class="small muted"> /mo</span></div></div>';}).join("");
+      '<div class="li-sub">Set in Practice › Rooms · '+gbp(inTY)+' this tax year</div></div>'+
+      '<div class="li-right">'+gbp(rs.live?rs.amount:0)+'<span class="small muted">'+esc(rentUnit(rs.freq))+'</span></div></div>';}).join("");
   const exps=sortFin(S.expenses||[]), incs=sortFin(S.otherIncome||[]);
   const costTotal=led.expenses+led.roomRent;
   const uohRow=led.useOfHome?('<div class="list-item"><div class="li-main"><div class="li-title">Use of home <span class="chip f">allowance</span></div>'+
@@ -5775,13 +6111,70 @@ function schedLabel(sched){
   const day=String(sched.day)==="last"?"the last day":"the "+ordinalDay(sched.day);
   return (sched.freq==="monthly"?"Monthly on ":sched.freq==="quarterly"?"Quarterly on ":"Yearly on ")+day;
 }
-/* Monthly rent effective on a date — dated steps, exactly like effRoomRate. 0 = no rent. */
-function effRoomRent(loc,dateStr){const d=parseD(dateStr);const L=(loc||"").toLowerCase();let best=null;
+/* ===== Room rent: an amount, a rhythm and a date range =====
+   A rent step says "£X every <freq> from <effectiveFrom>, until <endDate> if there is one". Two
+   of those three are new in v9 and both are OPTIONAL, which is what keeps every rent ever entered
+   reading correctly: a step with no `freq` is monthly, exactly as every step written before this
+   was, and a step with no `endDate` runs until the next step or forever.
+
+   Why the frequency lives HERE and not on the room: it is dated history, like the amount. A rent
+   that goes from monthly to weekly must not rewrite the months already accrued at the old rhythm,
+   for the same reason a rise from £450 to £500 does not rewrite them. The room's `pay` schedule
+   is kept in step with it (see rentSyncSchedule) so the reminder and the charge cannot disagree —
+   which is what "£500 monthly rent" sitting above "you pay every week" used to do. */
+const RENT_FREQS=["weekly","fortnightly","monthly","quarterly","annually"];
+const RENT_FREQ_UNIT={weekly:"week",fortnightly:"fortnight",monthly:"month",quarterly:"quarter",annually:"year"};
+/* Absent = monthly. Every step written before Sep 2026 has no freq at all and means exactly that. */
+function rentFreqOf(h){const f=String(h&&h.freq||"");return RENT_FREQS.indexOf(f)>=0?f:"monthly";}
+/* Did somebody actually CHOOSE this rhythm? Only a step written by the rent form carries `freq`,
+   and only those steps get to say when the money leaves — see the `due` line below. */
+function rentFreqSet(h){return RENT_FREQS.indexOf(String(h&&h.freq||""))>=0;}
+function rentUnit(freq){return " / "+(RENT_FREQ_UNIT[rentFreqOf({freq:freq})]||"month");}
+function rentEveryLabel(freq){const u=RENT_FREQ_UNIT[rentFreqOf({freq:freq})]||"month";
+  return u==="year"?"every year":"every "+u;}
+/* The rent step in force on a date — the latest one starting on or before it. */
+function rentStepAt(loc,dateStr){const d=parseD(dateStr);const L=(loc||"").toLowerCase();let best=null;
+  if(!d)return null;
   for(const h of (S.roomRentHistory||[])){ if((h.location||"").toLowerCase()!==L)continue;
-    const ef=parseD(h.effectiveFrom); if(d&&ef<=d){ if(!best||parseD(best.effectiveFrom)<ef)best=h; } }
-  return best?(+best.amount||0):0;}
-/* Rent charges landing inside [from,to]. Each room bills on the day of the month its rent
-   started, so a mid-month tax-year boundary lands the charge in the year it was actually due. */
+    const ef=parseD(h.effectiveFrom); if(ef&&ef<=d){ if(!best||parseD(best.effectiveFrom)<ef)best=h; } }
+  return best;}
+/* What a step is worth on a date: nothing once its end date has passed. A rent that ended is not
+   a rent of £0 — but it charges the same, and this is the one place that has to know. */
+function rentAmountOn(h,d){
+  if(!h||!d)return 0;
+  const end=h.endDate?parseD(h.endDate):null;
+  if(end&&d>end)return 0;
+  return +h.amount||0;
+}
+/* Rent effective on a date — dated steps, exactly like effRoomRate. 0 = no rent (or ended). */
+function effRoomRent(loc,dateStr){return rentAmountOn(rentStepAt(loc,dateStr),parseD(dateStr));}
+/* The rent arrangement as it stands today (or on `dateStr`), for the room screens to describe. */
+function rentSummary(loc,dateStr){
+  const iso=dateStr||isoD(today());
+  const steps=(S.roomRentHistory||[]).filter(h=>(h.location||"").toLowerCase()===(loc||"").toLowerCase())
+    .sort((a,b)=>parseD(a.effectiveFrom)-parseD(b.effectiveFrom));
+  const step=rentStepAt(loc,iso), d=parseD(iso);
+  const end=step&&step.endDate?parseD(step.endDate):null;
+  return {step,steps,
+    started:steps.length?steps[0].effectiveFrom:null,
+    from:step?step.effectiveFrom:null,
+    end:step&&step.endDate||null,
+    freq:rentFreqOf(step),
+    amount:step?(+step.amount||0):0,
+    live:!!(step&&rentAmountOn(step,d)>0),
+    ended:!!(end&&d&&d>end)};
+}
+/* Rent charges landing inside [from,to].
+
+   ONE TIMELINE PER ROOM, anchored where the rent started — not on the payment schedule, which is
+   a reminder the therapist can change at any time; letting it move this date would silently shift
+   historical rent between tax years. A change of AMOUNT dated mid-cycle therefore corrects the
+   charges from then on without moving the day they land on.
+
+   A change of RHYTHM is the one thing that does re-anchor: "£150 a week from 1 June" cannot be
+   paid on the old monthly day, so each frequency gets its own regime running from the step that
+   introduced it. Data written before v9 has exactly one regime — monthly, from the first step —
+   which is precisely what the previous month-by-month loop did. */
 function roomRentOccurrences(from,to){
   const out=[],byLoc={};
   (S.roomRentHistory||[]).forEach(h=>{const k=(h.location||"").toLowerCase();if(!k)return;(byLoc[k]=byLoc[k]||[]).push(h);});
@@ -5789,22 +6182,40 @@ function roomRentOccurrences(from,to){
     const steps=byLoc[k].slice().sort((a,b)=>parseD(a.effectiveFrom)-parseD(b.effectiveFrom));
     const first=parseD(steps[0].effectiveFrom); if(!first)return;
     const loc=steps[0].location;
-    /* The accrual date stays anchored to when the rent started, NOT to the payment schedule:
-       the schedule is a reminder the therapist can change at any time, and letting it move this
-       date would silently shift historical rent between tax years. Each occurrence carries its
-       payment date separately (see `due` below) for the payments-due list. */
-    const rm=roomFor(loc), sc=rm?roomSchedule(rm):null, dom=first.getDate();
-    let cur=new Date(first.getFullYear(),first.getMonth(),1);
-    for(let i=0;i<1200;i++){
-      const dim=new Date(cur.getFullYear(),cur.getMonth()+1,0).getDate();
-      const d=new Date(cur.getFullYear(),cur.getMonth(),Math.min(dom,dim));
-      if(d>to)break;
-      if(d>=first&&d>=from){const amt=effRoomRent(loc,isoD(d));
-        if(amt>0)out.push({location:loc,date:d,amount:amt,due:(sc&&schedNext(sc,d))||d});}
-      cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);
-    }
+    const rm=roomFor(loc), sc=rm?roomSchedule(rm):null;
+    const regimes=[];
+    steps.forEach(h=>{const d=parseD(h.effectiveFrom); if(!d)return;
+      const f=rentFreqOf(h);
+      if(!regimes.length||regimes[regimes.length-1].freq!==f)regimes.push({from:d,freq:f});});
+    regimes.forEach((rg,ri)=>{
+      const stop=regimes[ri+1]?regimes[ri+1].from:null;
+      for(let n=0;n<4000;n++){
+        const d=freqStep(rg.from,rg.freq,n);
+        if(!d||d>to)break;
+        if(stop&&d>=stop)break;
+        if(d<from)continue;
+        const st=rentStepAt(loc,isoD(d));
+        const amt=rentAmountOn(st,d);
+        if(amt<=0)continue;                                  /* not started, or ended */
+        /* A rent whose rhythm was actually chosen pays when it is charged — that IS its schedule.
+           A legacy step keeps reading the room's separate payment schedule, so nobody's existing
+           reminder dates move underneath them. */
+        out.push({location:loc,date:d,amount:amt,freq:rg.freq,
+          due:rentFreqSet(st)?d:((sc&&schedNext(sc,d))||d)});
+      }
+    });
   });
   return out;
+}
+/* Keep the room's payment schedule in step with the rent's own, so the reminder and the charge
+   can never say different things. Written from the rent form, never guessed at elsewhere. */
+function rentSyncSchedule(rm,fromISO,freq){
+  if(!rm)return;
+  const d=parseD(fromISO)||today();
+  const wk=(freq==="weekly"||freq==="fortnightly");
+  const day=wk?String((d.getDay()+6)%7):String(d.getDate());   /* WEEKDAYS is Monday-first */
+  rm.pay={freq:freq,day:day};
+  rm.due=wk?"EOW":"EOM";                                       /* legacy field, kept roughly sane */
 }
 /* ===== Which basis the tax figures are computed on =====
    Cash: counted when money actually moved. Accruals: counted when the work was done or the cost
@@ -6737,7 +7148,7 @@ VIEWS.money=function(){
       '<div class="card" id="roomDueCard"><h2>Room payments due</h2>'+(roomRows?'<div class="rawscroll"><table><thead><tr><th>Room</th><th class="num">Sessions</th><th>Dates</th><th class="num">Total</th></tr></thead><tbody>'+roomRows+'</tbody></table></div>':'<p class="muted small">No room payments outstanding.</p>')+
         (roomNotYet.length?'<p class="small muted" style="margin-top:8px">Another '+plural(roomNotYet.length,"session")+' has raised a fee that has not fallen due yet.</p>':'')+
         '<button class="btn sm sec mt" id="roomManage">Manage room fees ›</button>'+
-        (S.rooms.some(r=>roomBilling(r)==="monthly")?'<p class="small muted" style="margin-top:8px">Rooms on a monthly rent aren’t listed here — their rent is counted in <b>Costs &amp; income</b>, not per session.</p>':'')+'</div>';
+        (S.rooms.some(r=>roomBilling(r)==="monthly")?'<p class="small muted" style="margin-top:8px">Rooms on a rent aren’t listed here — their rent is settled under <b>Costs &amp; income</b>, not per session.</p>':'')+'</div>';
     const rmg=body.querySelector("#roomManage");
     if(rmg)rmg.onclick=()=>go("money",{seg:"costs",focus:"roomFeesCard"});
     let sel=null;
@@ -6757,22 +7168,26 @@ VIEWS.money=function(){
     body.querySelector("#gran").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{statGran=bt.dataset.g;go("money",{keepScroll:true});});
   }
   function drawCosts(){
-    /* Room fees come FIRST and come unconditionally. They are money already owed to a landlord
-       for sessions that have happened, raised from the therapist's own records — neither a
-       preference she switched off nor a subscription she has not bought may make them vanish.
-       Everything below this line is the ledger proper, which is both gated and lockable. */
-    const rooms=roomFeesCard();
+    /* WHAT THE ROOMS COST COMES FIRST, AND COMES UNCONDITIONALLY — both the fees a session
+       raises in a room hired by the hour and the rent on a room paid for by the month. It is
+       money already owed to a landlord, worked out from the therapist's own records: neither a
+       preference she switched off nor a subscription she has not bought may make it vanish, and
+       being able to SET a room up while being unable to manage what it costs is worse than not
+       having the feature. Everything below this line is the ledger proper — the costs and income
+       that have nothing to do with a room — which is both gated and lockable. */
+    const rooms=roomFeesCard()+roomRentCard();
     /* Locked and switched-off are different states and must say different things: one is a
        purchase, the other is a preference the reader set themselves. */
     if(plusLocked("finances")){
       body.innerHTML=rooms+plusLockHTML("finances","Costs & other income",
-        "Insurance, room rent, CPD and everything else the practice costs you \u2014 taken off the "+
-        "profit your tax is worked out from.");
-      plusWireLocks(body); wireRoomFees(body); return;
+        "Insurance, supervision, CPD, travel and everything else the practice costs you, plus any "+
+        "income that is not a client session \u2014 taken off the profit your tax is worked out from. "+
+        "What your rooms cost you stays here, free.");
+      plusWireLocks(body); wireRoomFees(body); wireRoomRent(body); wirePaymentsDue(body); return;
     }
     body.innerHTML=rooms+(feat("finances")?financeCards()
       :'<div class="card"><h2>Costs &amp; other income</h2><p class="small muted">Switched off in ⚙ Settings › Features. Turn it back on there and your costs reappear — nothing was deleted.</p></div>');
-    wireFinance(body); wirePaymentsDue(body); wireRoomFees(body);
+    wireFinance(body); wirePaymentsDue(body); wireRoomFees(body); wireRoomRent(body);
   }
   function drawTable(){body.innerHTML="";body.appendChild(rawPanel());}
   const route=()=>moneySeg==="costs"?drawCosts():moneySeg==="table"?drawTable():drawOverview();
@@ -9243,7 +9658,7 @@ function sessionForm(s,o){
       const note=g("#f_rpNote");
       if(na){
         note.innerHTML = monthly
-          ? gi("rooms")+" <b>"+esc(rm.location)+"</b> is on a monthly rent, so this session raises nothing of its own. The rent is ticked off each month in <b>Money › Costs &amp; income</b>."
+          ? gi("rooms")+" <b>"+esc(rm.location)+"</b> is on a rent, so this session raises nothing of its own. The rent is ticked off under <b>Money › Costs &amp; income</b>."
           : !anyPerUseRoom()
           ? gi("rooms")+" You don’t pay for a room by the session, so there is no room fee to track."
           : gi("rooms")+" <b>"+esc(loc||"This location")+"</b> costs you nothing per session, so this session raises no room fee.";
@@ -11541,11 +11956,18 @@ function setupApplyRooms(w){
   const find=loc=>S.rooms.find(x=>(x.location||"").toLowerCase()===(loc||"").toLowerCase());
   /* One dated step per history, written only when the amount actually moved. A monthly room's
      amount is its rent and its per-session cost is pinned to 0, so it can't charge both ways. */
+  /* RATE_EPOCH is a FLOOR for a price — it makes a fee resolve for sessions logged before the
+     therapist ever opened the app. A rent is not a price, it is a charge that lands on a rhythm,
+     so an epoch-dated rent bills every month back to the year 2000 and puts thousands of pounds
+     of imaginary cost into every past tax year. Rent starts at the top of the current month
+     instead, and the room screen is where a real start date is set. */
+  const rentStart=()=>{const t=today();return isoD(new Date(t.getFullYear(),t.getMonth(),1));};
   const step=(arr,loc,field,amt,cur)=>{
     if(Math.abs((+cur||0)-amt)<=0.001)return;
     if(fresh)for(let i=arr.length-1;i>=0;i--)if((arr[i].location||"").toLowerCase()===loc.toLowerCase())arr.splice(i,1);
-    const rec={_id:uid(),location:loc,effectiveFrom:fresh?RATE_EPOCH:isoD(today())};
-    rec[field]=amt; arr.push(rec);
+    const rent=(field==="amount");
+    const rec={_id:uid(),location:loc,effectiveFrom:fresh?(rent?rentStart():RATE_EPOCH):isoD(today())};
+    rec[field]=amt; if(rent)rec.freq="monthly"; arr.push(rec);
   };
   list.forEach(r=>{
     const ex=find(r.loc)||(r.orig?find(r.orig):null);
@@ -11565,7 +11987,7 @@ function setupApplyRooms(w){
     }else{
       S.rooms.push({_id:uid(),location:r.loc,rate:perSession,due:r.due,billing:r.monthly?"monthly":"session"});
       S.roomRateHistory.push({_id:uid(),location:r.loc,effectiveFrom:RATE_EPOCH,rate:perSession});
-      if(r.monthly)S.roomRentHistory.push({_id:uid(),location:r.loc,effectiveFrom:RATE_EPOCH,amount:r.rate});
+      if(r.monthly)S.roomRentHistory.push({_id:uid(),location:r.loc,effectiveFrom:rentStart(),amount:r.rate,freq:"monthly"});
     }
   });
   /* drop rooms the user removed — unless a session still points at them — and their now-orphaned cost history */
@@ -12511,6 +12933,7 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
   const bk=document.getElementById("bkNow");if(bk)bk.onclick=exportJSON;
   const sx=document.getElementById("svExport");if(sx)sx.onclick=exportJSON;
   applySettings();
+  applyPlusChrome();     // the tier mark on the launch screen, re-checked properly now
   go("home");
   splashHide();          // the app is on screen behind it now
   requestPersistence(); // ask the browser not to evict us; the answer is shown in Settings

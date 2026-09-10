@@ -163,8 +163,18 @@ last-month headline read −£8.64/14% on the established fixture where the true
    room rate or writes the odd fee off as "not owed". A per-invoice reconciliation was considered
    and is probably over-engineering for a sole trader.
 
+9. **A rent still has no per-invoice reconciliation either**, and for the same reason as 8 — the
+   charges are generated from the arrangement the therapist described, not from what the landlord
+   billed. The end date (v9) closes the worst of the gap: a rent that stopped now stops.
+10. **The setup wizard's room step still only offers "per session" or "per month".** The rhythm
+   (weekly, fortnightly, quarterly, yearly) and the start and end dates are set afterwards on the
+   room itself. Deliberate — the wizard asks the shortest question that gets someone running — but
+   a therapist who pays weekly has to visit Practice › Rooms once to say so.
+
 ## Notes
 - These were prompted by user feedback and security/compliance considerations.
 - Each item kept backwards compatibility. Schema bumps so far: v4 → v5 (cancellation charges),
-  v5 → v6 (dated tax settings), v6 → v7 (notes vs admin comments) and v7 → v8 (the CPD log and the
-  two supervision switches). None of them moves an existing figure.
+  v5 → v6 (dated tax settings), v6 → v7 (notes vs admin comments), v7 → v8 (the CPD log and the
+  two supervision switches) and v8 → v9 (a rent's own rhythm and end date). None of them moves an
+  existing figure — v9's two fields are absent from every rent ever entered, and absent means what
+  it has always meant: monthly, ongoing.
