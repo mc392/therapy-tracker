@@ -1,24 +1,30 @@
-<!-- Source for subscription-plus-1024.png — the App Store Connect image for the
-     GroundWork Plus subscription (offer-code redemption, win-back offers, and the
-     product page if App Store Promotion is enabled).
+<!-- Source for subscription-plus-1024.png — the App Store Connect image for **GroundWork Plus**,
+     the MIDDLE tier: Business analytics, accreditation hours and GroundWork Notes sync, without
+     the tax engine. GroundWork Pro is the top tier and has its own file beside this one.
+     docs/monetisation.md §3 has exactly what is on each rung.
 
      Regenerate rather than editing the PNG:
-       node scripts/render-subscription-image.mjs
+       node scripts/render-subscription-image.mjs subscription-plus-1024
 
-     Recognisably GroundWork at redemption-sheet size, and unmistakably NOT the free app icon:
-     the tallest bar carries a gold border. Lighting all three bars equally was tried first and
-     reads flat — the left-to-right fade is what gives the mark its depth — so the fade stays
-     and the gold does the work.
+     THE THREE BARS ARE A TIER LADDER, read the same way in both files: bar 1 is free, bar 2 is
+     Plus, bar 3 is Pro. The metal sits on bar 2 alone here — bar 3 is back to the plain fade
+     bars 1 and 2 share in the Pro image, because gold marks the TOP tier and putting it on bar 3
+     here would claim a rung this subscription does not sell. Do not brighten bar 3 to "look
+     premium too" — that is what subscription-pro-1024.html is for.
 
-     THE THREE BARS ARE A TIER LADDER, and that is why the gold is on the third one alone.
-     Today Plus is the only tier and it is the top tier, so bar 3 is gold and bars 1 and 2 are
-     the plain fade. A middle tier later takes bar 2 (silver, or a lighter gold) without
-     redrawing anything; a free tier is bar 1, already there and already plain. Do not move the
-     gold to all three — the ladder stops meaning anything if every rung is the top.
+     CHROME, NOT VIOLET (Sep 2026). Bar 2 was violet while the middle tier was unnamed and
+     unbuilt; the tier is real now and its accent is chrome, which is also what the app paints
+     every Plus lock and the Plus launch-screen mark in (index.html's --tier2-* tokens). One
+     metal per rung, silver below gold, is a ladder anybody can read without being told.
 
-     No text. Apple shows the subscription's name and description alongside this image, so a
-     word here would be redundant, and it could not be localised. Colours are sampled from
-     icon-1024.png, not guessed: #6B8B7C to #3C4F44. -->
+     Chrome was tried once before, as a flat cool silver, and abandoned for reading as
+     barely-there against the sage plate. This is not that: the ramp runs white → light steel →
+     DARK steel → light, and it is the dark stop that separates it from the plate. Check any
+     change to it at redemption-sheet size, not in a swatch.
+
+     No text, same reasoning as the Pro image: Apple shows the subscription's own name and
+     description beside it. Plate and bar colours are the same sample as that file, so the two
+     read as one ladder rather than two products: #6B8B7C → #3C4F44, #FBFDFB. -->
 <meta charset="utf-8">
 <style>
   html,body{margin:0;padding:0;width:1024px;height:1024px;overflow:hidden;background:#3C4F44}
@@ -29,14 +35,14 @@
   .glow{position:absolute;inset:0;
     background:radial-gradient(52% 46% at 68% 22%,rgba(255,255,255,.16),rgba(255,255,255,0) 70%)}
   svg{position:absolute;left:50%;top:52%;transform:translate(-50%,-50%);width:770px;height:719px}
-  /* The icon's own fade, sampled from it: #94A29A, #C2CCC6, #FBFDFB against this gradient. */
+  /* The icon's own fade, sampled from it: #94A29A, #C2CCC6, #FBFDFB against this gradient —
+     bars 1 and 3 here, the two rungs this subscription is NOT selling. */
   .b1{fill:#FBFDFB;opacity:.55}
-  .b2{fill:#FBFDFB;opacity:.78}
-  /* Gold on the top rung. A warm gold against sage reads premium and, unlike a brighter
-     yellow, does not fight the green. The stroke straddles the path, so bar 3 ends up a
-     little wider than the other two — which helps rather than hurts: it is meant to be the
-     one your eye lands on. */
-  .b3{fill:#FBFDFB;stroke:url(#gold);stroke-width:2.6}
+  .b3{fill:#FBFDFB;opacity:.78}
+  /* Chrome on the middle rung. The stroke straddles the path, so bar 2 ends up a little wider
+     than bars 1 and 3 — the same trick the Pro image uses to draw the eye to the rung being
+     sold. */
+  .b2{fill:#FBFDFB;stroke:url(#chrome);stroke-width:2.6}
   .leaf{fill:#FBFDFB}
   /* Thin, and short enough to stay well inside the leaf — at 3.4 it read as a slash across a
      lens rather than a vein, and it touched the edges. */
@@ -46,21 +52,24 @@
   <div class="glow"></div>
   <svg viewBox="0 0 120 112" role="img" aria-label="GroundWork Plus">
     <defs>
-      <!-- Metallic rather than flat: a single gold is a yellow outline, a light-to-deep ramp
-           reads as a rim catching the light. -->
-      <linearGradient id="gold" x1="0" y1="0" x2="0.35" y2="1">
-        <stop offset="0%"   stop-color="#F7E3AE"/>
-        <stop offset="38%"  stop-color="#E0BC6B"/>
-        <stop offset="72%"  stop-color="#C99A43"/>
-        <stop offset="100%" stop-color="#E7CB8B"/>
+      <!-- Same light-to-deep ramp construction as the Pro image's gold, chrome instead of warm
+           gold — a rim catching the light, not a flat outline. The dark stop at 72% is what
+           makes it read as metal against sage rather than as a pale outline. -->
+      <linearGradient id="chrome" x1="0" y1="0" x2="0.35" y2="1">
+        <stop offset="0%"   stop-color="#FFFFFF"/>
+        <stop offset="38%"  stop-color="#D6DFE4"/>
+        <stop offset="72%"  stop-color="#71838C"/>
+        <stop offset="100%" stop-color="#EDF2F5"/>
       </linearGradient>
-      <filter id="goldglow" x="-60%" y="-60%" width="220%" height="220%">
-        <feDropShadow dx="0" dy="0" stdDeviation="2.6" flood-color="#E0BC6B" flood-opacity=".55"/>
+      <!-- Cooler and tighter than the gold image's glow: a metal this light needs the halo to
+           stay near-white, or the sage behind it tints the whole thing green. -->
+      <filter id="chromeglow" x="-70%" y="-70%" width="240%" height="240%">
+        <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#E8F0F4" flood-opacity=".62"/>
       </filter>
     </defs>
     <rect class="b1" x="12" y="72" width="24" height="36" rx="12"/>
-    <rect class="b2" x="46" y="54" width="24" height="54" rx="12"/>
-    <g filter="url(#goldglow)"><rect class="b3" x="80" y="40" width="24" height="68" rx="12"/></g>
+    <g filter="url(#chromeglow)"><rect class="b2" x="46" y="54" width="24" height="54" rx="12"/></g>
+    <rect class="b3" x="80" y="40" width="24" height="68" rx="12"/>
     <!-- Lifted and nudged right of the splash mark's own placement: there the leaf all but
          touches the tallest bar, which at this size reads as one shape rather than two. -->
     <g transform="translate(95 13) rotate(35) scale(1.08)">

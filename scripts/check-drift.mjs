@@ -49,6 +49,8 @@ const SEAMS = [
   /* GroundWork Plus: the native StoreKit block refreshes the shared entitlement cache by name.
      Rename one of these and the PWA carries on perfectly while purchases stop working on iOS. */
   ["function plusActive(",      "the entitlement gate every locked view asks"],
+  ["function plusTier(",        "which tier this device holds — the whole two-tier gate resolves through it"],
+  ["const FEATURE_TIER=",       "the feature→tier split; the one place that decides what each subscription buys"],
   ["function plusRead(",        "the native StoreKit block reads the cache through this"],
   ["function plusWrite(",       "the native StoreKit block writes the cache through this"],
   ["function plusClear(",       "how a lapsed subscription clears the cache"],
@@ -78,6 +80,30 @@ if (existsSync("ios/App/App/GroundWorkRecordsFolder.swift")) {
   }
 } else {
   fail("ios/App/App/GroundWorkRecordsFolder.swift is missing — the records folder has no native half");
+}
+
+/* GroundWork Plus / Pro: the same silent-failure shape as the records folder above, and now
+   across two products. A method the web layer calls that the plugin does not declare rejects at
+   runtime, on a phone, and the paywall just says the subscription is unavailable. */
+const PLUS_CALLS = ["plusProducts", "plusStatus", "plusPurchase", "plusRestore",
+                    "plusRedeem", "plusManage"];
+if (existsSync("ios/App/App/GroundWorkNativePlugin.swift")) {
+  const plugin = readFileSync("ios/App/App/GroundWorkNativePlugin.swift", "utf8");
+  for (const m of PLUS_CALLS) {
+    if (!plugin.includes(`CAPPluginMethod(name: "${m}"`))
+      fail(`GroundWorkNativePlugin does not declare \`${m}\` — StoreKit would reject the call at runtime and the paywall would report the subscription unavailable`);
+    if (!plugin.includes(`@objc func ${m}(`))
+      fail(`GroundWorkNativePlugin declares \`${m}\` but does not implement it`);
+    if (!html.includes(`GW.${m}(`))
+      fail(`index.html no longer calls \`GW.${m}()\` — the native subscription bridge has a method nothing reaches`);
+  }
+  /* The one that costs real money if it rots: the ORIGINAL product id has always entitled
+     everything, so it must keep mapping to the top tier. Re-pointing it at the cheaper one would
+     take the tax engine off every existing subscriber, silently, on update. */
+  const legacy = plugin.split("\n").find((l) => l.includes("groundwork.plus.annual"));
+  if (!legacy) fail("the original subscription product id has gone from GroundWorkNativePlugin — an id can never be reused, and every existing subscriber holds that one");
+  else if (!/"pro"\s*:/.test(legacy))
+    fail("the original product id no longer maps to the `pro` tier — every existing subscriber bought everything, and pointing that id at the smaller tier takes the tax engine off them on update");
 }
 
 if (!html.includes("Native iOS shell (Capacitor)"))

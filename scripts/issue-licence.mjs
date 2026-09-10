@@ -16,6 +16,11 @@
      node scripts/issue-licence.mjs --keygen [--key-file <path>]
      node scripts/issue-licence.mjs --kind founding --name "Charlotte Bloor" --forever
      node scripts/issue-licence.mjs --kind gift --name "A N Other" --months 12
+     node scripts/issue-licence.mjs --kind gift --name "A N Other" --tier plus --months 12
+
+   --tier is the rung granted: "pro" (everything, the default) or "plus" (everything except the
+   tax engine). It defaults to pro because every licence issued before tiers existed granted
+   everything, and the app reads a licence with no tier on it the same way.
 */
 import { generateKeyPairSync, createPrivateKey, createPublicKey, sign, randomUUID } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
@@ -87,7 +92,13 @@ if (!flag("forever")) {
   die(`--forever is only for --kind founding or comp. A perpetual ${kind} is a support\n  obligation with no end date and no way to revoke it (there is no revocation list).`);
 }
 
+const tier = opt("tier", "pro");
+if (!["plus", "pro"].includes(tier)) die(`--tier must be plus or pro`);
+/* `t` rather than `tier`: the payload is base64 in a key somebody has to type, and every byte
+   of it is a character they can get wrong. Absent = pro, so a pro licence stays as short as it
+   has always been. */
 const payload = { v: 1, k: kind, n: name, exp, id: randomUUID().slice(0, 8) };
+if (tier !== "pro") payload.t = tier;
 const encoded = b64u(Buffer.from(JSON.stringify(payload), "utf8"));
 
 const { privateJwk } = JSON.parse(readFileSync(keyFile, "utf8"));
@@ -95,7 +106,7 @@ const key = createPrivateKey({ key: privateJwk, format: "jwk" });
 /* ieee-p1363 = raw r||s, which is what WebCrypto's ECDSA verify expects. Node's default is DER. */
 const sig = sign("sha256", Buffer.from(encoded, "utf8"), { key, dsaEncoding: "ieee-p1363" });
 
-console.log(`\n  ${kind} licence for ${name}`);
+console.log(`\n  ${kind} licence for ${name} (${tier === "pro" ? "GroundWork Pro" : "GroundWork Plus"})`);
 console.log(`  ${exp ? `expires ${exp.slice(0, 10)}` : "no expiry"} · id ${payload.id}\n`);
 console.log(`${encoded}.${b64u(sig)}\n`);
 console.log("  Record the id, name and expiry somewhere OUTSIDE this repo — it holds personal");
