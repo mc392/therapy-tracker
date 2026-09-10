@@ -581,6 +581,7 @@ npm run test:review          # Trends + Tax over all eight, invariants asserted,
 npm run test:tax             # tests/tax-tests.js in a headless browser instead of by hand
 npm run test:behaviour       # opens the sheets, clicks Save, asserts what landed in S
 npm run test:rent            # room rent: rhythms, date ranges, the ledger, and the ungated card
+npm run test:tiers           # the Plus/Pro gate matrix, and what an untiered entitlement means
 ```
 
 **`scripts/check-behaviour.mjs` is the only test that presses a button.** The tax suite checks the
@@ -771,11 +772,42 @@ No new gating layer — this only decides which existing `feat()` flags start of
 - **`accreditation` and `peer` are excluded from the simple preset** — `stepCPD` asks about both directly, and an answered question beats a default. Peer is never offered by a milestone: whether someone attends peer supervision is a fact about their practice, not something a session count can infer. `startSetup` unticks `peer` for a fresh install only (normalize leaves it absent = on, so existing installs keep it).
 - `revealCheck()` runs from `commit()` **after** the write, never before — an accepted nudge commits again and must not interleave with the save that triggered it. One offer per save; the key goes into `shown` whether accepted or declined, so nothing is ever asked twice.
 
-## GroundWork Plus — the paywall (added Sept 2026)
+## GroundWork Plus & Pro — the paywall (two tiers since Sep 2026)
 
-An annual subscription. Sold on iOS via StoreKit; **the web build is ungated** — Phase 1 keeps the
-PWA free as the shopfront, because a lock with no way to buy behind it is a broken feature. Full
-design and the decisions behind it in **`docs/monetisation.md`**.
+Two annual subscriptions, sold on iOS via StoreKit; **the web build is ungated** — Phase 1 keeps
+the PWA free as the shopfront, because a lock with no way to buy behind it is a broken feature.
+Full design and the decisions behind it in **`docs/monetisation.md`**.
+
+- **GroundWork Plus** — everything except the tax bundle: `trends`, `accreditation`, `notesSync`.
+  Nothing in it depends on where the reader pays tax, which is what makes it sellable outside the
+  UK. Accent: **chrome** (`--tier2-*`), bar 2 of the ladder.
+- **GroundWork Pro** — everything, i.e. Plus plus `tax`, `finances`, `mtd`. Accent: **gold**
+  (`--tier3-*`), bar 3.
+
+**The names moved when the tier split.** "GroundWork Plus" was the only tier and it was the TOP
+one; it is now the middle one. Anything written before Sep 2026 that says "Plus" means Pro.
+
+- **`FEATURE_TIER` is the one place the split lives** — a feature names the LOWEST tier that
+  unlocks it, and a key absent from it is free. `PLUS_FEATURES` is derived from its keys, not
+  maintained. `plusTier()` says which rung a device holds, `plusHas(t)` is the only comparison,
+  and `plusLocked(k)` is those two together. Nothing else may hand-roll a rank check.
+- **AN ENTITLEMENT WITH NO `tier` ON IT IS PRO, AND THAT DEFAULT IS THE MIGRATION.** Every
+  subscription and licence issued before the split entitled everything; reading one as the new,
+  smaller Plus would take the Tax tab off a paying subscriber on the morning they updated.
+  `tierOf()` applies it, and so do the pre-paint script in `<head>` and the native StoreKit block.
+  There is no migration step and there must never be one — a default cannot half-run.
+- **The legacy StoreKit product id sells Pro.** `…groundwork.plus.annual` says "plus" and
+  entitles everything, because that is what it has always done and an id can never be reused.
+  Rename its display name in App Store Connect; never re-point it. `check-drift.mjs` fails if the
+  Swift mapping changes, and asserts the whole JS↔Swift subscription surface besides.
+- **Both products must sit in ONE App Store Connect subscription group**, or an upgrade from Plus
+  to Pro bills somebody twice and nothing in the app could detect it.
+- **`npm run test:tiers`** (`scripts/check-tiers.mjs`) is 34 assertions in a real browser: the
+  free/Plus/Pro matrix against the documented split, the no-tier default, expiry and its grace,
+  a tier nobody recognises failing open, the lock cards' colours and names, the sheet lighting
+  the rung that was asked for, and the launch-screen mark. The matrix is written out from
+  `docs/monetisation.md` §3, never read back from `FEATURE_TIER` — a test that read the table it
+  is checking would assert nothing.
 
 Three rules the code depends on. Breaking any of them is silent.
 
@@ -793,13 +825,14 @@ Three rules the code depends on. Breaking any of them is silent.
   *button*, never the function. `check-drift.mjs` asserts this too; a tax test failing because of
   the paywall means it has been put in the wrong layer.
 
-Gated: `tax`, `finances`, `mtd`, `trends`, `accreditation`, `notesSync` (`PLUS_FEATURES`). **`palettes` was dropped in Sep 2026** when colour schemes were switched off entirely — see Setup wizard § Palettes.
+Gated: `tax`, `finances`, `mtd` (**Pro**); `trends`, `accreditation`, `notesSync` (**Plus**) — `FEATURE_TIER`. **`palettes` was dropped in Sep 2026** when colour schemes were switched off entirely — see Setup wizard § Palettes.
 
 - **Trends is a sneak peek, not a wall** (Sep 2026). `renderMetrics()` computes the retention funnel first and only then branches on `plusLocked("trends")`: under the gate the funnel renders **in full on real numbers**, and the other three sections are named underneath with **one real figure each from this practice** (`.peekrow` / `.peekfig`). The old behaviour — `plusLockHTML()` describing four charts nobody had seen — was a poor advert for data that belongs to the reader. The lock is a `return` partway through the function, not a mode: everything below it is untouched. **Deliberately not extended to Tax** — a partial tax figure is a wrong tax figure, and `taxAcked()` exists to stop people acting on numbers they were not walked through.
 - **What a room costs is never gated** (Sep 2026). Room fees were already free; room *rent* was not, because its charges only existed inside the gated Payments due card. Both now render above the lock — see **Room rent**. `PLUS_SELL`'s "Costs & other income" line was reworded at the same time: the paywall must not sell something the reader already has.
-- **Every lock wears the tier's edge.** `.card.plusgate` carries the violet ring and glow built from `--tier2-*`, the same ramp as the Business analytics tab and its `#crbody.bizA` rule, drawn as a `::before` because `.card` is a translucent glass surface and a gradient border would have to repaint the fill. `--tier2-ink` is the only one of that ramp redefined for dark, because it is the only one used as **text** (the funnel's "This one is yours to keep", the `.plmark`).
+- **Every lock wears ITS OWN tier's edge.** One set of rules paints from six local variables (`--tg1`..`--tg4`, `--tgglow`, `--tgink`); the `tier-plus` / `tier-pro` class sets them, and it sets them on **any** element, so a Plus card inside a sheet led by Pro repaints itself instead of inheriting gold. The ring is a `::before` rather than a gradient border, because `.card` is a translucent glass surface and a border-box gradient would have to repaint the fill and lose the blur. `--tier2-ink` / `--tier3-ink` are the only members of either ramp redefined for dark, because they are the only ones used as **text**. Default is chrome: a card whose class somebody forgets promises the cheaper tier, not the dearer one.
+- **The chrome ramp is not a flat silver.** It runs white → light steel → **dark** steel → light, and it is the dark stop that carries it against sage. A flat cool silver was tried in an earlier pass and abandoned for reading as barely-there at 13px; check any change at that size on a real screen, not in a swatch.
 - **The locked funnel's footer is passed in, not spliced in.** It used to be added with `funnelCard.replace('</div></div>', …)`, which matched the end of the *first* funnel row — so "This one is yours to keep" appeared under "In therapy" and read as a caption for that one tier. `funnelCard(foot)` takes it as an argument.
-- **The launch screen wears the tier too.** A pre-paint script in `<head>` reads `tt_plus` and stamps `data-plus` on `<html>`, so a subscriber's splash never starts plain and changes its mind; `applyPlusChrome()` keeps it honest after a purchase, restore or lapse. It is a deliberately simplified copy of `plusActive()` — it decides a decoration, nothing is unlocked by it, and anything it cannot read simply leaves the mark off.
+- **The launch screen wears the tier too, in the ladder's own terms.** A pre-paint script in `<head>` reads `tt_plus` and stamps `data-plus="plus"|"pro"` on `<html>`, so a subscriber's splash never starts plain and changes its mind; `applyPlusChrome()` keeps it honest after a purchase, an upgrade, a restore or a lapse. The mark lights **the bar that tier owns** — bar 2 chrome for Plus, bar 3 gold for Pro, from `<defs>` gradients in the splash SVG — exactly as that tier's App Store image does, plus a pill on the wordmark whose word is `::after` content so one node serves both. The pre-paint copy of the entitlement check is deliberately simplified: it decides a decoration, nothing is unlocked by it, and anything it cannot read leaves the mark off.
 - Palettes were dropped from the tier and from the app in Sep 2026; the reasoning is `docs/product-proposals-2026-09.md` §2.
 Free: everything else, including `receipts`, the spreadsheet import (it is the switching-cost
 remover — gate it and nobody ever reaches the paywall) and encrypted/automatic backups.

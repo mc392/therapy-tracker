@@ -6,9 +6,10 @@
    drift from the one shipping in index.html.
 
    Usage: node scripts/render-subscription-image.mjs [basename]
-     basename defaults to subscription-plus-1024 (GroundWork Plus). Pass a different one — e.g.
-     subscription-business-1024, the middle tier's own source — to render that image instead;
-     it must exist as <basename>.html beside this file's default. */
+     basename defaults to subscription-plus-1024 (GroundWork Plus, the middle tier, chrome).
+     Pass subscription-pro-1024 for the top tier (gold). Either must exist as <basename>.html
+     in TherapyTracker-web/icon-ideas/groundwork/. There is one image per subscription in App
+     Store Connect, so both need regenerating whenever the mark or the plate changes. */
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -34,7 +35,13 @@ const SRC = resolve(`TherapyTracker-web/icon-ideas/groundwork/${basename}.html`)
 const OUT = resolve(`TherapyTracker-web/icon-ideas/groundwork/${basename}.png`);
 if (!existsSync(SRC)) throw new Error(`missing source: ${SRC}`);
 
-const browser = await chromium.launch();
+/* Playwright's own browser download may not be the one this machine has. Honour an explicit
+   CHROMIUM_PATH, then the shared install the container ships with, then let Playwright find its
+   own — the same order scripts/check-behaviour.mjs uses. */
+const CHROME = process.env.CHROMIUM_PATH ||
+  ["/opt/pw-browsers/chromium-1194/chrome-linux/chrome", "/opt/pw-browsers/chromium/chrome"]
+    .find((p) => existsSync(p)) || undefined;
+const browser = await chromium.launch({ executablePath: CHROME });
 const page = await browser.newPage({
   viewport: { width: 1024, height: 1024 },
   deviceScaleFactor: 1,

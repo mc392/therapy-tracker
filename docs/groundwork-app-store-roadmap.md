@@ -73,7 +73,9 @@ from the web app and restore it in the native one.
 
 ## Monetisation
 
-Decided Sept 2026 and specified in **`docs/monetisation.md`**: an annual "GroundWork Plus"
+Decided Sept 2026 and specified in **`docs/monetisation.md`**, and split into two tiers later
+that month — what this paragraph calls "GroundWork Plus" is now **GroundWork Pro**, with a
+cheaper GroundWork Plus below it. An annual "GroundWork Plus"
 subscription, sold on iOS via StoreKit first, with the web app staying free until a second
 phase adds accounts. The tier is the tax engine (plus costs & other income, which is
 inseparable from it), the MTD export, Trends, Accreditation, GroundWork Notes sync and the

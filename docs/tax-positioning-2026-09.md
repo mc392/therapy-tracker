@@ -1,5 +1,9 @@
 # Selling the tax package — and getting out of MTD's way
 
+> **Naming, Sep 2026:** the tax bundle this document is about now belongs to **GroundWork Pro**,
+> the top of two tiers. Every "Plus" below means Pro; the new GroundWork Plus is the rung beneath
+> it and contains no tax content at all, which is the point of it. See `docs/monetisation.md` §3.
+
 *Sept 2026. How GroundWork Plus is pitched, in the app and outside it. This is the positioning
 decision record; `docs/monetisation.md` remains the record for **what** is in the tier and how
 the gate is built. Where the two touch, that document owns the mechanics and this one owns the

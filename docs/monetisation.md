@@ -1,8 +1,14 @@
 # GroundWork monetisation plan
 
-*How GroundWork Plus is defined, gated, sold and reviewed. Written Sept 2026, after the
-App Store roadmap (`docs/groundwork-app-store-roadmap.md`) reached "everything shipped
+*How GroundWork Plus and GroundWork Pro are defined, gated, sold and reviewed. Written Sept 2026,
+after the App Store roadmap (`docs/groundwork-app-store-roadmap.md`) reached "everything shipped
 except TestFlight, screenshots and submission".*
+
+> **Sep 2026 — the tier was split in two, and the names moved.** What this document called
+> "GroundWork Plus" throughout is now **GroundWork Pro**: the top tier, everything, gold. The new
+> **GroundWork Plus** is the rung below it — everything except the tax bundle, chrome — which §3
+> had already specified and deferred as "a middle tier, name TBC". Read every unqualified "Plus"
+> written before that date as "Pro"; §3 below is rewritten and is the current answer.
 
 This document is the decision record. Where it says "decided", the choice has been made and
 the reasoning is here so a later reader does not reopen it by accident. Where it says **OPEN**,
@@ -14,9 +20,9 @@ it has not.
 
 | | Decision | Why |
 |---|---|---|
-| **Model** | **Annual subscription** — "GroundWork Plus" | Everything in the tier is local computation with no server cost, which normally makes a recurring charge hard to defend. The tax engine is the exception and it is the anchor of the tier: HMRC bands, thresholds, Class 2/4 rates, student-loan plans and MTD rules change every April, and keeping `ukTax()` correct is genuine recurring work. "Your tax figures stay current" is an honest annual promise. A one-off unlock would fund none of it. |
+| **Model** | **Two annual subscriptions** — "GroundWork Plus" and "GroundWork Pro" | Everything in both tiers is local computation with no server cost, which normally makes a recurring charge hard to defend. The tax engine is the exception and it is the anchor of **Pro**: HMRC bands, thresholds, Class 2/4 rates, student-loan plans and MTD rules change every April, and keeping `ukTax()` correct is genuine recurring work. "Your tax figures stay current" is an honest annual promise. **Plus** cannot make that promise and does not try to — its line says what it is (analytics from records already kept, no jurisdiction anywhere in it), which is also what makes it sellable outside the UK. |
 | **Sequencing** | **iOS first. Web stays free until Phase 2.** | StoreKit needs no accounts, no server, no auth and no VAT registration. It answers "will anyone pay for this?" before you build billing infrastructure to find out. The PWA on Pages carries on as the free shopfront. |
-| **Tier contents** | Tax · Costs & other income · MTD export · Trends · Accreditation · GroundWork Notes sync · extra colour schemes | See §3. |
+| **Tier contents** | **Plus**: Business analytics · Accreditation · GroundWork Notes sync. **Pro**: everything in Plus + Tax · Costs & other income · MTD export | See §3. Extra colour schemes were dropped from both in Sep 2026 — the feature is switched off in the app. |
 | **Existing users** | **Charlotte only** is comped. No general grandfathering. | Chosen deliberately — and close to free, because as of Sept 2026 the user base is Charlotte, Matt and one tester. The risk this once carried is retired for now; see §7 for the condition on which it returns. |
 
 ---
@@ -77,7 +83,7 @@ renders a locked state instead of its content. The tab bar is the advert.
 
 ---
 
-## 3. The tier
+## 3. The tiers
 
 ### Free
 
@@ -95,22 +101,42 @@ obligation, not a luxury, and charging to meet it reads as punitive.
 
 **Backups stay free** on purpose: see §2.1.
 
-### Plus
+### The two paid rungs
 
-| Feature | Flag / entry point | Note |
-|---|---|---|
-| Tax | `tax` — `VIEWS.tax` (`index.html:4111`), `TABS` entry `index.html:1610` | The anchor. Estimate, pot, payments on account, per-year settings, seasonal moments, both guided flows. |
-| Costs & other income | `finances` — `financeCards()` (`3068`), `financeForm()` (`3120`) | **Bundled with tax, never sold separately.** Your own comment at `index.html:7728-7731` gives the reason: an estimate that ignores what the practice costs you is one nobody should set money aside against. That argument applies with more force when money is changing hands — selling a knowingly overstated tax figure is not on. |
-| MTD quarterly export | `#mtdExpCsv` / `#mtdExpJson` buttons → `mtdExport(ty,fmt)` | Gate the buttons, not the function. `.csv` and `.json` are rendered from one `mtdRows()` shape. The **positioning** of this line — that Plus plus a cheap submission tool replaces a bookkeeping subscription rather than sitting alongside one — is `docs/tax-positioning-2026-09.md`. |
-| Trends | `trends` — segment pushed at `index.html:2540` | Retention funnel, attendance vs expected, missed sessions, long-term clients. |
-| Accreditation (Form 3A) | `accreditation` — `mountAccreditation()` (`index.html:2149`) | The 1:6 ratio and total hours. |
-| GroundWork Notes sync | `#rosterSync` handler (`index.html:5847`) → `syncSchedules()` (`6823`) | Gate in the click handler; leave the card and its copy visible. |
-| ~~Extra colour schemes~~ | — | **Dropped Sep 2026.** Colour schemes are switched off in the app entirely (`PALETTES_ENABLED`), so this was gating something nobody could reach. Removed from `PLUS_FEATURES`, and from the paywall and Settings copy that still listed it. |
+`FEATURE_TIER` in `index.html` is the one place the split lives — a feature names the lowest tier
+that unlocks it, and anything absent from that table is free. `plusLocked(k)` compares the rung
+the reader holds against the rung the feature needs, and nothing else in the app hand-rolls that
+comparison.
 
-Honest note: **Trends is tier filler, not a tier driver.** The funnel and the attendance chart
-are admired once and rarely reopened. It earns its place in the bundle; do not build marketing
-around it. Tax, MTD and Notes sync are what people actually reach for a card over — and
-`PLUS_SELL` is ordered accordingly, with the January bill first and Trends fifth.
+**Plus — everything except the tax bundle.** Business analytics, accreditation hours, GroundWork
+Notes sync. Nothing in it depends on where the reader pays tax, which is the whole point: it is
+the tier that can be sold to a therapist in Dublin, Toronto or Auckland without a line of new
+rules code. Accent: **chrome**, bar 2 of the ladder.
+
+**Pro — everything.** Plus, and the tax bundle below. Accent: **gold**, bar 3.
+
+| Feature | Tier | Flag / entry point | Note |
+|---|---|---|---|
+| Tax | **Pro** | `tax` — `VIEWS.tax` (`index.html:4111`), `TABS` entry `index.html:1610` | The anchor. Estimate, pot, payments on account, per-year settings, seasonal moments, both guided flows. |
+| Costs & other income | **Pro** | `finances` — `financeCards()` (`3068`), `financeForm()` (`3120`) | **Bundled with tax, never sold separately.** Your own comment at `index.html:7728-7731` gives the reason: an estimate that ignores what the practice costs you is one nobody should set money aside against. That argument applies with more force when money is changing hands — selling a knowingly overstated tax figure is not on. |
+| MTD quarterly export | **Pro** | `#mtdExpCsv` / `#mtdExpJson` buttons → `mtdExport(ty,fmt)` | Gate the buttons, not the function. `.csv` and `.json` are rendered from one `mtdRows()` shape. The **positioning** of this line — that Plus plus a cheap submission tool replaces a bookkeeping subscription rather than sitting alongside one — is `docs/tax-positioning-2026-09.md`. |
+| Business analytics | **Plus** | `trends` — segment pushed at `index.html:2540` | Retention funnel, attendance vs expected, missed sessions, long-term clients. |
+| Accreditation (Form 3A) | **Plus** | `accreditation` — `mountAccreditation()` (`index.html:2149`) | The 1:6 ratio and total hours. |
+| GroundWork Notes sync | **Plus** | `#rosterSync` handler (`index.html:5847`) → `syncSchedules()` (`6823`) | Gate in the click handler; leave the card and its copy visible. |
+| ~~Extra colour schemes~~ | — | — | **Dropped Sep 2026.** Colour schemes are switched off in the app entirely (`PALETTES_ENABLED`), so this was gating something nobody could reach. Removed from `PLUS_FEATURES`, and from the paywall and Settings copy that still listed it. |
+
+Honest note, and it now cuts harder: **the four-card Trends was tier filler.** That note was
+written when Trends was a funnel and an attendance chart, admired once and rarely reopened. It is
+twenty analytics now, which is what makes it sellable as a rung of its own — but Plus is still the
+weaker of the two offers, and the app says so by ordering `PLUS_SELL` with the January bill first.
+Do not market Plus on charts nobody has asked for; market it on *drifting away*, *effective hourly
+rate* and *what a session actually earns*, the three that tell a therapist something they did not
+know (`docs/product-proposals-2026-09.md` § The demo).
+
+**Both products live in ONE App Store Connect subscription group.** That is what makes buying Pro
+while holding Plus an upgrade Apple prorates rather than two live subscriptions, and it is not
+optional — two groups would bill somebody twice for overlapping things and there is no code here
+that could detect it.
 
 **How the tier is pitched, as opposed to what is in it, is a separate decision record:**
 `docs/tax-positioning-2026-09.md`. It covers the two objections that actually come up ("MTD
@@ -118,26 +144,36 @@ isn't me" and "I already pay for MTD software"), the three audiences they come f
 claims guard-rails — the list of things this app must never say about tax, which is short and
 absolute.
 
-### Deliberately not in Plus
+### Deliberately not in either tier
 
-- Receipts, backups, import — see above.
+- Receipts, backups, import, and what a room costs you — see above, and CLAUDE.md § Room rent.
 - Multi-device sync — **it does not exist**. It is known limitation #8 in `CLAUDE.md` and it
   is the one feature that would carry real ongoing server cost and therefore make a
-  subscription self-evidently fair. If Plus ever struggles to justify its renewal, this is
-  the thing to build, not more analytics.
+  subscription self-evidently fair. If either tier ever struggles to justify its renewal, this is
+  the thing to build, not more analytics — and it would belong to Plus, since it is the tier with
+  no April rates work behind it.
 
-### A middle tier — not built, name TBC
+### The middle tier — built, Sep 2026
 
-Not implemented. `PLUS_FEATURES` is still one flat list and `plusLocked()` still resolves to a
-single Plus/no-Plus check — there is no second entitlement to gate against, and adding one is a
-real change to §2.2 and §4.1, not just a name. What exists so far is the **subscription image**
-for it, one rung below Plus on the tier ladder the app-store asset already draws: Business
-analytics, accreditation and Notes sync, without the tax bundle (`tax`, `finances`, `mtd` stay
-Plus-only, per the reasoning in §3 for why those three are never sold apart). See
-`docs/app-store-listing.md` § Subscription image for the asset itself. Building the tier for
-real means picking apart `PLUS_FEATURES` into two lists and giving `plusLocked()` a level to
-check against — do that as its own decision, not as a side effect of wanting the icon to have
-somewhere to point.
+Done, and the naming moved with it: the middle rung took the name **GroundWork Plus** and the top
+rung became **GroundWork Pro**. `FEATURE_TIER` replaced the flat `PLUS_FEATURES` list (which is
+still derived from it, because "is this gated at all" is still a real question), `plusTier()`
+answers *which* rung a device holds, and `plusLocked()` compares ranks.
+
+**The one rule that protects existing subscribers, and it is a default rather than a migration:**
+an entitlement with no `tier` on it reads as **Pro**. Every subscription and every licence issued
+before this build entitled everything, so anything else would take the tax engine off a paying
+customer on the morning they updated. `tierOf()` applies it, the pre-paint script in `<head>`
+applies it, the native StoreKit block applies it, and `scripts/check-tiers.mjs` asserts it. There
+is nothing to run, nothing to half-run, and nothing to get wrong twice.
+
+**The legacy product ID keeps selling Pro.** `uk.co.charlottebloortherapy.groundwork.plus.annual`
+says "plus" and entitles everything, because that is what it has always done and a product ID can
+never be reused for something else. Rename its *display name* in App Store Connect; never
+re-point the id. `check-drift.mjs` fails the build if that mapping changes.
+
+Deliberately still not sold apart: `tax`, `finances` and `mtd` are one bundle, per the reasoning
+in the table above.
 
 ---
 
@@ -210,8 +246,16 @@ a rename silently killing purchases on iOS while the web build carries on lookin
 
 ### 4.4 App Store Connect
 
-- Auto-renewable subscription in its own **subscription group**, submitted **with** the first
-  build (a build referencing an unsubmitted product fails review).
+- **Two** auto-renewable subscriptions in **one shared subscription group**, submitted **with**
+  the first build (a build referencing an unsubmitted product fails review). One group is what
+  makes Plus → Pro an upgrade rather than a second charge.
+  - `uk.co.charlottebloortherapy.groundwork.plus.annual` — display name **GroundWork Pro**. The
+    original product; the id is historical and must not be re-pointed (§3).
+  - `uk.co.charlottebloortherapy.groundwork.insights.annual` — display name **GroundWork Plus**.
+    New; does not exist yet. Until it does, the app shows "Unavailable" against the Plus card
+    alone and Pro carries on selling — that degradation is deliberate and is what makes it safe
+    to ship this before the store catches up.
+  - Price Pro above Plus. Nothing in the app hardcodes either figure.
 - Consider an introductory free trial. Given the January conversion peak, a trial that spans
   a deadline is worth more than a discount.
 
@@ -310,6 +354,9 @@ own expiry and redemption caps, and need the recipient to be in the right storef
 use them, App Review expects redemption to be reachable from inside the app.
 
 ### 6.3 Your own licence keys — for the web, and anything Apple cannot reach
+
+`scripts/issue-licence.mjs --tier plus|pro` picks the rung (default `pro`, and a licence with no
+tier in its payload is read as `pro` for the same reason §3 gives).
 
 Needed from Phase 2 onward, and for anyone you cannot route through the App Store.
 

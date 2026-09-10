@@ -105,11 +105,12 @@ you would rather, but then expect the question at review.
 > notes — keep those where you keep them now. Tax figures are estimates to help you plan,
 > not advice, and the app cannot file for you.
 >
-> Logging sessions, clients, rooms, supervision, receipts and every backup and export are
-> free and always will be. GroundWork Plus adds the year-end work: tax, business costs,
-> the MTD quarters, trends, accreditation hours, notes sync and extra colour schemes.
+> Logging sessions, clients, rooms, supervision, receipts, what your rooms cost you and every
+> backup and export are free and always will be. GroundWork Plus adds business analytics,
+> accreditation hours and notes sync. GroundWork Pro adds everything in Plus and the year-end
+> work: tax, business costs and the MTD quarters.
 >
-> GroundWork Plus is an auto-renewing annual subscription, £29.99/year.
+> GroundWork Plus and GroundWork Pro are auto-renewing annual subscriptions.
 > Payment is charged to your Apple ID at confirmation of purchase.
 > It renews automatically unless cancelled at least 24 hours before the end
 > of the current period. Manage or cancel in your Apple ID account settings.
@@ -144,39 +145,41 @@ It is already folded into the Description draft above, so there is nothing separ
 Leave **License Agreement** on Apple's Standard EULA; a custom one is entered as text, not a
 URL, and the link in the Description is what the guideline asks for.
 
-## Subscription image
+## Subscription images — one per subscription
 
-`TherapyTracker-web/icon-ideas/groundwork/subscription-plus-1024.png` — 1024×1024, opaque, no
-rounded corners (Apple masks its own). Used for offer-code redemption, win-back offers, and the
-product page if App Store Promotion is enabled.
+Each subscription in App Store Connect has its own image, and there are two:
 
-Regenerate with `node scripts/render-subscription-image.mjs`; the `.html` beside it is the
-source, and it reuses the same SVG geometry as the app's launch screen so the mark cannot drift
-from the one shipping in `index.html`. Colours are sampled from `icon-1024.png` rather than
-guessed: `#6B8B7C` → `#3C4F44`, bars at 55% / 78% / 100% white.
+| Subscription | Image | Regenerate |
+|---|---|---|
+| GroundWork Plus | `icon-ideas/groundwork/subscription-plus-1024.png` | `node scripts/render-subscription-image.mjs subscription-plus-1024` |
+| GroundWork Pro | `icon-ideas/groundwork/subscription-pro-1024.png` | `node scripts/render-subscription-image.mjs subscription-pro-1024` |
 
-It carries **no text** on purpose: Apple shows the subscription's name and description beside
-the image, so a word here would be redundant and could not be localised.
+Both are 1024×1024, opaque, no rounded corners (Apple masks its own). Used for offer-code
+redemption, win-back offers, and the product page if App Store Promotion is enabled. The `.html`
+beside each is the source, and both reuse the same SVG geometry as the app's launch screen so the
+mark cannot drift from the one shipping in `index.html`. Colours are sampled from `icon-1024.png`
+rather than guessed: `#6B8B7C` → `#3C4F44`, bars at 55% / 78% / 100% white.
 
-**The three bars are a tier ladder.** Gold is on the third one alone because Plus is the top
-tier. A free tier is bar 1, already there and already plain.
+They carry **no text** on purpose: Apple shows each subscription's name and description beside
+its image, so a word here would be redundant and could not be localised.
 
-**The middle tier now has its own image**, not a variant of this one:
-`TherapyTracker-web/icon-ideas/groundwork/subscription-business-1024.html` /
-`.png` — same plate, same regeneration command with the basename as an argument
-(`node scripts/render-subscription-image.mjs subscription-business-1024`), a violet neon glow on
-bar 2 instead of gold on bar 3, bar 3 back to the plain fade bar 1 carries. Violet (not a second
-metal) because a cool silver tried first sat too close in lightness to the sage plate to read at
-this scale — see the in-app `--tier2-*` tokens in `index.html`, picked from the same comparison
-and used for the matching Business analytics accent. Name TBC — see `docs/monetisation.md`.
-Putting gold on every bar, or the glow on more than one, would retire the ladder as a way of
-saying anything.
+**The three bars are a tier ladder, and each image lights the rung it sells.** Bar 1 is free and
+is always plain. Bar 2 is Plus and carries a **chrome** rim in the Plus image. Bar 3 is Pro and
+carries a **gold** rim in the Pro image. One metal per rung, silver below gold, is a ladder
+anybody can read without being told — and it is the same pair the app paints its own locks and
+launch screen in (`--tier2-*` chrome, `--tier3-*` gold in `index.html`). Bar 2 was violet while
+the middle tier was unnamed and unbuilt; it became chrome in Sep 2026 when the tier became real.
+
+Putting the metal on more than one bar per image, or gold on the middle rung, would retire the
+ladder as a way of saying anything.
 
 ## Subscription review screenshot
 
 `TherapyTracker-web/icon-ideas/groundwork/paywall-review-screenshot.png` — 1320×2868, the
 *App Review Information* screenshot on the subscription itself. Customers never see it; it
-exists so a reviewer can find where the purchase is offered.
+exists so a reviewer can find where the purchase is offered. One sheet offers both
+subscriptions, so the same screenshot serves both records; `--reason trends` renders the version
+that leads with Plus if a reviewer of that product would rather see it lit.
 
 Generated by `node scripts/render-paywall-screenshot.mjs --price "£39.99"`, which exists to
 break a genuine deadlock: App Store Connect wants this screenshot before the subscription can

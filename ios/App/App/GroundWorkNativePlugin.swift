@@ -38,7 +38,7 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "biometricAvailable", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "authenticate", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "sharePDF", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "plusProduct", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "plusProducts", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "plusStatus", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "plusPurchase", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "plusRestore", returnType: CAPPluginReturnPromise),
@@ -151,66 +151,102 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    // MARK: - GroundWork Plus (StoreKit 2)
+    // MARK: - GroundWork Plus / Pro (StoreKit 2)
 
-    /// The single auto-renewable subscription. Must match the product ID created in
-    /// App Store Connect; nothing else in the app hardcodes a price or a period.
-    static let plusProductID = "uk.co.charlottebloortherapy.groundwork.plus.annual"
+    /// The two auto-renewable subscriptions, keyed by the tier string the web layer speaks.
+    /// Both must exist in App Store Connect **in one subscription group**, so that buying `pro`
+    /// while holding `plus` is an upgrade Apple prorates rather than two live subscriptions.
+    ///
+    /// THE `pro` ID SAYS "plus" AND THAT IS DELIBERATE. It is the original product — the tier
+    /// was called GroundWork Plus when it was the only one, and it has always entitled
+    /// everything. Re-pointing it at the smaller tier would silently take the tax engine off
+    /// every existing subscriber, and a product ID can never be reused for something else, so
+    /// the id keeps its name and sells Pro. Rename it in App Store Connect (display name), not
+    /// here. Nothing outside this table may map a tier to an id.
+    static let productIDs: [String: String] = [
+        "pro":  "uk.co.charlottebloortherapy.groundwork.plus.annual",
+        "plus": "uk.co.charlottebloortherapy.groundwork.insights.annual"
+    ]
+    /// Ladder order, low to high. Used to pick the best of several live entitlements — during an
+    /// upgrade both can briefly be current, and reporting the lower one would lock a screen the
+    /// subscriber has just paid for.
+    static let tierRank: [String: Int] = ["plus": 1, "pro": 2]
+    static func tier(forProductID id: String) -> String? {
+        productIDs.first(where: { $0.value == id })?.key
+    }
 
-    /// Price and period as the *store* formats them, for the paywall. Never build this
-    /// string in JS: it is per-storefront, it changes without a release, and App Review
-    /// checks the paywall against the real product.
-    @objc func plusProduct(_ call: CAPPluginCall) {
+    /// Price and period as the *store* formats them, for the paywall, one entry per tier. Never
+    /// build these strings in JS: they are per-storefront, they change without a release, and
+    /// App Review checks the paywall against the real product.
+    ///
+    /// A tier the store cannot answer for is simply left out rather than failing the call — the
+    /// second product will not exist on the day this ships, and the first one must still sell.
+    @objc func plusProducts(_ call: CAPPluginCall) {
         Task {
+            var out: [String: Any] = ["found": false]
             do {
-                let products = try await Product.products(for: [Self.plusProductID])
-                guard let p = products.first else {
-                    call.resolve(["found": false]); return
-                }
-                var period = ""
-                if let sub = p.subscription {
-                    let unit: String
-                    switch sub.subscriptionPeriod.unit {
-                    case .day: unit = "day"; case .week: unit = "week"
-                    case .month: unit = "month"; case .year: unit = "year"
-                    @unknown default: unit = ""
+                let products = try await Product.products(for: Array(Self.productIDs.values))
+                for p in products {
+                    guard let tier = Self.tier(forProductID: p.id) else { continue }
+                    var period = ""
+                    if let sub = p.subscription {
+                        let unit: String
+                        switch sub.subscriptionPeriod.unit {
+                        case .day: unit = "day"; case .week: unit = "week"
+                        case .month: unit = "month"; case .year: unit = "year"
+                        @unknown default: unit = ""
+                        }
+                        let n = sub.subscriptionPeriod.value
+                        period = n == 1 ? unit : "\(n) \(unit)s"
                     }
-                    let n = sub.subscriptionPeriod.value
-                    period = n == 1 ? unit : "\(n) \(unit)s"
+                    out[tier] = ["price": p.displayPrice, "period": period, "title": p.displayName]
+                    out["found"] = true
                 }
-                call.resolve(["found": true, "price": p.displayPrice,
-                              "period": period, "title": p.displayName])
+                call.resolve(out)
             } catch {
-                call.resolve(["found": false, "error": error.localizedDescription])
+                out["error"] = error.localizedDescription
+                call.resolve(out)
             }
         }
     }
 
-    /// What StoreKit currently believes. `expiresAt` is the paid-through date, which is what
-    /// the web layer caches — it keeps working offline until that date passes, so a flight or
-    /// a bad signal never locks someone out of their own tax figures.
+    /// What StoreKit currently believes, and WHICH TIER. `expiresAt` is the paid-through date,
+    /// which is what the web layer caches — it keeps working offline until that date passes, so
+    /// a flight or a bad signal never locks someone out of their own tax figures.
     @objc func plusStatus(_ call: CAPPluginCall) {
         Task { call.resolve(await Self.currentStatus()) }
     }
 
+    /// The BEST live entitlement, not the first one found: an upgrade can leave both current for
+    /// a moment, and answering "plus" then would lock the screen the subscriber just bought.
     private static func currentStatus() async -> [String: Any] {
+        var best: (tier: String, expiresAt: Date?)? = nil
         for await result in Transaction.currentEntitlements {
             guard case .verified(let t) = result else { continue }   // unverified: ignore, don't trust
-            guard t.productID == plusProductID else { continue }
+            guard let tier = tier(forProductID: t.productID) else { continue }
             if let revoked = t.revocationDate, revoked <= Date() { continue }
-            var out: [String: Any] = ["active": true, "source": "storekit"]
-            if let exp = t.expirationDate {
-                out["expiresAt"] = ISO8601DateFormatter().string(from: exp)
-            }
-            return out
+            let rank = tierRank[tier] ?? 0
+            if let b = best, (tierRank[b.tier] ?? 0) >= rank { continue }
+            best = (tier, t.expirationDate)
         }
-        return ["active": false, "source": "storekit"]
+        guard let b = best else { return ["active": false, "source": "storekit"] }
+        var out: [String: Any] = ["active": true, "source": "storekit", "tier": b.tier]
+        if let exp = b.expiresAt {
+            out["expiresAt"] = ISO8601DateFormatter().string(from: exp)
+        }
+        return out
     }
 
+    /// `tier` names the rung to buy. It defaults to the top one, which is what a build older
+    /// than the second product would have meant by asking at all.
     @objc func plusPurchase(_ call: CAPPluginCall) {
         Task {
             do {
-                let products = try await Product.products(for: [Self.plusProductID])
+                let tier = call.getString("tier") ?? "pro"
+                guard let id = Self.productIDs[tier] else {
+                    call.reject("Unknown subscription tier"); return
+                }
+                let products = try await Product.products(for: [id])
                 guard let product = products.first else {
                     call.reject("Subscription not available"); return
                 }

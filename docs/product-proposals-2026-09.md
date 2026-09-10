@@ -25,8 +25,12 @@ empty chart. Three settings were added to feed them (`sessionMins`, `adminMinsPe
 `fullWeekSessions`) plus an optional `source` on a client. Mechanics are in CLAUDE.md
 § *Practice analytics*.
 
-**The tier split below is still a proposal** — nothing about pricing or geography has changed
-yet. What has changed is that the analytics now exist to sell.
+**The tier split below SHIPPED in Sep 2026**, with one change: the names. The middle tier is
+**GroundWork Plus** (the table below calls it "Insights") and the top tier became **GroundWork
+Pro**. Contents are exactly as proposed — the tax bundle (`tax`, `finances`, `mtd`) is Pro's, and
+everything else that was gated is Plus's. Mechanics are in CLAUDE.md § GroundWork Plus & Pro, the
+decision record is `docs/monetisation.md` §3, and the gate matrix is asserted by
+`npm run test:tiers`. Pricing is still open.
 
 
 ### The problem with the current shape

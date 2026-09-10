@@ -1,7 +1,12 @@
-# GroundWork Plus — launch checklist
+# GroundWork Plus & Pro — launch checklist
 
 *Pick this up cold. Everything here is done by you, in Apple's console or on a Mac — the code
 side of Phase 1 is finished and pushed.*
+
+> **Two subscriptions since Sep 2026.** **GroundWork Pro** is the top tier (everything, gold) and
+> is the ORIGINAL product — the same product ID, renamed. **GroundWork Plus** is a new, cheaper
+> tier below it (everything except tax, chrome). Anywhere below that says "the subscription" in
+> the singular, it means Pro unless it says otherwise.
 
 Design and reasoning: **`docs/monetisation.md`**. Release mechanics: **`docs/releasing.md`**.
 Store copy and the privacy-label answer: **`docs/app-store-listing.md`**.
@@ -60,19 +65,35 @@ than an opening bid.
 
 App Store Connect → **Apps** → GroundWork → **Subscriptions**
 
-- [ ] Create a **Subscription Group** named `GroundWork Plus`
-- [ ] Create a subscription inside it:
-  - **Reference name:** `GroundWork Plus Annual`
+- [ ] Create **ONE Subscription Group** named `GroundWork` and put **both** subscriptions in it.
+      This is not cosmetic: one group is what makes an upgrade from Plus to Pro a proration Apple
+      handles, rather than two live subscriptions billing the same person twice. Nothing in the
+      app could detect that if it happened.
+- [ ] Create the **top** subscription in it — this one already exists if you got this far before:
+  - **Reference name:** `GroundWork Pro Annual`
   - **Product ID:** `uk.co.charlottebloortherapy.groundwork.plus.annual`
+        ← says "plus", sells **Pro**. It is the original product and every existing subscriber
+        holds it, so it keeps entitling everything. **Change the display name, never the ID** —
+        an ID cannot be reused, and re-pointing this one takes the tax engine off people who
+        already paid. `npm run check` fails if the code's mapping ever changes.
   - **Duration:** 1 Year
   - **Price:** **£29.99 / year**
-- [ ] Add a **Localization** — display name and description. Required; review rejects without it.
+- [ ] Create the **middle** subscription in the same group:
+  - **Reference name:** `GroundWork Plus Annual`
+  - **Product ID:** `uk.co.charlottebloortherapy.groundwork.insights.annual`
+  - **Duration:** 1 Year
+  - **Price:** below Pro — the app never hardcodes either figure
+  - Until this product exists, the app shows "Unavailable" against the Plus card only and Pro
+    carries on selling. That is deliberate; you can ship before this step is done.
+- [ ] Add a **Localization** to each — display name and description. Required; review rejects
+      without it.
 - [ ] If offering a trial: **Introductory Offer** → Free → 1 month
-- [ ] Add the **subscription image** — 1024×1024, for offer-code redemption, win-back offers
-      and the product page if App Store Promotion is on:
-      `TherapyTracker-web/icon-ideas/groundwork/subscription-plus-1024.png`
-      Regenerate with `node scripts/render-subscription-image.mjs`; the `.html` beside it is
-      the source. Opaque, square, no rounded corners — Apple masks its own.
+- [ ] Add the **subscription image** to each — 1024×1024, for offer-code redemption, win-back
+      offers and the product page if App Store Promotion is on. One per subscription:
+      Pro → `TherapyTracker-web/icon-ideas/groundwork/subscription-pro-1024.png` (gold, bar 3)
+      Plus → `TherapyTracker-web/icon-ideas/groundwork/subscription-plus-1024.png` (chrome, bar 2)
+      Regenerate with `node scripts/render-subscription-image.mjs <basename>`; the `.html` beside
+      each is the source. Opaque, square, no rounded corners — Apple masks its own.
 - [ ] Add the **review screenshot** — the *App Review Information* one, so a reviewer can see
       where the purchase is offered. Customers never see it.
       `TherapyTracker-web/icon-ideas/groundwork/paywall-review-screenshot.png`
@@ -165,11 +186,17 @@ Then in Xcode:
 
 Check each of these:
 
-- [ ] Settings shows a **GroundWork Plus** card
-- [ ] Tax and Trends show the lock card, not their content
+- [ ] Settings shows a **Subscription** card listing both tiers
+- [ ] Tax shows a **gold** lock card naming GroundWork Pro; Business analytics shows a **chrome**
+      one naming GroundWork Plus, with the retention funnel still readable above it
 - [ ] The tabs are all still **there** — a locked tab still appears and still opens
-- [ ] The paywall shows a **real price** (if blank, the product ID does not match)
-- [ ] Buying unlocks everything
+- [ ] The paywall shows a **real price against each tier** (if one is blank, that product ID does
+      not match; if both are, the group does not)
+- [ ] Buying **Plus** unlocks Business analytics, accreditation and Notes sync — and leaves Tax
+      locked
+- [ ] Buying **Pro** (or upgrading from Plus) unlocks everything, and the upgrade is charged as a
+      proration rather than a second subscription
+- [ ] The launch screen shows the tier's own mark: chrome "Plus" on bar 2, gold "Pro" on bar 3
 - [ ] **Restore purchases** works after deleting and reinstalling
 - [ ] Export and backup still work **while locked** — this is the invariant that matters most
 
@@ -239,15 +266,21 @@ This catches what the simulator cannot.
 is no payment-route argument at review, and the subscription lands in the recipient's Apple ID
 subscriptions where they expect to manage it.
 
-- [ ] App Store Connect → your subscription → **Offer Codes** → create a batch
-- [ ] In the app: Settings → GroundWork Plus → **Redeem a code**
+- [ ] App Store Connect → the subscription you are gifting → **Offer Codes** → create a batch
+      (each tier has its own codes — a Plus code does not unlock Tax)
+- [ ] In the app: Settings → Subscription → View details → **Redeem a code**
 
 Licence keys are for the web (Phase 2) and anything Apple cannot reach. If you want one now:
 
 ```bash
 node scripts/issue-licence.mjs --keygen
 node scripts/issue-licence.mjs --kind founding --name "Charlotte Bloor" --forever
+node scripts/issue-licence.mjs --kind gift --name "A N Other" --tier plus --months 12
 ```
+
+`--tier` picks the rung: `pro` (everything) is the default, `plus` grants everything except the
+tax engine. A licence with no tier in it is read as `pro`, which is what every licence issued
+before Sep 2026 meant.
 
 - The keygen writes the private key to `~/.groundwork/licence-key.json`. **Back it up.** It is
   not in the repo and cannot be recovered — losing it means re-keying, which invalidates every

@@ -18,7 +18,10 @@ var n=localStorage.getItem('tt_practice');if(n)d.style.setProperty('--appname',J
    step from then on. */
 try{var p=JSON.parse(localStorage.getItem('tt_plus')||'null');
   if(p&&p.active){var x=p.expiresAt?Date.parse(p.expiresAt):NaN;
-    if(!p.expiresAt||isNaN(x)||Date.now()<=x+7*864e5)d.setAttribute('data-plus','1');}}catch(e2){}
+    /* The attribute carries WHICH tier, and an entitlement with no tier on it is Pro — the
+       same default the gate itself applies, and for the same reason (see the tier ladder). */
+    if(!p.expiresAt||isNaN(x)||Date.now()<=x+7*864e5)
+      d.setAttribute('data-plus',p.tier==='plus'?'plus':'pro');}}catch(e2){}
 }catch(e){d.setAttribute('data-theme','light');d.setAttribute('data-palette','sage');}})();</script>
 <style>
 /* ====== Design tokens ======
@@ -46,16 +49,26 @@ try{var p=JSON.parse(localStorage.getItem('tt_plus')||'null');
      shade darker than the icon's own top stop (#6A8B7C) on purpose — the 18px/700 header title
      falls just under the WCAG large-text threshold, and white on #6A8B7C is only 3.75:1. */
   --gs1:#5C7A6D; --gs2:#3C4F44;
-  /* The middle rung of the subscription-image tier ladder (see icon-ideas/groundwork/
-     subscription-business-1024.html) — a violet glow, not tied to any palette, the same way that
-     ladder's Plus gold isn't. Reused in-app for Business analytics, which sits on that rung.
-     Was a cool silver ramp; that read as barely-there at 13px and on the subscription icon's own
-     small bars, so it moved to a colour with actual contrast against sage instead of a lighter
-     neutral (see the "Accent Options" comparison this was picked from). */
-  --tier2-1:#F3E4FF; --tier2-2:#C084FC; --tier2-3:#7C3AED; --tier2-4:#E9D5FF; --tier2-glow:rgba(124,58,237,.6);
-  /* The ramp above is for edges and glows. --tier2-ink is the one that has to stay READABLE
-     as text on a card, so unlike the rest of the ladder it IS redefined for dark. */
-  --tier2-ink:#6D28D9;}
+  /* ===== The two paid rungs of the tier ladder =====
+     Not palette tokens: these are the subscription ladder's own colours, the same two the App
+     Store images use (icon-ideas/groundwork/subscription-plus-1024.html and -pro-1024.html), so
+     a lock inside the app and the image on the redemption sheet are recognisably one product.
+
+     tier2 = CHROME = GroundWork Plus, the middle rung. tier3 = GOLD = GroundWork Pro, the top.
+     A ramp of four rather than one flat colour in both cases: a single value is a coloured
+     outline, a light→deep→light ramp is a rim catching the light, which is what makes either
+     read as metal rather than as a border somebody picked.
+
+     Chrome was tried once before as a flat cool silver and abandoned for reading as
+     barely-there. This ramp is not that: it runs white → light steel → DARK steel → light, and
+     it is the dark stop that does the work against sage. Anything that touches these values
+     has to be checked at 13px on a real screen, not in a swatch. */
+  --tier2-1:#FFFFFF; --tier2-2:#D6DFE4; --tier2-3:#71838C; --tier2-4:#EDF2F5; --tier2-glow:rgba(120,145,158,.55);
+  --tier3-1:#F7E3AE; --tier3-2:#E0BC6B; --tier3-3:#C99A43; --tier3-4:#E7CB8B; --tier3-glow:rgba(224,188,107,.6);
+  /* The ramps above are for edges and glows. The two `-ink` values are the ones that have to
+     stay READABLE as text on a card, so unlike the rest of the ladder they ARE redefined for
+     dark. Both clear 4.5:1 on their own theme's card. */
+  --tier2-ink:#4E606A; --tier3-ink:#8A6A1F;}
 html[data-theme="dark"]{
   color-scheme:dark;
   --bg:#0C1512; --card:#16211E; --soft:#1E2C28; --ink:#E9F2EE; --muted:#93A8A1; --line:#243430;
@@ -67,7 +80,7 @@ html[data-theme="dark"]{
   --shadow-lg:0 2px 8px rgba(0,0,0,.5),0 24px 56px -14px rgba(0,0,0,.75);
 
   --gs1:#5C7A6D; --gs2:#3C4F44;
-  --tier2-ink:#C9AEFF;}
+  --tier2-ink:#C7D5DC; --tier3-ink:#EBD196;}
 /* ====== Colour schemes ======
    Chosen in Setup / Settings, applied as data-palette on <html>. "sage" is the built-in default
    above, so it needs no block here. Each other scheme overrides the light values, then the
@@ -881,17 +894,38 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:0
 #splash .sp-word{font-size:min(9.2vw,40px);font-weight:800;letter-spacing:-.012em;line-height:1}
 #splash .sp-word b{color:#3C4F44;font-weight:800}
 #splash .sp-word span{color:#5C7A6D}
-/* Subscribers get their tier on the launch screen. Hidden unless the pre-paint script found
-   a live entitlement, so it costs a non-subscriber nothing but a few bytes. The mark itself
-   and the wordmark are untouched — this is the same product, wearing its tier, not a
-   second brand — and the violet is the subscription ladder's own, hard-coded like every
-   other colour on this screen rather than read from a token. */
-#splash .sp-plus{display:none;font-style:normal;font-size:.36em;font-weight:800;
+/* Subscribers get their tier on the launch screen, in two places and both of them the ladder's
+   own: the wordmark takes a pill, and THE BAR THAT TIER OWNS is lit exactly as it is in that
+   tier's App Store image — bar 2 in chrome for Plus, bar 3 in gold for Pro. That is what makes
+   the redemption sheet and the app the same object rather than two things sharing a name.
+
+   Hidden unless the pre-paint script found a live entitlement, so it costs a non-subscriber
+   nothing but a few bytes. The mark and the wordmark are otherwise untouched — this is the same
+   product wearing its tier, not a second brand — and the colours are hard-coded like every other
+   colour on this screen rather than read from a token, for the same reason: the launch screen is
+   painted before any stylesheet variable of ours could be trusted to exist.
+
+   The name is generated content on ::after rather than markup, so one node serves both tiers and
+   an install with no entitlement carries no tier word at all. #splash is aria-hidden, so nothing
+   is lost to a screen reader by it not being real text. */
+#splash .sp-tier{display:none;font-style:normal;font-size:.36em;font-weight:800;
   letter-spacing:.02em;vertical-align:.85em;margin-left:.28em;padding:.28em .58em;
-  border-radius:999px;color:#FFFFFF;
-  background:linear-gradient(135deg,#8B5CF6,#7C3AED 55%,#6D28D9);
-  box-shadow:0 0 14px rgba(124,58,237,.55)}
-html[data-plus] #splash .sp-plus{display:inline-block}
+  border-radius:999px}
+html[data-plus] #splash .sp-tier{display:inline-block}
+html[data-plus="plus"] #splash .sp-tier::after{content:"Plus"}
+html[data-plus="pro"]  #splash .sp-tier::after{content:"Pro"}
+/* Chrome needs dark text on it — white on light steel is the one way to make a metal look
+   cheap — where gold is deep enough to carry white. */
+html[data-plus="plus"] #splash .sp-tier{color:#2B3A42;
+  background:linear-gradient(135deg,#FFFFFF,#D6DFE4 45%,#8B9BA4);
+  box-shadow:0 0 14px rgba(120,145,158,.5)}
+html[data-plus="pro"] #splash .sp-tier{color:#3B2C08;
+  background:linear-gradient(135deg,#F7E3AE,#E0BC6B 45%,#C99A43);
+  box-shadow:0 0 14px rgba(224,188,107,.55)}
+html[data-plus="plus"] #splash .sp-bars .b2,
+html[data-plus="pro"]  #splash .sp-bars .b3{stroke-width:2.6;paint-order:stroke}
+html[data-plus="plus"] #splash .sp-bars .b2{stroke:url(#spChrome);filter:drop-shadow(0 0 3px rgba(120,145,158,.65))}
+html[data-plus="pro"]  #splash .sp-bars .b3{stroke:url(#spGold);filter:drop-shadow(0 0 3px rgba(224,188,107,.7))}
 @keyframes spRise{from{opacity:0;transform:translateY(calc(-3vh + 14px))}to{opacity:1;transform:translateY(-3vh)}}
 html[data-theme="dark"] #splash{background:linear-gradient(155deg,#496256 0%,#38493F 48%,#26332B 100%)}
 html[data-theme="dark"] #splash .sp-bars .b1{fill:#8FA396}
@@ -1064,27 +1098,66 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 .palopt.locked{opacity:.78}
 .paltag{display:inline-block;font-size:10px;font-weight:700;vertical-align:1px;padding:1px 6px;
   border-radius:999px;margin-left:5px;background:color-mix(in srgb,var(--brand) 16%,transparent);color:var(--brand-dark)}
-/* GroundWork Plus — the paywall sheet and the in-place lock that replaces a paid view. */
-.plusgate{text-align:center;padding:4px 2px 2px}
-/* A lock card wears the same violet edge and glow as the Business analytics accent, so the
-   paid tier looks like one thing wherever it is met — the tab, the screen it opens, and the
-   card that stands in for a screen not bought yet. The ring is a ::before rather than a
-   gradient border, because .card is a translucent glass surface and a border-box gradient
-   would have to repaint the fill and lose the blur behind it. */
+/* GroundWork Plus / Pro — the paywall sheet and the in-place lock that replaces a paid view.
+
+   ONE SET OF RULES, TWO TIERS. Every surface here paints from four local variables (--tg1..--tg4,
+   --tgglow, --tgink) rather than naming a ramp, and the tier class sets them: `.t-plus` is
+   chrome, `.t-pro` is gold. A lock therefore wears the colour of the tier that would unlock
+   *that* screen — chrome on Business analytics, gold on Tax — which is the only way a reader can
+   tell from the card which of the two they are being asked for. Default is chrome, so a card
+   whose class somebody forgets falls back to the cheaper tier rather than promising gold. */
+.plusgate{text-align:center;padding:4px 2px 2px;
+  --tg1:var(--tier2-1); --tg2:var(--tier2-2); --tg3:var(--tier2-3); --tg4:var(--tier2-4);
+  --tgglow:var(--tier2-glow); --tgink:var(--tier2-ink)}
+/* Set on ANY element, not only on a gate card: a Plus card sitting inside a sheet led by Pro
+   has to repaint itself, and it can only do that if the class carries the variables with it. */
+.tier-pro{--tg1:var(--tier3-1); --tg2:var(--tier3-2); --tg3:var(--tier3-3);
+  --tg4:var(--tier3-4); --tgglow:var(--tier3-glow); --tgink:var(--tier3-ink)}
+.tier-plus{--tg1:var(--tier2-1); --tg2:var(--tier2-2); --tg3:var(--tier2-3);
+  --tg4:var(--tier2-4); --tgglow:var(--tier2-glow); --tgink:var(--tier2-ink)}
+/* A lock card wears the same edge and glow as its tier's App Store image, so the paid tier
+   looks like one thing wherever it is met — the tab, the screen it opens, the card that stands
+   in for a screen not bought yet, and the picture on the redemption sheet. The ring is a
+   ::before rather than a gradient border, because .card is a translucent glass surface and a
+   border-box gradient would have to repaint the fill and lose the blur behind it. */
 .card.plusgate{position:relative;overflow:hidden;
-  border-color:color-mix(in srgb,var(--tier2-3) 40%,var(--hair));
-  box-shadow:var(--shadow),inset 0 1px 0 var(--hair),0 0 15px -3px var(--tier2-glow)}
+  border-color:color-mix(in srgb,var(--tg3) 40%,var(--hair));
+  box-shadow:var(--shadow),inset 0 1px 0 var(--hair),0 0 15px -3px var(--tgglow)}
 .card.plusgate::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;
-  background:linear-gradient(90deg,var(--tier2-3),var(--tier2-1) 25%,var(--tier2-4) 50%,var(--tier2-1) 75%,var(--tier2-3));
-  box-shadow:0 0 8px var(--tier2-glow)}
+  background:linear-gradient(90deg,var(--tg3),var(--tg1) 25%,var(--tg4) 50%,var(--tg1) 75%,var(--tg3));
+  box-shadow:0 0 8px var(--tgglow)}
 .plusgate .plmark{width:46px;height:46px;margin:0 auto 10px;border-radius:14px;display:grid;place-items:center;
-  background:color-mix(in srgb,var(--tier2-3) 13%,transparent);color:var(--tier2-ink)}
+  background:color-mix(in srgb,var(--tg3) 13%,transparent);color:var(--tgink)}
 .plusgate .plmark .gi{width:24px;height:24px}
 .plusgate h2{margin:0 0 4px;font-size:17px}
 .plusgate .plfeat{text-align:left;margin-top:14px}
 .plusgate .plfeat div{font-size:12.5px;color:var(--muted);padding:6px 0;border-top:1px solid var(--line)}
 .plusgate .plfeat b{color:var(--ink);font-weight:700}
 .plusgate input{text-align:center}
+/* ===== The two offers on one sheet =====
+   Ladder order, cheapest first, each carrying its own edge — the sheet has to answer "which of
+   these two am I being asked for" before it answers anything else, and on a phone that is done
+   with colour and one chip, not with a comparison table nobody reads on a 390px screen. */
+.tiercard{position:relative;overflow:hidden;text-align:left;border-radius:16px;padding:14px;
+  margin-top:12px;border:1px solid color-mix(in srgb,var(--tg3) 34%,var(--hair));
+  background:color-mix(in srgb,var(--card) 70%,transparent)}
+.tiercard::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,var(--tg3),var(--tg1) 25%,var(--tg4) 50%,var(--tg1) 75%,var(--tg3))}
+/* The one that answers the lock the reader just tapped is lit; the other is still a real offer
+   and is deliberately not dimmed — hiding it would make the ladder invisible. */
+.tiercard.needed{box-shadow:0 0 16px -3px var(--tgglow)}
+.tiercard .tcname{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.tiercard .tcname b{font-size:15.5px;color:var(--tgink);letter-spacing:.005em}
+.tiercard .tcprice{font-size:12.5px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+.tiercard .tcinc{font-size:12.5px;color:var(--muted);line-height:1.5;margin:7px 0 0}
+.tiercard .tcinc b{color:var(--ink);font-weight:700}
+.tiercard .btn{margin-top:11px}
+.tiertag{display:inline-block;font-size:10px;font-weight:800;vertical-align:1px;padding:1px 7px;
+  border-radius:999px;margin-left:5px;letter-spacing:.02em;
+  background:color-mix(in srgb,var(--tg3) 15%,transparent);color:var(--tgink);
+  border:1px solid color-mix(in srgb,var(--tg3) 34%,transparent)}
+.tcchip{font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:999px;letter-spacing:.02em;
+  background:color-mix(in srgb,var(--tg3) 16%,transparent);color:var(--tgink)}
 /* The sneak peek: a locked card that still says something true about THIS practice. Left-aligned
    inside a centred gate, because these are rows of fact rather than sales copy. */
 .plusgate.peek{text-align:left}
@@ -1095,9 +1168,9 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
   font-variant-numeric:tabular-nums;line-height:1.35}
 .peekh{font-size:13.5px;font-weight:700;color:var(--ink);line-height:1.35}
 .peeks{font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.45}
-/* "This one is yours to keep" under the funnel the gate does NOT take away. In the tier's
-   own violet with a soft glow, so it reads as a promise from the paid tier rather than as a
-   caption somebody forgot to style. */
+/* "This one is yours to keep" under the funnel the gate does NOT take away. In the colour of
+   the tier that owns Business analytics (chrome, Plus), so it reads as a promise from the tier
+   being offered rather than as a caption somebody forgot to style. */
 .plkeep{display:flex;align-items:center;justify-content:center;gap:6px;margin:14px 0 0;
   font-size:12.5px;font-weight:800;letter-spacing:.01em;color:var(--tier2-ink);
   text-shadow:0 0 12px var(--tier2-glow)}
@@ -1183,6 +1256,20 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 <div id="splash" aria-hidden="true">
   <div class="sp-in">
     <svg class="sp-mark" viewBox="0 0 120 112" role="img" aria-label="GroundWork">
+      <!-- The two subscription ramps, the same construction and the same stops as the App Store
+           images (icon-ideas/groundwork/subscription-plus-1024.html and -pro-1024.html): a
+           light→deep→light rim rather than a flat outline. Referenced from CSS by id, and drawn
+           on nothing at all unless the pre-paint script found a live entitlement. -->
+      <defs>
+        <linearGradient id="spChrome" x1="0" y1="0" x2="0.35" y2="1">
+          <stop offset="0%" stop-color="#FFFFFF"/><stop offset="38%" stop-color="#D6DFE4"/>
+          <stop offset="72%" stop-color="#71838C"/><stop offset="100%" stop-color="#EDF2F5"/>
+        </linearGradient>
+        <linearGradient id="spGold" x1="0" y1="0" x2="0.35" y2="1">
+          <stop offset="0%" stop-color="#F7E3AE"/><stop offset="38%" stop-color="#E0BC6B"/>
+          <stop offset="72%" stop-color="#C99A43"/><stop offset="100%" stop-color="#E7CB8B"/>
+        </linearGradient>
+      </defs>
       <g class="sp-bars">
         <rect class="b1" x="12" y="72" width="24" height="36" rx="12"/>
         <rect class="b2" x="46" y="54" width="24" height="54" rx="12"/>
@@ -1193,7 +1280,7 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
         <path class="vein" d="M-5 7 5-7"/>
       </g>
     </svg>
-    <div class="sp-word"><b>Ground</b><span>Work</span><i class="sp-plus">Plus</i></div>
+    <div class="sp-word"><b>Ground</b><span>Work</span><i class="sp-tier"></i></div>
   </div>
 </div>
 <div class="app">
@@ -1826,12 +1913,48 @@ function paletteSwatch(p){return '<span class="pswatch"><i style="background:'+p
       are pure and ungated, both because that is where correctness lives and because
       tests/tax-tests.js calls them directly. If a tax test ever fails because of the paywall,
       the paywall has been put in the wrong layer — move it back to the view. */
-const PLUS_NAME="GroundWork Plus";
-/* Keys the gate understands. Most are also feat() keys; "mtd", "notesSync" and "palettes" are
-   not features anyone can switch off, only things that can be locked. */
-/* "palettes" was here until Sep 2026. Colour schemes are switched off entirely now
+/* ===== The tier ladder =====
+   TIERS is ordered, cheapest first, and the order is the whole model: a feature names the LOWEST
+   tier that unlocks it, an entitlement unlocks everything at or below its own rung, and a third
+   tier would mean adding a rung here rather than another boolean anywhere else.
+
+   THE NAMING INVERTED, AND THAT IS WHY THE DEFAULT MATTERS. "GroundWork Plus" used to be the
+   only tier and it was the TOP one. It is now the MIDDLE one — everything except the tax engine
+   — and "GroundWork Pro" is the top. So every entitlement that predates this build belongs to
+   somebody who paid for everything, and `tierOf()` reads a missing `tier` as **pro**. Reading it
+   as the new, smaller Plus would take the Tax tab off a paying subscriber on the morning they
+   updated. There is no migration and there must never be one: the default IS the migration, it
+   costs nothing, and it cannot half-run. */
+const TIERS=["plus","pro"];                    /* free is the absence of a tier, not a rung */
+const TIER_NAME={plus:"GroundWork Plus",pro:"GroundWork Pro"};
+const TIER_SHORT={plus:"Plus",pro:"Pro"};
+/* What each rung is FOR, in one line, for the paywall and the Settings card. */
+const TIER_BLURB={
+  plus:"Your practice read back to you: twenty analytics, accreditation hours and Notes sync. "+
+       "Nothing in it depends on where you pay tax.",
+  pro:"Everything in Plus, and the year-end work: what you will owe, what to keep back for it, "+
+      "what the practice costs you, and the quarterly figures already added up."};
+/* Which rung each gated feature sits on. ABSENT MEANS FREE, and free is the default for anything
+   new — a feature becomes paid by being written into this table, never by omission.
+
+   tax / finances / mtd are the tax bundle and are Pro's alone. They are UK machinery — SA103
+   boxes, HMRC bands, MTD quarters — which is also why they are the part that cannot be sold to a
+   therapist in Dublin or Toronto, and therefore exactly the seam the tier below them exists on.
+   Costs & other income sits IN the bundle rather than beside it for the reason monetisation.md §3
+   has always given: an estimate that ignores what the practice costs you is one nobody should set
+   money aside against, and selling a knowingly overstated tax figure is not on.
+
+   "palettes" was here until Sep 2026. Colour schemes are switched off entirely now
    (see PALETTES_ENABLED), so gating them would gate something nobody can reach. */
-const PLUS_FEATURES=["tax","finances","mtd","trends","accreditation","notesSync"];
+const FEATURE_TIER={tax:"pro",finances:"pro",mtd:"pro",
+                    trends:"plus",accreditation:"plus",notesSync:"plus"};
+/* Derived, not maintained: "is this gated at all" still has one answer and one list. */
+const PLUS_FEATURES=Object.keys(FEATURE_TIER);
+function tierRank(t){const i=TIERS.indexOf(String(t||""));return i<0?0:i+1;}   /* 0 = free */
+function tierName(t){return TIER_NAME[t]||"GroundWork";}
+function tierShort(t){return TIER_SHORT[t]||"";}
+function featureTier(k){return FEATURE_TIER[k]||null;}
+function tierOf(s){const t=String(s&&s.tier||"");return TIERS.indexOf(t)>=0?t:"pro";}
 const PLUS_KEY="tt_plus";
 /* Grace past the paid-through date. A renewal we could not verify — offline, or StoreKit not
    yet caught up — must not lock someone out of their own tax figures on the morning it lands. */
@@ -1849,22 +1972,32 @@ function plusClear(){try{localStorage.removeItem(PLUS_KEY);}catch(e){}applyPlusC
 /* The one thing the entitlement changes outside a view: the tier mark on the launch screen,
    which is shown again on every resume and so has to be right for the rest of the session
    as well as at boot. The pre-paint script in <head> sets this attribute first; this keeps
-   it honest after a purchase, a restore or a lapse, without anyone having to reload. */
+   it honest after a purchase, an upgrade, a restore or a lapse, without anyone having to
+   reload. The attribute's VALUE is the tier, because the mark differs between them. */
 function applyPlusChrome(){try{
-  const d=document.documentElement;
-  if(plusActive())d.setAttribute("data-plus","1"); else d.removeAttribute("data-plus");
+  const d=document.documentElement, t=plusTier();
+  if(t)d.setAttribute("data-plus",t); else d.removeAttribute("data-plus");
 }catch(e){}}
-/* Synchronous by design — this is called from render paths all over the file, so it must never
-   await and must never throw. The cache is not the truth (StoreKit is); it is what lets the app
-   work on a train. Every failure mode below fails OPEN, never shut. */
-function plusActive(){
+/* WHICH TIER this device holds, or null. Synchronous by design — called from render paths all
+   over the file, so it must never await and must never throw. The cache is not the truth
+   (StoreKit is); it is what lets the app work on a train. Every failure mode fails OPEN, never
+   shut: an unreadable date, a tier nobody recognises and a thrown read all leave the reader with
+   MORE than they paid for rather than less, which is the right way round for a bug to fall. */
+function plusTier(){
   const s=plusRead();
-  if(!s||!s.active)return false;
-  if(!s.expiresAt)return true;                    /* comps and founding licences never expire */
-  const t=Date.parse(s.expiresAt);
-  if(isNaN(t))return true;                        /* unreadable date: don't lock someone out over it */
-  return Date.now()<=t+PLUS_EXPIRY_GRACE_DAYS*864e5;
+  if(!s||!s.active)return null;
+  if(s.expiresAt){                                /* comps and founding licences never expire */
+    const t=Date.parse(s.expiresAt);
+    /* unreadable date: don't lock someone out over it */
+    if(!isNaN(t)&&Date.now()>t+PLUS_EXPIRY_GRACE_DAYS*864e5)return null;
+  }
+  return tierOf(s);
 }
+/* Is ANY tier held? Kept, and kept meaning exactly what it did — the native StoreKit block and
+   the drift check both name it, and "am I subscribed at all" is still a real question. */
+function plusActive(){return !!plusTier();}
+/* Does this device hold `tier` or better? The one comparison; nothing else may hand-roll it. */
+function plusHas(tier){return tierRank(plusTier())>=tierRank(tier);}
 /* Can this build actually sell? Phase 1 is iOS only — the PWA stays free as the shopfront, and
    a lock with no way to buy behind it is just a broken feature. */
 function plusSellable(){try{return !!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());}catch(e){return false;}}
@@ -1872,116 +2005,173 @@ function plusSellable(){try{return !!(window.Capacitor&&window.Capacitor.isNativ
    states can be exercised in a desktop browser; it is deliberately incapable of unlocking. */
 function plusGateOn(){if(plusSellable())return true;
   try{return localStorage.getItem("tt_plus_gate")==="on";}catch(e){return false;}}
-function plusLocked(k){return plusGateOn()&&PLUS_FEATURES.indexOf(k)>=0&&!plusActive();}
+/* Locked for THIS reader: a gated feature whose rung is above the one they hold. A feature
+   missing from FEATURE_TIER is free and is never locked, whatever the gate is doing. */
+function plusLocked(k){const need=FEATURE_TIER[k];
+  return !!need&&plusGateOn()&&!plusHas(need);}
+/* The cheapest tier that would unlock `k` for someone who holds nothing — what a lock card
+   offers, and what the paywall leads with. */
+function lockedTier(k){return featureTier(k);}
 /* Set by the native block when StoreKit is available. Shared code never touches Capacitor
    directly — it asks for this and degrades to the web path when it is absent. */
 function plusNative(){return window.GWPlusNative||null;}
 function plusStatusLine(){
-  const s=plusRead();
-  if(!plusActive())return s&&s.expiresAt?"Expired "+esc(fmtD(String(s.expiresAt).slice(0,10)))+".":"Not subscribed.";
+  const s=plusRead(), t=plusTier();
+  if(!t)return s&&s.expiresAt?"Expired "+esc(fmtD(String(s.expiresAt).slice(0,10)))+".":"Not subscribed.";
   const kind=(s&&PLUS_KINDS[s.kind])||"Active";
   const who=s&&s.name?" \u00b7 "+esc(s.name):"";
-  return kind+who+(s.expiresAt?" \u00b7 renews "+esc(fmtD(String(s.expiresAt).slice(0,10))):" \u00b7 no expiry")+".";
+  return esc(tierName(t))+" \u00b7 "+kind+who+(s.expiresAt?" \u00b7 renews "+esc(fmtD(String(s.expiresAt).slice(0,10))):" \u00b7 no expiry")+".";
 }
 
-/* ---- what Plus is, in the order it is worth paying for ----
-   Ordered by what actually makes someone reach for a card, which is the January bill and not the
-   charts \u2014 docs/monetisation.md is blunt that Trends is tier filler, so it does not lead. The
-   MTD line is written to the "instead of, not as well as" reframe in
-   docs/tax-positioning-2026-09.md \u00a72: the point is that Plus plus a cheap submission tool
+/* ---- what each rung is, in the order it is worth paying for ----
+   THE THIRD FIELD IS THE RUNG, and it is the only thing that decides which card a line appears
+   on. Within a rung, ordered by what actually makes someone reach for a card: for Pro that is
+   the January bill and not the charts \u2014 docs/monetisation.md is blunt that Trends is tier
+   filler, so it never leads. The MTD line is written to the "instead of, not as well as" reframe
+   in docs/tax-positioning-2026-09.md \u00a72: the point is that Pro plus a cheap submission tool
    replaces a bookkeeping subscription, not that it sits alongside one. Plain text \u2014
    openPlusSheet escapes these. */
 const PLUS_SELL=[
-  ["What to set aside","A running figure worked from money you have actually been paid \u2014 including the January that is half again bigger than people expect, months before it lands."],
-  ["Costs & other income","Insurance, supervision, CPD, travel and the rest, taken off the profit your tax is worked out from. Bundled with tax because an estimate without them is one nobody should save against. What your rooms cost you is free either way."],
-  ["Your pot, and what leaves it","Payments on account, the balancing payment, every due date in order, and what HMRC actually assessed once you have filed."],
-  ["Making Tax Digital","Your four quarters added up and exported as a file for your accountant, or for software that files. You are already keeping the records, so the only thing left to buy is the submission \u2014 and HMRC lists free ones."],
-  ["Business analytics","Twenty readings of your own history: who stays, who drifts, what an hour is really worth and what missed sessions cost."],
-  ["Accreditation hours","Clinical and supervision hours and the 1:6 ratio, in the shape Form 3A asks for."],
-  ["GroundWork Notes sync","Sends each client\u2019s cadence to the notes app so it knows what still needs writing up."]
+  ["What to set aside","A running figure worked from money you have actually been paid \u2014 including the January that is half again bigger than people expect, months before it lands.","pro"],
+  ["Costs & other income","Insurance, supervision, CPD, travel and the rest, taken off the profit your tax is worked out from. Bundled with tax because an estimate without them is one nobody should save against. What your rooms cost you is free either way.","pro"],
+  ["Your pot, and what leaves it","Payments on account, the balancing payment, every due date in order, and what HMRC actually assessed once you have filed.","pro"],
+  ["Making Tax Digital","Your four quarters added up and exported as a file for your accountant, or for software that files. You are already keeping the records, so the only thing left to buy is the submission \u2014 and HMRC lists free ones.","pro"],
+  ["Business analytics","Twenty readings of your own history: who stays, who drifts, what an hour is really worth and what missed sessions cost.","plus"],
+  ["Accreditation hours","Clinical and supervision hours and the 1:6 ratio, in the shape Form 3A asks for.","plus"],
+  ["GroundWork Notes sync","Sends each client\u2019s cadence to the notes app so it knows what still needs writing up.","plus"]
 ];
-/* The annual promise, said in one sentence. It is the honest reason a subscription rather than a
-   one-off unlock: HMRC bands, thresholds, Class 2/4 rates and student-loan plans move every
-   April, and keeping ukTax() right is the recurring work being paid for. */
-const PLUS_PROMISE="Rates, bands and thresholds are kept current as they change each April.";
-const PLUS_REASONS={
-  tax:"Tax is part of "+PLUS_NAME, finances:"Costs & other income is part of "+PLUS_NAME,
-  mtd:"The quarterly export is part of "+PLUS_NAME, trends:"Business analytics is part of "+PLUS_NAME,
-  accreditation:"Accreditation hours are part of "+PLUS_NAME,
-  notesSync:"Notes sync is part of "+PLUS_NAME, palettes:"More colour schemes are part of "+PLUS_NAME
-};
-/* Filled from StoreKit when the sheet opens. Never hardcode a price — the store owns it, it is
-   per-storefront, and App Review checks the paywall against the real product. */
-let _plusPrice="";
+function tierSell(t){return PLUS_SELL.filter(f=>f[2]===t);}
+/* The annual promise, per rung, said in one sentence \u2014 the honest reason each is a
+   subscription rather than a one-off unlock.
 
-/* ---- the one paywall ---- */
+   Pro's is the strong one and it is a fact: HMRC bands, thresholds, Class 2/4 rates and
+   student-loan plans move every April, and keeping ukTax() right is the recurring work being
+   paid for. PLUS HAS NO SUCH ENGINE BEHIND IT, so its line says what it is rather than promising
+   work that has not been agreed \u2014 no roadmap, no "more coming", nothing App Review or a
+   reader could hold up against what the app actually does today. */
+const TIER_PROMISE={
+  plus:"Worked out from records you already keep \u2014 nothing to enter, and nothing in it depends on where you pay tax.",
+  pro:"Rates, bands and thresholds are kept current as they change each April."};
+/* What was locked, in the words the reader just saw on the screen they came from. The tier is
+   never written into these \u2014 it is looked up from FEATURE_TIER, so a feature that moves rung
+   cannot leave a sentence behind naming the wrong one. */
+const PLUS_REASONS={tax:"Tax",finances:"Costs & other income",mtd:"The quarterly export",
+  trends:"Business analytics",accreditation:"Accreditation hours",notesSync:"Notes sync"};
+function reasonHead(reason){
+  const what=PLUS_REASONS[reason], t=featureTier(reason);
+  return (what&&t)?what+" is part of "+tierName(t):"GroundWork Plus and Pro";
+}
+/* Filled from StoreKit when the sheet opens, one per rung. Never hardcode a price \u2014 the store
+   owns it, it is per-storefront, and App Review checks the paywall against the real product. */
+let _tierPrice={};
+
+/* ---- the one paywall, now with two rungs on it ----
+   ONE SHEET, NOT TWO. A reader who taps a locked Tax card and a reader who opens Settings are
+   asking the same question — what are these and which one do I want — and answering it in two
+   places would mean two places to keep true. The tier that unlocks whatever they tapped is lit
+   and its button is the primary one; the other is still shown, because a ladder with one rung
+   visible is not a ladder.
+
+   UPGRADES ARE STOREKIT'S JOB, not ours: both products must live in ONE subscription group in
+   App Store Connect, so buying Pro while holding Plus is an upgrade Apple prorates rather than
+   two subscriptions running at once. Nothing here has to know that happened — plusStatus()
+   reports whichever product is entitled next time it is asked. */
 function openPlusSheet(reason){
-  const active=plusActive(), nat=plusNative(), lic=plusLicenceConfigured();
-  const b=el('<div class="plusgate"></div>');
+  const held=plusTier(), nat=plusNative(), lic=plusLicenceConfigured();
+  const need=featureTier(reason);            /* null when opened from Settings, not from a lock */
+  const lead=need||held||"pro";              /* whose colour the sheet's own mark wears */
+  const b=el('<div class="plusgate tier-'+lead+'"></div>');
+
+  const tierCard=t=>{
+    const owned=plusHas(t), isNeed=(need===t);
+    const names=tierSell(t).map(f=>f[0]).join(" · ");
+    return '<div class="tiercard tier-'+t+(isNeed?' needed':'')+'">'+
+      '<div class="tcname"><b>'+esc(tierName(t))+'</b>'+
+        (isNeed&&PLUS_REASONS[reason]?'<span class="tcchip">Unlocks '+esc(PLUS_REASONS[reason])+'</span>':'')+
+        (owned?'<span class="tcchip">Your subscription</span>'
+              :'<span class="tcprice" id="plPrice-'+t+'">'+(nat?"…":"")+'</span>')+'</div>'+
+      '<p class="tcinc">'+(t==="pro"?'<b>Everything in Plus</b>, and: ':'')+esc(names)+'</p>'+
+      '<p class="tcinc">'+esc(TIER_PROMISE[t]||"")+'</p>'+
+      (owned||!nat?'':'<button class="btn '+(isNeed?'':'sec ')+'full" data-buy="'+t+'">Subscribe to '+esc(tierShort(t))+'</button>')+
+      '</div>';
+  };
+  /* Held already: say what they have and what it covers. The only offer left is the rung above,
+     and only while there is one. */
+  const haveList=held?TIERS.filter(t=>plusHas(t)).map(t=>tierSell(t)).flat():[];
+
   b.innerHTML=
-    '<div class="plmark">'+gi("tax")+'</div>'+
-    '<h2>'+esc(active?PLUS_NAME:(PLUS_REASONS[reason]||PLUS_NAME))+'</h2>'+
-    '<p class="small muted">'+(active?plusStatusLine()
-      :"Everything you already use stays free \u2014 logging sessions, receipts, and every backup and "+
-       "export. "+PLUS_NAME+" adds the year-end work: what you will owe, what to keep back for it, "+
-       "and the figures already added up when it is time to file.")+'</p>'+
-    '<div class="plfeat">'+PLUS_SELL.map(f=>'<div><b>'+esc(f[0])+'</b> \u2014 '+esc(f[1])+'</div>').join("")+'</div>'+
-    (active?'':'<p class="small muted">'+esc(PLUS_PROMISE)+'</p>')+
-    (active?'<button class="btn sec full mt" id="plManage">Manage subscription</button>'
-     :nat?'<p class="small muted mt" id="plPrice">'+(_plusPrice?esc(_plusPrice):"Checking the price\u2026")+'</p>'+
-          '<button class="btn full" id="plBuy">Subscribe</button>'+
-          '<button class="btn ghost full mt" id="plRestore">Restore purchases</button>'+
+    '<div class="plmark">'+gi(lead==="pro"?"tax":"trends")+'</div>'+
+    '<h2>'+esc(held?tierName(held):reasonHead(reason))+'</h2>'+
+    '<p class="small muted">'+(held?plusStatusLine()
+      :"Everything you already use stays free — logging sessions, what your rooms cost you, "+
+       "receipts, and every backup and export. These two add the rest.")+'</p>'+
+    (held
+      ? '<div class="plfeat">'+haveList.map(f=>'<div><b>'+esc(f[0])+'</b> — '+esc(f[1])+'</div>').join("")+'</div>'+
+        (plusHas("pro")?'':'<p class="small muted mt">'+esc(TIER_BLURB.pro)+'</p>'+tierCard("pro"))
+      : TIERS.map(tierCard).join(""))+
+    (held?'<button class="btn sec full mt" id="plManage">Manage subscription</button>'
+     :nat?'<button class="btn ghost full mt" id="plRestore">Restore purchases</button>'+
           '<button class="btn ghost full mt" id="plRedeem">Redeem a code</button>'
-     :'<p class="small muted mt">'+PLUS_NAME+' is sold in the iPhone app.'+
+     :'<p class="small muted mt">Subscriptions are sold in the iPhone app.'+
       (lic?' If you have been given a licence key, enter it here.':'')+'</p>'+
       (lic?'<input id="plKey" placeholder="Licence key" autocomplete="off" spellcheck="false">'+
            '<button class="btn full mt" id="plKeyGo">Redeem</button>':''))+
-    '<p class="prev">Auto-renewing annual subscription. '+
-      '<a href="terms.html" target="_blank" rel="noopener">Terms</a> \u00b7 '+
+    '<p class="prev">Auto-renewing annual subscriptions. '+
+      '<a href="terms.html" target="_blank" rel="noopener">Terms</a> · '+
       '<a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>';
 
   const q=s=>b.querySelector(s);
   /* The store owns the price and the period; ask for it rather than shipping a number that
      goes stale or is wrong in another storefront. */
-  /* A product that does not come back is a REAL state and has to be reported: it means the
+  /* A product that does not come back is a REAL state and has to be reported: it means that
      subscription does not exist in App Store Connect yet, or the store cannot be reached. The
-     silent `return` this used to do left "Checking the price\u2026" on screen for ever, and left
-     Subscribe live so it could only fail. */
-  const priceUnavailable=()=>{
-    const el2=q("#plPrice"); if(el2)el2.textContent="Subscription unavailable right now.";
-    const bb=q("#plBuy"); if(bb){bb.disabled=true;bb.textContent="Subscribe";}
+     silent `return` this used to do left "Checking the price…" on screen for ever, and left
+     Subscribe live so it could only fail. Per rung, because one can be missing on its own —
+     which is exactly what happens on the day the second one is added. */
+  const priceUnavailable=t=>{
+    const el2=q("#plPrice-"+t); if(el2)el2.textContent="Unavailable";
+    const bb=b.querySelector('[data-buy="'+t+'"]'); if(bb)bb.disabled=true;
   };
-  if(nat&&!active){
-    if(!nat.products)priceUnavailable();
+  const showPrice=(t,p)=>{
+    if(!p||!p.price)return priceUnavailable(t);
+    _tierPrice[t]=p.price+(p.period?" / "+p.period:"");
+    const el2=q("#plPrice-"+t); if(el2)el2.textContent=_tierPrice[t];
+  };
+  if(nat&&!plusHas("pro")){
+    if(!nat.products)TIERS.forEach(priceUnavailable);
     else nat.products().then(p=>{
-      if(!p||!p.price)return priceUnavailable();
-      _plusPrice=p.price+(p.period?" / "+p.period:"");
-      const el2=q("#plPrice"); if(el2)el2.textContent=_plusPrice;
-      const bb=q("#plBuy"); if(bb)bb.textContent="Subscribe \u2014 "+_plusPrice;
-    }).catch(priceUnavailable);
+      p=p||{};
+      /* Tolerant of the single-product shape this seam used to have: a native build that only
+         knows one product is answering about the top rung. */
+      if(p.price&&!p.pro&&!p.plus)p={pro:p};
+      TIERS.forEach(t=>{ if(plusHas(t))return; showPrice(t,p[t]); });
+    }).catch(()=>TIERS.forEach(t=>{if(!plusHas(t))priceUnavailable(t);}));
   }
 
   const done=(msg)=>{
-    closeSheet(); toast(msg||PLUS_NAME+" is active"); Sfx.complete();
+    closeSheet(); toast(msg||"Subscription active"); Sfx.complete();
     renderTabs(); go(curTab(),{keepScroll:true});
   };
   /* One helper, but the failure message belongs to the BUTTON. This used to say "Nothing to
      restore" whatever had been pressed, so a purchase that failed because the product does not
      exist told the reader something both wrong and baffling. */
   const run=async(btn,fn,okMsg,failMsg)=>{
-    if(!btn)return; const t=btn.textContent; btn.disabled=true; btn.textContent="\u2026";
+    if(!btn)return; const t=btn.textContent; btn.disabled=true; btn.textContent="…";
     let r={}; try{r=(await fn())||{};}catch(e){r={};}
     btn.disabled=false; btn.textContent=t;
     if(r.ok)return done(okMsg);
     /* Changing your mind is not an error and earns no toast at all. Ask to Buy and SCA are not
-       failures either \u2014 they simply have not finished, and saying "couldn\u2019t complete that
+       failures either — they simply have not finished, and saying "couldn’t complete that
        purchase" to a teenager waiting on a parent's approval would be a lie. */
     if(r.cancelled)return;
-    if(r.pending)return toast("Waiting for approval \u2014 nothing has been charged");
+    if(r.pending)return toast("Waiting for approval — nothing has been charged");
     toast(failMsg); Sfx.error();
   };
-  if(q("#plBuy"))q("#plBuy").onclick=()=>run(q("#plBuy"),()=>nat.purchase(),
-    PLUS_NAME+" is active \u2014 thank you","Couldn\u2019t complete that purchase");
+  b.querySelectorAll("[data-buy]").forEach(btn=>{
+    const t=btn.dataset.buy;
+    btn.onclick=()=>run(btn,()=>nat.purchase(t),
+      tierName(t)+" is active — thank you","Couldn’t complete that purchase");
+  });
   if(q("#plRestore"))q("#plRestore").onclick=()=>run(q("#plRestore"),()=>nat.restore(),
     null,"Nothing to restore");
   if(q("#plRedeem"))q("#plRedeem").onclick=()=>{if(nat.redeem)nat.redeem();};
@@ -1989,20 +2179,29 @@ function openPlusSheet(reason){
   if(q("#plKeyGo"))q("#plKeyGo").onclick=async()=>{
     const btn=q("#plKeyGo"); btn.disabled=true;
     const ok=await plusRedeemLicence(q("#plKey").value); btn.disabled=false;
-    if(ok)done("Licence accepted"); else {toast("That licence key wasn\u2019t valid");Sfx.error();}
+    if(ok)done("Licence accepted"); else {toast("That licence key wasn’t valid");Sfx.error();}
   };
-  openSheet(active?PLUS_NAME:"Unlock "+PLUS_NAME,b);
+  openSheet(held?tierName(held):"GroundWork Plus & Pro",b);
 }
-
 /* ---- the lock that replaces a paid view in place ----
    A card, not an empty screen: it says what the feature does and offers the one way in. */
 function plusLockHTML(reason,title,blurb){
-  return '<div class="card plusgate">'+
-    '<div class="plmark">'+gi("tax")+'</div>'+
+  /* The tier of THIS screen, not "the paid tier" — a reader looking at a locked Tax card and a
+     reader looking at a locked Business analytics card are being asked for different money, and
+     the card is the only place that difference can be seen before the sheet opens. Colour and
+     wording come from the same lookup, so they cannot disagree. */
+  const t=featureTier(reason)||"pro";
+  return '<div class="card plusgate tier-'+t+'">'+
+    '<div class="plmark">'+gi(t==="pro"?"tax":"trends")+'</div>'+
     '<h2>'+esc(title)+'</h2>'+
     '<p class="small muted">'+esc(blurb)+'</p>'+
-    '<button class="btn full mt" data-plus="'+esc(reason)+'">About '+PLUS_NAME+'</button>'+
+    '<button class="btn full mt" data-plus="'+esc(reason)+'">About '+esc(tierName(t))+'</button>'+
     '</div>';
+}
+/* The small chip that names a tier beside a control which is still on screen (the Notes sync
+   button, a feature row in setup). Same colours as the lock cards, from the same lookup. */
+function tierTagHTML(t){
+  return '<span class="tiertag tier-'+t+'">'+gi("lock")+' '+esc(tierShort(t))+'</span>';
 }
 /* Wires every lock card inside `host`. Safe to call on hosts that contain none. */
 function plusWireLocks(host){
@@ -2051,7 +2250,9 @@ async function plusVerifyLicence(key){
 async function plusRedeemLicence(key){
   const pay=await plusVerifyLicence(key);
   if(!pay)return false;
-  plusWrite({active:true,expiresAt:pay.exp||null,source:"licence",
+  /* `t` is the rung the licence grants. Absent means the top one, the same default the rest of
+     the gate applies: every licence issued before tiers existed was for everything. */
+  plusWrite({active:true,expiresAt:pay.exp||null,source:"licence",tier:tierOf({tier:pay.t}),
              kind:pay.k||"comp",name:pay.n||"",id:pay.id||"",checkedAt:new Date().toISOString()});
   return true;
 }
@@ -4828,7 +5029,7 @@ VIEWS.practice=function(){
         '<div><div class="peekh">'+head+'</div><div class="peeks">'+sub+'</div></div></div>';
       body.innerHTML=
         funnelCard('<p class="plkeep">'+gi("done")+' This one is yours to keep.</p>')+
-        '<div class="card plusgate peek"><div class="plmark">'+gi("trends")+'</div>'+
+        '<div class="card plusgate peek tier-'+(featureTier("trends")||"plus")+'"><div class="plmark">'+gi("trends")+'</div>'+
           '<h2>Twenty more, from the same records</h2>'+
           '<p class="small muted">Nothing to set up and nothing to enter — all of it is worked out from sessions you have already logged. Here is what four of them currently say about your practice.</p>'+
           '<div class="mt">'+
@@ -4853,7 +5054,7 @@ VIEWS.practice=function(){
                 ? "worked in the last year, not the 48 most people price for. Also: supervision cadence, heavy days and your CPD pace."
                 : "Supervision cadence against 1:6, heavy days and back-to-back runs, and whether your CPD pace clears your target.")+
           '</div>'+
-          '<button class="btn full mt" data-plus="trends">See all twenty · '+PLUS_NAME+'</button>'+
+          '<button class="btn full mt" data-plus="trends">See all twenty · '+esc(tierName(featureTier("trends")))+'</button>'+
         '</div>';
       plusWireLocks(body); wireInfo(body);
       requestAnimationFrame(()=>body.querySelectorAll(".funnel .fbar>i").forEach(i=>{i.style.width=(+i.dataset.w)+"%";}));
@@ -8841,17 +9042,20 @@ function rawPanel(){
    is everyone, and a subscription card for something you cannot buy here is just noise. */
 function plusSettingsCardHTML(){
   if(!plusGateOn()&&!plusActive())return "";
-  const active=plusActive();
-  return '<div class="card"><h2>'+PLUS_NAME+'</h2>'+
+  const held=plusTier();
+  /* Both rungs, in ladder order, each in a line — this card is where somebody checks what they
+     are paying for and what the other one is, and a single blended sentence answered neither.
+     Colour schemes were in it until Sep 2026 and are now switched off entirely (see
+     PALETTES_ENABLED): a tier that lists something nobody can reach reads as padding. */
+  const line=t=>'<p class="small muted" style="margin:8px 0 0"><b class="tier-'+t+'" style="color:var(--tgink)">'+
+      esc(tierName(t))+'</b>'+(plusHas(t)?' '+gi("done"):'')+' — '+
+      (t==="pro"?'everything in Plus, and ':'')+esc(tierSell(t).map(f=>f[0]).join(" \u00b7 "))+'.</p>';
+  return '<div class="card"><h2>Subscription</h2>'+
     '<p class="small muted">'+plusStatusLine()+'</p>'+
-    /* Colour schemes were in this sentence until Sep 2026 and are now switched off entirely
-       (see PALETTES_ENABLED). A tier that lists something nobody can reach reads as padding,
-       which is the opposite of what this card is for. */
-    '<p class="small muted">What you will owe and what to keep back for it, costs &amp; other income, '+
-      'the quarterly figures for Making Tax Digital, Business analytics, accreditation hours and GroundWork '+
-      'Notes sync. Logging, receipts and every backup and export stay free.</p>'+
-    '<button class="btn '+(active?"sec ":"")+'full mt" data-plus="settings">'+
-      (active?"View details":"Unlock "+PLUS_NAME)+'</button></div>';
+    TIERS.map(line).join("")+
+    '<p class="small muted" style="margin:8px 0 0">Logging, what your rooms cost you, receipts and every backup and export stay free.</p>'+
+    '<button class="btn '+(held?"sec ":"")+'full mt" data-plus="settings">'+
+      (held?(plusHas("pro")?"View details":"View details or upgrade"):"See what these are")+'</button></div>';
 }
 /* Wires the one shared "which section am I in" bar for Settings. Driven by scroll position
    rather than an IntersectionObserver on each group, because groups are independent <details>
@@ -9265,7 +9469,7 @@ VIEWS.settings=function(){
     const btn=v.querySelector("#rosterSync"), st=v.querySelector("#rosterState");
     /* Tagged rather than hidden. The card is what explains the sync, which makes it the best
        advert the feature has \u2014 so it stays visible and the tap is what asks for payment. */
-    if(plusLocked("notesSync"))btn.innerHTML='\u21bb Sync schedules <span class="paltag">\ud83d\udd12 Plus</span>';
+    if(plusLocked("notesSync"))btn.innerHTML='\u21bb Sync schedules '+tierTagHTML(featureTier("notesSync"));
     const paint=(msg)=>{
       const last=rosterLastSync();
       st.innerHTML=(msg?esc(msg)+" ":"")+
@@ -11551,13 +11755,16 @@ function revealOffer(step){
   /* A reveal for something in the tier says so on the card. The flag still turns on either way:
      the flag is a preference and the entitlement is separate (see plusLocked), and the locked
      view is where the selling belongs \u2014 not in a nudge the reader did not ask for. */
-  const plusStep=step.keys.some(k=>plusLocked(k));
+  /* Which rung, not "is it paid" — a step can hold keys from both (none does today, but the
+     highest one is the honest answer if one ever does). */
+  const stepTier=step.keys.filter(k=>plusLocked(k))
+    .reduce((a,k)=>tierRank(featureTier(k))>tierRank(a)?featureTier(k):a,null);
   const body=el('<div></div>');
   body.innerHTML='<div style="text-align:center;font-size:40px;line-height:1">'+step.emoji+'</div>'+
     '<h3 style="text-align:center;margin:8px 0 4px">'+esc(step.title)+'</h3>'+
     '<p class="small muted" style="text-align:center">'+step.sub+'</p>'+
     fs.map(f=>'<div class="vmsg ok mt">'+esc(f.n)+' — '+f.d+'</div>').join("")+
-    (plusStep?'<div class="vmsg warn mt">Part of '+PLUS_NAME+'.</div>':'')+
+    (stepTier?'<div class="vmsg warn mt">Part of '+esc(tierName(stepTier))+'.</div>':'')+
     '<button class="btn full mt" id="rvYes">'+(fs.length>1?"Turn them on":"Turn it on")+'</button>'+
     '<button class="btn ghost full mt" id="rvNo">Not for me</button>'+
     '<p class="prev" style="text-align:center">Either way you can change your mind in <b>'+gi("settings")+' Settings › Features</b>.</p>';
@@ -12985,17 +13192,25 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
   const Splash = P("SplashScreen");
   if(Splash) requestAnimationFrame(()=>setTimeout(()=>{ Splash.hide().catch(()=>{}); },80));
 
-  /* ================= GroundWork Plus (StoreKit) =================
+  /* ================= GroundWork Plus / Pro (StoreKit) =================
      Shared code never touches Capacitor directly: it reads window.GWPlusNative and takes the
      web path when that is absent. Everything here only ever REFRESHES the tt_plus cache, so
      plusActive() stays synchronous, offline-tolerant, and safe to call from a render path.
-     See docs/monetisation.md §4.2. */
+     See docs/monetisation.md §4.2.
+
+     TWO PRODUCTS SINCE SEP 2026, in one App Store Connect subscription group so that buying the
+     upper rung while holding the lower is an upgrade Apple prorates rather than two live
+     subscriptions. The tier travels as a STRING from the plugin ("plus" | "pro"), never as a
+     product id: ids are opaque, one of them says "plus" and sells Pro for historical reasons,
+     and nothing in the web layer should ever have to know that. */
   const applyPlus = (r, allowClear) => {
     try{
       if(!r || typeof r.active === "undefined") return plusActive();
       const prev = plusRead() || {};
       if(r.active){
-        plusWrite({ active:true, expiresAt:r.expiresAt||null, source:"storekit",
+        /* tierOf() defaults a missing tier to the top rung — right here too: a native binary
+           older than the second product only knows the legacy one, which sells Pro. */
+        plusWrite({ active:true, tier:tierOf(r), expiresAt:r.expiresAt||null, source:"storekit",
                     kind:prev.kind||null, name:prev.name||null,
                     checkedAt:new Date().toISOString() });
       }else if(allowClear && (prev.source==="storekit" || !prev.source)){
@@ -13009,11 +13224,14 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
   };
   if(GW && GW.plusStatus){
     window.GWPlusNative = {
-      products: async () => { try{ const p = await GW.plusProduct(); return (p && p.found) ? p : null; }catch(e){ return null; } },
+      /* {plus:{price,period,title}, pro:{…}} — one entry per rung the store could answer for.
+         A rung the store does not know about is simply absent, and the sheet says so for that
+         rung alone: on the day the second product is added, the first must keep working. */
+      products: async () => { try{ const p = await GW.plusProducts(); return (p && p.found) ? p : null; }catch(e){ return null; } },
       /* {ok, cancelled, pending} rather than a bare boolean: the sheet has to tell a real
          failure apart from someone changing their mind, and from Ask to Buy still waiting. */
-      purchase: async () => {
-        try{ const r = (await GW.plusPurchase()) || {};
+      purchase: async (tier) => {
+        try{ const r = (await GW.plusPurchase({ tier: tier || "pro" })) || {};
              return { ok: applyPlus(r, false), cancelled: !!r.cancelled, pending: !!r.pending }; }
         catch(e){ return { ok: plusActive() }; }
       },

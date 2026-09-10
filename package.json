@@ -11,6 +11,7 @@
     "test:behaviour": "node scripts/check-behaviour.mjs",
     "test:folder": "node scripts/check-records-folder.mjs",
     "test:rent": "node scripts/check-room-rent.mjs",
+    "test:tiers": "node scripts/check-tiers.mjs",
     "sync": "cap sync ios && node scripts/add-native-plugin.mjs && node scripts/register-native-plugin.mjs && node scripts/add-watch-target.mjs && node scripts/install-assets.mjs && node scripts/prune-public.mjs",
     "ios": "npm run check && npm run sync && cap open ios",
     "open": "cap open ios",
