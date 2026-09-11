@@ -39,7 +39,8 @@ npm run check                # syntax parse, the native-seam drift check, schedu
 npm i --no-save playwright   # once, for the browser suites (deliberately not a dependency)
 npm run test:tax             # 134 tax-engine tests, derived from the HMRC rules
 npm run test:behaviour       # opens the forms, clicks Save, asserts what landed in the data
-npm run test:guidance        # every info icon opens a sheet, the app map's rows all land somewhere
+npm run test:guidance        # every info icon opens a sheet; the app map, Getting started, search and help
+npm run test:import          # the spreadsheet importer against the shapes real sheets take
 npm run test:rent | test:tiers | test:pins | test:projection | test:review
 ```
 

@@ -139,6 +139,85 @@ async function inPage(profile) {
     if (link) { link.onclick(); ok("the map opens from the empty Home", sheetOpen() && sheetTitle() === "Where everything is"); closeSheet(); }
     S.sessions = keep; go("home"); })();
 
+  /* ---- Getting started: derived from the data, two stored answers, dismissable ---- */
+  delete S.settings.start;
+  if (profile === "day-one") {
+    go("home"); await sleep(20);
+    ok("an early practice sees the Getting started card", !!document.getElementById("startCard"));
+    const rec = startItems().find((i) => i.k === "records");
+    ok("the records question leads and is open", rec && !rec.done && document.querySelector('#startCard [data-start]').dataset.start === "records");
+    document.querySelector('#startCard [data-start="records"]').click(); await sleep(20);
+    ok("tapping it opens the records chooser", sheetOpen() && sheetTitle() === "Your existing records", sheetTitle());
+    ok("the chooser offers a spreadsheet, a backup and starting fresh",
+      !!document.getElementById("rsSheet") && !!document.getElementById("rsBackup") && !!document.getElementById("rsFresh"));
+    document.getElementById("rsFresh").click(); await sleep(40);
+    ok("'starting fresh' is stored and the row ticks", S.settings.start.records === "fresh" && startItems().find((i) => i.k === "records").done);
+    ok("the card redraws with the row done", !!document.querySelector('#startCard .li-title.done'));
+    const alt = document.querySelector('#startCard [data-startalt="rooms"]');
+    ok("'I only work from home' is offered on the rooms row", !!alt);
+    if (alt) { alt.click(); await sleep(40); ok("'home only' is stored and the row ticks", S.settings.start.homeOnly === true && startItems().find((i) => i.k === "rooms").done); }
+    ok("a policy nobody touched is not 'chosen'", cancelChosen() === false);
+    document.getElementById("startHide").click(); await sleep(40);
+    ok("hiding the card sticks", S.settings.start.dismissed === true && !document.getElementById("startCard"));
+    delete S.settings.start;
+  } else {
+    go("home"); await sleep(20);
+    ok("an established practice never sees Getting started", !document.getElementById("startCard") && !startVisible(), S.sessions.length);
+  }
+
+  /* ---- Still on defaults, in Settings › Your practice ---- */
+  (() => { const keep = { cx: S.settings.cancelRulesChosen, rules: S.settings.cancelRules, pay: S.settings.payTo, reg: S.settings.taxRegionYears, sm: S.settings.sessionMins };
+    delete S.settings.cancelRulesChosen; S.settings.cancelRules = { window: [{ hoursBefore: 24, chargePct: 100 }], dnaChargePct: 100 };
+    S.settings.payTo = ""; S.settings.taxRegionYears = {}; delete S.settings.sessionMins; delete S.settings.fullWeekSessions;
+    go("settings"); 
+    const card = document.getElementById("decisionsCard");
+    ok("the defaults card lists the undecided settings", card && /Cancellation policy/.test(card.textContent) && /like to be paid/.test(card.textContent) && /income tax/.test(card.textContent), card && card.textContent.slice(0, 120));
+    S.settings.cancelRulesChosen = true; S.settings.payTo = "Bank transfer"; S.settings.taxRegionYears = { "2026-27": "rUK" }; S.settings.sessionMins = 50;
+    go("settings");
+    ok("the defaults card disappears once everything is decided", !document.getElementById("decisionsCard"));
+    S.settings.cancelRulesChosen = keep.cx; S.settings.cancelRules = keep.rules; S.settings.payTo = keep.pay; S.settings.taxRegionYears = keep.reg; S.settings.sessionMins = keep.sm; })();
+
+  /* ---- Search & help ---- */
+  ok("the header has the search-and-help button", !!document.getElementById("helpBtn") && typeof document.getElementById("helpBtn").onclick === "function");
+  go("home"); findSheet(); await sleep(80);
+  ok("the sheet opens with help rows before anything is typed",
+    sheetOpen() && sheetTitle() === "Search & help" && document.querySelectorAll("#findRes [data-find]").length >= 3);
+  const q = document.getElementById("findQ");
+  const code = S.clients[0] && S.clients[0].code;
+  if (code) { q.value = code; q.oninput(); ok("a client code finds the client", /Clients/.test(document.getElementById("findRes").textContent) && document.querySelector("#findRes [data-find]"), code); }
+  q.value = "backup"; q.oninput();
+  ok("'backup' finds the setting and the screen", /Settings/.test(document.getElementById("findRes").textContent), document.getElementById("findRes").textContent.slice(0, 80));
+  q.value = "payments on account"; q.oninput();
+  ok("an explanation can be searched for", /Explanations/.test(document.getElementById("findRes").textContent));
+  q.value = "zzzz-nothing"; q.oninput();
+  ok("no match says so", /Nothing matches/.test(document.getElementById("findRes").textContent));
+  q.value = "Backup & restore"; q.oninput(); await sleep(10);
+  const hit = [...document.querySelectorAll("#findRes [data-find]")].find((n) => /Backup & restore/.test(n.textContent));
+  if (hit) { hit.click(); await sleep(150); ok("a settings hit lands in Settings with its group open", curTab() === "settings" && document.querySelector('.sgrp[data-g="data"]').open); }
+  if (sheetOpen()) closeSheet();
+
+  /* ---- the two new attention rows ---- */
+  (() => { const keepC = S.clients.map((c) => ({ c, st: c.status })), keepSup = S.supervision, keepCpd = S.cpd, keepF = S.settings.features;
+    const c0 = S.clients.find((c) => S.sessions.some((s) => s.client === c.code));
+    if (c0) { c0.status = "Finished";
+      const ss = S.sessions.filter((s) => s.client === c0.code); const keepDates = ss.map((s) => s.date);
+      ss.forEach((s) => { s.date = "2015-01-05"; });
+      const items = attentionItems();
+      ok("a client past their retention date is raised on Home", items.some((i) => /retention date/.test(i.msg)), items.map((i) => i.msg).join(" | "));
+      ss.forEach((s, i) => { s.date = keepDates[i]; }); }
+    S.supervision = []; S.cpd = []; S.peerSupervision = [];
+    const items2 = attentionItems();
+    ok("CPD that has stopped is raised on Home (given enough history)", S.sessions.length < 20 || items2.some((i) => /No CPD/.test(i.msg)), items2.map((i) => i.msg).join(" | "));
+    keepC.forEach((k) => { k.c.status = k.st; }); S.supervision = keepSup; S.cpd = keepCpd; S.settings.features = keepF; })();
+
+  /* ---- setup: the records question ---- */
+  (() => { const w = { records: null, features: {} }; const host = document.createElement("div");
+    stepImport(w).mount(host);
+    ok("setup asks about previous records with three answers", host.querySelectorAll("#spRec .palopt").length === 3);
+    host.querySelector('#spRec .palopt[data-r="fresh"]').click();
+    ok("choosing 'starting fresh' is remembered for setupSave", w.records === "fresh"); })();
+  ok("the restore-a-backup route exists for setup", typeof setupRestoreBackup === "function");
+
   /* ---- What's new and the tour build and run through ---- */
   ok("tour has its eight stops", tourSteps().length === 8);
   showWhatsNew();
