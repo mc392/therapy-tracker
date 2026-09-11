@@ -132,6 +132,13 @@ async function inPage(profile) {
     const r = [...document.querySelectorAll("#sheetBody [data-map]")].find((n) => n.querySelector(".li-title").textContent === "Data & backup");
     r.click(); const d = document.querySelector('.sgrp[data-g="data"]'); return curTab() === "settings" && d && d.open; })());
 
+  /* ---- an empty Home offers the map, and the map opens from it ---- */
+  (() => { const keep = S.sessions; S.sessions = []; go("home");
+    const link = document.querySelector("#main #hMap");
+    ok("empty Home links to the map", !!link);
+    if (link) { link.onclick(); ok("the map opens from the empty Home", sheetOpen() && sheetTitle() === "Where everything is"); closeSheet(); }
+    S.sessions = keep; go("home"); })();
+
   /* ---- What's new and the tour build and run through ---- */
   ok("tour has its eight stops", tourSteps().length === 8);
   showWhatsNew();

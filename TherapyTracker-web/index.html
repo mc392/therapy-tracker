@@ -1333,6 +1333,36 @@ window.SEED = {"clients": [], "rooms": [{"location": "At home", "rate": 0, "due"
 
 <script>
 "use strict";
+/* ============================================================================
+   GroundWork — the app, in one script. A map of this file, top to bottom.
+   Search for the banner text (each is a "===== Name =====" comment) to jump to it.
+   ----------------------------------------------------------------------------
+   Storage layer            IndexedDB + audit log + snapshots; durability; save health
+   App state                S, SEED, normalize() and the schema migrations, backup reminders
+   Date / money helpers     parseD, isoD, gbp and friends
+   Derived per-session      effRate, derive(), derivedSessions()
+   UI helpers               $, el(), toast, sheets, emptyNote(), glyphs (gi), theme, palettes
+   GroundWork Plus / Pro    the entitlement gate, the tier ladder, the paywall sheet
+   Gamification             sounds, confetti, celebrate(), streaks and goals
+   Router                   TABS, go(), goSessions(), goRoomCosts(), segment bars, crash screen
+   VIEWS                    home (arrange sheet, pinned block) · sessions · practice · money · tax · settings
+   Analytics helpers        inline SVG charts, the CPD card, Form 3A, session validation
+   Practice analytics       the ana* engine (pure), the ac* card builders, ANA_CARDS registry, pins
+   Rooms and the ledger     rent sheet, business costs & other income, HMRC categories,
+                            what is due, room fees the sessions raise
+   UK tax engine            rates, per-year settings, ledgerBetween, use of home, the pot,
+                            the timeline, MTD, "Find out more" info topics, take-home
+   Tax screens              Now, Estimate, Pot & payments, Per year, Making Tax Digital, the flows
+   Settings screen          VIEWS.settings, cancellation rules, the raw table panel
+   Forms                    session, client (+ rate change), supervision, peer, CPD, room fees
+   Invoices & receipts      documents, chasers, the clipboard, the receipt generator
+   Export / import          backups, the schedule file, encrypted backups, validation,
+                            the spreadsheet importer, restore hardening, data removal
+   Setup & help             FEATURES, gradual reveal, the step-flow overlay, the setup wizard,
+                            the tax disclaimer, What's new, on-page coaching, the app map,
+                            the tour and the first-visit tips, records retention
+   Init                     loadState, the launch screen, boot
+   ============================================================================ */
 /* ============ Storage layer (IndexedDB + audit + snapshots) ============ */
 const DBN="TherapyTrackerDB", DBV=1;
 let _db=null;
@@ -6586,7 +6616,7 @@ function chargeRow(c){
    that have nothing to do with a room.
 
    It is a tick-list, not accounting: ledgerBetween counts a rent in the year it fell due whether
-   or not it has been ticked here (the footnote says so, because that is a fair question to have). */
+   or not it has been ticked here (the Find out more link says so, because that is a fair question to have). */
 function roomRentCard(){
   const t=today();
   const rentRooms=S.rooms.filter(r=>roomBilling(r)==="monthly");

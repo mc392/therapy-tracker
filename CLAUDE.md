@@ -485,7 +485,9 @@ keep records for. `stepCPD()` asks in setup.
 
 **The rule for choosing:** if the reader needs the sentence *every* time, leave it on screen. If they need it once and then never again, it goes behind a dot. That is what makes twenty analytics cards fit on a phone, and it is why Settings is now headings and controls rather than headings, controls and three paragraphs.
 
-**A block that redraws itself must call `wireInfo` again** — `wireCancelRules`'s `draw()` replaces its own markup and would otherwise leave a dead dot behind. `VIEWS.settings` only wires once, at build.
+**A block that redraws itself must call `wireInfo` again** — `wireCancelRules`'s `draw()` replaces its own markup and would otherwise leave a dead dot behind. `VIEWS.settings` only wires once, at build. **A sheet or screen that gains its first info link needs a `wireInfo(host)` call** — the peer-supervision form and Tax › Per year both lacked one when links were added in Sep 2026. `npm run test:guidance` (`scripts/check-guidance.mjs`) walks every screen, segment, sub-tab and info-bearing form and fires every `[data-info]`, so an unregistered key or an unwired link is a failing test rather than a dead tap. Registered topics nobody links are dead code: `backup-restore-detail` was removed for that reason.
+
+**Copy review, Sep 2026** (`docs/orientation-review-2026-09.md`): every on-screen paragraph over ~170 characters outside the info sheets was listed and either trimmed to one sentence with the reasoning moved behind a link, or kept deliberately (warnings, the backup step of setup, the removal flows). Two things the pass settled: raw storage codes never reach the screen (the session form printed a room's legacy `EOM` due code), and a screen label in copy must be the label on the tab today (`Clients › Rooms` had outlived the Practice tab by a month).
 
 ### Settings layout
 Six collapsible `<details class="sgrp">` groups (**business / app** / data / records / help / about), plus **device** on native. Every card lives inside a group — don't add loose cards to the settings view.
@@ -589,6 +591,8 @@ npm run test:pins            # pinning an analytic to Home: the registry, the ca
                              #   and that Home's copy of a card is identical to Trends'
 npm run test:projection      # the year-end projection: the run rate against the tax engine's own,
                              #   the seasonal share re-derived a day at a time, the trailing window
+npm run test:guidance        # every info icon on every screen and form opens a real sheet, every
+                             #   row of "Where everything is" lands somewhere, What's new runs through
 ```
 
 **`scripts/check-behaviour.mjs` is the only test that presses a button.** The tax suite checks the
@@ -1004,7 +1008,9 @@ The tour used to be eight full-screen `.ov` cards describing controls the reader
 ## Setup wizard & guided tour (S.settings)
 - **First run**: `startSetup()` fires from init when `S.settings.onboarded` is false. `normalize()` sets `onboarded = true` for any state that already has clients or sessions, so existing installs never see it.
 - **Flow engine**: `flowStart/flowGo/flowNext/flowClose` drive a full-screen `.ov` overlay (z-index 45 — above the tab bar, below `#sheet`) from an array of step objects `{emoji,h,sub,html,mount,validate,onLeave}`. Shared by setup and the tour.
-- **Tour**: `startTour()` — now on-page coach marks, not the `.ov` flow. Eight stops on day-one essentials; per-screen depth lives in `TIPS`. Read-only, replayable from Settings › Setup & help, where the tips can also be switched off or reset.
+- **Tour**: `startTour()` — now on-page coach marks, not the `.ov` flow. Eight stops on day-one essentials; per-screen depth lives in `TIPS`. Read-only, replayable from Settings › Setup & help, where the tips can also be switched off or reset. Its last stop names the map below.
+- **Where everything is** (Sep 2026): `appMapSheet()` — one sheet listing every tab, segment and Settings group with a line each, then **what to do and how often** (weekly / monthly / every few months / yearly), every row a link. Built from `APP_MAP` / `APP_JOBS` and filtered through the same `tabEnabled()` / `feat()` the tab bar uses, so it never lists a screen this install cannot open. Reached from Settings › Setup & help, from the empty Home screen, and named at the end of the tour and in What's new. It is the answer to "where did that go" and "what am I supposed to be doing in here" — the two questions a feature-dense app gets asked after setup has faded. Keep `APP_MAP` in step when a segment is added, renamed or removed; `npm run test:guidance` clicks every row.
+- **What's new**: `WHATS_NEW` (currently **4**) against `tt_whatsnew` in localStorage; `whatsNewSteps()` is rewritten each release cycle and describes only that cycle — the Aug 2026 reorganisation notes were replaced in Sep 2026 rather than appended to, because ten steps is a wall nobody reads. Bump the constant whenever the steps change.
 - **Re-run**: `confirmRerunSetup()` — warning sheet requiring the user to type `RESET SETUP`. Skips the rooms step once sessions exist.
 - **Feature flags**: `feat(key)` gates tabs (`TABS[].ft`), gamification (`celebrate`, `Confetti.burst`), attention feed, receipts, accreditation, `peer` (peer supervision, dep: supervision) and `finances` (costs & other income, dep: income). Off = hidden, never deleted.
 - **Removed Sep 2026: the quick-add command bar** (`parseQuickLog` / `quickLogBuild` / `mountQuickLog`, the `quickadd` flag and its reveal step). It was a second, less capable route into the session form — every session it created still had to be opened and corrected. A stored `features.quickadd` on an existing install is now inert; don't reintroduce the key.
@@ -1017,27 +1023,31 @@ The tour used to be eight full-screen `.ov` cards describing controls the reader
 
 ## UI structure
 - Single-page app with tab navigation (`nav.tabs`).
-- Views rendered into `<main id="main">` — each tab calls its own `render*()` function.
+- Views rendered into `<main id="main">` — `go(tab)` calls `VIEWS[tab]()` and attaches what it returns.
 - Bottom-sheet modal: `#sheet` / `#sheetBody` / `openSheet(title, html)`.
 - FAB (`#fab`) = quick "Log session".
 - Toast notifications: `toast(msg)`.
 - Dark/light theme via `data-theme` on `<html>`. `localStorage('tt_theme')` holds `light`/`dark`; **absent = auto** (follow the device, via a `matchMedia` listener). Use `themePref()` to read it, `setTheme('light'|'dark'|'auto')` to set it.
-- Colour scheme via `data-palette` on `<html>`, persisted to `localStorage('tt_palette')`.
+- Colour scheme via `data-palette` on `<html>`, persisted to `localStorage('tt_palette')` — **switched off** while `PALETTES_ENABLED` is false (see Setup wizard § Palettes); the attribute is always `sage`.
 
 ## Key views / render functions
-| Function | Tab |
+There are no `render*()` functions for tabs any more. `VIEWS[tab]` is a function returning the
+view element, and `go(tab,opts)` calls it. Inside a view the segments are plain closures.
+
+| Function | What it draws |
 |---|---|
-| `renderHome()` | Dashboard / KPIs |
-| `renderClients()` | Clients list |
-| `renderSessions()` | Sessions (includes Incomplete sub-tab) |
-| `renderIncomplete()` | Bulk notes editor (room fees moved to Money, Sep 2026) |
-| `renderUnpaid()` | Bulk unpaid session payment screen |
-| `renderCalendar()` | Calendar view |
-| `renderRooms()` | Room management (per-session or monthly billing) |
-| `financeCards()` / `financeForm()` | Business costs & other income (inside Revenue) |
-| `retentionCardHTML()` | Records retention review (inside Settings) |
-| `renderReports()` | Raw data / reports |
-| `renderSettings()` | Settings / data management |
+| `VIEWS.home` | Dashboard: attention feed, four KPIs, pinned analytics, the blocks in `HOME_CARDS` order |
+| `VIEWS.sessions` | List (Upcoming / Unpaid / Incomplete / All) and Calendar; `renderUnpaid` and `renderIncomplete` are its bulk editors |
+| `VIEWS.practice` | Clients, Rooms, Supervision (`supervisionPanel()` — Log / Peer / CPD / Insights), Business analytics (`renderMetrics`) |
+| `VIEWS.money` | Overview, Costs & income (`roomFeesCard`, `roomRentCard`, `financeCards`), Table (`rawPanel()`) |
+| `VIEWS.tax` | Now (`drawNow`), Estimate, Pot & payments (`drawPayments`), Per year (`drawAllowances`), Making Tax Digital (`drawMTD`) |
+| `VIEWS.settings` | The six collapsible groups; `retentionCardHTML()`, `basisCardHTML()`, `taxRegionCardHTML()` are cards inside it |
+| `appMapSheet()` | "Where everything is" — every tab, segment and Settings group as a link, plus the what-to-do-and-how-often list |
+
+Small helpers most screens reach for (all near the top of the script): `derivedSessions()` (every
+session paired with `derive()`), `goSessions(seg)` (land on a Sessions worklist), `goRoomCosts(card)`
+(focus a room-cost card on Money › Costs & income) and `emptyNote(text)` (the one empty-state line).
+A table of contents for the whole script sits at the top of the main `<script>` block.
 
 ## Locale / formatting
 - Currency: `gbp(n)` → `£` with locale formatting (en-GB).
