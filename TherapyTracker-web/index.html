@@ -12863,7 +12863,9 @@ function stepNotes(w){return{emoji:gi("notes"), h:"Your notes don’t live here"
       [gi("receipts"),"So nothing you print is confidential","A statement for an insurer shows dates, fees and attendance against a client code. That’s all there is to show."],
       [gi("shield"),"And a lost phone is a much smaller problem","There’s no clinical record here to lose."]
     ])+
-    '<div class="ovnote">There’s a second box for practical reminders — “invoice goes to her employer”, “moved from Tuesday”. Handy, but keep it administrative: it appears on screen and in exports.</div>';
+    '<div class="ovnote">There’s a second box for practical reminders — “invoice goes to her employer”, “moved from Tuesday”. Handy, but keep it administrative: it appears on screen and in exports.</div>'+
+    '<div class="ovnote">Need somewhere for the notes themselves? <b>GroundWork Notes</b> is a companion app built for exactly that — and the two can sync, so it always knows which sessions still need writing up. Only the cadence travels across; never the notes. '+infoLink("notes-sync","How the sync works ›")+'</div>';
+    wireInfo(host);
   }};}
 /* CPD is everybody; accreditation and peer supervision are both minority needs, so both are
    asked here rather than left to be found. Peer in particular is never offered by a milestone —
