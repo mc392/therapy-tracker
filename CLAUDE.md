@@ -587,6 +587,8 @@ npm run test:rent            # room rent: rhythms, date ranges, the ledger, and 
 npm run test:tiers           # the Plus/Pro gate matrix, and what an untiered entitlement means
 npm run test:pins            # pinning an analytic to Home: the registry, the cap, the picker,
                              #   and that Home's copy of a card is identical to Trends'
+npm run test:projection      # the year-end projection: the run rate against the tax engine's own,
+                             #   the seasonal share re-derived a day at a time, the trailing window
 ```
 
 **`scripts/check-behaviour.mjs` is the only test that presses a button.** The tax suite checks the
@@ -778,6 +780,61 @@ row. `settings.homePins` holds the keys.
   **Done**, one `commit()`. Readiness is deliberately **not** shown — working out whether all
   twenty-two have enough data means running all twenty-two, and a card that is waiting says so in
   its own words once it is on the screen.
+
+### Where this year lands — the year-end projection (Sep 2026)
+`anaProjection()` answers "what will this year come to" **three ways at once**, because there is no
+single right answer and hiding the working behind one number is how a projection gets believed more
+than it deserves. Revenue and profit before tax for the current tax year, on a basis the reader
+picks; it lives in **Business analytics › Money** (`acProjection`, registry key `projection`) and
+not on Money › Overview, for three reasons: it is inference from history rather than a record of
+what happened, the seasonal basis needs `anaSeasonality()` which lives here, and only an `ANA_CARDS`
+entry can be pinned to Home.
+- **Run rate is deliberately the dumb one, and that is load-bearing.** `elapsed`/`yearDays` is
+  copied from `taxForYear()` character for character so the run-rate profit **is** the figure
+  Tax › Estimate projects its bill from. A smarter scale here — projecting income and costs
+  separately, say, since `ledgerBetween` already knows a whole year's recurring costs — is more
+  accurate and was rejected: two screens quoting two different year-ends is worse than one screen
+  quoting a rougher one, and nothing would throw. `npm run test:projection` asserts the equality.
+- **Seasonal divides by a share of a typical YEAR, not a share of the days.** `projSeasonWeight()`
+  walks the tax year a month at a time against `anaSeasonality()`'s indices, pro-rating the two
+  April stubs by days. A month with no history is worth an **average** month (100): `idx == null`
+  means "not measured", which is a different fact from £0. It gates on seasonality's own two-year
+  rule and says so rather than quietly falling back to the flat one.
+- **Trailing 12 months is not a forecast and must never be worded as one.** The twelve **complete**
+  months to last month end — the month in progress is excluded, or it reads low every time and
+  lowest on the 1st. Home's one-line summary carries a **separate sentence** for it: substituting
+  the basis name into "on X, 2026-27 lands near £28,170" says the year just gone is this year,
+  which is the one claim the card exists to let the reader check.
+- **`projWindow(from,to)` returns income AND profit together**, counted exactly the way
+  `tyIncome`/`tyNet` count a tax year (same basis, same room/supervision/ledger arithmetic). One
+  function rather than two so the pair cannot drift into a margin nobody can reconcile.
+  `tyIncome`/`tyNet` stay the source for the tax year itself — they are memoised and they are what
+  the tax engine reads — so this is only ever asked about windows that are **not** a tax year.
+- **The chart is CLIENT FEES ONLY, and it says so above itself.** Other income and the ledger are
+  in the headline figures; charting them per month means twelve more `ledgerBetween()` passes on
+  the app's hottest render for a line most practices do not have.
+- **Thirteen bars, in the order the year happens.** A tax year starts and ends in April. Folding
+  the closing 1–5 April stub into the opening bar was tried first and puts a "still to come" cap on
+  the **leftmost** bar — five days of next April sitting on top of a month that finished in the
+  spring. Both Aprils are labelled plainly (at 9px "Apr ’27" runs into March beside it) and the
+  chart states its full span in its own heading instead.
+- **`scrollChart` gained `data-keepleft`.** Every other chart here reads backwards from now, so the
+  newest period is the one to land on; this one reads **forward from a fixed start**, and without
+  it the reader lands in next February with April off the left edge. Marked on the wrap rather than
+  passed at every call site — the generic sweeps in Trends and on Home pass `null` and have no idea
+  which chart they are looking at.
+- **Memoised through `tyMemo`**, which is cleared on every navigation, save and `normalize()`.
+  Home draws it on the app's hottest render and Business analytics draws it again a tap later.
+- **The basis toggle is not a redraw.** All three panes are in the markup and `wireProjection()`
+  flips which is hidden. The same card is drawn on Home when it is pinned, where a redraw means
+  re-running the whole home screen to change one word. `projBasis` is module-level like `trendSeg`,
+  so Home and Business analytics can never be showing two different bases.
+- **Home links through** (`goProjection`): "Billed this tax year" is a part-year figure and the
+  question in front of it is what the whole year comes to, so the tile is now `.clk` with a
+  chevron and one line under the four figures carries the projection. Both are gated on
+  `anaPinnable()` for the same reason `pinBtn()` is — a figure linking to a screen this device
+  cannot open is not a link. `trendsHeadFig("money")` leads with it too, falling back to
+  `anaFloor`'s typical month.
 
 ### The four sections
 `TREND_SEGS` / `trendSeg`, with its own segment bar inside the view, and above the cards a **headline strip** (`trendsHeadline`) carrying one real figure from each of the three sections you are *not* reading, each tapping through to it — navigation as much as decoration. Same contract as everything else here: `trendsHeadFig()` returns `null` rather than invent one, the tile is left out, and if none of the three is ready the strip does not render. **Sections are built only when opened** — `clientAttendance()` across a whole client list and `anaCohorts()` are both real work, and changing section redraws `#trbody` only, never `go()`, so the reader is not thrown to the top of Practice.

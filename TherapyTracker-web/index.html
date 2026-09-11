@@ -396,6 +396,13 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .seg.fade-l::before,.seg.fade-r::after{opacity:.8}
 .seg button{border:0;background:transparent;padding:8px 13px;border-radius:9px;font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap;cursor:pointer}
 .seg button.on{background:var(--card);color:var(--brand-dark);box-shadow:0 1px 2px var(--ring),0 2px 8px -4px var(--ring)}
+/* ===== Year-end projection: the basis picker, and the three panes it swaps between =====
+   ALL THREE PANES ARE RENDERED and the toggle only changes which one is shown. Redrawing the
+   card on every tap would move the page under the reader's thumb — and the same card is drawn
+   on Home when it is pinned, where a redraw means re-running the whole home screen. */
+.projseg{margin:0 0 12px}
+.projpane[hidden]{display:none}
+.projnote{margin:10px 0 0}
 /* The one tab in a bar that costs extra — a violet glow marks it out from its plain siblings,
    the same colour as the middle rung of the subscription-image tier ladder (see icon-ideas/
    groundwork/subscription-business-1024.html) rather than one invented for this screen alone.
@@ -2993,16 +3000,36 @@ VIEWS.home=function(){
      exactly as before. See HOME_CARDS. */
   /* Whatever the reader pinned from Business analytics, drawn by those cards' own builders. */
   const pinsBlock=homePinsBlock();
+  /* WHERE THE YEAR LANDS, under the four figures that started it.
+     "Billed this tax year" is a part-year number, and the question the reader actually has in
+     front of it is what the whole year comes to — so the tile now leads somewhere rather than
+     just sitting there. One line, the reader's own basis, and both it and the tile open the card
+     that owns the working. Gated on anaPinnable() for the same reason pinBtn() is: a figure that
+     links to a screen this device cannot open is not a link, and the projection is part of what
+     Business analytics is sold as. */
+  const proj=anaPinnable()?anaProjection():null;
+  const projKey=proj?projActive(proj):null;
+  const projM=projKey?proj.modes[projKey]:null;
+  /* THE TRAILING BASIS IS NOT A PROJECTION AND MUST NOT BE WORDED AS ONE. "On the twelve months
+     just gone, 2026-27 lands near £28,170" says the year just gone is this year, which is the
+     one claim this whole card exists to let the reader check. Two sentences, not one with a
+     substituted phrase. Only the tail is underlined: a two-line dashed link is a wall, and the
+     figures are there to be read rather than tapped. */
+  const projLine=projM?'<p class="small muted center" id="projLine" style="margin:8px 0 14px">'+
+    (projKey==="ttm"
+      ? 'The twelve months just gone: <b>'+gbp(projM.income)+'</b> billed, <b>'+gbp(projM.net)+'</b> before tax. '
+      : 'On '+esc(projBasisName(projKey))+', '+esc(proj.ty)+' lands near <b>'+gbp(projM.income)+'</b> billed and <b>'+gbp(projM.net)+'</b> before tax. ')+
+    '<span class="taxlink" id="kProj">Where this year lands \u203a</span></p>':'';
   const parts={
     attention:(S.sessions.length&&feat("attention")?'<div class="card"><h2>Needs attention</h2><div class="attn" id="attn"></div></div>':''),
     pins:(pinsBlock.html?'<div id="homePins">'+pinsBlock.html+'</div>':''),
     kpis:`
-   <div class="kpis mb" data-coach="home-kpis">
-     <div class="kpi"><div class="v" data-to="${billed}" data-fmt="m">${gbp(billed)}</div><div class="l">Billed this tax year</div></div>
+   <div class="kpis${projLine?"":" mb"}" data-coach="home-kpis">
+     <div class="kpi${projM?" clk":""}"${projM?' id="kBilled"':''}><div class="v" data-to="${billed}" data-fmt="m">${gbp(billed)}</div><div class="l">Billed this tax year${projM?" \u203a":""}</div></div>
      <div class="kpi good"><div class="v" data-to="${seenRows.length}">${seenRows.length}</div><div class="l">Sessions this tax year${seenClients?` · ${seenClients} client${seenClients===1?"":"s"}`:""}</div></div>
      <div class="kpi clk ${outstanding?'bad':''}" id="kOut"><div class="v" data-to="${outstanding}" data-fmt="m">${gbp(outstanding)}</div><div class="l">Outstanding now ›</div></div>
      <div class="kpi clk" id="kNext7"><div class="v" data-to="${next7.length}">${next7.length}</div><div class="l">Sessions next 7 days ›</div></div>
-   </div>`,
+   </div>${projLine}`,
     spark:sparkCard,
     goals:goalsCard,
     log:`
@@ -3035,6 +3062,8 @@ VIEWS.home=function(){
       <div class="li-sub">${fmtDshort(x.s.date)}${x.s.time?" · "+esc(x.s.time):""} · ${esc(x.s.mode||"")}</div></div>
       <div class="li-right">${gbp(d.rate)}</div></div>`}).join("");
   up.querySelectorAll(".list-item").forEach(li=>li.onclick=()=>sessionForm(S.sessions.find(s=>s._id===li.dataset.id)));
+  const kbl=v.querySelector("#kBilled");if(kbl)kbl.onclick=()=>goProjection();
+  const kpj=v.querySelector("#kProj");if(kpj)kpj.onclick=()=>goProjection();
   const kb=v.querySelector("#kOut");if(kb)kb.onclick=()=>{sessFilter.view="list";sessFilter.seg="unpaid";go("sessions");};
   const kn=v.querySelector("#kNext7");if(kn)kn.onclick=()=>{sessFilter.view="list";sessFilter.seg="upcoming";go("sessions");};
   v.querySelectorAll(".list-item[data-cid]").forEach(li=>li.onclick=()=>clientProfile(S.clients.find(c=>c._id===li.dataset.cid)));
@@ -3057,6 +3086,7 @@ VIEWS.home=function(){
     const lpu=ph.querySelector("#lpUnpaid");
     if(lpu)lpu.onclick=e=>{e.stopPropagation();sessFilter.view="list";sessFilter.seg="unpaid";go("sessions");};
     wireAgedFolds(ph,pinsBlock.folds||{});
+    wireProjection(ph);
     /* Unpinning from here removes the card the reader is looking at, so Home redraws — but
        keepScroll, or unpinning the third of three would fling them back to the top. */
     wirePins(ph,()=>go("home",{keepScroll:true}));
@@ -3194,6 +3224,12 @@ function periodSeries(gran){
    The width isn't final until layout has run, hence the rAF for the first paint. */
 function scrollChart(wrap,keep){
   if(!wrap)return;
+  /* Every other chart here reads backwards from now, so the most recent period is the one to
+     land on. A chart that runs FORWARD from a fixed start — the tax year, April to April — opens
+     at its start instead, or the reader lands in next February with April off the left edge.
+     Marked on the wrap rather than passed by every call site: the generic sweeps in Trends and on
+     Home pass null and have no idea which chart they are looking at. */
+  if(keep==null&&wrap.dataset&&wrap.dataset.keepleft)keep=0;
   const put=()=>{if(!wrap.isConnected&&keep==null)return;
     wrap.scrollLeft=(keep!=null)?keep:Math.max(0,wrap.scrollWidth-wrap.clientWidth);};
   /* The chart is built before its view is attached, so at this point it has no width to scroll.
@@ -4102,6 +4138,196 @@ function anaFloor(){
     spread:med>0?Math.round((med-worst.revenue)/med*100):0};
 }
 
+/* ============ 1.1b · What will the whole year come to? ============ */
+
+/* WHERE THE YEAR LANDS — revenue and profit before tax, on three bases the reader picks between.
+   There is no single right answer to "what will this year come to", which is exactly why this
+   card offers three rather than picking one and hiding the working:
+
+     • RUN RATE      everything counted for the tax year so far, scaled by how much of the year
+                     has gone. Deliberately the same arithmetic as taxForYear()'s projAnnual —
+                     see the note on `elapsed` below — so the profit here IS the figure Tax ›
+                     Estimate works its bill out from. Two screens quoting two year-ends is the
+                     one failure this must not produce.
+     • SEASONAL      the same figures weighted by WHICH months have gone rather than how many
+                     days. A practice three months past a quiet summer is not on the pace its
+                     calendar says it is. Needs anaSeasonality(), so it needs two years, and it
+                     says so rather than quietly falling back to the flat one.
+     • LAST 12 MO    not a forecast at all: the twelve complete months just gone, actually
+                     counted. It is the sanity check on the other two.
+
+   Same contract as every other ana*: pure, reads S and today(), writes nothing, and returns
+   {ready:false,need:"..."} per basis rather than inventing a figure. */
+
+/* Income and profit for an arbitrary window, counted EXACTLY the way tyIncome and tyNet count a
+   tax year — same basis, same session/room/supervision/ledger arithmetic. One function rather
+   than two so the pair can never drift: a revenue that includes other income beside a profit
+   that does not is a margin nobody can reconcile. tyIncome/tyNet stay the source for the tax
+   year itself (they are memoised, and they are what the tax engine reads); this is only ever
+   asked about windows that are not a tax year. */
+function projWindow(from,to){
+  if(!from||!to||from>to)return {income:0,net:0};
+  const cash=taxBasis()==="cash";
+  let fees=0,room=0,sup=0;
+  S.sessions.forEach(s=>{
+    const when=cash?(s.paidDate||null):s.date;
+    if(cash&&!when)return;
+    const dd=parseD(when); if(!dd||dd<from||dd>to)return;
+    const d=derive(s); fees+=(d.rate||0); room+=(d.roomRate||0);});
+  const own=r=>{const dd=parseD(r&&r.date); if(dd&&dd>=from&&dd<=to)sup+=(+r.cost||0);};
+  (S.supervision||[]).forEach(own); (S.peerSupervision||[]).forEach(own);
+  const led=ledgerBetween(from,to,{});
+  return {income:Math.round(fees+led.otherIncome),net:Math.round(fees-room-sup+led.total)};
+}
+
+/* What share of a TYPICAL year's takings normally falls between two dates. Whole months are
+   worth their own seasonal index; the part-months at each end of a tax year (6 April, 5 April)
+   are pro-rated by days. A month with no history is worth an AVERAGE month (100), never nothing
+   — `idx == null` means "not measured", which is a different fact from £0. */
+function projSeasonWeight(from,to,idx){
+  if(!from||!to||from>to)return 0;
+  let w=0,m=new Date(from.getFullYear(),from.getMonth(),1),guard=0;
+  while(m<=to&&guard++<40){
+    const next=new Date(m.getFullYear(),m.getMonth()+1,1);
+    const days=Math.round((next-m)/86400000);
+    const a=(m>from)?m:from, last=addDays(next,-1), b=(last<to)?last:to;
+    const span=Math.round((b-a)/86400000)+1;
+    if(span>0&&days>0)w+=(idx[m.getMonth()]==null?100:idx[m.getMonth()])*(span/days);
+    m=next;
+  }
+  return w;
+}
+
+/* A run rate off a fortnight of a tax year is arithmetic, not a forecast. */
+const PROJ_MIN_DAYS=28;
+/* key, the button, and how the basis is named in a sentence. */
+const PROJ_BASES=[
+  ["annual","Run rate","this year’s run rate"],
+  ["seasonal","Seasonal","a seasonally adjusted run rate"],
+  ["ttm","Last 12 months","the twelve months just gone"]
+];
+/* Module-level like trendSeg and statGran: the reader's choice survives a redraw and is the same
+   choice on Home as in Business analytics, so the two screens can never quote different bases. */
+let projBasis="annual";
+function projBasisName(k){const b=PROJ_BASES.find(x=>x[0]===k);return b?b[2]:k;}
+/* Which pane is showing. The stored choice when it has something to say, otherwise the first
+   basis that does — never a pane that can only apologise while another one is ready. */
+function projActive(p){
+  if(p.modes[projBasis]&&p.modes[projBasis].ready)return projBasis;
+  const f=PROJ_BASES.find(x=>p.modes[x[0]].ready);
+  return f?f[0]:null;
+}
+
+/* Memoised through tyMemo, which is cleared on every navigation, every save and every normalize()
+   — every point at which the answer can have changed. Home draws this on its hottest render and
+   Business analytics draws it again a tap later. */
+function anaProjection(){return tyMemo("proj|"+curTaxYear()+"|"+taxBasis(),anaProjectionCalc);}
+function anaProjectionCalc(){
+  const ty=curTaxYear(), b=tyBounds(ty), t=today(), cash=taxBasis()==="cash";
+  const yearDays=Math.round((b.end-b.start)/86400000)+1;
+  /* Character for character what taxForYear() does. The run-rate profit below has to BE the
+     figure Tax › Estimate projects its bill from; re-deriving "how far through the year is it"
+     a second way is how two screens end up a few days apart and quoting different year-ends. */
+  const elapsed=Math.min(yearDays,Math.max(1,Math.round((t-b.start)/86400000)+1));
+  const frac=elapsed/yearDays;
+  const td={income:tyIncome(ty,true),net:tyNet(ty,true)};
+
+  /* Last year, but only where it is a LIKE-FOR-LIKE year. A practice that opened in January has
+     a previous tax year of ten weeks, and "down 74%" against it is not a fall in earnings. */
+  const der=anaDer();
+  const first=der.length?der.reduce((m,x)=>(!m||x.dt<m)?x.dt:m,null):null;
+  const pty=prevTY(ty), pb=tyBounds(pty);
+  const prev=(first&&first<=pb.start)?{ty:pty,income:tyIncome(pty,false),net:tyNet(pty,false)}:null;
+
+  const modes={};
+  const tooEarly=elapsed<PROJ_MIN_DAYS
+    ? "About a month of "+ty+" before a run rate means anything — you are "+plural(elapsed,"day")+" in."
+    : "Some income counted in "+ty+" first. Nothing has been logged against this year yet.";
+  const enough=elapsed>=PROJ_MIN_DAYS&&td.income>0;
+
+  /* --- run rate --- */
+  modes.annual=!enough?{ready:false,need:tooEarly}
+    :{ready:true,share:frac,income:Math.round(td.income/frac),net:Math.round(td.net/frac)};
+
+  /* --- seasonally adjusted --- */
+  const seas=anaSeasonality();
+  let idx=null,share=null;
+  if(seas.ready){
+    idx={}; seas.months.forEach(x=>{idx[x.m]=x.idx;});
+    const full=projSeasonWeight(b.start,b.end,idx);
+    const done=projSeasonWeight(b.start,(t<b.end?t:b.end),idx);
+    share=(full>0)?done/full:null;
+  }
+  modes.seasonal=!enough?{ready:false,need:tooEarly}
+    :!seas.ready?{ready:false,need:seas.need}
+    :(!share||share<0.02)?{ready:false,need:"Too little of "+ty+" has gone for a seasonal weighting to say anything yet."}
+    :{ready:true,share:share,income:Math.round(td.income/share),net:Math.round(td.net/share)};
+
+  /* --- the twelve complete months just gone --- */
+  const have=anaHistoryMonths();
+  const ttmFrom=anaMonthStart(t,12), ttmTo=addDays(anaMonthStart(t,0),-1);
+  modes.ttm=(have<12)
+    ? {ready:false,need:"Twelve complete months of records before there is a full year to look back at. You have about "+plural(Math.max(0,have),"month")+"."}
+    : Object.assign({ready:true,from:ttmFrom,to:ttmTo},projWindow(ttmFrom,ttmTo));
+
+  /* --- the chart: CLIENT FEES by month, actual then estimated ---
+     Fees only, and the card says so. Other income and the ledger are in the headline figures;
+     charting them per month means twelve more ledgerBetween() passes on the app's hottest
+     render for a line most practices do not have.
+     THIRTEEN BARS, NOT TWELVE, and they are in the order the year happens. A tax year starts and
+     ends in April (6–30 April, then 1–5 April), and folding the second stub into the first was
+     tried first: it puts a "still to come" cap on the LEFTMOST bar, five days of next April
+     sitting on top of a month that finished in the spring. A chart read left to right has to run
+     left to right. The closing stub is short, which is the truth about it, and it carries its own
+     year in the label so the two Aprils cannot be read as one. */
+  const buckets=[];
+  {
+    let cur=new Date(b.start),guard=0;
+    while(cur<=b.end&&guard++<20){
+      const nx=new Date(cur.getFullYear(),cur.getMonth()+1,1);
+      const lastDay=addDays(nx,-1), end=(lastDay<b.end)?lastDay:new Date(b.end);
+      /* Both Aprils are labelled plainly. A year in the label is the obvious fix and it does
+         not fit: at 9px "Apr ’27" runs into March beside it. The chart states its own span in
+         full above it, which answers the same question once instead of on every bar. */
+      const bk={m:cur.getMonth(),from:new Date(cur),to:end,l:ANA_MONTHS[cur.getMonth()],
+        days:Math.round((end-cur)/86400000)+1,left:0,actual:0};
+      const openFrom=(cur>t)?cur:addDays(t,1);
+      if(end>=openFrom)bk.left=Math.round((end-openFrom)/86400000)+1;
+      buckets.push(bk); cur=nx;
+    }
+  }
+  const ttmKeys={};
+  S.sessions.forEach(s=>{
+    const when=cash?(s.paidDate||null):s.date;
+    if(cash&&!when)return;
+    const dd=parseD(when); if(!dd||dd>t)return;
+    const amt=derive(s).rate||0;
+    if(dd>=b.start&&dd<=b.end){const bk=buckets.find(x=>dd>=x.from&&dd<=x.to); if(bk)bk.actual+=amt;}
+    if(dd>=ttmFrom&&dd<=ttmTo){const k=dd.getFullYear()+"-"+dd.getMonth();ttmKeys[k]=(ttmKeys[k]||0)+amt;}
+  });
+  const feesTD=buckets.reduce((a,x)=>a+x.actual,0);
+  /* The remainder is spread over the days still to come — flat for the run rate, weighted by each
+     month's own index for the seasonal one. That difference IS the difference between the two
+     bases, drawn rather than described. */
+  const rowsFor=k=>{
+    const md=modes[k]; if(!md.ready)return null;
+    const rest=Math.max(0,(feesTD/md.share)-feesTD);
+    const wt=bk=>((k==="seasonal"&&idx)?(idx[bk.m]==null?100:idx[bk.m]):100)*bk.left;
+    const tot=buckets.reduce((a,x)=>a+wt(x),0);
+    return buckets.map(bk=>({l:bk.l,actual:Math.round(bk.actual),est:tot>0?Math.round(rest*wt(bk)/tot):0}));
+  };
+  if(modes.annual.ready)modes.annual.rows=rowsFor("annual");
+  if(modes.seasonal.ready)modes.seasonal.rows=rowsFor("seasonal");
+  if(modes.ttm.ready){
+    const rows=[];
+    for(let i=12;i>=1;i--){const ms=anaMonthStart(t,i);
+      rows.push({l:ANA_MONTHS[ms.getMonth()],actual:Math.round(ttmKeys[ms.getFullYear()+"-"+ms.getMonth()]||0),est:0});}
+    modes.ttm.rows=rows;
+  }
+  return {ty:ty,from:b.start,to:b.end,prev:prev,td:td,elapsed:elapsed,yearDays:yearDays,frac:frac,
+    pctYear:Math.round(frac*100),basisName:cash?"cash":"accruals",modes:modes};
+}
+
 /* ============ 1.2 · What is an hour actually worth? ============ */
 
 /* EFFECTIVE HOURLY RATE — the figure almost nobody self-employed works out.
@@ -4729,7 +4955,12 @@ function trendsHeadFig(seg){
         .map(x=>(x.s.client||"").toLowerCase()).filter(Boolean));
       if(!seen.size)return null;
       return {fig:String(seen.size),lab:"seen this year",e:"sprout"};}
-    if(seg==="money"){const f=anaFloor();
+    if(seg==="money"){
+      /* Where the year lands leads, when it can: it is the money question people open this
+         section for. The typical month is the fallback, not the headline. */
+      const pj=anaProjection(), k=projActive(pj);
+      if(k)return {fig:moneyShort(pj.modes[k].income),lab:"projected "+pj.ty,e:"money"};
+      const f=anaFloor();
       if(!f.ready)return null;
       return {fig:gbp(f.median),lab:"typical month",e:"money"};}
     if(seg==="time"){const h=anaHourlyRate();
@@ -4813,6 +5044,36 @@ async function homePinToggle(k){
   toast(had?"Removed from your home screen":"Pinned to your home screen");
   return !had;
 }
+/* The basis picker, wired the same way on both screens that can draw this card. It changes which
+   pane is shown and nothing else — no redraw, so Business analytics does not jump and Home does
+   not rebuild. The stored `projBasis` means the choice is already made the next time either
+   screen draws it, which is what keeps Home and Business analytics quoting the same basis.
+   scrollChart runs on the pane that has just appeared: a chart built inside a hidden pane has no
+   width, so it would otherwise sit at scroll 0 showing the oldest month. */
+function wireProjection(host){
+  host=host||document;
+  const cards=host.querySelectorAll(".projcard");
+  if(!cards.length)return;
+  const show=k=>{
+    projBasis=k;
+    cards.forEach(c=>{
+      c.querySelectorAll("[data-pbasis]").forEach(b=>{const on=b.dataset.pbasis===k;
+        b.classList.toggle("on",on);b.setAttribute("aria-pressed",on?"true":"false");});
+      c.querySelectorAll("[data-ppane]").forEach(pn=>{pn.hidden=pn.dataset.ppane!==k;});
+      c.querySelectorAll('[data-ppane]:not([hidden]) .svgwrap').forEach(w=>scrollChart(w,null));
+    });
+  };
+  cards.forEach(c=>c.querySelectorAll("[data-pbasis]").forEach(b=>b.onclick=ev=>{
+    ev.stopPropagation(); show(b.dataset.pbasis);}));
+}
+/* The one way into this card from elsewhere. Business analytics owns it, so everything that
+   points at it has to open the right section as well as the right tab — go() alone would land
+   the reader on Clients. */
+function goProjection(){
+  if(!anaPinnable()){go("money");return;}
+  trendSeg="money"; pracTab="trends";
+  go("practice",{seg:"trends",focus:"anaProjCard"});
+}
 /* `after` is what the screen wants to happen once the pin has changed. Trends repaints the
    buttons and stays put; Home redraws itself, because the card the reader just unpinned is the
    one they are looking at. */
@@ -4830,7 +5091,9 @@ function anaCard(title,infoKey,inner,opt){
      the one control that is in the same place on every card — a reader who has found it once
      must not have to look for it again on the next one. */
   const right=(opt.pin?pinBtn(opt.pin):"")+(opt.right||"");
-  return '<div class="card'+(opt.cls?" "+opt.cls:"")+'">'+cardHead(title,infoKey,right)+
+  /* `id` is for go(tab,{focus:"..."}) — a prompt elsewhere in the app that points AT one card
+     has to be able to land on it, not at the top of the section it lives in. */
+  return '<div class="card'+(opt.cls?" "+opt.cls:"")+'"'+(opt.id?' id="'+esc(opt.id)+'"':'')+'>'+cardHead(title,infoKey,right)+
     (opt.lead?'<p class="small muted" style="margin:-4px 0 10px">'+opt.lead+'</p>':'')+inner+'</div>';
 }
 /* A card that cannot say anything yet says exactly what it is waiting for. Never an empty chart:
@@ -4869,6 +5132,34 @@ function anaRefChart(data,ref,opt){
     '<line x1="'+padL+'" y1="'+refY.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+refY.toFixed(1)+'" stroke="var(--muted)" stroke-dasharray="3 4" opacity=".7"></line>'+
     '<text x="'+(W-padR+3)+'" y="'+(refY+3).toFixed(1)+'" font-size="9" fill="var(--muted)">'+esc(opt.refLabel||String(ref))+'</text>'+
     bars+labs+'</svg></div>';
+}
+/* Actual against estimated, stacked in one bar: the solid part is what has been logged, the pale
+   part on top is what the basis says is still to come. Two separate series would make the reader
+   add them up by eye; one bar whose total IS the projected month is the figure they came for. */
+function anaProjBars(rows){
+  if(!rows||rows.length<2)return '<p class="muted small">Not enough to chart yet.</p>';
+  const h=190,padT=22,padB=44,padL=10,padR=18;
+  /* Sized so a whole tax year — thirteen slices — very nearly fits a 390px phone rather than
+     scrolling: a projection whose last three months are off the edge is not a projection. */
+  const step=Math.max(22,Math.min(46,Math.floor(310/rows.length)));
+  const W=Math.max(280,padL+rows.length*step+padR),innerH=h-padT-padB;
+  const max=Math.max(1,...rows.map(r=>(r.actual||0)+(r.est||0)));
+  const bw=Math.min(24,step-8);
+  const body=rows.map((r,i)=>{
+    const x=padL+i*step+(step-bw)/2, a=r.actual||0, e=r.est||0;
+    const hT=Math.round(innerH*(a+e)/max), hA=Math.round(innerH*a/max);
+    const yT=padT+innerH-hT, yA=padT+innerH-hA;
+    let out="";
+    if(e>0)out+='<rect class="cbar" x="'+x+'" y="'+yT+'" width="'+bw+'" height="'+Math.max(1,hT-hA)+'" rx="3" fill="var(--brand)" opacity=".3"></rect>';
+    if(a>0)out+='<rect class="cbar" x="'+x+'" y="'+yA+'" width="'+bw+'" height="'+Math.max(2,hA)+'" rx="3" fill="var(--brand)"></rect>';
+    return out+'<text x="'+(x+bw/2)+'" y="'+(h-padB+15)+'" text-anchor="middle" font-size="9" fill="var(--muted)">'+esc(r.l)+'</text>';
+  }).join("");
+  const key=rows.some(r=>(r.est||0)>0)
+    ? '<text x="'+padL+'" y="'+(h-6)+'" font-size="9" fill="var(--muted)">Solid = already logged · pale = still to come</text>' : "";
+  return '<div class="svgwrap" data-keepleft="1"><svg viewBox="0 0 '+W+' '+h+'" width="'+W+'" height="'+h+'">'+
+    '<line x1="'+padL+'" y1="'+padT+'" x2="'+(W-padR)+'" y2="'+padT+'" stroke="var(--line)"></line>'+
+    '<text x="'+padL+'" y="'+(padT-5)+'" font-size="9" fill="var(--muted)">'+moneyShort(max)+'</text>'+
+    body+key+'</svg></div>';
 }
 /* Two lines on one axis, for "what you would have billed" against "what you did". */
 function anaGapChart(data){
@@ -4947,6 +5238,47 @@ function anaCtx(){
 }
 
 /* ---- MONEY: what arrives, when, and what it costs to run ---- */
+/* THE BASIS PICKER IS NOT A REDRAW. All three panes are in the markup and the toggle flips which
+   is hidden — see wireProjection(). The card is drawn on Home too when it is pinned, and a
+   redraw there means re-running the whole home screen to change one word. */
+function acProjection(cx,pin){
+  const p=anaProjection();
+  const active=projActive(p);
+  if(!active)return {html:anaWaiting("Where this year lands","ana-projection",p.modes.annual.need,pin)};
+  const seg='<div class="seg projseg" style="display:inline-flex"><div class="segwrap">'+
+    PROJ_BASES.map(x=>'<button type="button" data-pbasis="'+x[0]+'" class="'+(x[0]===active?"on":"")+
+      '" aria-pressed="'+(x[0]===active?"true":"false")+'">'+esc(x[1])+'</button>').join("")+'</div></div>';
+  const note=(k,m)=>{
+    if(k==="annual")return 'Everything counted for '+p.ty+' so far, scaled to the whole year — you are <b>'+p.pctYear+'%</b> of the way through it. '+
+      'This is the same run rate <b>Tax › Estimate</b> works its bill out from, so the two screens cannot quote different year-ends.';
+    if(k==="seasonal")return 'Weighted by <i>which</i> months have gone rather than how many days. About <b>'+Math.round(m.share*100)+'%</b> of a typical year’s takings has usually landed by today, against <b>'+p.pctYear+'%</b> of the days — so '+
+      (m.share>p.frac?'this year is further along than the calendar says, and the projection comes out <b>lower</b> than the flat run rate.'
+                     :'this year has its busier months still to come, and the projection comes out <b>higher</b> than the flat run rate.');
+    return 'Not a forecast — the twelve complete months to <b>'+fmtD(m.to)+'</b>, actually counted. It is the sanity check on the other two: a run rate well above this is a claim that this year is better than the last one, and worth being sure about.';
+  };
+  const pane=k=>{
+    const m=p.modes[k];
+    const inner=!m.ready
+      ? '<div class="anawait">'+gi("clock")+'<span>'+esc(m.need)+'</span></div>'
+      : anaKpis([
+          [gbp(m.income),k==="ttm"?"Revenue, last 12 months":"Revenue, "+p.ty],
+          [gbp(m.net),k==="ttm"?"Profit before tax":"Profit before tax, "+p.ty,m.net>=0?"good":"bad"],
+          [(m.income>0?Math.round(m.net/m.income*100):0)+"%","Kept before tax"],
+          p.prev?[(m.net>=p.prev.net?"+":"−")+gbp(Math.abs(m.net-p.prev.net)),"vs "+p.prev.ty+" ("+gbp(p.prev.net)+")",m.net>=p.prev.net?"good":"bad"]:null
+        ])+
+        '<div class="small muted" style="font-weight:600;margin:2px 0 2px">Client fees \u00b7 '+
+          fmtD(k==="ttm"?m.from:p.from)+' to '+fmtD(k==="ttm"?m.to:p.to)+'</div>'+
+        anaProjBars(m.rows||[])+
+        '<p class="small muted projnote">'+note(k,m)+'</p>';
+    return '<div class="projpane" data-ppane="'+k+'"'+(k===active?"":" hidden")+'>'+inner+'</div>';
+  };
+  const foot='<p class="small muted projnote">So far in '+p.ty+': <b>'+gbp(p.td.income)+'</b> counted and <b>'+gbp(p.td.net)+'</b> before tax, with <b>'+p.pctYear+'%</b> of the year gone. '+
+    'Counted on the <b>'+p.basisName+'</b> basis, like every other tax figure here — profit is before tax, and before anything you draw.</p>';
+  return {html:anaCard("Where this year lands","ana-projection",
+    seg+PROJ_BASES.map(x=>pane(x[0])).join("")+foot,
+    {pin:pin,id:"anaProjCard",cls:"projcard",
+     lead:"Revenue and profit before tax for "+p.ty+", if the rest of the year looks like what you have already logged."})};
+}
 function acSeasonality(cx,pin){
   const seas=anaSeasonality();
   return {html: seas.ready
@@ -5463,6 +5795,7 @@ const ANA_CARDS=[
   {k:"episodes",   seg:"clients",n:"How long clients stay",     d:"Typical length of a piece of work", b:acEpisodes},
   {k:"sources",    seg:"clients",n:"Where clients come from",   d:"Which referral sources bring people who stay", b:acSources},
   {k:"longterm",   seg:"clients",n:"Long-term clients",         d:"Clients seen for 20+ sessions", b:acLongterm},
+  {k:"projection", seg:"money",  n:"Where this year lands",     d:"Revenue and profit before tax, projected three ways", b:acProjection},
   {k:"seasonality",seg:"money",  n:"Seasonality",               d:"Each month against your own average", b:acSeasonality},
   {k:"floor",      seg:"money",  n:"Your floor",                d:"Your worst, typical and best month", b:acFloor},
   {k:"erosion",    seg:"money",  n:"What a session actually earns", d:"What you billed against what your fees say", b:acErosion},
@@ -5670,6 +6003,7 @@ VIEWS.practice=function(){
       /* folded rows are built the first time each block is opened, not now */
       wireAgedFolds(host,built.folds);
       wireInfo(host);
+      wireProjection(host);
       /* Repaint the buttons rather than redraw the section: a pin tapped halfway down a long
          section must not throw the reader back to the top of it. */
       wirePins(host,()=>paintPins(host));
@@ -7560,6 +7894,13 @@ infoDef("ana-funnel","The retention funnel",
   '<p class="small">Every client you have ever seen, counted at four depths. A client at 12 sessions is counted in all three bands below 12 as well — it is a funnel, not four separate groups.</p>'+
   '<p class="small">The percentages are of everyone who ever started. A practice where most people stop after one or two sessions and one where most reach twelve are doing very different work, and this is the quickest way to see which yours is.</p>'+
   '<p class="small muted">It says nothing about <i>when</i> — a client who finished four years ago counts the same as one you saw yesterday. Cohort retention is the version with time in it.</p>');
+infoDef("ana-projection","Where this year lands",
+  '<p class="small">Revenue and profit before tax for the whole tax year, worked out from what you have already logged. There is no single right way to do this, so there are three — and you can see what each of them assumes.</p>'+
+  '<div class="acc-work"><div><b>Run rate</b> — everything counted for the year so far, scaled by how much of the year has gone. Simple, and the same arithmetic <b>Tax › Estimate</b> uses, so the two screens always agree.</div>'+
+  '<div><b>Seasonal</b> — the same figures, but weighted by <i>which</i> months have gone rather than how many days. Three months past a quiet summer you are further ahead than the calendar says; three months before a busy autumn you are further behind. Needs two full years of history.</div>'+
+  '<div><b>Last 12 months</b> — not a forecast at all. The twelve complete months just gone, actually counted. The other two are claims about the future; this one is a fact, and it is the thing to check them against.</div></div>'+
+  '<p class="small mt">Profit is <b>before tax and before anything you draw</b> — it is the figure a Self Assessment return is built on, not what lands in your account. Everything is counted on whichever basis your tax figures use (cash or accruals), set in <b>Settings › Your practice</b>.</p>'+
+  '<p class="small muted">Two things it deliberately does not do. It counts what has <i>happened</i>, not what is in the diary — sessions already booked for later in the year are not added on top. And it scales your costs along with your income, so a one-off bill still to come (an annual insurance premium, a training course) is not in the profit figure unless you have already entered it under <b>Costs &amp; income</b>, where recurring costs are counted for the whole year whether or not they have fallen due.</p>');
 infoDef("ana-seasonality","Seasonality",
   '<p class="small">Each calendar month set against your own average month, indexed to 100. <b>118</b> means that month typically runs 18% above your average; <b>76</b> means 24% below.</p>'+
   '<p class="small">It needs two full years before it says anything, because one August tells you about one August rather than about Augusts.</p>'+
