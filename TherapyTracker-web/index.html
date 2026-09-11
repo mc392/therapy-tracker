@@ -493,6 +493,10 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
    bar reaches both edges. */
 .sheet-head{position:sticky;top:0;background:var(--bg);display:flex;align-items:center;gap:10px;
   margin:0 -18px;padding:20px 18px 12px;z-index:2}
+/* Grip bar — pure decoration signalling the swipe-to-close gesture below. A ::before on the
+   already-positioned (sticky) header, so it needs no markup and can't shift the title/✕ row. */
+.sheet-head::before{content:"";position:absolute;top:8px;left:50%;transform:translateX(-50%);
+  width:36px;height:4px;border-radius:2px;background:var(--hair)}
 .sheet-head h2{flex:1;margin:0;font-size:17px;text-transform:none;color:var(--ink)}
 .sheet-inner h3{font-size:14px;margin:0 0 4px;color:var(--brand-dark)}
 .taxlink{color:var(--brand);font-weight:700;cursor:pointer;border-bottom:1px dashed var(--brand)}
@@ -1872,6 +1876,37 @@ function openSheet(title,bodyEl){$("#sheetTitle").textContent=title;const b=$("#
 function closeSheet(){$("#sheet").classList.remove("open")}
 $("#sheetClose").onclick=closeSheet;
 $("#sheet").addEventListener("click",e=>{if(e.target.id==="sheet")closeSheet()});
+/* Swipe-down-to-close. Touch/pen only — a mouse drag is text selection, not a gesture, and
+   desktop already has the ✕. Only starts when the sheet is scrolled to the top and the touch
+   didn't land on something interactive, or the same drag would fight a form control's own
+   behaviour (a slider, a select, text selection in a textarea) or a chart's own horizontal
+   scroller. SHEET_CLOSE_PX is how far down counts as "meant it", not an accidental nudge. */
+(function(){
+  const SHEET_CLOSE_PX=100;
+  const inner=$("#sheet .sheet-inner");
+  let dragId=null,startY=0,dy=0;
+  function draggable(t){return !t.closest("input,textarea,select,button,a,canvas,[contenteditable],.rawscroll,.svgwrap,.hmgrid")}
+  inner.addEventListener("pointerdown",e=>{
+    if(e.pointerType==="mouse"||inner.scrollTop>0||!draggable(e.target))return;
+    dragId=e.pointerId;startY=e.clientY;dy=0;
+    inner.setPointerCapture(dragId);
+    inner.style.transition="none";inner.style.touchAction="none";
+  });
+  inner.addEventListener("pointermove",e=>{
+    if(dragId===null||e.pointerId!==dragId)return;
+    dy=Math.max(0,e.clientY-startY);
+    inner.style.transform=dy?`translateY(${dy}px)`:"";
+  });
+  function endDrag(e){
+    if(dragId===null||e.pointerId!==dragId)return;
+    inner.releasePointerCapture(dragId);dragId=null;
+    inner.style.transition="";inner.style.touchAction="";inner.style.transform="";
+    if(dy>SHEET_CLOSE_PX)closeSheet();
+    dy=0;
+  }
+  inner.addEventListener("pointerup",endDrag);
+  inner.addEventListener("pointercancel",endDrag);
+})();
 function curTheme(){return document.documentElement.getAttribute("data-theme")==="dark"?"dark":"light";}
 function systemTheme(){return (window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light";}
 /* stored preference: "light" | "dark" | "auto" (auto = no key, follow the device) */
