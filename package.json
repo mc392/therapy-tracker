@@ -14,6 +14,7 @@
     "test:tiers": "node scripts/check-tiers.mjs",
     "test:pins": "node scripts/check-pins.mjs",
     "test:projection": "node scripts/check-projection.mjs",
+    "test:guidance": "node scripts/check-guidance.mjs",
     "sync": "cap sync ios && node scripts/add-native-plugin.mjs && node scripts/register-native-plugin.mjs && node scripts/add-watch-target.mjs && node scripts/install-assets.mjs && node scripts/prune-public.mjs",
     "ios": "npm run check && npm run sync && cap open ios",
     "open": "cap open ios",

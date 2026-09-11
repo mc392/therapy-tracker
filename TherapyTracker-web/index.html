@@ -1006,6 +1006,11 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 .wkdots i{width:15px;height:15px;border-radius:4px;background:var(--soft);flex:none}
 .wkdots i.att{background:var(--brand)} .wkdots i.lc{background:color-mix(in srgb,var(--bad) 45%,var(--soft))} .wkdots i.up{border:1.5px dashed var(--brand);background:transparent;box-sizing:border-box}
 
+/* ===== Where everything is (the app map) ===== */
+.appmap .mapic{display:inline-flex;width:20px;height:20px;color:var(--brand-dark)}
+.appmap .mapic svg{width:20px;height:20px;display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.appmap .grp-h{display:flex;align-items:center;gap:8px}
+
 /* ===== on-page coaching =====
    A spotlight over the real control rather than a card in front of it. The whole point is that
    the thing being described stays visible while it is described, so sits ABOVE the tab bar (35)
@@ -3033,7 +3038,7 @@ VIEWS.home=function(){
   _homeVisible=order.filter(k=>parts[k]);
   const arrangeRow=_homeVisible.length>1
     ? '<p class="small muted center" style="margin:16px 0 0"><span class="taxlink" id="hArrange">Arrange this screen ›</span></p>' : '';
-  v.innerHTML=(S.sessions.length?"":'<div class="hint" style="font-size:14px">👋 <b>Nothing logged yet.</b> Tap <b>＋ New session</b> below to start, or open <b>⚙ Settings → Restore from backup</b> to load a <b>.json</b> backup from another device. Need a refresher? <span class="taxlink" id="hTour">Take the guided tour ›</span></div>')+
+  v.innerHTML=(S.sessions.length?"":'<div class="hint" style="font-size:14px">👋 <b>Nothing logged yet.</b> Tap <b>＋ New session</b> to start, or restore a backup from another device in <b>⚙ Settings › Data &amp; backup</b>. <span class="taxlink" id="hTour">Take the guided tour ›</span> &nbsp;·&nbsp; <span class="taxlink" id="hMap">Where everything is ›</span></div>')+
     order.map(k=>parts[k]||"").join("")+arrangeRow;
   const up=v.querySelector("#up");
   if(!upcoming.length)up.innerHTML='<p class="muted small">No future sessions logged.</p>';
@@ -3053,6 +3058,7 @@ VIEWS.home=function(){
   v.querySelector("#qRepeat").onclick=()=>repeatPicker();
   const qs=v.querySelector("#qSup");if(qs)qs.onclick=()=>supervisionForm(null);
   const ht=v.querySelector("#hTour");if(ht)ht.onclick=()=>startTour();
+  const hm=v.querySelector("#hMap");if(hm)hm.onclick=()=>appMapSheet();
   const ha=v.querySelector("#hArrange");if(ha)ha.onclick=()=>homeArrangeSheet();
   /* ---- the pinned analytics ----
      Wired inside their own container, never across the whole view: "Coming up" also renders
@@ -3812,7 +3818,7 @@ VIEWS.sessions=function(){
     container.innerHTML='<div class="bulkbar"><div class="hint" style="margin-top:4px">Sessions you haven’t marked as written up — tick the ones that are done, then Save.</div>'+
       '<div class="bbtns"><button class="btn sm sec" id="allNotes">✓ All notes done</button></div>'+
       '<button class="btn full savebig" id="saveInc">Save (0)</button></div><div id="irows"></div>'+
-      '<p class="small muted" style="margin:10px 2px 0">Room fees aren’t here any more — a session raises its fee automatically and you settle it in <span class="taxlink" id="incRoomGo">Money › Room fees ›</span></p>';
+      '<p class="small muted" style="margin:10px 2px 0">Room fees are settled separately, under <span class="taxlink" id="incRoomGo">Money › Room fees ›</span></p>';
     const irw=container.querySelector("#irows");
     const stage={};
     irw.innerHTML=rows.map(x=>{const s=x.s,d=x.d;
@@ -3926,7 +3932,8 @@ function supervisionPanel(){
           '<div class="li-right">'+(+p.cost?gbp(p.cost):'<span class="small muted">free</span>')+'</div></div>').join("")
           :emptyNote("No peer supervision logged yet."))+'</div>'+
         '<p class="small muted center">'+(Math.round(hrs*10)/10)+' hr'+(hrs===1?'':'s')+' logged'+(cost?' · '+gbp(cost)+' spent':'')+'.</p>'+
-        '<div class="card"><h2>What this counts toward</h2><p class="small muted" style="margin:0">Peer supervision adds to your <b>total accreditation hours</b> on the Insights tab. It is deliberately left out of the <b>1:6 clinical-to-supervision ratio</b>, which only counts formal clinical supervision — that’s the BACP rule, not an app decision.</p></div>';
+        '<p class="small muted center">Counts toward your accreditation hours, not the 1:6 ratio. '+infoLink("peer-counts","Why")+'</p>';
+      wireInfo(sb);
       sb.querySelector("#addPeer").onclick=()=>peerForm(null);
       sb.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>peerForm((S.peerSupervision||[]).find(p=>p._id===li.dataset.id)));
     }
@@ -3948,10 +3955,11 @@ function supervisionPanel(){
         '<div class="toolbar"><button class="btn sm" id="addCpd">＋ Log CPD</button></div>'+
         '<div class="card" style="padding:4px 12px">'+(log.length?log.map(row).join("")
           :emptyNote("No CPD logged yet. Workshops, courses, reading, podcasts — anything that counts toward your hours."))+'</div>'+
-        (log.length?'<p class="small muted center">'+log.length+' '+(log.length===1?'entry':'entries')+' logged · '+
-          (Math.round(c.own*10)/10)+' hr'+(c.own===1?'':'s')+' of it in the last 12 months.</p>':'')+
-        '<div class="card"><h2>What goes here</h2><p class="small muted" style="margin:0">Everything that is <b>not</b> supervision — a training day, a book, a podcast episode, an e-learning module, your own therapy. Supervision is logged on its own tabs and added to the total above, unless you\u2019ve said it shouldn\u2019t count.</p></div>';
+        '<p class="small muted center">'+(log.length?log.length+' '+(log.length===1?'entry':'entries')+' logged · '+
+          (Math.round(c.own*10)/10)+' hr'+(c.own===1?'':'s')+' of it in the last 12 months. ':'')+
+          'Supervision is logged on its own tabs. '+infoLink("cpd-window","What counts")+'</p>';
       mountCPD(sb.querySelector("#cpdMount"));
+      wireInfo(sb);
       sb.querySelector("#addCpd").onclick=()=>cpdForm(null);
       sb.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>cpdForm((S.cpd||[]).find(x=>x._id===li.dataset.id)));
     }
@@ -5956,7 +5964,7 @@ VIEWS.practice=function(){
       const rest=["drifting","review","attendance","cohorts","episodes","sources","longterm"].map(add).join("");
       const totalSessions=withSess.reduce((a,x)=>a+x.n,0);
       const avg=base?Math.round(totalSessions/base*10)/10:0;
-      const html=(folded?'<p class="small muted" style="margin:-2px 0 10px">Lists here lead with the clients worth a look. Anyone attending as expected, finished, or not seen for over a year folds into a \u2304 summary row \u2014 they still count in every total and chart. Tap one to see them.</p>':'')+
+      const html=(folded?'<p class="small muted" style="margin:-2px 0 10px">Clients attending as expected, finished, or not seen for a year are folded into \u2304 rows. They still count in every total \u2014 tap a row to see them.</p>':'')+
         funnel+
         anaKpis([[base,"Clients seen"],[avg,"Avg sessions / client"]])+
         rest;
@@ -6611,7 +6619,6 @@ function roomRentCard(){
     '<div style="padding:0 2px">'+body+'</div>'+
     (live.length?'<p class="small muted" style="margin-top:10px">'+esc(live.map(r=>r.location+" · "+gbp(rentSummary(r.location).amount)+" "+rentEveryLabel(rentSummary(r.location).freq)).join(" · "))+
       ' \u00b7 <span class="taxlink" id="rentGoRooms">change in Rooms \u203a</span></p>':'')+
-    '<p class="prev">Rent counts as a business cost in the tax year it falls due, whether or not it has been ticked off here.</p>'+
     '</div>';
 }
 function wireRoomRent(v){
@@ -7691,10 +7698,6 @@ infoDef("attendance-mechanics","How attendance is worked out",
   '<p class="small">Long gaps (3\u00d7 the usual interval or more) count as a pause and are excluded from the rate, though they are still noted (\u23f8).</p>'+
   '<p class="small">Missed sessions \u2014 late cancellations and DNAs \u2014 don\u2019t count as attended.</p>'+
   '<p class="small">Only the <b>exceptions</b> are listed: clients under '+ATT_OK_PCT+'%, or sitting in a pause right now. Everyone attending as expected folds into one \u2304 row you can open. The average and the chart still count every client \u2014 the fold hides rows, never figures.</p>');
-infoDef("backup-restore-detail","What a backup contains",
-  '<p class="small">Export regularly to a file you keep (iCloud/Files/email).</p>'+
-  '<p class="small">The <b>.json backup is the complete copy</b> \u2014 it holds every session, supervision entry, client, room and setting. The CSVs are spreadsheet-friendly extracts.</p>'+
-  '<p class="small">No export contains clinical notes \u2014 the sessions\u2019 <b>notes</b> column records whether yours were written up, nothing more.</p>');
 /* Three different things in this app are called a backup, they protect against different
    failures, and only one of them is the one that matters. Spelling that out here rather than
    in three separate cards is the only way a reader can compare them. */
@@ -7739,7 +7742,7 @@ function wireBasisCard(host,after){
     if(after)after();});
 }
 infoDef("encrypted-backup-detail","How encrypted backup works",
-  '<p class="small">The file is unreadable without the passphrase \u2014 safe to keep in iCloud, Drive or email.</p>'+
+  '<p class="small">The file is encrypted (AES-256) and unreadable without the passphrase \u2014 safe to keep in iCloud, Drive or email.</p>'+
   '<p class="small">On desktop Chrome/Edge you can also pick a file that backups <b>auto-save to silently</b> after every change.</p>');
 
 /* ---- Trends & working-week topics ----
@@ -7977,6 +7980,19 @@ infoDef("trends-sections","How Business analytics is organised",
   '<p class="small mt">Everything is worked out from sessions you have already logged. Nothing here is entered twice, and nothing leaves the device.</p>'+
   '<p class="small muted">Cards say what they need rather than showing an empty chart, so a new practice sees them fill in one at a time.</p>');
 
+/* ---- topics that used to be paragraphs on the screens they belong to ---- */
+infoDef("tax-table","What each column means",
+  '<div class="acc-work"><div><b>Tax</b> \u2014 Income Tax plus Class 4 National Insurance for a sole trader, worked out from the Net figure beside it.</div>'+
+  '<div><b>Net</b> \u2014 client fees, less room costs, supervision and business costs, plus any other practice income. The figure your tax is based on.</div>'+
+  '<div><b>Billed</b> \u2014 every session in the year at the fee it carried, missed sessions at whatever you charged for them.</div>'+
+  '<div><b>Recv\u2019d</b> \u2014 the part of Billed that has a payment date. <b>Overdue</b> is what is past and unpaid.</div>'+
+  '<div><b>Sess</b> \u2014 how many sessions the year held.</div></div>'+
+  '<p class="small mt">Which year a session or a cost belongs to depends on the basis you have chosen. '+infoLink("tax-basis","Cash or accruals")+'</p>');
+infoDef("peer-counts","What peer supervision counts toward",
+  '<p class="small">Peer supervision adds to your <b>total accreditation hours</b> on Supervision \u203a Insights, and to your CPD hours if you have said it should.</p>'+
+  '<p class="small">It is deliberately kept out of the <b>1:6 clinical-to-supervision ratio</b>, which only counts formal clinical supervision \u2014 that is the BACP rule, not an app decision.</p>'+
+  '<p class="small muted">Any cost you enter against it is treated as a business cost.</p>');
+
 /* ===== Monthly take-home & pension =====
    Both of these return **null when the therapist has never set one**, which is deliberately not
    the same as zero. Suggesting a fee or a pension figure puts a number on someone's records that
@@ -7996,7 +8012,7 @@ function monthlyTakeHome(){const ty=curTaxYear();const tx=taxForYear(ty);
   return {ty,status:tx.status,annualNet,annualTax,annualHome,monthly:annualHome/12};}
 function editPension(after){const body=el('<div></div>');
   const cur=pensionPcm();
-  body.innerHTML='<p class="muted small">Set your monthly pension contribution. It’s deducted from your after-tax take-home in the “After pension” view (higher-rate relief is modelled by extending your basic-rate band).</p>'+
+  body.innerHTML='<p class="muted small">Your monthly pension contribution. It comes off the “After pension” take-home figure, and the tax estimate allows for the tax relief on it.</p>'+
     '<label>Monthly pension contribution (£)</label><input type="number" min="0" id="penA" placeholder="Not set" value="'+(cur==null?"":esc(cur))+'">'+
     '<p class="small muted">Leave it blank if you don’t pay into a pension — the app won’t assume a figure.</p>'+
     '<div class="row mt" style="gap:8px"><button class="btn" id="penS">Save</button>'+
@@ -8065,8 +8081,8 @@ VIEWS.money=function(){
         : '<div class="kpi clk good" id="mProj"><div class="v">'+gbp(pj.modes[pjKey].income)+'</div>'+
             '<div class="l">Where '+esc(pj.ty)+' lands\u00a0\u203a</div></div>';
     const fcFoot=!trOn
-      ? 'Everything on this tab is what has <b>actually happened</b>. Projections live in <b>Business analytics</b>, which is switched off in <b>Settings › App preferences</b>.'
-      : 'Everything on this tab is what has <b>actually happened</b>. Where the year lands — on three different bases, with profit before tax — is worked out in <b>Business analytics › Money</b>. '+
+      ? 'Everything on this tab has <b>actually happened</b>. Projections live in <b>Business analytics</b>, which is switched off in <b>Settings › App preferences</b>.'
+      : 'Everything on this tab has <b>actually happened</b>. What the whole year may come to is worked out in <b>Business analytics</b>. '+
         '<span class="taxlink" id="mProjMore">'+(pjLocked?'See what is behind this':'Where this year lands')+' \u203a</span>';
     const fcCard='<div class="card"><h2>This month &amp; year at a glance</h2>'+
       '<div class="kpis mt">'+
@@ -8229,7 +8245,7 @@ VIEWS.tax=function(){
      reading an estimate. What stays here is the one line saying which basis these figures are
      on \u2014 that has to travel with the numbers. */
   body.innerHTML=taxDisclaimBar()+thCard+c2Card+
-    '<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">By tax year</h2><div class="seg" id="taxmode" style="display:inline-flex"><button data-m="proj" class="'+(taxMode==="proj"?"on":"")+'">Projected</button><button data-m="todate" class="'+(taxMode==="todate"?"on":"")+'">To date</button></div></div><div class="rawscroll"><table><thead><tr><th>Year</th><th class="num">Tax</th><th class="num">Net</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Overdue</th><th class="num">Sess</th></tr></thead><tbody>'+tyTable+'</tbody></table></div><p class="small muted"><b>'+esc(basisLabel())+'.</b> Tax = Income Tax + Class 4 NIC (sole trader), worked out from Net. Net = income less room, supervision and business costs, plus any other practice income. Tap either figure for the breakdown. <b>*</b> in-progress year shown as '+(taxMode==="proj"?"a pro-rata projection":"tax on income to date")+'. <span class="taxlink" id="toBasis">Change how your figures are counted ›</span></p></div>';
+    '<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">By tax year</h2><div class="seg" id="taxmode" style="display:inline-flex"><button data-m="proj" class="'+(taxMode==="proj"?"on":"")+'">Projected</button><button data-m="todate" class="'+(taxMode==="todate"?"on":"")+'">To date</button></div></div><div class="rawscroll"><table><thead><tr><th>Year</th><th class="num">Tax</th><th class="num">Net</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Overdue</th><th class="num">Sess</th></tr></thead><tbody>'+tyTable+'</tbody></table></div><p class="small muted"><b>'+esc(basisLabel())+'.</b> Tap a Tax or Net figure for the working. <b>*</b> the year in progress is shown as '+(taxMode==="proj"?"a projection for the whole year":"tax on income so far")+'. '+infoLink("tax-table","What each column means")+' &nbsp;·&nbsp; <span class="taxlink" id="toBasis">Change how figures are counted ›</span></p></div>';
   wireTaxDisclaimBar(body);
   /* [data-y] only — .taxlink is also the style for the pension link, which is not a year. */
   body.querySelectorAll(".taxlink[data-y]").forEach(elx=>elx.onclick=()=>{
@@ -9360,14 +9376,14 @@ function drawMTD(host){
         '<button class="btn ghost sm" id="mtdExpJson" style="flex:1 1 140px">'+gi("export")+' Export .json</button></div>'+
       '<div class="small muted">The <b>.csv</b> is the one to reach for: it opens in a spreadsheet and it is what bridging software reads. The .json carries the same figures for anything that prefers structured data. '+infoLink("mtd-exports","Which file for what")+'</div></div></div>'+
     '<div class="mtdstep todo"><span class="mtdn">'+gi("plane")+'</span><div><b>Somebody presses Submit</b>'+
-      '<div class="small muted"><b>GroundWork cannot do this part, and is not trying to.</b> A quarterly update has to go through software HMRC has recognised. Your accountant can send it, or you can use a submission tool yourself \u2014 HMRC keeps the list, and there are free and low-cost ones on it built for exactly this, taking the figures from a spreadsheet.</div>'+
+      '<div class="small muted"><b>GroundWork cannot do this part, and is not trying to.</b> A quarterly update has to go through software HMRC has recognised \u2014 your accountant\u2019s, or a tool from HMRC\u2019s own list that takes the figures from a spreadsheet. '+infoLink("mtd-route","How that works")+'</div>'+
       '<div class="small" style="margin-top:6px"><a href="https://www.gov.uk/guidance/find-software-that-works-with-making-tax-digital-for-income-tax" target="_blank" rel="noopener">HMRC\u2019s list of software \u203a</a></div></div></div>'+
     '</div>'+
     '<div class="card"><h2>'+ty+' by tax-return box</h2>'+
     '<p class="small muted">Where each cost lands on the self-employment pages (SA103).</p>'+
     (boxRows?'<div class="rawscroll"><table><thead><tr><th>Box</th><th>What HMRC calls it</th><th class="num">'+ty+'</th></tr></thead><tbody>'+boxRows+'</tbody></table></div>'
             :'<p class="muted small">No costs recorded for '+ty+' yet.</p>')+
-    '<p class="small muted mt">When MTD applies to you depends on turnover: over \u00a350,000 from April 2026, over \u00a330,000 from April 2027, over \u00a320,000 from April 2028. Under that you carry on filing one return a year \u2014 and these are still the year already added up, a quarter at a time.</p></div>';
+    '<p class="small muted mt">Whether MTD applies to you yet depends on your turnover. Under the threshold you carry on filing one return a year \u2014 these are still your year added up a quarter at a time. '+infoLink("mtd-what","The thresholds")+'</p></div>';
   /* Redundant while the whole Tax tab is locked, and kept deliberately: the export is its own
      line in the tier, and this is the guard that survives Tax ever being unlocked separately.
      Note it gates the BUTTONS \u2014 mtdExport() itself stays pure, because tests call it. */
@@ -9480,12 +9496,12 @@ function drawAllowances(host){
     : '';
   const yearCard='<div class="card"><h2>Settings that follow the tax year</h2>'+
     reviewRow+
-    '<p class="small muted">HMRC lets some things change from one year to the next, and once a year is filed its figures should stop moving. Pick a year here \u2014 everything below applies to it, and to later years until you say otherwise.</p>'+
+    '<p class="small muted">Pick a year \u2014 everything below applies to it and to later years, until you change it again. '+infoLink("carryforward","How that works")+'</p>'+
     yearStrip+
     (status.filed?'<div class="vmsg warn" style="margin-top:10px">\ud83d\uddc4 You have marked <b>'+esc(ty)+'</b> as filed. Changing anything below changes figures you have already submitted \u2014 if this is a correction, keep a note of what you changed and why.</div>':'')+
     '</div>';
   host.innerHTML=yearCard+regCard+slCard+'<div class="card"><h2>Use of home</h2>'+
-    '<p class="small muted">If you see clients or do your admin at home, part of running that home is a business cost. HMRC lets you work it out two ways, and you can pick a different one each tax year.</p>'+
+    '<p class="small muted">Part of running a home you work from is a business cost. HMRC allows two ways of working it out, and you can pick either one each tax year.</p>'+
     (applied.method&&applied.method!=="none"
       ? '<div class="vmsg ok">\ud83d\udd12 <b>'+esc(applied.method==="simplified"?"Simplified":"Actual costs")+'</b> is what '+esc(ty)+' uses \u2014 '+money(uohMonthlyFor(applied))+' a month, '+money(yearAmt)+' for the year. It is already in your costs and tax estimate.'+
         (inForce.inherited?' <b>Carried forward from '+esc(inForce.from)+'</b> \u2014 it has no figures of its own yet, so editing '+esc(inForce.from)+' would move '+esc(ty)+' too.':'')+'</div>'
@@ -9531,6 +9547,7 @@ function drawAllowances(host){
     delete yearMap("studentLoanYears")[ty];
     await commit("Cleared the student loan setting for "+ty);
     go("tax",{keepScroll:true});};
+  wireInfo(host);
   const bodyEl=host.querySelector("#uohBody");
   const suggested=uohSessionHours();
   function saveDraft(patch,label){
@@ -9894,7 +9911,7 @@ VIEWS.settings=function(){
      <p class="prev">Set 0 if you don’t charge for these.</p>
    </div>
    ${`<div class="card" id="payToCard">${cardHead("Getting paid","getting-paid")}
-     <p class="small muted" style="margin:-2px 0 0">Printed on every invoice and offered in every payment reminder. Free text, because &ldquo;bank transfer&rdquo;, &ldquo;card at the end of the session&rdquo; and &ldquo;your insurer pays me&rdquo; are all real answers.</p>
+     <p class="small muted" style="margin:-2px 0 0">Printed on every invoice and offered in every payment reminder.</p>
      <label>How you like to be paid</label>
      <textarea id="setPayTo" rows="4" maxlength="400" placeholder="e.g. Bank transfer to A Therapist, 12-34-56, 12345678. Please use your initials as the reference.">${esc(payToDetails())}</textarea>
      <label>Payment terms (days)</label>
@@ -9962,7 +9979,7 @@ VIEWS.settings=function(){
      <button class="btn sec mt" id="stAsk" style="display:none">Ask the browser to protect it</button>
    </div>
    <div class="card">${cardHead("Encrypted backup 🔐","encrypted-backup-detail")}
-     <p class="small muted" style="margin:-2px 0 0">Protect backups with a passphrase (AES-256). <b>Forget it and they cannot be opened.</b></p>
+     <p class="small muted" style="margin:-2px 0 0">Protect backups with a passphrase. <b>Forget it and they cannot be opened.</b></p>
      <p class="small" id="encStatus" style="font-weight:600"></p>
      <div class="row mt" style="flex-wrap:wrap;gap:8px">
        <button class="btn sec" id="encSet"></button>
@@ -9999,9 +10016,10 @@ VIEWS.settings=function(){
      </details>
    </div>
    </div></details>
-   <details class="sgrp" data-g="help"><summary><span class="sgt">Setup &amp; help</span><span class="sgs">The tour, what’s new, and re-running setup</span></summary><div class="sgb">
+   <details class="sgrp" data-g="help"><summary><span class="sgt">Setup &amp; help</span><span class="sgs">The tour, a map of the app, what’s new, and re-running setup</span></summary><div class="sgb">
    <div class="card">${cardHead("Setup & help","guided-tour")}
-     <button class="btn sec full" id="setTour">🧭 Replay the guided tour</button>
+     <button class="btn sec full" id="setMap">${gi("tabs")} Where everything is</button>
+     <button class="btn sec full mt" id="setTour">🧭 Replay the guided tour</button>
      <button class="btn sec full mt" id="setNew">✨ What’s new in this update</button>
      <div class="grp-h" style="margin-top:18px">Tips on new screens ${infoDot("screen-tips","Tips on new screens")}</div>
      <p class="small muted" style="margin:0 0 8px"><span id="tipsSeen"></span></p>
@@ -10102,6 +10120,7 @@ VIEWS.settings=function(){
     paint();})();
   wireCancelRules(v);
   wireAdvancedMode(v);
+  v.querySelector("#setMap").onclick=()=>appMapSheet();
   v.querySelector("#setTour").onclick=()=>startTour();
   const tOn=v.querySelector("#tipsOn"), tSeen=v.querySelector("#tipsSeen");
   const paintTips=()=>{const c=coachCfg();
@@ -10910,7 +10929,7 @@ function peerForm(p){
     '<label>Who with <span class="muted small">(group or colleague)</span></label><input id="p_with" maxlength="60" value="'+esc(m.with||"")+'">'+
     '<label>Cost (£) <span class="muted small">(leave 0 if it costs nothing)</span></label><input type="number" min="0" step="0.01" id="p_cost" value="'+(+m.cost||0)+'">'+
     '<label>Notes <span class="muted small">(optional)</span></label><input id="p_notes" maxlength="120" value="'+esc(m.notes||"")+'">'+
-    '<p class="small muted">Counts toward your total accreditation hours. It does <b>not</b> count toward the 1:6 clinical-to-supervision ratio — only formal clinical supervision does. Any cost is treated as a business expense.</p>'+
+    '<p class="small muted">Counts toward your accreditation hours, not the 1:6 ratio. '+infoLink("peer-counts","Why")+'</p>'+
     '<button class="btn full mt" id="pSave">Save</button>'+
     (isNew?"":'<button class="btn danger full mt" id="pDel">Delete</button>');
   const g=s=>body.querySelector(s);
@@ -10927,6 +10946,7 @@ function peerForm(p){
   if(!isNew)g("#pDel").onclick=async()=>{
     S.peerSupervision=(S.peerSupervision||[]).filter(x=>x._id!==m._id);
     await commit("Deleted peer supervision: "+m.date);closeSheet();toast("Deleted");go(cur);};
+  wireInfo(body);
   openSheet(isNew?"New peer supervision":"Edit peer supervision",body);
 }
 
@@ -12258,7 +12278,7 @@ function impStagePreview(){
       esc([...p.newClients.values()].map(c=>c.code).join(", "))+'</div>':'')+
     (p.newRooms.size?'<div class="hint"><b>Locations that will be created</b><br>'+
       esc([...p.newRooms.values()].map(r=>r.location+" ("+gbp(r.rate)+"/session)").join(", "))+
-      '<div class="prev" style="margin-top:6px">Set when each room’s fee falls due in <b>Clients › Rooms</b> — imported rooms start as “n/a”.</div></div>':'')+
+      '<div class="prev" style="margin-top:6px">Set when each room’s fee falls due in <b>Practice › Rooms</b> — imported rooms start as “n/a”.</div></div>':'')+
     '<h3 style="margin:16px 0 6px;font-size:15px">First '+show.length+' of '+p.recs.length+'</h3>'+
     '<div style="overflow:auto"><table><thead><tr><th>Client</th><th>Date</th><th>Time</th><th class="num">Fee</th><th>Paid</th><th>Room</th></tr></thead><tbody>'+
     show.map(r=>'<tr><td><b>'+esc(r.client)+'</b>'+(r._update?' <span class="chip s">update</span>':'')+'</td>'+
@@ -12467,7 +12487,7 @@ const REVEAL_STEPS=[
    sub:"Now that money is actually coming in, <b>Receipts &amp; statements</b> prints a dated statement of what a client has paid — for their insurer, their employer, or their own records."},
   {keys:["tax","finances"], when:st=>st.sessions.length>=10,
    emoji:gi("tax"), title:"Ready to think about tax?",
-   sub:"Ten sessions in. <b>Tax</b> turns them into a running figure for what to set aside — including the first January, which is usually half again bigger than people expect because a payment on account sits on top of the bill — and <b>Costs &amp; other income</b> takes insurance, supervision, room rent and CPD off the profit it is worked out from. They arrive together because the estimate is wrong without the costs."},
+   sub:"Ten sessions in. <b>Tax</b> turns them into a running figure for what to set aside, and <b>Costs &amp; other income</b> takes insurance, room rent and CPD off the profit it is worked out from. They arrive together because the estimate is wrong without the costs."},
   {keys:["gamify"],   when:st=>st.sessions.length>=15,
    emoji:gi("gamify"), title:"Want a bit of celebration?",
    sub:"Streaks, goal rings and the occasional confetti when you clear a backlog. Entirely cosmetic — plenty of people leave it off."},
@@ -12567,8 +12587,8 @@ function wireAdvancedMode(v){
   const paint=()=>{
     const simple=revealCfg().mode==="simple";
     const advText=simple
-      ? "Some features are still hidden, and will be offered as you go once there is enough in the app for them to be worth anything. Turn this on to switch them all on now instead."
-      : "Every feature is available. The individual switches below still apply, so you can turn off anything you do not want.";
+      ? "Some features are still hidden and will be offered as your records grow. Turn this on to show them all now."
+      : "Every feature is available. Use the switches below to turn off anything you do not want.";
     host.innerHTML=ovToggleRow("adv",gi("tabs"),"Show everything",advText,!simple,false,"adv");
     const fq=host.querySelector("[data-fq]");
     if(fq)fq.onclick=ev=>{ev.stopPropagation();
@@ -12754,10 +12774,10 @@ function stepCPD(w){return{emoji:gi("cpd"), h:"CPD, supervision and accreditatio
       '<input id="spCpd" type="number" min="1" max="200" step="1" value="'+esc(w.cpdTarget)+'">'+
       '<p class="prev">BACP asks accredited members for 30 hours a year. Other bodies differ — set yours.</p>'+
       '<div style="margin-top:16px">'+ovToggleRow("peer",gi("peer"),"I also attend peer supervision",
-        "Logged on its own tab, separately from clinical supervision. Those hours add to your CPD and accreditation totals but are deliberately kept out of the 1:6 ratio, which only clinical supervision counts toward.",
+        "Logged on its own tab. The hours count toward your CPD and accreditation totals, but never toward the 1:6 supervision ratio.",
         featureOn(w,"peer"))+'</div>'+
       '<div style="margin-top:10px">'+ovToggleRow("acc",gi("accreditation"),"I’m working toward accreditation",
-        "Adds the BACP Form 3A card: clinical vs supervision hours and the 1:6 ratio. Most therapists don’t need this — leave it off unless you’re actively accruing hours toward accreditation.",
+        "Adds the BACP Form 3A card (clinical hours against supervision hours). Leave it off unless you are accruing hours toward accreditation.",
         featureOn(w,"accreditation"))+'</div>'+
       '<div class="ovnote">Any of this can be changed later in <b>'+gi("settings")+' Settings › Features</b>.</div>';
     host.querySelector("#spCpd").oninput=e=>w.cpdTarget=+e.target.value||0;
@@ -12789,7 +12809,7 @@ function stepRooms(w){return{emoji:gi("rooms"), h:"Where do you see clients?",
             '<button class="rmx" data-x="'+i+'" title="Remove" aria-label="Remove">'+gi("close")+'</button>'+
           '</div>').join("")+'</div>'+
         '<button class="btn sec sm mt" id="rmAdd">'+gi("plus")+' Add a location</button>'+
-        '<div class="ovnote">Sessions at home usually cost <b>£0</b>. Most rooms charge <b>per session</b>. Pick <b>per month</b> for a room you rent at a flat monthly rate — those sessions then carry no room cost of their own. Costs are dated, so changing one later never rewrites past sessions. You can set when each venue invoices you (end of month / week) in <b>Clients › Rooms</b>.</div>';
+        '<div class="ovnote">Sessions at home usually cost <b>£0</b>. Pick <b>per month</b> for a room on a flat rent. Start dates, invoice dates and later changes are all set on the room in <b>Practice › Rooms</b>.</div>';
       host.querySelectorAll(".rmrow").forEach(row=>{
         const i=+row.dataset.i;
         row.querySelectorAll("[data-f]").forEach(inp=>inp.oninput=inp.onchange=()=>{
@@ -12814,7 +12834,7 @@ function stepMoney(w){
   mount(host){
     host.innerHTML='<label>Usual session fee for a new client (£) <span class="muted">(optional)</span></label>'+
       '<input id="spRate" type="number" min="0" step="1" placeholder="Leave blank for none" value="'+val(w.rate)+'">'+
-      '<p class="prev">If you set one, it pre-fills when you add a client — you can still change it per client. Every client keeps their own dated fee history, so a rate change never rewrites past sessions. Leave it blank and the app won’t suggest a fee.</p>'+
+      '<p class="prev">Pre-fills the fee when you add a client; each client can still have their own. Leave it blank and nothing is suggested.</p>'+
       '<label style="margin-top:14px">Monthly pension contribution (£) <span class="muted">(optional)</span></label>'+
       '<input id="spPen" type="number" min="0" step="5" placeholder="Leave blank for none" value="'+val(w.pension)+'">'+
       '<p class="prev">Used only by the “after pension” take-home figure on the Tax tab. Leave it blank if you don’t pay into a pension.</p>';
@@ -12878,7 +12898,7 @@ function stepBackup(w){return{emoji:gi("backup"), h:"How your data is kept safe"
       '<div><label>…or changes</label><input id="spActs" type="number" min="1" value="'+w.bkActs+'"></div></div>'+
     '<p class="prev">A banner appears when either limit is reached, and clears when you export.</p>'+
     '<button class="btn sec full mt" id="spEnc">'+gi("key")+' Add a backup passphrase (optional)</button>'+
-    '<p class="prev">Encrypts backups with AES-256 so they’re safe to keep in iCloud, Drive or email. <b>Lose the passphrase and the file can’t be opened</b> — by anyone.</p>';
+    '<p class="prev">Encrypts your backups so they’re safe to keep in iCloud, Drive or email. <b>Lose the passphrase and the file can’t be opened</b> — by anyone.</p>';
     host.querySelector("#spDays").oninput=e=>w.bkDays=Math.max(1,Math.round(+e.target.value)||7);
     host.querySelector("#spActs").oninput=e=>w.bkActs=Math.max(1,Math.round(+e.target.value)||25);
     const eb=host.querySelector("#spEnc");
@@ -13141,73 +13161,38 @@ function startSetup(opts){
    button when a flow supplies one, and nothing else dismisses the overlay (no backdrop click, no
    Escape), so the Continue/Got it button is the only way past it.
    Bump WHATS_NEW and rewrite whatsNewSteps() for the next release. */
-const WHATS_NEW=3;
+const WHATS_NEW=4;
 function whatsNewSeen(){try{return +localStorage.getItem("tt_whatsnew")||0;}catch(e){return 0;}}
 function markWhatsNewSeen(){try{localStorage.setItem("tt_whatsnew",String(WHATS_NEW));}catch(e){}}
 function whatsNewDue(){return whatsNewSeen()<WHATS_NEW;}
 function whatsNewSteps(){
   const st=[];
-  st.push({emoji:"\ud83d\udca1", h:"Help that points at things", sub:"The tour used to describe the app from behind a full-screen card. It now dims the page and highlights whatever it is talking about.",
+  st.push({emoji:gi("tabs"), h:"Finding your way around", sub:"A lot has been added since you last looked. Two minutes, and everything is where you expect it.",
     html:ovPoints([
-      ["\ud83e\udded","A shorter tour","Eight stops on the things worth knowing on day one, on the real screens. Replay it any time from \u2699 Settings."],
-      ["\ud83d\udcd8","The rest arrives when it matters","Open a screen for the first time and it points out the two or three things worth knowing about <i>it</i> \u2014 then never again. Switch them off or replay them in \u2699 Settings \u203a Setup & help."]
+      [gi("home"),"Home is yours to arrange","<b>Arrange this screen</b>, at the bottom of Home, puts the blocks in your order. Any Business analytics card can be pinned to it."],
+      [gi("settings"),"A map, and a search box","<b>Settings › Setup &amp; help › Where everything is</b> lists every screen on one page, with what to check and how often. Settings itself now has a search box at the top."],
+      [gi("trends"),"Trends is now Business analytics","Last on the Practice tab: twenty cards on clients, money, time and you, and a projection of where this year lands."]
     ])});
-  st.push({emoji:"\ud83e\uded9", h:"Pot & payments", sub:"A new section on the Tax tab, and the answer to \u201cwhat exactly am I paying in January?\u201d",
+  st.push({emoji:gi("rooms"), h:"Room fees moved out of the session form", sub:"Logging a session no longer asks whether you have paid for the room.",
     html:ovPoints([
-      ["\ud83d\udcc5","Every payment on one list, by date","A single 31 January is usually two different years\u2019 money \u2014 the balancing payment finishing one year and the first instalment towards the next. Now itemised on the date it actually leaves your account, and tickable once paid."],
-      ["\ud83d\udee0","A buffer you choose","The pot target is tax you have <b>already</b> earned, plus anything still owed on earlier years, plus a buffer you set. Tell it what is really in the account and it says whether you are ahead or short."],
-      ["\ud83d\uddc4","HMRC\u2019s figures beat the estimate","Filed your return? Enter the liability from your tax calculation and the instalments HMRC set, and every figure switches to the real ones. You can record a claim to reduce your payments on account too."],
-      ["\ud83d\udd27","A projection that was showing zero","The set-aside percentage and the projected tax on the pot were worked out from tax to date rather than the full year, so early in the year they read 0%. Fixed."]
+      [gi("rooms"),"A session raises its own fee","In a room you pay for by the hour, every session raises a fee by itself. Settle them under <b>Money › Costs &amp; income</b>, beside the rent."],
+      [gi("money"),"Rent with a rhythm and an end date","Weekly, monthly, quarterly — from a date, to a date. Set on the room in Practice › Rooms, ticked off in the same place as the fees."],
+      [gi("done"),"Complete means written up and confirmed","A session is complete once your notes are ticked and you have said whether it went ahead."]
     ])});
-  st.push({emoji:"\ud83d\udd12", h:"Settings that belong to a tax year", sub:"Two things that used to apply to every year at once now change from a date, like use of home already did.",
+  st.push({emoji:gi("notes"), h:"On a session", sub:"Two small changes to the form, and a way to get paid.",
     html:ovPoints([
-      ["\ud83c\udf93","Student loan","Set per tax year in <b>Tax \u203a Per year</b>. The year you finish repaying, the years you were repaying keep the repayments you actually made."],
-      ["\ud83c\udff4","Where you pay income tax","Moved to \u2699 Settings, where it belongs \u2014 it is a question you answer once. Changing it applies from the current tax year onwards, so moving to or from Scotland never rewrites a return you have filed."]
+      [gi("notes"),"A tick, and an admin comment","The notes box is now a tick for whether your write-up is done. Practical reminders go in the admin comment, which shows under the session in the list."],
+      [gi("receipts"),"Invoices, receipts and chasers","From a client’s profile: a statement, a receipt for what was paid, or an invoice for what is owed — plus a payment reminder to copy into an email. <b>Sessions › Unpaid</b> has <b>Chase…</b> too."]
     ])});
-  st.push({emoji:"\u2728", h:"The app has been reorganised", sub:"Two tabs became four sections, and the tax side got a lot more capable. Two minutes and you\u2019ll know where everything went.",
+  st.push({emoji:gi("cpd"), h:"CPD, all of it", sub:"Practice › Supervision › CPD.",
     html:ovPoints([
-      ["\ud83e\udded","New tabs","<b>Practice</b> holds clients, rooms and supervision. <b>Money</b> is the day-to-day. <b>Tax</b> is new."],
-      ["\ud83c\udfe0","Working from home counts","The app now works out what you can claim for it, both ways HMRC allows."],
-      ["\ud83d\udcb0","A tax pot that includes January","Including the payments on account that catch people out."],
-      ["\ud83e\uddfe","Categories HMRC recognises","Every cost maps to a box on your tax return."]
+      [gi("cpd"),"Log everything, not just supervision","Workshops, courses, reading, podcasts, your own therapy. The card shows where your hours came from, not only how many."],
+      [gi("supervision"),"You decide whether supervision counts","<b>Target &amp; what counts</b>, on the CPD card. Accrediting bodies differ, so the app no longer assumes."]
     ])});
-  st.push({emoji:"\ud83e\udded", h:"Where things moved", sub:"Nothing was deleted \u2014 it is all still here, just grouped more sensibly.",
+  if(feat("tax"))st.push({emoji:gi("tax"), h:"Making Tax Digital", sub:"Tax › Making Tax Digital.",
     html:ovPoints([
-      ["\ud83d\udc65","Practice","Clients, Business analytics, Rooms and Supervision in one place. Peer supervision, CPD hours and the accreditation card are all still inside Supervision, exactly as they were."],
-      ["\ud83d\udcb7","Money","Your revenue charts, what is outstanding, and your costs and other income. The old <b>Table</b> is a section in here now."],
-      ["\ud83e\uddfe","Tax","Take-home, the tax-year table, and everything new below."]
-    ])});
-  st.push({emoji:"\u2696\ufe0f", h:"Your figures are counted differently", sub:"This one changes your numbers, so it is worth a read.",
-    html:ovPoints([
-      ["\ud83d\udcb8","Cash basis is now the default","Since 2024/25 HMRC counts sole traders on the <b>cash basis</b>: income when you are actually paid, costs when you actually pay them. The app used to count everything when it was billed."],
-      ["\ud83d\udcc9","So some totals will move","A session you have not been paid for is no longer in this year\u2019s income \u2014 it arrives in the year the money does."],
-      ["\ud83d\udd01","You can switch back","If you have elected the accruals basis with HMRC, change it on the <b>Tax</b> tab and everything reverts. The tab always says which one is in use."]
-    ])});
-  st.push({emoji:"\ud83c\udfe0", h:"Use of home", sub:"In <b>Tax \u203a Per year</b>.",
-    html:ovPoints([
-      ["\ud83d\udcd0","Both HMRC methods","The <b>simplified</b> flat rate by hours worked at home (\u00a310, \u00a318 or \u00a326 a month), or <b>actual costs</b> apportioned by rooms and how much of the time they are used for work."],
-      ["\ud83d\udd0e","Shown side by side","So you can see which is worth more before choosing. It counts your logged home sessions as a starting point for the hours \u2014 your real total will be higher, because notes and admin count too."],
-      ["\u2705","It flows straight through","Into your costs, your net income and the tax estimate. No separate sum to remember."]
-    ])});
-  st.push({emoji:"\ud83d\udcb0", h:"The tax pot, and January", sub:"In <b>Tax \u203a Estimate</b>.",
-    html:ovPoints([
-      ["\ud83c\udfaf","A percentage to set aside","Worked out from your own figures, not a rule of thumb."],
-      ["\u26a0\ufe0f","Payments on account","Once your bill passes \u00a31,000, HMRC wants that year\u2019s tax <i>plus half again</i> in January, and another half in July. Your first January can be about 150% of the tax. The app now says so in advance."],
-      ["\ud83c\udff4","Scotland, student loans, pension","All three change the number. Set them once under <b>Your tax situation</b> and the estimate follows. Pension contributions now get higher-rate relief properly."],
-      ["\ud83e\udd1d","Class 2 when profits are low","Under the Small Profits Threshold it is not due \u2014 but paying it voluntarily keeps the year counting towards your State Pension. The app offers it rather than quietly leaving it out."]
-    ])});
-  st.push({emoji:"\ud83e\uddfe", h:"Ready for Making Tax Digital", sub:"In <b>Tax \u203a Making Tax Digital</b>.",
-    html:ovPoints([
-      ["\ud83d\udcc5","Your four quarters","6 Apr\u20135 Jul, 6 Jul\u20135 Oct, 6 Oct\u20135 Jan, 6 Jan\u20135 Apr, each totalled and reconciled to your year."],
-      ["\ud83d\udce6","Totals by tax-return box","Every cost mapped to its SA103 box, exportable as a file."],
-      ["\ud83d\udeab","It cannot file for you","And will not pretend to. Filing needs software HMRC has recognised and a server to hold the credentials \u2014 neither belongs in an app that runs only on your device. It keeps the records and hands your accountant the figures."]
-    ])});
-  st.push({emoji:"\ud83d\udcc5", h:"Also since you last looked", sub:"A few things from the previous update.",
-    html:ovPoints([
-      ["\ud83c\udfe0","Rooms you rent monthly","A room can cost a flat monthly rent instead of a fee per session \u2014 and those sessions stop asking whether the room was paid for, because it is settled once a month instead."],
-      ["\ud83d\udd14","Payments due","Rent and repeating costs show up in <b>Money \u203a Costs</b> before they are due, with one tap to tick them off. Weekly, fortnightly, monthly, quarterly or yearly, on a day you choose."],
-      ["\ud83d\udcda","CPD hours","<b>Practice \u203a Supervision</b> leads with CPD hours over a rolling year against your target. The BACP accreditation card is now optional \u2014 on only if you are working toward it."],
-      ["\u2699\ufe0f","Settings tidied","Sixteen cards grouped into five sections that fold away."]
+      [gi("table"),"Exports built for bridging software","The .csv carries the same rows in the same order every quarter, each named with its tax-return box."],
+      [gi("plane"),"The route to filing, spelled out","What is done here, what is not, and where HMRC’s own list of software is."]
     ])});
   return st;
 }
@@ -13352,6 +13337,74 @@ function coachPlace(animate){
   bub.style.left=Math.min(Math.max(12,left+w/2-bw/2),Math.max(12,vw-bw-12))+"px";
 }
 
+/* ===== Where everything is =====
+   A map of the app on one sheet, built from the same tab and feature switches the tab bar
+   reads, so it never lists a screen this install cannot open. Every row is a link. Reached from
+   Settings › Setup & help, from the empty Home screen, and named at the end of the tour and of
+   What's new — the places somebody goes when they are lost. Below the map, the jobs the app
+   expects and roughly how often, each a link too: the answer to "what should I be doing in here". */
+const APP_MAP=[
+  {tab:"home",rows:[[null,"Home","your four figures, what needs attention, what is coming up, and anything you have pinned"]]},
+  {tab:"sessions",rows:[["upcoming","Upcoming","what is booked"],["unpaid","Unpaid","payments to chase"],
+    ["incomplete","Incomplete","write-ups still to tick off"],["all","All","everything, newest first — and the calendar"]]},
+  {tab:"practice",rows:[["clients","Clients","codes, status, fees and each client’s profile"],
+    ["rooms","Rooms","what each costs you and how it is charged"],
+    ["supervision","Supervision","the log, peer supervision, CPD hours and Form 3A",()=>feat("supervision")],
+    ["trends","Business analytics","what your records say about clients, money, time and you",()=>feat("trends")]]},
+  {tab:"money",rows:[["overview","Overview","what came in, and what is still owed"],
+    ["costs","Costs & income","room fees, rent, business costs and other income"],
+    ["table","Table","every session as a spreadsheet",()=>feat("raw")]]},
+  {tab:"tax",rows:[["now","Now","three numbers, most of the year"],["estimate","Estimate","take-home and the year-by-year table"],
+    ["payments","Pot & payments","what to keep back, and every due date"],
+    ["allowances","Per year","student loan, region and use of home, by tax year"],
+    ["mtd","Making Tax Digital","the four quarters and their exports"]]},
+  {tab:"settings",rows:[["business","Your practice","name, cancellation policy, how figures are counted"],
+    ["app","App preferences","look, sound and which features are on"],
+    ["data","Data & backup","export, restore, import and undo"],
+    ["records","Records & privacy","how long you keep records, and removal"],
+    ["help","Setup & help","the tour, tips, what’s new and re-running setup"]]}
+];
+const APP_JOBS=[
+  ["Every week",[
+    ["Log each session as it happens",()=>sessionForm(null)],
+    ["Tick off what has been paid",()=>goSessions("unpaid")],
+    ["Mark your write-ups done",()=>goSessions("incomplete")],
+    ["Export a backup",()=>go("settings",{openGroup:"data"})]]],
+  ["Every month",[
+    ["Settle room fees and rent",()=>goRoomCosts(),()=>feat("money")&&(anyPerUseRoom()||S.rooms.some(r=>roomBilling(r)==="monthly"))],
+    ["Log supervision",()=>supervisionForm(null),()=>feat("supervision")]]],
+  ["Every few months",[
+    ["Read Business analytics",()=>go("practice",{seg:"trends"}),()=>feat("trends")],
+    ["Glance at Tax › Now",()=>go("tax",{seg:"now"}),()=>feat("tax")]]],
+  ["Once a year",[
+    ["Tax › Now raises filing, payments and the new tax year when they are due",()=>go("tax",{seg:"now"}),()=>feat("tax")],
+    ["Review records retention",()=>go("settings",{openGroup:"records"})]]]
+];
+function appMapSheet(){
+  const body=el('<div class="appmap"></div>');
+  const acts={}; let n=0;
+  const reg=fn=>{const k="m"+(n++);acts[k]=fn;return k;};
+  const row=(label,sub,key)=>'<div class="list-item" data-map="'+key+'"><div class="li-main"><div class="li-title">'+esc(label)+'</div>'+
+    (sub?'<div class="li-sub">'+esc(sub)+'</div>':'')+'</div><div class="li-right muted">›</div></div>';
+  let h='<p class="small muted">Every row is a link. Anything switched off in Settings › App preferences is left out.</p>';
+  APP_MAP.forEach(sec=>{
+    if(sec.tab!=="settings"&&!tabEnabled(sec.tab))return;
+    const t=TABS.find(x=>x.id===sec.tab);
+    h+='<div class="grp-h" style="margin-top:14px">'+(t?'<span class="mapic">'+t.ic+'</span>'+esc(t.label):gi("settings")+' Settings — the gear at the top')+'</div>';
+    sec.rows.filter(r=>!r[3]||r[3]()).forEach(r=>{
+      const fn=sec.tab==="settings"?()=>go("settings",{openGroup:r[0]}):()=>go(sec.tab,r[0]?{seg:r[0]}:{});
+      h+=row(r[1],r[2],reg(fn));});
+  });
+  h+='<div class="grp-h" style="margin-top:18px">'+gi("calendar")+' What to do, and how often</div>';
+  APP_JOBS.forEach(job=>{
+    const its=job[1].filter(i=>!i[2]||i[2]()); if(!its.length)return;
+    h+='<div class="small muted" style="font-weight:700;margin:10px 2px 2px">'+esc(job[0])+'</div>'+its.map(i=>row(i[0],"",reg(i[1]))).join("");
+  });
+  body.innerHTML=h;
+  body.querySelectorAll("[data-map]").forEach(li=>li.onclick=()=>{closeSheet();const f=acts[li.dataset.map];if(f)f();});
+  openSheet("Where everything is",body);
+}
+
 /* ---- the tour: what is worth knowing before you have used any of it ---- */
 function tourSteps(){
   const st=[];
@@ -13375,7 +13428,7 @@ function tourSteps(){
   st.push({emoji:gi("backup"),h:"Back it up",tab:"home",sel:"#settingsBtn",
     body:"Settings → <b>Export backup</b> gives you one file with everything in it. Keep it somewhere that isn’t this device. Undo and restore points live in there too."});
   st.push({emoji:gi("done"),h:"That’s it",
-    body:"The rest explains itself as you go. If you take one habit from this: export a backup after your weekly catch-up. Five seconds, and it’s the whole safety net."});
+    body:"The rest explains itself as you go. If you take one habit from this: export a backup after your weekly catch-up. Five seconds, and it’s the whole safety net. Lost later? <b>Settings › Setup &amp; help</b> has a map of every screen."});
   return st;
 }
 function startTour(){
@@ -13494,7 +13547,7 @@ function confirmRerunSetup(){
     '<div class="acc-work"><div>• Clients, sessions or supervision entries</div><div>• Payments, fee history or room cost history</div>'+
       '<div>• Your backups or restore points</div></div>'+
     (withRooms?'<div class="vmsg err" style="margin-top:14px">You have no sessions logged, so setup will also rebuild your <b>rooms list</b>. Rooms you remove there are gone from the list.</div>'
-      :'<div class="vmsg ok" style="margin-top:14px">You already have sessions logged, so the rooms step will be <b>skipped</b> — manage rooms in Clients › Rooms instead.</div>')+
+      :'<div class="vmsg ok" style="margin-top:14px">You already have sessions logged, so the rooms step will be <b>skipped</b> — manage rooms in Practice › Rooms instead.</div>')+
     '<p class="small muted mt">A restore point is saved before anything changes, and ↩︎ Undo will bring your settings back.</p>'+
     '<button class="btn sec full mt" id="rsExp">⤓ Export a backup first</button>'+
     '<label style="margin-top:16px">Type <b>RESET SETUP</b> to confirm</label>'+
