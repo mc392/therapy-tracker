@@ -45,10 +45,13 @@ a fresh install and offers them back one at a time.
 
 | At | Revealed |
 |---|---|
+| 5 sessions, one paid | Receipts & statements |
 | 10 sessions | Tax **+** Costs & other income (together — an estimate ignoring costs is one nobody should set money aside against) |
-| 20 sessions | Trends |
-| 25 sessions | Quick-add |
+| 15 sessions | Streaks & celebrations |
+| 20 sessions | Business analytics |
 | 40 sessions | Table view |
+
+(Re-tiered by T5, Aug 2026. Quick-add was removed in Sep 2026 and no longer has a step.)
 
 `normalize()` defaults `mode` to `"all"`; only the setup step sets `"simple"`, and only on a
 genuinely fresh install, so nobody with data can have a tab taken away. Peer supervision and
@@ -136,6 +139,22 @@ last-month headline read −£8.64/14% on the established fixture where the true
 −£1.48/2%.
 
 ---
+
+## Sep 2026 — code, copy and orientation review
+
+A three-part pass, written up in `docs/orientation-review-2026-09.md`:
+
+- **Code**: dead functions, a dead constant and the CSS for retired components removed;
+  `derivedSessions()`, `goSessions()`, `goRoomCosts()` and `emptyNote()` replace the same snippet
+  pasted at eight to eleven sites each; a table of contents at the top of the script. No
+  behaviour changed, and every suite still passes.
+- **Copy**: the dense paragraphs still on screen were trimmed to one sentence each with the
+  reasoning behind an info icon or a *Find out more* link; two new topics, one dead one removed,
+  stale `Clients › Rooms` labels corrected.
+- **Orientation**: *Where everything is* — a map of the app with a what-to-do-and-how-often list,
+  every row a link — from Settings › Setup & help and the empty Home screen; What's new rewritten
+  for this cycle; `npm run test:guidance` guards all of it. The recommendations that were **not**
+  built are ranked in the review document.
 
 ## Follow-ups still open
 
