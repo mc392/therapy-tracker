@@ -146,6 +146,20 @@ async function inPage(profile) {
     ok("an early practice sees the Getting started card", !!document.getElementById("startCard"));
     const rec = startItems().find((i) => i.k === "records");
     ok("the records question leads and is open", rec && !rec.done && document.querySelector('#startCard [data-start]').dataset.start === "records");
+
+    /* setup's "yes, but not this minute" is a job still outstanding, never an answer: it must not
+       tick the row, and it is what sends the reader here to finish it. */
+    S.settings.start = { recordsLater: true }; go("home"); await sleep(20);
+    const waiting = startItems().find((i) => i.k === "records");
+    ok("'I'll bring them in' leaves the records row open", waiting && !waiting.done && waiting.lead === true);
+    ok("and the row says to start there", /Start here/.test(document.querySelector('#startCard [data-start="records"]').textContent));
+    ok("the tour gains a stop pointing at that row", tourSteps().length === 9 && tourSteps().some((s) => s.sel === '#startCard [data-start="records"]'));
+    ok("the tour's intro counts its own stops", /Nine short stops/.test(tourSteps()[0].body));
+    S.settings.start = { records: "imported" };
+    ok("records actually brought in tick the row and drop the stop",
+      startItems().find((i) => i.k === "records").done && tourSteps().length === 8);
+    delete S.settings.start; go("home"); await sleep(20);
+
     document.querySelector('#startCard [data-start="records"]').click(); await sleep(20);
     ok("tapping it opens the records chooser", sheetOpen() && sheetTitle() === "Your existing records", sheetTitle());
     ok("the chooser offers a spreadsheet, a backup and starting fresh",
@@ -210,13 +224,18 @@ async function inPage(profile) {
     ok("CPD that has stopped is raised on Home (given enough history)", S.sessions.length < 20 || items2.some((i) => /No CPD/.test(i.msg)), items2.map((i) => i.msg).join(" | "));
     keepC.forEach((k) => { k.c.status = k.st; }); S.supervision = keepSup; S.cpd = keepCpd; S.settings.features = keepF; })();
 
-  /* ---- setup: the records question ---- */
+  /* ---- setup: the records question tells you the options, it never answers for you ---- */
   (() => { const w = { records: null, features: {} }; const host = document.createElement("div");
     stepImport(w).mount(host);
-    ok("setup asks about previous records with three answers", host.querySelectorAll("#spRec .palopt").length === 3);
+    ok("setup offers two honest answers about previous records",
+      host.querySelectorAll("#spRec .palopt").length === 2
+      && !!host.querySelector('#spRec .palopt[data-r="later"]') && !!host.querySelector('#spRec .palopt[data-r="fresh"]'));
+    ok("it says which kind adds and which replaces", /adds/.test(host.textContent) && /replaces/.test(host.textContent));
+    host.querySelector('#spRec .palopt[data-r="later"]').click();
+    ok("saying 'I'll bring them in' opens nothing and ticks nothing", w.records === "later" && !sheetOpen());
     host.querySelector('#spRec .palopt[data-r="fresh"]').click();
     ok("choosing 'starting fresh' is remembered for setupSave", w.records === "fresh"); })();
-  ok("the restore-a-backup route exists for setup", typeof setupRestoreBackup === "function");
+  ok("the restore-a-backup route is still offered in the step", typeof setupRestoreBackup === "function");
 
   /* ---- What's new and the tour build and run through ---- */
   ok("tour has its eight stops", tourSteps().length === 8);

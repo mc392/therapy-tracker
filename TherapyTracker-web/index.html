@@ -12206,7 +12206,7 @@ async function impCommit(plan){
   S.rooms.forEach(r=>{if(touchedR.has((r.location||"").toLowerCase()))r.rate=effRoomRate(r.location,t);});
 
   /* The Getting started card's first job is answered by this. */
-  try{const stt=startCfg();if(!stt.records)stt.records="imported";}catch(e){}
+  try{const stt=startCfg();if(!stt.records)stt.records="imported";delete stt.recordsLater;}catch(e){}
   const n=plan.fresh+plan.updates;
   const ok=await commit("Imported "+n+" session"+(n===1?"":"s")+" from a spreadsheet");
   return {ok,n};
@@ -12231,7 +12231,9 @@ function impTemplate(){
 
 /* ---- UI: three sheet stages ---- */
 let _imp=null;
-/* opts.quiet — called from inside the setup overlay: don't navigate or celebrate over it.
+/* opts.quiet — running underneath a full-screen overlay: don't navigate or celebrate over it.
+   No caller since the setup wizard stopped launching the importer in place (Sep 2026) — kept
+   because anything opening this from inside a flow still needs it.
    opts.done(n) — fired after a successful import. */
 function impOpen(opts){
   _imp={rows:null,map:null,scan:null,order:"DMY",onDupe:"skip",plan:null,
@@ -12533,7 +12535,7 @@ async function importFromText(text,label){
     if(!rep.ok)throw new Error(rep.problems.join("; "));
     if(!await restoreConfirm(o,st,rep))return false;
     S=normalize(st);
-    try{const stt=startCfg();if(!stt.records)stt.records="restored";}catch(e){}
+    try{const stt=startCfg();if(!stt.records)stt.records="restored";delete stt.recordsLater;}catch(e){}
     await commit((label||"Restored backup")+" ("+(S.sessions.length)+" sessions)");markBackedUp();
     applySettings();toast("Backup restored");go("home");
     return true;
@@ -12947,28 +12949,36 @@ function stepMoney(w){
     host.querySelector("#spRate").oninput=e=>w.rate=read(e);
     host.querySelector("#spPen").oninput=e=>w.pension=read(e);
   }};}
-/* Offered during setup so the "starting from nothing" hump is dealt with on day one,
-   rather than being discovered in Settings six months later. Entirely optional. */
-function stepImport(w){return{emoji:gi("import"), h:"Do you have previous records?",
-  sub:"Bring them in now and your totals, tax figures and client histories start out complete. You can also do it later — Home will remind you.",
+/* Asked during setup, ANSWERED on Home. This screen only ever TELLS: what the two kinds of
+   previous records are, and which of them adds to what is here rather than replacing it.
+   It used to launch the importer or a file picker the instant an answer was tapped, which left
+   anybody whose spreadsheet was on the other computer with no honest answer:
+     - "starting fresh" ticks the Getting started row, so they are never reminded again;
+     - "a spreadsheet", then cancelling out of the importer, still stamped
+       `start.records="imported"` — a job marked done that nobody had done.
+   Saying yes now records a job still OUTSTANDING (`start.recordsLater`), never an answer, which
+   is what keeps "Bring in your existing records" open at the top of Home until the records are
+   actually in. The one route still offered in place is restoring a backup, because that carries
+   the practice's own settings and therefore FINISHES setup rather than interrupting it. */
+function stepImport(w){return{emoji:gi("import"), h:"Do you have records from before?",
+  sub:"Nothing to bring in right now — this only decides whether Home keeps the job waiting for you.",
   mount(host){
     const paint=()=>{
       const n=S.sessions.length;
       const opt=(k,ic,t,d)=>'<button type="button" class="palopt'+(w.records===k?" on":"")+'" data-r="'+k+'">'+
         '<span class="pswatch">'+ic+'</span><span class="pt"><span class="pn">'+t+'</span><span class="pd">'+d+'</span></span></button>';
-      host.innerHTML='<div class="palgrid choices" id="spRec">'+
-        opt("imported",gi("paste"),"Yes — in a spreadsheet","Excel, Numbers or Google Sheets, one row per session. Paste the rows or pick a .csv; clients and rooms are created for you, and you see a preview before anything is saved.")+
-        opt("restored",gi("backup"),"Yes — a GroundWork backup","A .json file exported from GroundWork on another phone or computer. Restoring it finishes setup for you.")+
+      host.innerHTML=ovPoints([
+          [gi("paste"),"A spreadsheet","One row per session, in Excel, Numbers or Google Sheets. It <b>adds</b> to what is here."],
+          [gi("backup"),"A GroundWork backup","A .json file exported from GroundWork on another device. It <b>replaces</b> what is here with that copy."]
+        ])+
+        '<label style="margin-top:16px">Have you got either of those?</label>'+
+        '<div class="palgrid choices" id="spRec">'+
+        opt("later",gi("import"),"Yes — I’ll bring them in","Carry on setting up. <b>Bring in your existing records</b> waits at the top of Home until you have, and hands you the right tool for whichever kind you’ve got.")+
         opt("fresh",gi("sprout"),"No — starting fresh","Nothing to bring in. Log your first session once setup is done.")+
         '</div>'+
         (n?'<div class="vmsg ok mt">'+gi("done")+' '+plural(n,"session")+' in the app so far.</div>':'')+
-        (w.records==="imported"?'<button class="btn full mt" id="spImp">'+gi("import")+(n?" Import more rows":" Import my spreadsheet…")+'</button>':'')+
-        (w.records==="restored"?'<button class="btn full mt" id="spRes">'+gi("backup")+' Choose the backup file…</button>':'');
-      host.querySelectorAll("#spRec .palopt").forEach(b=>b.onclick=()=>{
-        w.records=b.dataset.r;Sfx.tick();paint();
-        if(w.records==="imported"&&!n)impOpen({quiet:true,done:paint});
-        if(w.records==="restored")setupRestoreBackup();});
-      const ib=host.querySelector("#spImp");if(ib)ib.onclick=()=>impOpen({quiet:true,done:paint});
+        '<p class="prev">Moving from another device and have the backup file to hand? <span class="taxlink" id="spRes">Restore it now ›</span> — it carries your settings too, so it finishes setup for you.</p>';
+      host.querySelectorAll("#spRec .palopt").forEach(b=>b.onclick=()=>{w.records=b.dataset.r;Sfx.tick();paint();});
       const rb=host.querySelector("#spRes");if(rb)rb.onclick=()=>setupRestoreBackup();
     };
     paint();
@@ -13050,7 +13060,9 @@ function stepDone(w){return{emoji:gi("done"), h:"That’s you set up",
       '<div><span>Keep records</span><b>notes '+w.rtNotes+' yrs · financial '+w.rtFin+' yrs</b></div>'+
       (featureOn(w,"supervision")?'<div><span>CPD target</span><b>'+w.cpdTarget+' hrs/yr'+(featureOn(w,"accreditation")?' · accreditation tracking on':'')+'</b></div>':'')+
       '<div><span>Switched off</span><b>'+(offList.length?esc(offList.join(", ")):"nothing")+'</b></div>'+
-      '<div><span>Previous records</span><b>'+(w.records==="fresh"?"starting fresh":S.sessions.length?plural(S.sessions.length,"session")+" brought in":"not yet — Home will remind you")+'</b></div>'+
+      '<div><span>Previous records</span><b>'+(w.records==="fresh"?"starting fresh":
+        w.records==="later"?"waiting on Home for you":
+        S.sessions.length?plural(S.sessions.length,"session")+" brought in":"not yet — Home will remind you")+'</b></div>'+
       '</div>'+
       '<div style="margin-top:14px">'+ovToggleRow("tour",gi("tour"),"Show me around","A short guided tour of each tab, how to log a session, and how saving and backups work.",w.tour!==false)+'</div>';
     const sw=host.querySelector('[data-sw="tour"]');
@@ -13128,9 +13140,15 @@ async function setupSave(w,opts){
   rv.mode=(w.depth==="simple")?"simple":"all";
   if(!Array.isArray(rv.shown))rv.shown=[];
   sg.setupRuns=(sg.setupRuns||0)+1;
-  /* "Starting fresh" is an answer to the Getting started card's first question; an import or a
-     restore has already stamped its own. */
-  if(w.records){const stt=sg.start=sg.start||{};if(!stt.records)stt.records=w.records;}
+  /* "Starting fresh" is an ANSWER to the Getting started card's first question; an import or a
+     restore has already stamped its own. "I'll bring them in" is the opposite of an answer — it
+     is a job still outstanding, so it must never land in `start.records`, which is what ticks
+     that row off. It is recorded separately, and Home keeps asking until the records are in. */
+  if(w.records==="fresh"||w.records==="imported"||w.records==="restored"){
+    const stt=sg.start=sg.start||{};if(!stt.records)stt.records=w.records;
+  }else if(w.records==="later"){
+    const stt=sg.start=sg.start||{};if(!stt.records)stt.recordsLater=true;
+  }
   const rt=sg.retention=sg.retention||{};
   if(+w.cpdTarget>=1)sg.cpdTarget=Math.round(+w.cpdTarget);
   if(+w.rtNotes>=1)rt.notesYears=Math.round(+w.rtNotes);
@@ -13143,7 +13161,11 @@ async function setupSave(w,opts){
   setPensionPcm(w.pension==null||w.pension===""?null:+w.pension);
   try{localStorage.setItem("tt_backup_days",String(w.bkDays));localStorage.setItem("tt_backup_acts",String(w.bkActs));}catch(e){}
   await commit("Setup: practice “"+sg.practiceName+"”");
-  applySettings();go("home");updateBackupBanner();
+  applySettings();
+  /* Somebody who said they have records to bring in lands ON the card that does it, rather than
+     on a Home screen where that job is one row of seven. */
+  go("home",w.records==="later"?{focus:"startCard"}:null);
+  updateBackupBanner();
 }
 
 /* ============ Tax disclaimer ============
@@ -13496,9 +13518,14 @@ function cancelChosen(){
 }
 function startItems(){
   const st=startCfg();
+  /* `recordsLater` is setup's "yes, but not this minute" — a job outstanding, never an answer, so
+     it cannot tick the row. All it does is say so on the row and mark it as the one to start on. */
+  const waiting=st.recordsLater===true&&!st.records;
   return [
-    {k:"records",t:"Bring in your existing records",s:"From a spreadsheet, or a GroundWork backup from another device",
-     done:!!st.records||S.sessions.length>=5,act:()=>startRecordsSheet(),
+    {k:"records",t:"Bring in your existing records",
+     s:waiting?"You said in setup you have some — a spreadsheet, or a backup from another device"
+              :"From a spreadsheet, or a GroundWork backup from another device",
+     done:!!st.records||S.sessions.length>=5,act:()=>startRecordsSheet(),lead:waiting,
      alt:{t:"I’m starting fresh",act:()=>startAnswer("records","fresh","Starting fresh — nothing to bring in")}},
     {k:"client",t:"Add your first client",s:"Codes, not names — AB, JM2, whatever you already use",
      done:S.clients.length>0,act:()=>clientForm(null)},
@@ -13521,7 +13548,10 @@ function startVisible(){
   return startItems().some(i=>!i.done);
 }
 async function startAnswer(key,val,msg){
-  startCfg()[key]=val;
+  const st=startCfg();
+  st[key]=val;
+  /* the question setup left open has now been answered, whichever way */
+  if(key==="records")delete st.recordsLater;
   await commit("Getting started: "+key+" = "+val);
   closeSheet();toast(msg);go("home",{keepScroll:true});
 }
@@ -13529,7 +13559,7 @@ function startCardHTML(){
   if(!startVisible())return "";
   const items=startItems(), done=items.filter(i=>i.done).length;
   const row=i=>'<div class="list-item" data-start="'+i.k+'"><div class="li-main">'+
-    '<div class="li-title'+(i.done?' done':'')+'">'+(i.done?'<span class="chip y">✓</span> ':'')+esc(i.t)+'</div>'+
+    '<div class="li-title'+(i.done?' done':'')+'">'+(i.done?'<span class="chip y">✓</span> ':i.lead?'<span class="chip s">Start here</span> ':'')+esc(i.t)+'</div>'+
     (i.done?'':'<div class="li-sub">'+esc(i.s)+(i.alt?' · <span class="taxlink" data-startalt="'+i.k+'">'+esc(i.alt.t)+'</span>':'')+'</div>')+
     '</div>'+(i.done?'':'<div class="li-right muted">›</div>')+'</div>';
   /* Undone first, and the records row always leads: it is the reason the card exists. */
@@ -13565,7 +13595,8 @@ function startRecordsSheet(){
     '<button class="btn sec full mt" id="rsBackup">'+gi("backup")+' Restore a backup…</button>'+
     '<button class="btn ghost full mt" id="rsFresh">I’m starting fresh</button>'+
     '<input type="file" id="rsFile" accept=".json,application/json" style="display:none">'+
-    '<p class="prev" style="text-align:center">Not sure? A spreadsheet is anything with one row per session. <span class="taxlink" id="rsTpl">Download the template ›</span> to see the columns.</p>';
+    '<p class="prev" style="text-align:center">Not sure? A spreadsheet is anything with one row per session. <span class="taxlink" id="rsTpl">Download the template ›</span> to see the columns.</p>'+
+    '<p class="small muted center" style="margin:0">Not right now? Close this — it stays at the top of Home until it’s done.</p>';
   body.querySelector("#rsSheet").onclick=()=>impOpen({done:()=>go("home")});
   body.querySelector("#rsBackup").onclick=()=>body.querySelector("#rsFile").click();
   body.querySelector("#rsFile").onchange=e=>{const f=e.target.files[0];if(!f)return;
@@ -13762,17 +13793,25 @@ function appMapSheet(){
 /* ---- the tour: what is worth knowing before you have used any of it ---- */
 function tourSteps(){
   const st=[];
-  /* Eight stops, and the rule for every one of them is: one idea, said once, in the words a
-     person would use out loud. The old copy ran to two paragraphs a stop and explained things
-     nobody had met yet — which is how a tour ends up being skipped. */
+  /* Eight stops (nine with the records one below), and the rule for every one of them is: one
+     idea, said once, in the words a person would use out loud. The old copy ran to two paragraphs
+     a stop and explained things nobody had met yet — which is how a tour ends up being skipped.
+     The intro names the count, so it is filled in at the end rather than written into the copy. */
   st.push({emoji:gi("tour"),h:"Quick look round",tab:"home",
-    body:"Eight short stops. The app dims and points at the real thing each time. <b>Nothing here changes your data</b> and you can leave whenever you like."});
+    body:"{N} short stops. The app dims and points at the real thing each time. <b>Nothing here changes your data</b> and you can leave whenever you like."});
   st.push({emoji:gi("tabs"),h:"The tabs along the bottom",tab:"home",sel:"#tabs",
     body:"<b>Home</b> is where you land. <b>Sessions</b> is everything you’ve logged. <b>Practice</b> is your clients, rooms and supervision."+
       (feat("money")||feat("tax")?" <b>Money</b> and <b>Tax</b> are the money side.":"")+
       " Each one introduces itself the first time you open it."});
   st.push({emoji:gi("money"),h:"Your four numbers",tab:"home",sel:'[data-coach="home-kpis"]',
     body:"What you’ve billed this tax year, how many sessions that was, what’s still owed, and what’s coming in the next week. <b>Tap the last two</b> to go straight to that list."});
+  /* Nine stops, not eight, for the one person who needs a ninth: somebody who said in setup that
+     they have records to bring in and has been sent here to do it. Conditional so nobody else
+     gets a stop about a job they have already answered — and `sel` degrades to a centred bubble
+     if the card is not on screen. */
+  if(startCfg().recordsLater===true&&!startCfg().records)
+    st.push({emoji:gi("import"),h:"Your records from before",tab:"home",sel:'#startCard [data-start="records"]',
+      body:"You said you have some. <b>Tap this row</b> when you have your spreadsheet or your backup file to hand — it asks which kind you’ve got and does the rest. It stays here until you have."});
   st.push({emoji:gi("sessionadd"),h:"Logging a session",tab:"home",sel:"#fab",
     body:"This button. Pick the client and the rest fills itself in from last time. You can log ahead too — future sessions just sit under <b>Coming up</b> until the day comes."});
   st.push({emoji:gi("notes"),h:"Your notes don’t live here",
@@ -13783,6 +13822,7 @@ function tourSteps(){
     body:"Settings → <b>Export backup</b> gives you one file with everything in it. Keep it somewhere that isn’t this device. Undo and restore points live in there too."});
   st.push({emoji:gi("done"),h:"That’s it",
     body:"The rest explains itself as you go. If you take one habit from this: export a backup after your weekly catch-up. Five seconds, and it’s the whole safety net. Lost later? The magnifier at the top finds a client, a screen or a setting, and holds the tips for whatever screen you are on."});
+  st[0].body=st[0].body.replace("{N}",["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten"][st.length]||st.length);
   return st;
 }
 function startTour(){
