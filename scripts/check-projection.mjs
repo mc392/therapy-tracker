@@ -316,6 +316,100 @@ const results = await page.evaluate(async (env) => {
     ok("…and the tile goes back to being a plain figure", !document.querySelector("#kBilled"));
     settings().features.trends = true;
   }
+
+  /* ---- 8. Money is the actuals tab, and borrows the one projection ----
+     The rule: Money says what happened, Business analytics says where it is going, and there is
+     exactly ONE year-end figure in the app. Two screens projecting one practice by two methods is
+     the drift this split exists to end, so the tile must carry anaProjection()'s own number. */
+  {
+    load(env.established);
+    settings().features = settings().features || {}; settings().features.trends = true;
+    try { localStorage.removeItem("tt_plus_gate"); } catch (e) {}
+    moneySeg = "overview"; projBasis = "annual";
+    go("money", { seg: "overview" }); await sleep(250);
+    const tile = document.querySelector("#mProj");
+    const p = anaProjection(), k = projActive(p);
+    ok("Money's glance card carries a projection tile", !!tile);
+    ok("…showing the SAME figure Business analytics shows, not one of its own",
+      tile && tile.querySelector(".v").textContent.trim() === gbp(p.modes[k].income),
+      tile && tile.querySelector(".v").textContent);
+    ok("…named for the year it projects", tile && tile.textContent.indexOf(curTaxYear()) >= 0, tile && tile.textContent);
+    ok("…and unblurred for someone who can open it", tile && !tile.querySelector(".blurfig"));
+    /* Money must no longer work out a month projection of its own. */
+    const fc = incomeForecast();
+    ok("Money's own month projection is gone", fc.proj === undefined && fc.delta === undefined,
+      JSON.stringify(Object.keys(fc)));
+    /* …and what replaced the comparison it fed is like-for-like: the same span of last month. */
+    {
+      const t = today(), der = S.sessions.map((s) => ({ s, d: derive(s) }));
+      const ms = new Date(t.getFullYear(), t.getMonth(), 1);
+      const lms = new Date(t.getFullYear(), t.getMonth() - 1, 1);
+      const lme = new Date(t.getFullYear(), t.getMonth(), 0);
+      const lmTo = new Date(lms.getFullYear(), lms.getMonth(), Math.min(t.getDate(), lme.getDate()));
+      const sumIn = (a, b) => Math.round(der.filter((x) => { const d = parseD(x.s.date); return d && d >= a && d <= b; })
+        .reduce((acc, x) => acc + (x.d.rate || 0), 0));
+      ok("…comparing the same span of last month, not the whole of it",
+        fc.mtdLast === sumIn(lms, lmTo), fc.mtdLast + " vs " + sumIn(lms, lmTo));
+      ok("…ending on the same day of the month, clamped to a short one",
+        lmTo.getDate() === Math.min(t.getDate(), lme.getDate()) && lmTo <= lme,
+        lmTo + " / today " + t.getDate());
+      ok("…as a percentage against month-to-date",
+        fc.deltaTD === (fc.mtdLast > 0 ? Math.round((sumIn(ms, t) - fc.mtdLast) / fc.mtdLast * 100) : null),
+        fc.deltaTD);
+    }
+    /* A month the therapist took off is not a collapse, and a bare dash reads as a fault. */
+    {
+      const dt = [...document.querySelectorAll(".card .kpis .kpi")]
+        .find((n) => /point last month|Nothing billed/.test(n.textContent));
+      ok("the like-for-like comparison is on the card", !!dt, dt && dt.textContent);
+      ok("…and when there is nothing to compare against it says so, not just a dash",
+        dt && (fc.deltaTD == null
+          ? /Nothing billed by this point last month/.test(dt.textContent) && !/\(£0\)/.test(dt.textContent)
+          : /vs this point last month/.test(dt.textContent)),
+        dt && dt.textContent);
+    }
+    /* Tapping through. */
+    tile.click(); await sleep(300);
+    ok("tapping the tile opens Business analytics on the card that owns the figure",
+      pracTab === "trends" && trendSeg === "money" && !!document.querySelector("#anaProjCard"));
+
+    /* ---- locked: her own figure, blurred, with the way in beside it ---- */
+    try { localStorage.setItem("tt_plus_gate", "on"); localStorage.removeItem("tt_plus"); } catch (e) {}
+    go("money", { seg: "overview" }); await sleep(250);
+    const lt = document.querySelector("#mProj");
+    ok("behind the gate the tile is still there", !!lt);
+    const fig = lt && lt.querySelector(".blurfig");
+    ok("…with the figure blurred rather than replaced or invented", !!fig);
+    ok("…and it really is her own figure", fig && fig.textContent.trim() === gbp(p.modes[k].income), fig && fig.textContent);
+    ok("…actually blurred, not just class-named",
+      fig && /blur\(/.test(getComputedStyle(fig).filter), fig && getComputedStyle(fig).filter);
+    ok("…hidden from a screen reader, which would otherwise read out what is being withheld",
+      fig && fig.getAttribute("aria-hidden") === "true");
+    ok("…while the tile itself says plainly what it is",
+      lt && /Plus/.test(lt.getAttribute("aria-label") || ""), lt && lt.getAttribute("aria-label"));
+    ok("…wearing the tier it is sold at, not the dearer one",
+      lt && lt.classList.contains("tier-plus") && !!lt.querySelector(".tiertag"), lt && lt.className);
+    ok("…and reachable from the keyboard, being a div playing a button",
+      lt && lt.getAttribute("role") === "button" && lt.getAttribute("tabindex") === "0");
+    const foot = document.querySelector("#mProjMore");
+    ok("…with the tease naming where to look", !!foot && /behind this/i.test(foot.textContent), foot && foot.textContent);
+    foot.click(); await sleep(300);
+    ok("…which lands on Business analytics' sneak peek, not on a wall",
+      pracTab === "trends" && !!document.querySelector(".peekrow") && !document.querySelector("#anaProjCard"));
+    ok("…where the money row keeps the promise the blurred tile made",
+      [...document.querySelectorAll(".peekrow")].some((r) => /where this year lands/i.test(r.textContent)));
+
+    /* ---- switched off: a preference, not a purchase, so nothing is being sold ---- */
+    try { localStorage.removeItem("tt_plus_gate"); } catch (e) {}
+    settings().features.trends = false; tyMemoClear();
+    go("money", { seg: "overview" }); await sleep(250);
+    ok("switched off, Money offers no projection tile at all", !document.querySelector("#mProj"));
+    ok("…and no upgrade tease either — there is nothing to sell", !document.querySelector("#mProjMore"));
+    ok("…but the glance card still shows four figures",
+      document.querySelectorAll(".card .kpis .kpi").length >= 4,
+      document.querySelectorAll(".card .kpis .kpi").length);
+    settings().features.trends = true;
+  }
   return out;
 }, states);
 

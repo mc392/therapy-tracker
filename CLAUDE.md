@@ -829,6 +829,32 @@ entry can be pinned to Home.
   flips which is hidden. The same card is drawn on Home when it is pinned, where a redraw means
   re-running the whole home screen to change one word. `projBasis` is module-level like `trendSeg`,
   so Home and Business analytics can never be showing two different bases.
+- **Money is the actuals tab and borrows this figure rather than computing one** (Sep 2026).
+  `incomeForecast()` used to work out its own month projection — billed to date plus the larger of
+  what was already booked and an eight-week daily average — and Money › Overview's *This month &
+  year at a glance* showed it. **That projection is gone.** Two projections of one practice, on two
+  screens, by two methods is exactly the drift this codebase keeps warning about, and
+  `anaProjection()` is the one with three bases, profit before tax and its own tests. The tile now
+  carries `anaProjection()`'s revenue and hands the reader over to the card that shows the working.
+  Three states, and the last two differ for the reason `feat()` and `plusLocked()` always differ:
+  - **Locked** is a billing state, so the therapist's **own figure is shown blurred** (`.blurfig`)
+    with a `tierTagHTML` chip and the way in beside it. Blurred, never replaced and never invented:
+    same posture as the sneak peek, which shows real figures from this practice. The number is
+    `aria-hidden` and the tile carries the honest label — a screen reader reading out the very
+    figure the design is withholding is the worst of both. It is a shopfront, not a secret
+    (`docs/monetisation.md` §5.4). The locked money **peek row names the projection first**, so the
+    promise the blurred tile makes is kept on the screen it lands on.
+  - **Switched off** is a preference the reader set, so there is nothing to sell: no tile and no
+    tease, and the slot goes back to being a fact ("Last month, in full").
+  - `goProjection()` lands a locked reader on Business analytics **with no `focus`** — under the
+    gate that screen is the sneak peek and the card is not rendered, so focusing its id would
+    scroll nowhere in particular.
+- **Removing that projection took its comparison with it.** "vs last month" was *projected month
+  against whole last month*; with no projection the honest replacement is month-to-date against
+  **the same span of last month** (`mtdLast`/`deltaTD`), clamped so the 31st compares against the
+  end of a 30-day month. When nothing was billed by that point last month — an August off, or a
+  practice that had not started — the label **says so** rather than printing "—" beside "(£0)",
+  which reads as a broken tile.
 - **Home links through** (`goProjection`): "Billed this tax year" is a part-year figure and the
   question in front of it is what the whole year comes to, so the tile is now `.clk` with a
   chevron and one line under the four figures carries the projection. Both are gated on

@@ -229,6 +229,16 @@ details.dz[open]>summary::before{content:"▾ "}
 .kpi .l{font-size:12px;color:var(--muted);margin-top:3px}
 .kpi.good .v{color:var(--good)} .kpi.bad .v{color:var(--bad)}
 .kpi.clk{cursor:pointer} .kpi.clk:active{transform:scale(.98)}
+/* A figure that is behind the gate: the reader's OWN number, blurred rather than replaced or
+   invented. Same posture as the sneak peek on Business analytics, which shows real figures from
+   this practice rather than describing charts nobody has seen — this is a shopfront, not a
+   secret, and one person reading it in devtools is already possible and already accepted
+   (docs/monetisation.md §5.4). The number is aria-hidden and the tile carries the honest label:
+   a screen reader reading out the very figure the design is withholding is the worst of both. */
+.blurfig{filter:blur(9px);-webkit-filter:blur(9px);opacity:.9;pointer-events:none;
+  user-select:none;-webkit-user-select:none}
+.kpi.plusblur{cursor:pointer;border-color:color-mix(in srgb,var(--tg3) 40%,transparent)}
+.kpi.plusblur:active{transform:scale(.98)}
 /* Tax › Now — the three numbers that answer the everyday questions, one full-width card each.
    Deliberately bigger than a .kpi: there are only three of them and they are the whole screen. */
 .nowcard{cursor:pointer}
@@ -5070,9 +5080,13 @@ function wireProjection(host){
    points at it has to open the right section as well as the right tab — go() alone would land
    the reader on Clients. */
 function goProjection(){
-  if(!anaPinnable()){go("money");return;}
+  /* Switched off is the reader's own preference, so the only useful destination is the switch.
+     Locked lands on Business analytics all the same — under the gate that screen is the sneak
+     peek, which is the shopfront, not a wall. There is no card to focus on there, and focusCard
+     on an id that is not rendered would scroll nowhere in particular. */
+  if(!feat("trends")){go("settings",{openGroup:"app"});return;}
   trendSeg="money"; pracTab="trends";
-  go("practice",{seg:"trends",focus:"anaProjCard"});
+  go("practice",{seg:"trends",focus:plusLocked("trends")?null:"anaProjCard"});
 }
 /* `after` is what the screen wants to happen once the pin has changed. Trends repaints the
    buttons and stays put; Home redraws itself, because the card the reader just unpinned is the
@@ -5931,8 +5945,10 @@ VIEWS.practice=function(){
             peek("Money · what arrives and what it costs",
               lostPeek>0?gbp(Math.round(lostPeek)):(avgPeek?avgPeek+" avg":"—"),
               missedPk.length
-                ? "in fees you chose not to charge on "+plural(missedPk.length,"missed session")+". Also: seasonality, your worst month, fee erosion and days to payment."
-                : "Seasonality, your worst and best month, fee erosion, days to payment and what the practice costs to run.")+
+                /* The Money tab's blurred tile promises "where this year lands" is behind the
+                   gate, and this row is where that promise is kept — name it first. */
+                ? "in fees you chose not to charge on "+plural(missedPk.length,"missed session")+". Also: where this year lands on three bases, seasonality, your worst month and days to payment."
+                : "Where this year lands — revenue and profit before tax on three bases — plus seasonality, your worst and best month, days to payment and what the practice costs to run.")+
             peek("Time · what an hour is really worth",
               hrPk.ready?gbp(hrPk.rate):"—",
               hrPk.ready
@@ -8059,16 +8075,45 @@ VIEWS.money=function(){
       const rng=g.min?(fmtDM(g.min)+(g.max&&+g.max!==+g.min?" – "+fmtDM(g.max):"")):"";
       return '<tr><td>'+esc(k)+'</td><td class="num">'+g.n+'</td><td>'+rng+'</td><td class="num">'+gbp(g.amt)+'</td></tr>';}).join("");
     const fc=incomeForecast();
+    /* ---- the one projection on this tab, and it is not this tab's ----
+       Money says what happened; Business analytics says what it means and where it is going. The
+       tile carries anaProjection()'s figure rather than a second one worked out here, so the two
+       screens cannot disagree, and it hands the reader over to the card that shows the working.
+       Three states, and the difference between the last two matters: switched off is a preference
+       the reader set and there is nothing to sell her, so the slot goes back to being a fact;
+       locked is a billing state, so her own figure is shown blurred with the way in beside it. */
+    const trOn=feat("trends");
+    const pj=trOn?anaProjection():null;
+    const pjKey=pj?projActive(pj):null;
+    const pjLocked=trOn&&plusLocked("trends");
+    const pjTier=featureTier("trends")||"plus";
+    const projTile=!pjKey
+      ? '<div class="kpi"><div class="v">'+gbp(fc.lastM)+'</div><div class="l">Last month, in full</div></div>'
+      : pjLocked
+        ? '<div class="kpi clk plusblur tier-'+pjTier+'" id="mProj" role="button" tabindex="0" '+
+          'aria-label="Where '+esc(pj.ty)+' lands — a '+esc(tierName(pjTier))+' figure. Opens Business analytics.">'+
+            '<div class="v blurfig" aria-hidden="true">'+gbp(pj.modes[pjKey].income)+'</div>'+
+            '<div class="l" aria-hidden="true">Where '+esc(pj.ty)+' lands'+tierTagHTML(pjTier)+'</div></div>'
+        : '<div class="kpi clk good" id="mProj"><div class="v">'+gbp(pj.modes[pjKey].income)+'</div>'+
+            '<div class="l">Where '+esc(pj.ty)+' lands\u00a0\u203a</div></div>';
+    const fcFoot=!trOn
+      ? 'Everything on this tab is what has <b>actually happened</b>. Projections live in <b>Business analytics</b>, which is switched off in <b>Settings › App preferences</b>.'
+      : 'Everything on this tab is what has <b>actually happened</b>. Where the year lands — on three different bases, with profit before tax — is worked out in <b>Business analytics › Money</b>. '+
+        '<span class="taxlink" id="mProjMore">'+(pjLocked?'See what is behind this':'Where this year lands')+' \u203a</span>';
     const fcCard='<div class="card"><h2>This month &amp; year at a glance</h2>'+
       '<div class="kpis mt">'+
         '<div class="kpi"><div class="v">'+gbp(fc.mtd)+'</div><div class="l">Billed so far this month</div></div>'+
-        '<div class="kpi good"><div class="v">'+gbp(fc.proj)+'</div><div class="l">Projected month total</div></div>'+
-        '<div class="kpi'+(fc.delta==null?'':(fc.delta>=0?' good':' bad'))+'"><div class="v">'+(fc.delta==null?'—':(fc.delta>=0?'+':'')+fc.delta+'%')+'</div><div class="l">vs last month ('+gbp(fc.lastM)+')</div></div>'+
+        projTile+
+        /* deltaTD is null exactly when nothing was billed by this point last month — a holiday,
+           or a practice that had not started. "—" beside "(£0)" reads as a broken tile, so the
+           label says which it is rather than leaving the dash to be interpreted. */
+        '<div class="kpi'+(fc.deltaTD==null?'':(fc.deltaTD>=0?' good':' bad'))+'"><div class="v">'+(fc.deltaTD==null?'—':(fc.deltaTD>=0?'+':'')+fc.deltaTD+'%')+'</div>'+
+          '<div class="l">'+(fc.deltaTD==null?'Nothing billed by this point last month':'vs this point last month ('+gbp(fc.mtdLast)+')')+'</div></div>'+
         '<div class="kpi"><div class="v">'+esc(fc.busiest)+'</div><div class="l">Busiest day (6 mo)</div></div>'+
       '</div>'+
       /* The year heatmap used to sit here. It is a "how busy have I been" picture, not a money
          one, and it now opens the Home tab — see VIEWS.home's heatCard. */
-      '<p class="small muted" style="margin:12px 0 0">Projection = billed to date + the larger of (sessions already booked this month) and (your 8-week average daily revenue × days left).</p></div>';
+      '<p class="small muted" style="margin:12px 0 0">'+fcFoot+'</p></div>';
     const series=periodSeries(statGran);
     body.innerHTML=fcCard+
       '<div class="card"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Revenue &amp; net income</h2>'+
@@ -8083,6 +8128,11 @@ VIEWS.money=function(){
         (S.rooms.some(r=>roomBilling(r)==="monthly")?'<p class="small muted" style="margin-top:8px">Rooms on a rent aren’t listed here — their rent is settled under <b>Costs &amp; income</b>, not per session.</p>':'')+'</div>';
     const rmg=body.querySelector("#roomManage");
     if(rmg)rmg.onclick=()=>go("money",{seg:"costs",focus:"roomFeesCard"});
+    /* The blurred tile is a div playing the part of a button, so it needs the keyboard itself. */
+    const mpj=body.querySelector("#mProj");
+    if(mpj){mpj.onclick=()=>goProjection();
+      mpj.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();goProjection();}};}
+    const mpm=body.querySelector("#mProjMore"); if(mpm)mpm.onclick=()=>goProjection();
     let sel=null;
     /* Redrawing replaces the .svgwrap, which resets its horizontal scroll — so tapping a bar used
        to fling the chart back to the oldest period, hiding the very breakdown it just opened.
@@ -11416,19 +11466,25 @@ function incomeForecast(){
   const t=today();const der=S.sessions.map(s=>({s,d:derive(s)}));
   const mStart=new Date(t.getFullYear(),t.getMonth(),1),mEnd=eomonth(t);
   const mtd=der.filter(x=>{const d=parseD(x.s.date);return d&&d>=mStart&&d<=t;}).reduce((a,x)=>a+(x.d.rate||0),0);
-  const booked=der.filter(x=>{const d=parseD(x.s.date);return d&&d>t&&d<=mEnd;}).reduce((a,x)=>a+(x.d.rate||0),0);
-  const hFrom=addDays(weekMonday(t),-56),hTo=weekMonday(t);
-  const hist=der.filter(x=>{const d=parseD(x.s.date);return d&&d>=hFrom&&d<hTo;}).reduce((a,x)=>a+(x.d.rate||0),0)/56;
-  const remDays=Math.max(0,Math.round((mEnd-t)/86400000));
-  const proj=Math.round(mtd+Math.max(booked,hist*remDays));
   const lmStart=new Date(t.getFullYear(),t.getMonth()-1,1),lmEnd=eomonth(lmStart);
   const lastM=der.filter(x=>{const d=parseD(x.s.date);return d&&d>=lmStart&&d<=lmEnd;}).reduce((a,x)=>a+(x.d.rate||0),0);
-  const delta=lastM>0?Math.round((proj-lastM)/lastM*100):null;
+  /* THE MONTH PROJECTION THAT USED TO LIVE HERE IS GONE — billed to date plus the larger of what
+     was already booked and an eight-week daily average, worked out here and nowhere else. Two
+     projections of one practice, on two screens, by two methods is exactly the drift this
+     codebase keeps warning about, and anaProjection() is the one with three bases, profit before
+     tax and its own tests behind it. Money is the actuals tab; the card links across.
+     What replaces the comparison it fed is a like-for-like one: the same SPAN of last month, not
+     the whole of it. Eleven days against thirty says the practice has collapsed, every month,
+     until the 30th. Clamped, so the 31st compares against the end of a 30-day month rather than
+     falling off it. */
+  const lmTo=new Date(lmStart.getFullYear(),lmStart.getMonth(),Math.min(t.getDate(),lmEnd.getDate()));
+  const mtdLast=der.filter(x=>{const d=parseD(x.s.date);return d&&d>=lmStart&&d<=lmTo;}).reduce((a,x)=>a+(x.d.rate||0),0);
+  const deltaTD=mtdLast>0?Math.round((mtd-mtdLast)/mtdLast*100):null;
   const dayN=[0,0,0,0,0,0,0];
   der.forEach(x=>{const d=parseD(x.s.date);if(d&&d<=t&&(t-d)/86400000<=182&&!isCancelled(x.s))dayN[d.getDay()]++;});
   const bestI=dayN.indexOf(Math.max(...dayN));
   const busiest=Math.max(...dayN)>0?["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][bestI]:"—";
-  return {mtd:Math.round(mtd),proj,lastM:Math.round(lastM),delta,busiest};
+  return {mtd:Math.round(mtd),lastM:Math.round(lastM),mtdLast:Math.round(mtdLast),deltaTD,busiest};
 }
 
 /* ============ Export / import ============ */
