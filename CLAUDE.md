@@ -282,6 +282,8 @@ S = {
     coach: {},          // {seen:[tip keys], off} — first-visit tips (v6)
     homeOrder: [],      // HOME_CARDS keys, the reader's own order (absent = the default)
     homePins: [],       // ANA_CARDS keys pinned to Home, max ANA_PIN_MAX (absent = none)
+    start: {},          // Getting started answers: records "imported"|"restored"|"fresh", homeOnly, dismissed (Sep 2026)
+    cancelRulesChosen,  // true once the cancellation policy has been touched at all — see cancelChosen()
     onboarded, onboardedAt, setupRuns
   }
 }
@@ -504,6 +506,7 @@ Six collapsible `<details class="sgrp">` groups (**business / app** / data / rec
 - The old `income` feature flag became `money` + `tax`; `normalize()` carries `income:false` across to both rather than switching a hidden tab back on.
 
 ### Home (revised Sep 2026)
+- **The attention feed raises two jobs with a season** (Sep 2026): a client past a retention date (`retentionRows()`, linking to the retention card) and CPD that has stopped (`anaCPD().recent===0`, only once there are 20 sessions or some CPD ever logged, so day one is not nagged). Same shape as the other rows; both read functions that already existed.
 - **Four KPIs: billed this tax year · sessions this tax year · outstanding now › · sessions next 7 days ›.** "Received" was dropped: sitting beside "Billed" it answered one question twice, and what was actually missing — the gap — was already the Outstanding tile. The replacement counts **attended** sessions (`isCancelled` excluded) and names the distinct clients behind them, which nothing else on Home said.
 - **The year heatmap (`yearHeatmapHTML`) moved here from Money › Overview.** "How busy have I been" is a Home question — nobody opens the money tab to find out whether they took August off. It needs `scrollChart(v.querySelector(".hmgrid"),null)` after render for the same reason the charts do: it is built before the view is attached, so it has no width at draw time, and without it the reader lands on the same date last year.
 - The "Quick add" card is now "Log something" and holds only the three buttons.
@@ -592,7 +595,11 @@ npm run test:pins            # pinning an analytic to Home: the registry, the ca
 npm run test:projection      # the year-end projection: the run rate against the tax engine's own,
                              #   the seasonal share re-derived a day at a time, the trailing window
 npm run test:guidance        # every info icon on every screen and form opens a real sheet, every
-                             #   row of "Where everything is" lands somewhere, What's new runs through
+                             #   row of "Where everything is" lands somewhere, What's new runs through;
+                             #   Getting started, Still on defaults, Search & help and the new
+                             #   attention rows, from the documented rule for each
+npm run test:import          # the spreadsheet importer against the shapes real sheets take: datetime
+                             #   cells, time ranges, "Amount paid", "closed", workbooks, no heading row
 ```
 
 **`scripts/check-behaviour.mjs` is the only test that presses a button.** The tax suite checks the
@@ -655,6 +662,7 @@ Rules that must not regress:
 - **`impTemplate()` generates the template from `IMP_FIELDS`**, so template headers can never drift from the parser. There's a test for this: the template's own column list must guess back to itself exactly.
 - `impGuess()` matches header synonyms exact-first then substring, one field per column. Field order in `IMP_FIELDS` breaks ties (`location` claims a bare "Room" before the `room` field does).
 - Offered as a setup-wizard step (`stepImport`) on first run only — a re-run promises not to touch client data. Inside the overlay it runs with `{quiet:true}` so it doesn't `go()` or `celebrate()` behind it.
+- **Shapes real spreadsheets take, all handled since Sep 2026** (`npm run test:import` asserts each): a date cell carrying a time (`07/04/2026 10:00`, ISO `T…`) parses as the date, and `impTimeInDate()` supplies the time when no Time column is mapped; a Time written as a range (`10:00 - 11:00`, `10.30 to 11.20`) or with seconds keeps its start; **an amount in the paid column means paid** (`impYN("£60")` is `Y`, `0` is `N`) because "Amount paid" is how most sheets record it; `impStatus()` maps "current / closed / on hold" onto Ongoing / Finished / Paused and keeps anything else as typed; `Name`, `ID`, `Patient` guess as the client code and `Amount paid` as the paid column. The plan counts **rows with no fee for a client the app has no rate for** (`plan.noFee`) and the preview warns they will count as £0 — that is the one silent failure of an import, and the Money tab was where it used to surface. Picking a workbook (`.xlsx`, `.numbers`) says how to save it as a `.csv` instead of pasting a zip into the box, and a paste whose first row contains a date is told it has no heading row.
 
 ## Session schedules & GroundWork Notes (added Aug 2026)
 How often each client is seen, shared with the companion notes app so it can work out which
@@ -1010,7 +1018,11 @@ The tour used to be eight full-screen `.ov` cards describing controls the reader
 - **Flow engine**: `flowStart/flowGo/flowNext/flowClose` drive a full-screen `.ov` overlay (z-index 45 — above the tab bar, below `#sheet`) from an array of step objects `{emoji,h,sub,html,mount,validate,onLeave}`. Shared by setup and the tour.
 - **Tour**: `startTour()` — now on-page coach marks, not the `.ov` flow. Eight stops on day-one essentials; per-screen depth lives in `TIPS`. Read-only, replayable from Settings › Setup & help, where the tips can also be switched off or reset. Its last stop names the map below.
 - **Where everything is** (Sep 2026): `appMapSheet()` — one sheet listing every tab, segment and Settings group with a line each, then **what to do and how often** (weekly / monthly / every few months / yearly), every row a link. Built from `APP_MAP` / `APP_JOBS` and filtered through the same `tabEnabled()` / `feat()` the tab bar uses, so it never lists a screen this install cannot open. Reached from Settings › Setup & help, from the empty Home screen, and named at the end of the tour and in What's new. It is the answer to "where did that go" and "what am I supposed to be doing in here" — the two questions a feature-dense app gets asked after setup has faded. Keep `APP_MAP` in step when a segment is added, renamed or removed; `npm run test:guidance` clicks every row.
+- **Getting started** (Sep 2026): `startCardHTML()` / `startItems()` — the first block on Home (`HOME_CARDS` key `start`) for a practice under `START_MAX_SESSIONS` (25) sessions, until dismissed. Seven rows, **every one derived from the data** (a client exists, a session is logged, `cancelChosen()`, `payToDetails()`, `lastBackupTs()`), never from a stored tick; the two answers that cannot be read from data — "I'm starting fresh" and "I only work from home" — are the only stored ones, in `settings.start`, so they travel in a backup. **The first row is the point of the card**: `startRecordsSheet()` asks which kind of records the reader has and hands them to the right tool, saying which one *adds* (the spreadsheet import) and which *replaces* (a backup restore). `impCommit()` and `importFromText()` stamp `start.records` themselves, so the row ticks without the reader saying so. An established practice never sees it; the **Still on defaults** card is its version for them.
+- **Still on defaults** (Sep 2026): `decisionsCardHTML()` at the top of Settings › Your practice — the business settings the app is deciding by default until the reader does: the cancellation policy (`cancelChosen()`: `normalize()` seeds a default, so the test is "still exactly the default and never touched"; `wireCancelRules`'s save sets `cancelRulesChosen`), a blank *how to pay*, an unconfirmed tax region, a working week on defaults. Rows link with `focus` to the card (every Settings card now carries an id), and the card disappears with the last row.
+- **Search & help** (Sep 2026): the magnifier in the header (`#helpBtn`, kept on desktop where the gear is hidden) opens `findSheet()`. Empty, it holds the help this screen has — its own `TIPS` replayed (the tips fire once by themselves; this is their second life), Getting started while it shows, the app map, the tour, What's new. Typed into, `findIndex(q)` searches clients, sessions, rooms, `ANA_CARDS`, `APP_MAP` screens, `SETTINGS_INDEX` (a static list of Settings cards with keywords, group and card id — keep it in step with `VIEWS.settings`), `INFO` topics and `APP_JOBS`. Every hit is a link. `segOf(tab)` is the one place a tab's current segment is read; `coachMaybeTip` uses it too.
 - **What's new**: `WHATS_NEW` (currently **4**) against `tt_whatsnew` in localStorage; `whatsNewSteps()` is rewritten each release cycle and describes only that cycle — the Aug 2026 reorganisation notes were replaced in Sep 2026 rather than appended to, because ten steps is a wall nobody reads. Bump the constant whenever the steps change.
+- **Previous records are asked about, not assumed** (Sep 2026). `stepImport` is "Do you have previous records?" with three answers — a spreadsheet (opens the importer in place), a GroundWork backup (`setupRestoreBackup()`: restoring **finishes setup**, because the backup carries the practice's own settings, so the overlay closes and the app opens as it was on the other device), or starting fresh (stored as `start.records="fresh"` by `setupSave`). The welcome step offers the backup route too, so somebody moving phones never sees the other ten steps. A cancelled or failed restore leaves the wizard where it was.
 - **Re-run**: `confirmRerunSetup()` — warning sheet requiring the user to type `RESET SETUP`. Skips the rooms step once sessions exist.
 - **Feature flags**: `feat(key)` gates tabs (`TABS[].ft`), gamification (`celebrate`, `Confetti.burst`), attention feed, receipts, accreditation, `peer` (peer supervision, dep: supervision) and `finances` (costs & other income, dep: income). Off = hidden, never deleted.
 - **Removed Sep 2026: the quick-add command bar** (`parseQuickLog` / `quickLogBuild` / `mountQuickLog`, the `quickadd` flag and its reveal step). It was a second, less capable route into the session form — every session it created still had to be opened and corrected. A stored `features.quickadd` on an existing install is now inert; don't reintroduce the key.
@@ -1043,6 +1055,9 @@ view element, and `go(tab,opts)` calls it. Inside a view the segments are plain 
 | `VIEWS.tax` | Now (`drawNow`), Estimate, Pot & payments (`drawPayments`), Per year (`drawAllowances`), Making Tax Digital (`drawMTD`) |
 | `VIEWS.settings` | The six collapsible groups; `retentionCardHTML()`, `basisCardHTML()`, `taxRegionCardHTML()` are cards inside it |
 | `appMapSheet()` | "Where everything is" — every tab, segment and Settings group as a link, plus the what-to-do-and-how-often list |
+| `findSheet()` | Search & help, from the header magnifier: search across everything, or this screen's tips, the map, the tour and What's new |
+| `startCardHTML()` / `startRecordsSheet()` | Getting started on Home, and the chooser that routes previous records to the importer or the restore |
+| `decisionsCardHTML()` | "Still on defaults" at the top of Settings › Your practice |
 
 Small helpers most screens reach for (all near the top of the script): `derivedSessions()` (every
 session paired with `derive()`), `goSessions(seg)` (land on a Sessions worklist), `goRoomCosts(card)`

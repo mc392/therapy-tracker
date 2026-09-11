@@ -170,47 +170,66 @@ the empty Home screen, and named at the end of the tour and in What's new.
 **What's new** was rewritten for this cycle (it still described the August reorganisation) and
 cut from ten steps to five, the first of which points at the map.
 
-### Recommended, not built — ranked
+### Recommended — and built the same day
 
-Each is a real change to the app and is left for the owner to choose. Effort is relative to a
-single session of work.
+The six recommendations below were written first as recommendations, then built in a second
+round the same day when the owner asked for all of them, with the first one aimed squarely at
+someone arriving with previous records. What each is, and where it lives:
 
-1. **A "Getting started" card on Home** *(medium)*. A short checklist derived from the data
-   rather than from a stored list: add a client · log a session · set up a room · set your
-   cancellation policy · say how you like to be paid · export a backup. Each row links to the
-   place; each ticks itself the moment the state says it is done; the card disappears when all
-   are done or when dismissed. This is the natural successor to the setup wizard — it turns the
-   decisions setup skipped into visible, tickable jobs instead of silent defaults. Fits
-   `HOME_CARDS` as a new keyed block (`start`), which `homeOrder()` will place by default for
-   everyone who has never rearranged.
+1. **Getting started** — a card at the top of Home (`HOME_CARDS` key `start`) for a practice
+   under 25 sessions, until dismissed. Seven jobs, every one **derived from the data** rather than
+   ticked by hand: bring in your existing records · add your first client · log a session · say
+   where you see clients · set your cancellation policy · say how you like to be paid · export
+   your first backup. Undone rows lead; done rows sink with a tick. Two answers cannot be read
+   from data and are the only stored ones: *I'm starting fresh* and *I only work from home*.
+   **The first row is the point.** It opens *Your existing records*, which asks which kind the
+   reader has — a spreadsheet (which **adds**), a GroundWork backup (which **replaces**), or
+   nothing yet — and hands them straight to the importer or the restore. The importer and the
+   restore stamp the answer themselves, so the row ticks without being told.
 
-2. **A "decisions not yet made" card in Settings › Your practice** *(small)*. The same idea for
-   the business settings that have consequences: no cancellation policy, no payment details, the
-   working week still on defaults, retention never chosen, tax region never confirmed. One card
-   at the top of the group listing what is still at its default, each a link. It would replace the
-   quiet failure where a policy nobody set silently charges 100%.
+2. **Still on defaults** — a card at the top of Settings › Your practice listing the business
+   decisions the app is making by default: a cancellation policy nobody has touched (it charges
+   the full fee whatever the notice), a blank *how to pay*, an unconfirmed tax region, a working
+   week on defaults. Each row links to the card; the card disappears with the last row. This is
+   the Getting started card for an established practice, which never sees the Home one.
 
-3. **Extend the attention feed beyond money and notes** *(small)*. `attentionItems()` already
-   raises unpaid sessions, incomplete notes, room fees, overdue supervision and the backup nag.
-   Two more rows follow the same shape and cost nothing to add: **a client past their retention
-   date** (from `retentionRows()`), and **no CPD logged in 90 days** while a target is set (from
-   `anaCPD().pace`). Both are jobs with a season the reader will otherwise only meet on a renewal
-   form.
+3. **Two more attention rows on Home** — a client past the retention date the reader chose, and
+   CPD that has stopped (nothing in 90 days, once there is history to judge by). Both read
+   functions that already existed.
 
-4. **A "What is this screen for?" button in the header** *(small)*. The first-visit tips are good
-   and fire once. A `?` beside the gear that replays the current screen's tip (or opens the map
-   when there is none) gives the tips a second life without making them nag. `coachStart` and
-   `TIPS` already hold everything needed; it is a lookup by `cur` and `seg`.
+4. **Search & help, one button** — a magnifier in the header on every screen (kept on desktop,
+   where the gear is hidden). Before anything is typed it holds the help this screen has: its own
+   first-visit tips replayed, Getting started while it shows, the app map, the tour and What's
+   new. Typed into, it searches clients, sessions, rooms, analytics cards, screens, Settings cards
+   and the explanations behind the info icons. Every hit is a link. Recommendations 4 and 5 were
+   built as one control rather than two buttons, because the header at phone width has room for
+   one more and the two questions — "where is X" and "what is this screen" — are asked by the
+   same person at the same moment.
 
-5. **One search box for the whole app** *(larger)*. Settings search is the most-used orientation
-   tool the app has. The same box on Home, matching client codes, session dates, room names,
-   analytics card names and settings cards, would answer "where is X" for everything — the map
-   answers it for screens only. Worth doing after 1–4, when the shape of "things a reader looks
-   for" is clearer from use.
+5. **Search** — see 4.
 
-6. **Keep What's new per release, and short** *(process)*. It is the one channel that reaches an
-   existing user with a change they did not ask for. Bump `WHATS_NEW` with every user-visible
-   change and keep the steps to what changed since the last bump, never a history.
+6. **What's new per release** — the process note stands; What's new was extended for this cycle
+   rather than bumped, because version 4 had not yet shipped.
+
+Alongside these, **setup asks *Do you have previous records?*** with the same three answers, and
+the welcome screen offers *Restore a backup instead* — restoring finishes setup, because the
+backup carries the practice's own settings. Someone moving phones never sees the other ten steps.
+
+### The importer, made easier to arrive through
+
+Real spreadsheets are messier than the template, and every shape below was either silently
+mis-read or refused before this round. Each is now handled and asserted by `npm run test:import`:
+
+| A sheet that has… | Before | Now |
+|---|---|---|
+| A date cell carrying a time (`07/04/2026 10:00`) | Row skipped: "date not understood" | Parses as the date; the time is used when there is no Time column |
+| A Time column written as a range (`10:00 - 11:00`) or with seconds | Time lost | Start time kept |
+| An "Amount paid" column instead of Y/N | Every row unpaid | An amount above zero means paid; "Amount paid" guesses as the paid column |
+| A status column saying *current*, *closed*, *on hold* | A status nothing else in the app had heard of | Ongoing / Finished / Paused; anything else kept as typed |
+| A "Name" or "ID" heading for the client code | Not guessed | Guessed |
+| Rows with no fee, for clients the app has no rate for | Imported silently at £0 | The preview says so, counts them, and says where to set the rate |
+| An `.xlsx` or `.numbers` file picked instead of a `.csv` | A zip pasted into the box | Told how to save it as a `.csv`, in the words the spreadsheet's own menu uses |
+| No heading row (a paste that starts with a session) | "Still needed: Client code, Session date" | Told the first row looks like a session, with the fix |
 
 ### Not recommended
 

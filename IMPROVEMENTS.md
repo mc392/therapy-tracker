@@ -153,8 +153,15 @@ A three-part pass, written up in `docs/orientation-review-2026-09.md`:
   stale `Clients › Rooms` labels corrected.
 - **Orientation**: *Where everything is* — a map of the app with a what-to-do-and-how-often list,
   every row a link — from Settings › Setup & help and the empty Home screen; What's new rewritten
-  for this cycle; `npm run test:guidance` guards all of it. The recommendations that were **not**
-  built are ranked in the review document.
+  for this cycle; `npm run test:guidance` guards all of it.
+- **The review's recommendations, all built** (same day): a **Getting started** card on Home whose
+  first job routes previous records to the importer or a restore; a **Still on defaults** card in
+  Settings › Your practice; two new attention rows (retention date passed, CPD stopped); one
+  **Search & help** button in the header that searches clients, sessions, screens, settings and
+  explanations and replays a screen's tips; setup asks *Do you have previous records?* and a
+  backup can be restored from the welcome screen. The importer now handles datetime cells, time
+  ranges, "Amount paid", "closed" statuses, workbooks and heading-less pastes, and warns about
+  fee-less rows (`npm run test:import`).
 
 ## Follow-ups still open
 

@@ -744,6 +744,8 @@ nav.tabs button.navset{display:none}
   nav.tabs button.navset{display:flex;margin-top:auto}
   /* One route to Settings, not two. The sidebar item says the word; the gear was a guess. */
   header.top .themebtn{display:none}
+  /* ...but search-and-help has no sidebar equivalent, so it stays. */
+  header.top #helpBtn{display:flex}
 }
 /* ===== Pointer affordances =====
    Gated on a real pointer so nothing here reaches a touch device, where :hover sticks after a
@@ -1005,6 +1007,13 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 .wkdots{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
 .wkdots i{width:15px;height:15px;border-radius:4px;background:var(--soft);flex:none}
 .wkdots i.att{background:var(--brand)} .wkdots i.lc{background:color-mix(in srgb,var(--bad) 45%,var(--soft))} .wkdots i.up{border:1.5px dashed var(--brand);background:transparent;box-sizing:border-box}
+
+/* ===== Getting started, still-on-defaults, and the search sheet ===== */
+.startcard .li-title.done{color:var(--muted);font-weight:600}
+/* These rows are sentences, not labels — let them wrap rather than truncate to one line. */
+.startcard .li-sub,#decisionsCard .li-sub,.findsheet .li-sub{white-space:normal;overflow:visible;text-overflow:clip}
+.findsheet input[type=search]{margin-bottom:4px}
+.findsheet .grp-h{margin-top:12px}
 
 /* ===== Where everything is (the app map) ===== */
 .appmap .mapic{display:inline-flex;width:20px;height:20px;color:var(--brand-dark)}
@@ -1315,7 +1324,7 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
   </div>
 </div>
 <div class="app">
-  <header class="top"><h1 id="topTitle">GroundWork</h1><span class="ty" id="topTY"></span><button class="themebtn" id="settingsBtn" title="Settings" aria-label="Settings"><svg class="gi" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.1"/><path d="M12 2.6l1.6 2.7 3.1-.6.5 3.1 2.8 1.5-1.6 2.7 1.6 2.7-2.8 1.5-.5 3.1-3.1-.6L12 21.4l-1.6-2.7-3.1.6-.5-3.1-2.8-1.5L5.6 12 4 9.3l2.8-1.5.5-3.1 3.1.6z"/></svg></button></header>
+  <header class="top"><h1 id="topTitle">GroundWork</h1><span class="ty" id="topTY"></span><button class="themebtn" id="helpBtn" title="Search &amp; help" aria-label="Search and help"><svg class="gi" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.2"/><path d="M15.2 15.2 20.5 20.5"/></svg></button><button class="themebtn" id="settingsBtn" title="Settings" aria-label="Settings"><svg class="gi" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.1"/><path d="M12 2.6l1.6 2.7 3.1-.6.5 3.1 2.8 1.5-1.6 2.7 1.6 2.7-2.8 1.5-.5 3.1-3.1-.6L12 21.4l-1.6-2.7-3.1.6-.5-3.1-2.8-1.5L5.6 12 4 9.3l2.8-1.5.5-3.1 3.1.6z"/></svg></button></header>
   <div id="saveBanner" class="bkbar err"><span class="bkmsg"><svg class="gi" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.2"/><path d="M5.5 5.5l13 13"/></svg> <b>Your last change was not saved.</b> <span id="svdetail" class="bkdetail"></span></span><button class="btn sm" id="svExport">Export now</button></div>
   <div id="backupBanner" class="bkbar"><span class="bkmsg"><svg class="gi" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.8 2.5 17.4A2 2 0 0 0 4.2 20.5h15.6a2 2 0 0 0 1.7-3.1L13.7 3.8a2 2 0 0 0-3.4 0z"/><path d="M12 9.4v4.2M12 17h.01"/></svg> <b>Time to back up your data.</b> <span id="bkdetail" class="bkdetail"></span></span><button class="btn sm" id="bkNow">Back up now</button></div>
   <main id="main"></main>
@@ -2377,7 +2386,7 @@ function applyBranding(){const n=practiceName();
 function applySettings(){applyPalette(settings().palette||"sage");applyBranding();paintThemeColor();}
 
 (function(){const b=$("#themeBtn");if(b){b.textContent=curTheme()==="dark"?"☀":"☾";b.onclick=()=>setTheme(curTheme()==="dark"?"light":"dark");}})();
-(function(){const b=$("#settingsBtn");if(b)b.onclick=()=>go("settings");})();
+(function(){const b=$("#settingsBtn");if(b)b.onclick=()=>go("settings");const h=$("#helpBtn");if(h)h.onclick=()=>findSheet();})();
 function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 function opts(arr,sel){return arr.map(o=>`<option value="${esc(o)}"${o===sel?" selected":""}>${esc(o)}</option>`).join("")}
 /* same, for [value,label] pairs where the stored value isn't what the user should read */
@@ -2798,6 +2807,7 @@ const VIEWS={};
    same question is how a card ends up on in one place and off in another. A block nobody reads
    goes to the bottom, which costs one scroll and no confusion. */
 const HOME_CARDS=[
+  {k:"start",    n:"Getting started",      d:"Bring in your records and set the essentials"},
   {k:"attention",n:"Needs attention",      d:"What needs doing today"},
   {k:"kpis",     n:"The four figures",     d:"Billed, sessions, outstanding, next 7 days"},
   {k:"pins",     n:"Pinned analytics",     d:"Cards you pinned from Business analytics"},
@@ -3038,6 +3048,7 @@ VIEWS.home=function(){
       : 'On '+esc(projBasisName(projKey))+', '+esc(proj.ty)+' lands near <b>'+gbp(projM.income)+'</b> billed and <b>'+gbp(projM.net)+'</b> before tax. ')+
     '<span class="taxlink" id="kProj">Where this year lands \u203a</span></p>':'';
   const parts={
+    start:startCardHTML(),
     attention:(S.sessions.length&&feat("attention")?'<div class="card"><h2>Needs attention</h2><div class="attn" id="attn"></div></div>':''),
     pins:(pinsBlock.html?'<div id="homePins">'+pinsBlock.html+'</div>':''),
     kpis:`
@@ -3090,6 +3101,7 @@ VIEWS.home=function(){
   const ht=v.querySelector("#hTour");if(ht)ht.onclick=()=>startTour();
   const hm=v.querySelector("#hMap");if(hm)hm.onclick=()=>appMapSheet();
   const ha=v.querySelector("#hArrange");if(ha)ha.onclick=()=>homeArrangeSheet();
+  wireStart(v);
   /* ---- the pinned analytics ----
      Wired inside their own container, never across the whole view: "Coming up" also renders
      .list-item[data-id], and those ids are sessions, not clients. One selector over `v` would
@@ -6833,7 +6845,7 @@ function taxRegionCardHTML(){
   const ty=curTaxYear(), m=yearMap("taxRegionYears");
   const r=taxRegionFor(ty), hist=Object.keys(m).sort();
   const changed=hist.length>1||(hist.length===1&&m[hist[0]]==="scotland");
-  return '<div class="card">'+cardHead("Where you pay income tax","tax-region")+
+  return '<div class="card" id="regionCard">'+cardHead("Where you pay income tax","tax-region")+
     '<div class="seg" id="setRegSeg" style="display:inline-flex">'+
       '<button data-r="rUK" class="'+(r==="rUK"?"on":"")+'">England, Wales or NI</button>'+
       '<button data-r="scotland" class="'+(r==="scotland"?"on":"")+'">Scotland</button></div>'+
@@ -7753,7 +7765,7 @@ infoDef("backups-explained","Backups: which is which",
    once, not a view toggle. Built here beside the tax engine so the wording and the engine that
    honours it stay together. */
 function basisCardHTML(){
-  return '<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
+  return '<div class="card" id="basisCard"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
       '<h2 style="margin:0">How your figures are counted '+infoDot("tax-basis","How your figures are counted")+'</h2>'+
       '<div class="seg" id="basisSeg" style="display:inline-flex"><button data-b="cash" class="'+(taxBasis()==="cash"?"on":"")+'">Cash</button>'+
         '<button data-b="accruals" class="'+(taxBasis()==="accruals"?"on":"")+'">Accruals</button></div></div>'+
@@ -9683,7 +9695,8 @@ function wireCancelRules(v){
   const sg=settings();
   const rules=()=>{sg.cancelRules=sg.cancelRules||{window:[],dnaChargePct:100};
     sg.cancelRules.window=sg.cancelRules.window||[]; return sg.cancelRules;};
-  const save=async label=>{await commit(label);};
+  /* Touching the policy at all — even to keep the defaults — is a decision made. */
+  const save=async label=>{sg.cancelRulesChosen=true;await commit(label);};
   const draw=()=>{
     const w=rules().window.slice().sort((a,b)=>(+b.hoursBefore||0)-(+a.hoursBefore||0));
     host.innerHTML=w.length?w.map((r,i)=>
@@ -9914,12 +9927,13 @@ VIEWS.settings=function(){
      <p class="small muted" id="setSearchNone" style="margin:8px 2px 0;display:none">No settings match that search.</p>
    </div>
    <details class="sgrp" data-g="business"><summary><span class="sgt">Your practice</span><span class="sgs">Decisions about the business: name, charging policy and how your figures are counted</span></summary><div class="sgb">
-   <div class="card">${cardHead("Practice details","practice-details")}
+   ${decisionsCardHTML()}
+   <div class="card" id="practiceCard">${cardHead("Practice details","practice-details")}
      <label>Practice name</label><input id="setName" maxlength="60" value="${esc(practiceName())}">
      <label>Strapline <span class="muted">(receipts only)</span></label><input id="setTag" maxlength="70" value="${esc(practiceTagline())}">
      <button class="btn full mt" id="setNameSave">Save practice details</button>
    </div>
-   <div class="card">${cardHead("Your working week","working-week")}
+   <div class="card" id="weekCard">${cardHead("Your working week","working-week")}
      <p class="small muted" style="margin:-2px 0 0">Turns session counts into hours, for <b>Practice › Business analytics</b>. Nothing else uses them.</p>
      <div class="field2">
        <div><label>Session length (mins)</label><input type="number" min="10" max="180" step="5" id="setSessMins" value="${esc(sessionMins())}"></div>
@@ -9929,7 +9943,7 @@ VIEWS.settings=function(){
      <input type="number" min="1" max="60" step="1" id="setFullWeek" placeholder="Leave blank and we&rsquo;ll use your busiest week" value="${fullWeekSessions()==null?"":esc(fullWeekSessions())}">
      <button class="btn full mt" id="setWeekSave">Save working week</button>
    </div>
-   <div class="card">${cardHead("Cancellations & DNAs","cancellations")}
+   <div class="card" id="cxCard">${cardHead("Cancellations & DNAs","cancellations")}
      <p class="small muted" style="margin:-2px 0 0">What a client is charged when a session is missed.</p>
      <div class="vmsg warn mt">${gi("clock")} This is your policy <b>from now on</b>. Sessions you have already logged keep the charge they were given.</div>
      <div class="grp-h">Cancelled with notice</div>
@@ -9954,7 +9968,7 @@ VIEWS.settings=function(){
    </div></details>
    <details class="sgrp" data-g="app"><summary><span class="sgt">App preferences</span><span class="sgs">How the app looks and sounds, and which parts of it you use</span></summary><div class="sgb">
    ${plusSettingsCardHTML()}
-   <div class="card"><h2>Appearance &amp; sound</h2>
+   <div class="card" id="appearanceCard"><h2>Appearance &amp; sound</h2>
      <p class="small muted">${PALETTES_ENABLED?"Colour scheme, light/dark":"Light or dark"} and sound effects. Stored on this device.</p>
      ${PALETTES_ENABLED?`<label>Colour scheme</label>
      <div class="palgrid" id="setPalMain">${PALETTES.filter(p=>p.free).map(p=>paletteOptionHTML(p,p.k===curPalette())).join("")}</div>
@@ -9967,14 +9981,14 @@ VIEWS.settings=function(){
        <button class="btn sec" id="setSound"></button>
      </div>
    </div>
-   <div class="card">${cardHead("Features","features")}
+   <div class="card" id="featuresCard">${cardHead("Features","features")}
      <p class="small muted" style="margin:-2px 0 0">Switch off anything you don’t use. Nothing is deleted.</p>
      <div class="mt" id="setAdvanced"></div>
      <div class="mt" id="setFeat"></div>
    </div>
    </div></details>
    <details class="sgrp" data-g="data"><summary><span class="sgt">Data &amp; backup</span><span class="sgs">Backups, storage, import, undo and health checks</span></summary><div class="sgb">
-   <div class="card">${cardHead("Backup & restore","backups-explained")}
+   <div class="card" id="backupCard">${cardHead("Backup & restore","backups-explained")}
      <p class="small muted" style="margin:-2px 0 0">One <b>.json</b> file with everything in it. Keep one somewhere that is <b>not</b> this device.</p>
      <div class="row mt" style="flex-wrap:wrap;gap:8px">
        <button class="btn" id="expJ">⤓ Export backup (.json)</button>
@@ -9982,7 +9996,7 @@ VIEWS.settings=function(){
        <input type="file" id="impF" accept=".json,application/json" style="display:none">
      </div>
    </div>
-   <div class="card">${cardHead("Spreadsheet exports","backups-explained")}
+   <div class="card" id="csvCard">${cardHead("Spreadsheet exports","backups-explained")}
      <p class="small muted" style="margin:-2px 0 0">For a spreadsheet or your accountant. <b>Not backups</b> — they cannot be restored.</p>
      <details class="dz"><summary>Export a .csv</summary>
        <div class="row mt" style="flex-wrap:wrap;gap:8px">
@@ -9992,23 +10006,23 @@ VIEWS.settings=function(){
        </div>
      </details>
    </div>
-   <div class="card">${cardHead("GroundWork Notes","notes-sync")}
+   <div class="card" id="notesSyncCard">${cardHead("GroundWork Notes","notes-sync")}
      <p class="small muted" style="margin:-2px 0 0">Sends the companion notes app how often you see each client. <b>Client codes and times only</b> — no names, no fees, nothing clinical.</p>
      <div class="row mt" style="flex-wrap:wrap;gap:8px">
        <button class="btn" id="rosterSync">↻ Sync schedules</button>
      </div>
      <p class="small muted mt" id="rosterState"></p>
    </div>
-   <div class="card">${cardHead("Import from a spreadsheet","sheet-import")}
+   <div class="card" id="importCard">${cardHead("Import from a spreadsheet","sheet-import")}
      <p class="small muted" style="margin:-2px 0 0">Arriving from Excel, Numbers or Sheets? This <b>adds</b> to what you have — it never replaces it.</p>
      <button class="btn sec full mt" id="impSheet">📥 Import old sessions…</button>
    </div>
-   <div class="card webonly"><h2>Storage on this device</h2>
+   <div class="card webonly" id="storageCard"><h2>Storage on this device</h2>
      <p class="small" id="stStatus" style="font-weight:600">Checking…</p>
      <p class="small muted" id="stHint"></p>
      <button class="btn sec mt" id="stAsk" style="display:none">Ask the browser to protect it</button>
    </div>
-   <div class="card">${cardHead("Encrypted backup 🔐","encrypted-backup-detail")}
+   <div class="card" id="encCard">${cardHead("Encrypted backup 🔐","encrypted-backup-detail")}
      <p class="small muted" style="margin:-2px 0 0">Protect backups with a passphrase. <b>Forget it and they cannot be opened.</b></p>
      <p class="small" id="encStatus" style="font-weight:600"></p>
      <div class="row mt" style="flex-wrap:wrap;gap:8px">
@@ -10018,19 +10032,19 @@ VIEWS.settings=function(){
        <button class="btn ghost" id="encOff" style="display:none">Turn off</button>
      </div>
    </div>
-   <div class="card">${cardHead("Backup reminders","backup-reminders")}
+   <div class="card" id="bkRemindCard">${cardHead("Backup reminders","backup-reminders")}
      <p class="small muted" id="bkStatus"></p>
      <div class="field2">
        <div><label>Remind after (days)</label><input type="number" min="1" id="setBkDays"></div>
        <div><label>…or after (changes)</label><input type="number" min="1" id="setBkActs"></div>
      </div>
    </div>
-   <div class="card"><h2>Undo &amp; history</h2>
+   <div class="card" id="undoCard"><h2>Undo &amp; history</h2>
      <div class="row" style="gap:8px"><button class="btn sec" id="undoB">↩︎ Undo last change</button>
        <button class="btn ghost" id="snapB">View restore points</button></div>
      <div id="auditWrap" class="mt"></div>
    </div>
-   <div class="card">${cardHead("Data health","data-health")}
+   <div class="card" id="healthCard">${cardHead("Data health","data-health")}
      <p class="small muted" style="margin:-2px 0 0">Scan every session for things that look wrong. It changes nothing.</p>
      <button class="btn sec" id="checkData">Check data</button>
      <div id="dhResults" class="mt"></div>
@@ -10038,7 +10052,7 @@ VIEWS.settings=function(){
    </div></details>
    <details class="sgrp" data-g="records"><summary><span class="sgt">Records &amp; privacy</span><span class="sgs">How long you keep records, and how to remove them</span></summary><div class="sgb">
    ${retentionCardHTML()}
-   <div class="card">${cardHead("Privacy & removal","privacy-removal")}
+   <div class="card" id="removalCard">${cardHead("Privacy & removal","privacy-removal")}
      <p class="small muted" style="margin:-2px 0 0">Anonymising or deleting client information. Permanent.</p>
      <details class="dz"><summary>Show data removal tools</summary>
        <p class="small muted" style="margin-top:6px">Not what you want for day-to-day tidying up — set a client’s status to <b>Finished</b> instead.</p>
@@ -10047,7 +10061,7 @@ VIEWS.settings=function(){
    </div>
    </div></details>
    <details class="sgrp" data-g="help"><summary><span class="sgt">Setup &amp; help</span><span class="sgs">The tour, a map of the app, what’s new, and re-running setup</span></summary><div class="sgb">
-   <div class="card">${cardHead("Setup & help","guided-tour")}
+   <div class="card" id="helpCard">${cardHead("Setup & help","guided-tour")}
      <button class="btn sec full" id="setMap">${gi("tabs")} Where everything is</button>
      <button class="btn sec full mt" id="setTour">🧭 Replay the guided tour</button>
      <button class="btn sec full mt" id="setNew">✨ What’s new in this update</button>
@@ -10061,12 +10075,12 @@ VIEWS.settings=function(){
    </div>
    </div></details>
    <details class="sgrp" data-g="about"><summary><span class="sgt">About</span><span class="sgs">Version, policies and how to install it</span></summary><div class="sgb">
-   <div class="card"><h2>About the tax figures</h2>
+   <div class="card" id="taxAboutCard"><h2>About the tax figures</h2>
      <p class="small muted">What the Tax tab is, and what it isn’t. Worth re-reading before you rely on a number.</p>
      <div style="padding:0 2px">${taxDisclaimerListHTML()}</div>
      <p class="small muted mt">Also set out in the <a href="terms.html#tax" target="_blank" rel="noopener">Terms of Service</a>.${S.settings&&S.settings.taxAckAt?" Acknowledged on "+fmtD(S.settings.taxAckAt)+".":""}</p>
    </div>
-   <div class="card"><h2>About</h2><p class="small muted">GroundWork · offline · replaces the spreadsheet.
+   <div class="card" id="aboutCard"><h2>About</h2><p class="small muted">GroundWork · offline · replaces the spreadsheet.
      ${S.sessions.length} sessions, ${S.clients.length} clients${S.settings&&S.settings.onboardedAt?" · set up "+fmtD(S.settings.onboardedAt):""}. <span class="webonly">Add to your Home Screen for an app-like experience.</span></p>
      <p class="small muted"><a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a></p></div>
    </div></details>
@@ -10165,6 +10179,7 @@ VIEWS.settings=function(){
   v.querySelector("#setRerun").onclick=()=>confirmRerunSetup();
   v.querySelector("#setDanger").onclick=()=>dzMenu();
   wireRetention(v);
+  wireDecisions(v);
   wireInfo(v);
   /* Every section starts collapsed each time Settings is opened, so the tab presents as a short
      list of headings rather than a wall. Open state is held in memory only and cleared by go()
@@ -11074,6 +11089,16 @@ function attentionItems(){
   if(sups.length){const days=Math.floor((t-parseD(sups[0].date))/86400000);
     if(days>35)items.push({cls:"acc",e:gi("supervision"),msg:"<b>Supervision due</b> · last was "+days+" days ago",
       sub:"guideline: min 1½ hrs per month",btn:"Log it",act:()=>supervisionForm(null)});}
+  /* Two jobs with a season the reader would otherwise only meet on a renewal form or a
+     complaint: a client past the retention date they chose, and CPD that has quietly stopped. */
+  const rr=retentionRows();
+  if(rr.length)items.push({cls:"acc",e:gi("retention"),msg:"<b>"+plural(rr.length,"client")+" past a retention date</b>",
+    sub:"review, then anonymise or erase",btn:"Review",act:()=>go("settings",{openGroup:"records",focus:"retentionCard"})});
+  if(feat("supervision")&&(S.sessions.length>=20||(S.cpd||[]).length)){
+    const cp=anaCPD();
+    if(cp.ready&&cp.recent===0)items.push({cls:"acc",e:gi("cpd"),msg:"<b>No CPD in the last 90 days</b>",
+      sub:cp.total+" of "+cp.target+" hrs in the last year",btn:"Log CPD",act:()=>cpdForm(null)});
+  }
   const bi=backupDueInfo();
   if(bi.due)items.push({cls:"brand",e:gi("backup"),msg:"<b>Back up your data</b>"+(bi.acts?" · "+bi.acts+" change"+(bi.acts===1?"":"s")+" unsaved":""),
     sub:bi.days!=null?(bi.days+" days since last backup"):"never backed up on this device",btn:"Back up",
@@ -11830,7 +11855,7 @@ function exportFinanceCSV(){
    A snapshot is taken before the write, so one Undo reverses the whole import.
    ============================================================ */
 const IMP_FIELDS=[
-  {k:"client",      n:"Client code",          req:true, t:"text",  syn:["client","clientcode","code","initials","clientname","clientref","ref","reference","who"]},
+  {k:"client",      n:"Client code",          req:true, t:"text",  syn:["client","clientcode","code","initials","clientname","clientref","ref","reference","who","name","id","clientid","patient","serviceuser"]},
   {k:"date",        n:"Session date",         req:true, t:"date",  syn:["date","sessiondate","when","day","appointmentdate","appointment"]},
   {k:"num",         n:"Session number",                 t:"int",   syn:["num","no","number","sessionnumber","sessionno","sessionnum","session","seq","count"]},
   {k:"time",        n:"Time",                           t:"time",  syn:["time","start","starttime","sessiontime","slot"]},
@@ -11839,7 +11864,7 @@ const IMP_FIELDS=[
   {k:"room",        n:"Room booked (ref or Y)",         t:"text",  syn:["roombooked","booked","bookingref","roomref","room"]},
   {k:"rate",        n:"Session fee (£)",                t:"money", syn:["rate","fee","sessionfee","price","charge","chargedamount","amount","cost","feecharged"]},
   {k:"paidDate",    n:"Client paid on (date)",          t:"date",  syn:["paiddate","datepaid","paidon","paymentdate","datereceived","received","settledon"]},
-  {k:"paidYN",      n:"Client paid? (Y/N)",             t:"yn",    syn:["paid","paidyn","clientpaid","ispaid","paymentstatus","settled","payment"]},
+  {k:"paidYN",      n:"Client paid? (Y/N)",             t:"yn",    syn:["paid","paidyn","clientpaid","ispaid","paymentstatus","settled","payment","amountpaid","paidamount","amountreceived","paidamt"]},
   {k:"invoice",     n:"Invoice reference",              t:"text",  syn:["invoice","invoiceno","invoicenumber","invoiceref","inv"]},
   {k:"notes",       n:"Notes / comments",               t:"text",  syn:["notes","note","comment","comments","details","detail","remarks"]},
   {k:"roomPaid",    n:"Room paid? (Y/N)",               t:"yn",    syn:["roompaid","roompaidyn","roomfeepaid","roomsettled","rentpaid"]},
@@ -11875,8 +11900,13 @@ const IMP_MONTHS={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,n
 function impYear(y){return y<100?(y<70?2000+y:1900+y):y;}
 /* Returns {y, a, b, iso} where for iso a=month/b=day; for an ambiguous d/m/y style
    a and b are simply the first and second numbers, resolved later by the column-wide order. */
+/* A cell that holds "07/04/2026 10:00" is a date with a time attached — Excel and Google Sheets
+   both export datetime cells that way. The date part parses as normal; the time part is kept so
+   impPlan can use it when the sheet has no separate Time column. */
+const IMP_TIME_TAIL=/[T\s]+(\d{1,2}[:.]\d{2}(?::\d{2})?\s*(?:[ap]\.?m\.?)?)$/i;
+function impTimeInDate(v){const m=IMP_TIME_TAIL.exec(String(v==null?"":v).trim());return m?m[1]:"";}
 function impDateParts(v){
-  const s=String(v==null?"":v).trim();
+  const s=String(v==null?"":v).trim().replace(IMP_TIME_TAIL,"");
   if(!s)return null;
   let m=s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
   if(m)return {y:+m[1],a:+m[2],b:+m[3],iso:true};
@@ -11943,7 +11973,23 @@ function impYN(v){
   if(/^(n\/a|na|none|not applicable|-|—)$/.test(s))return "n/a";
   if(/^(y|yes|true|1|paid|done|complete|✓|✔|x)$/.test(s))return "Y";
   if(/^(n|no|false|0|unpaid|outstanding|due|✗|✘)$/.test(s))return "N";
+  /* An "Amount paid" column is the commonest way a spreadsheet records payment: £60 means paid,
+     a blank or a nought means not. Any amount above zero reads as Y. */
+  const amt=impMoney(s); if(amt!=null)return amt>0?"Y":"N";
   return "";
+}
+/* A client's status as another spreadsheet spells it — "current", "closed", "on hold" — mapped
+   onto the three statuses the app's lists sort by, so an imported client lands in the right
+   place rather than under a status nothing else in the app has heard of. Anything that matches
+   none of them is kept as typed. */
+function impStatus(v){
+  const s=String(v==null?"":v).trim();
+  if(!s)return "Ongoing";
+  const l=s.toLowerCase();
+  if(/^(ongoing|active|current|open|in therapy|regular|seeing)$/.test(l))return "Ongoing";
+  if(/^(paused|on hold|hold|break|on a break|pause|suspended)$/.test(l))return "Paused";
+  if(/^(finished|ended|closed|complete|completed|discharged|done|left|ex|former|inactive|archived)$/.test(l))return "Finished";
+  return s;
 }
 /* Which kind of missed session an imported row describes: "" attended | "late" | "dna".
    A spreadsheet's one "late cancel" column is commonly used for both, so the words are read
@@ -11968,6 +12014,9 @@ function impTime(v){
   const ap=/(a\.?m\.?|p\.?m\.?)$/.exec(s);
   let pm=false,am=false;
   if(ap){pm=/p/.test(ap[1]);am=!pm;s=s.slice(0,ap.index).trim();}
+  /* "10:00 - 11:00" and "10:00 to 10:50" are the start time with the end written after it;
+     "10:00:00" is a time with seconds. Neither is a reason to lose the row's time. */
+  s=s.replace(/\s*(?:-|–|—|to)\s*\d.*$/,"").replace(/^(\d{1,2}[:.]\d{2}):\d{2}$/,"$1");
   const m=s.match(/^(\d{1,2})(?:[:.h]?(\d{2}))?$/);
   if(!m)return "";
   let h=+m[1];const mi=+(m[2]||0);
@@ -12011,7 +12060,7 @@ function impPlan(rows,map,order,opt){
   map.forEach((k,i)=>{if(k&&col[k]==null)col[k]=i;});
   const get=(r,k)=>col[k]==null?"":String(r[col[k]]==null?"":r[col[k]]).trim();
   const plan={recs:[],skipped:[],warn:[],newClients:new Map(),newRooms:new Map(),
-              fresh:0,updates:0,dupes:0,order};
+              fresh:0,updates:0,dupes:0,order,noFee:0,noFeeClients:new Set()};
   const seen=new Map();
   const existing=new Map();
   S.sessions.forEach(s=>existing.set(impKey(s.client,s.date,s.time),s));
@@ -12022,7 +12071,8 @@ function impPlan(rows,map,order,opt){
     const rawD=get(r,"date");
     const date=impDate(rawD,order);
     if(!date){plan.skipped.push({line,why:rawD?("date not understood — “"+rawD+"”"):"no date"});return;}
-    const time=impTime(get(r,"time"));
+    /* No Time column, but the date cell carried one ("07/04/2026 10:00") — use it. */
+    const time=impTime(get(r,"time"))||(col.time==null?impTime(impTimeInDate(rawD)):"");
     const key=impKey(code,date,time);
     if(seen.has(key)){plan.skipped.push({line,why:"same client, date and time as line "+seen.get(key)});return;}
     seen.set(key,line);
@@ -12079,10 +12129,15 @@ function impPlan(rows,map,order,opt){
     };
     if(prior)plan.updates++;else plan.fresh++;
     plan.recs.push(rec);
+    /* A row with no fee, for a client the app has no rate for either, imports as £0 — which is
+       what every total downstream will then say. Counted so the preview can say so before it
+       happens rather than the Money tab saying it afterwards. */
+    if(rec._rate==null&&!(+effRate(code,date)>0)&&!plan.recs.some(x=>x!==rec&&impSame(x.client,code)&&x._rate!=null)){
+      plan.noFee++;plan.noFeeClients.add(code);}
 
     const ck=code.toLowerCase();
     if(!S.clients.some(c=>impSame(c.code,code))&&!plan.newClients.has(ck))
-      plan.newClients.set(ck,{code,status:get(r,"status")||"Ongoing",first:date});
+      plan.newClients.set(ck,{code,status:impStatus(get(r,"status")),first:date});
     const lk=loc.toLowerCase();
     if(loc&&lk!=="at home"&&!S.rooms.some(x=>impSame(x.location,loc))){
       const nr=plan.newRooms.get(lk)||{location:loc,rate:0};
@@ -12150,6 +12205,8 @@ async function impCommit(plan){
   S.clients.forEach(c=>{if(touchedC.has((c.code||"").toLowerCase()))c.rate=effRate(c.code,t);});
   S.rooms.forEach(r=>{if(touchedR.has((r.location||"").toLowerCase()))r.rate=effRoomRate(r.location,t);});
 
+  /* The Getting started card's first job is answered by this. */
+  try{const stt=startCfg();if(!stt.records)stt.records="imported";}catch(e){}
   const n=plan.fresh+plan.updates;
   const ok=await commit("Imported "+n+" session"+(n===1?"":"s")+" from a spreadsheet");
   return {ok,n};
@@ -12193,13 +12250,19 @@ function impStageSource(){
       '<button class="btn ghost" id="impTpl">⤓ Blank template (.csv)</button>'+
     '</div>'+
     '<input type="file" id="impFile" accept=".csv,.tsv,.txt,text/csv,text/plain" style="display:none">'+
-    '<p class="prev">Any spreadsheet can produce a .csv with <b>File › Save as</b> or <b>Export</b>. Column names don’t have to match ours — you’ll match them up on the next screen.</p>'+
+    '<div id="impFileNote"></div>'+
+    '<p class="prev">Any spreadsheet can produce a .csv with <b>File › Save as</b> or <b>Export</b> — or skip the file and paste the cells. Column names don’t have to match ours; you’ll match them up on the next screen.</p>'+
     '<button class="btn full mt" id="impGo">Continue</button>';
   const ta=b.querySelector("#impTA");
   b.querySelector("#impTpl").onclick=impTemplate;
   b.querySelector("#impFileB").onclick=()=>b.querySelector("#impFile").click();
   b.querySelector("#impFile").onchange=e=>{
     const f=e.target.files[0];if(!f)return;
+    /* A workbook is a zip of XML, not text — reading it would paste gibberish into the box.
+       Say what to do instead, in the words the spreadsheet's own menu uses. */
+    if(/\.(xlsx|xlsm|xls|numbers|ods)$/i.test(f.name)){
+      b.querySelector("#impFileNote").innerHTML='<div class="vmsg warn mt">'+gi("warning")+' <b>'+esc(f.name)+'</b> is a workbook, not a .csv. In your spreadsheet choose <b>File › Save As</b> (Excel) or <b>File › Export</b> (Numbers, Google Sheets) and pick <b>CSV</b>, then choose that file — or select the cells, copy, and paste them above.</div>';
+      e.target.value="";return;}
     const rd=new FileReader();
     rd.onload=()=>{ta.value=rd.result;toast("Loaded "+f.name);impTake(ta.value);};
     rd.onerror=()=>toast("Could not read that file");
@@ -12267,8 +12330,15 @@ function impStageMap(){
   };
   const paintWarn=()=>{
     const miss=IMP_FIELDS.filter(f=>f.req&&_imp.map.indexOf(f.k)<0).map(f=>f.n);
-    b.querySelector("#impMapWarn").innerHTML=miss.length?
-      '<p class="small" style="color:var(--bad);font-weight:600">Still needed: '+esc(miss.join(", "))+'</p>':'';
+    /* Nothing guessed at all usually means the first row is data rather than headings — a
+       date in it is the giveaway. Say so, because "Still needed: Client code, Session date"
+       on its own reads as a fault in the file rather than a missing header row. */
+    const noGuess=!_imp.map.some(Boolean);
+    const firstIsData=noGuess&&head.some(h=>!!impDateParts(h));
+    b.querySelector("#impMapWarn").innerHTML=
+      (firstIsData?'<div class="vmsg warn mt">'+gi("warning")+' Your first row looks like a session, not column headings — it contains a date. Add a heading row to your sheet and paste again, or match the columns by hand below.</div>'
+        :noGuess?'<p class="small muted mt">None of the headings matched, so pick what each column is by hand. Only <b>Client code</b> and <b>Session date</b> are needed.</p>':'')+
+      (miss.length?'<p class="small" style="color:var(--bad);font-weight:600">Still needed: '+esc(miss.join(", "))+'</p>':'');
     b.querySelector("#impNext").disabled=!!miss.length;
   };
   b.querySelectorAll("select[data-c]").forEach(s=>s.onchange=e=>{
@@ -12304,6 +12374,8 @@ function impStagePreview(){
       '<option value="update"'+(_imp.onDupe==="update"?" selected":"")+'>Overwrite with the spreadsheet’s version</option>'+
     '</select>'+
     '<p class="prev">Re-importing a corrected file? Choose overwrite — matching rows update in place instead of duplicating.</p>'+
+    (p.noFee?'<div class="vmsg warn" style="margin-top:12px">'+gi("warning")+' <b>'+plural(p.noFee,"row")+' ha'+(p.noFee===1?'s':'ve')+' no fee</b> and the app has no rate for '+
+      (p.noFeeClients.size===1?'that client':'those '+p.noFeeClients.size+' clients')+', so they will count as £0. Map a fee column if you have one, or set each client’s rate afterwards in <b>Practice › Clients</b> — past sessions pick it up.</div>':'')+
     (p.newClients.size?'<div class="hint" style="margin-top:12px"><b>Clients that will be created</b><br>'+
       esc([...p.newClients.values()].map(c=>c.code).join(", "))+'</div>':'')+
     (p.newRooms.size?'<div class="hint"><b>Locations that will be created</b><br>'+
@@ -12323,8 +12395,8 @@ function impStagePreview(){
       p.skipped.slice(0,60).map(s=>'<div class="audit-row">Line '+s.line+' — '+esc(s.why)+'</div>').join("")+
       (p.skipped.length>60?'<div class="audit-row muted">…and '+(p.skipped.length-60)+' more</div>':'')+
       '</details>':'')+
-    '<p class="small muted mt">Your existing '+S.sessions.length+' session'+(S.sessions.length===1?"":"s")+
-      ' stay exactly as they are — this only adds to them. The state you’re in right now is kept as a restore point, so <b>Settings › Undo</b> reverses the whole import in one tap.</p>'+
+    '<p class="small muted mt">Your existing '+plural(S.sessions.length,"session")+
+      (S.sessions.length===1?' stays':' stay')+' exactly as '+(S.sessions.length===1?'it is':'they are')+' — this only adds to them. The state you’re in right now is kept as a restore point, so <b>Settings › Undo</b> reverses the whole import in one tap.</p>'+
     '<button class="btn full mt" id="impDo"'+(p.recs.length?"":" disabled")+'>Import '+p.recs.length+' row'+(p.recs.length===1?"":"s")+'</button>'+
     '<button class="btn ghost full mt" id="impBack2">Back to columns</button>';
   b.querySelector("#impDupe").onchange=e=>{_imp.onDupe=e.target.value;impStagePreview();};
@@ -12461,6 +12533,7 @@ async function importFromText(text,label){
     if(!rep.ok)throw new Error(rep.problems.join("; "));
     if(!await restoreConfirm(o,st,rep))return false;
     S=normalize(st);
+    try{const stt=startCfg();if(!stt.records)stt.records="restored";}catch(e){}
     await commit((label||"Restored backup")+" ("+(S.sessions.length)+" sessions)");markBackedUp();
     applySettings();toast("Backup restored");go("home");
     return true;
@@ -12874,23 +12947,48 @@ function stepMoney(w){
   }};}
 /* Offered during setup so the "starting from nothing" hump is dealt with on day one,
    rather than being discovered in Settings six months later. Entirely optional. */
-function stepImport(w){return{emoji:gi("import"), h:"Already keep a spreadsheet?",
-  sub:"Bring the history across now and your totals, tax figures and client histories start out complete. You can also do this later in <b>"+gi("settings")+" Settings</b>.",
+function stepImport(w){return{emoji:gi("import"), h:"Do you have previous records?",
+  sub:"Bring them in now and your totals, tax figures and client histories start out complete. You can also do it later — Home will remind you.",
   mount(host){
     const paint=()=>{
       const n=S.sessions.length;
-      host.innerHTML=ovPoints([
-        [gi("paste"),"Paste it straight in","Select your rows in Excel, Numbers or Sheets — header row included — copy, and paste. No file wrangling."],
-        [gi("letters"),"Your column names are fine","You match them to the app’s fields on the next screen. We guess most of them from the headings."],
-        [gi("eye"),"You see it before it lands","A preview shows exactly what will be added, what’s being skipped and why. Nothing saves until you say so."]
-      ])+
-      '<button class="btn full mt" id="spImp">'+gi("import")+(n?" Import more rows":" Import my spreadsheet…")+'</button>'+
-      (n?'<p class="prev" style="text-align:center">'+n+' session'+(n===1?"":"s")+' in the app so far.</p>'
-        :'<p class="prev" style="text-align:center">No history to bring? Skip straight past — Continue.</p>');
-      host.querySelector("#spImp").onclick=()=>impOpen({quiet:true,done:paint});
+      const opt=(k,ic,t,d)=>'<button type="button" class="palopt'+(w.records===k?" on":"")+'" data-r="'+k+'">'+
+        '<span class="pswatch">'+ic+'</span><span class="pt"><span class="pn">'+t+'</span><span class="pd">'+d+'</span></span></button>';
+      host.innerHTML='<div class="palgrid choices" id="spRec">'+
+        opt("imported",gi("paste"),"Yes — in a spreadsheet","Excel, Numbers or Google Sheets, one row per session. Paste the rows or pick a .csv; clients and rooms are created for you, and you see a preview before anything is saved.")+
+        opt("restored",gi("backup"),"Yes — a GroundWork backup","A .json file exported from GroundWork on another phone or computer. Restoring it finishes setup for you.")+
+        opt("fresh",gi("sprout"),"No — starting fresh","Nothing to bring in. Log your first session once setup is done.")+
+        '</div>'+
+        (n?'<div class="vmsg ok mt">'+gi("done")+' '+plural(n,"session")+' in the app so far.</div>':'')+
+        (w.records==="imported"?'<button class="btn full mt" id="spImp">'+gi("import")+(n?" Import more rows":" Import my spreadsheet…")+'</button>':'')+
+        (w.records==="restored"?'<button class="btn full mt" id="spRes">'+gi("backup")+' Choose the backup file…</button>':'');
+      host.querySelectorAll("#spRec .palopt").forEach(b=>b.onclick=()=>{
+        w.records=b.dataset.r;Sfx.tick();paint();
+        if(w.records==="imported"&&!n)impOpen({quiet:true,done:paint});
+        if(w.records==="restored")setupRestoreBackup();});
+      const ib=host.querySelector("#spImp");if(ib)ib.onclick=()=>impOpen({quiet:true,done:paint});
+      const rb=host.querySelector("#spRes");if(rb)rb.onclick=()=>setupRestoreBackup();
     };
     paint();
   }};}
+/* Restoring a backup from inside setup: the backup carries the practice's own settings, so a
+   successful restore IS the end of setup — the overlay closes and the app opens as it was on the
+   other device. A cancelled or failed restore leaves the wizard exactly where it was. */
+function setupRestoreBackup(){
+  const inp=document.createElement("input");inp.type="file";inp.accept=".json,application/json";inp.style.display="none";
+  document.body.appendChild(inp);
+  inp.onchange=()=>{const f=inp.files[0];inp.remove();if(!f)return;
+    const rd=new FileReader();
+    rd.onload=async()=>{
+      const ok=await importFromText(rd.result,"Restored backup");
+      if(!ok)return;
+      flowClose();markWhatsNewSeen();
+      if(!settings().onboarded){settings().onboarded=true;settings().onboardedAt=isoD(today());await commit("Setup finished by restoring a backup");}
+      applySettings();go("home");
+      toast("Restored — you’re exactly where you left off");};
+    rd.readAsText(f);};
+  inp.click();
+}
 /* Not skippable-with-blanks: a retention period the therapist never chose is a compliance
    decision made by a default, which is exactly what this step exists to avoid. */
 function stepRetention(w){return{emoji:gi("retention"), h:"How long do you keep records?",
@@ -12950,6 +13048,7 @@ function stepDone(w){return{emoji:gi("done"), h:"That’s you set up",
       '<div><span>Keep records</span><b>notes '+w.rtNotes+' yrs · financial '+w.rtFin+' yrs</b></div>'+
       (featureOn(w,"supervision")?'<div><span>CPD target</span><b>'+w.cpdTarget+' hrs/yr'+(featureOn(w,"accreditation")?' · accreditation tracking on':'')+'</b></div>':'')+
       '<div><span>Switched off</span><b>'+(offList.length?esc(offList.join(", ")):"nothing")+'</b></div>'+
+      '<div><span>Previous records</span><b>'+(w.records==="fresh"?"starting fresh":S.sessions.length?plural(S.sessions.length,"session")+" brought in":"not yet — Home will remind you")+'</b></div>'+
       '</div>'+
       '<div style="margin-top:14px">'+ovToggleRow("tour",gi("tour"),"Show me around","A short guided tour of each tab, how to log a session, and how saving and backups work.",w.tour!==false)+'</div>';
     const sw=host.querySelector('[data-sw="tour"]');
@@ -13027,6 +13126,9 @@ async function setupSave(w,opts){
   rv.mode=(w.depth==="simple")?"simple":"all";
   if(!Array.isArray(rv.shown))rv.shown=[];
   sg.setupRuns=(sg.setupRuns||0)+1;
+  /* "Starting fresh" is an answer to the Getting started card's first question; an import or a
+     restore has already stamped its own. */
+  if(w.records){const stt=sg.start=sg.start||{};if(!stt.records)stt.records=w.records;}
   const rt=sg.retention=sg.retention||{};
   if(+w.cpdTarget>=1)sg.cpdTarget=Math.round(+w.cpdTarget);
   if(+w.rtNotes>=1)rt.notesYears=Math.round(+w.rtNotes);
@@ -13156,7 +13258,8 @@ function startSetup(opts){
       [gi("privacy"),"Private by design","Everything stays on this device. No account, no cloud, no analytics."],
       [gi("plane"),"Works with no signal","Install it to your Home Screen and it opens like a normal app, offline."],
       [gi("tax"),"Replaces the spreadsheet","Fees, room costs, unpaid sessions and tax estimates all work themselves out."]
-    ])};
+    ])+(rerun?"":'<p class="prev" style="text-align:center;margin-top:14px">Already use GroundWork on another device? <span class="taxlink" id="spRestore">Restore a backup instead ›</span></p>'),
+    mount(host){const r=host.parentElement.querySelector("#spRestore");if(r)r.onclick=()=>setupRestoreBackup();}};
   const steps=[welcome,stepPractice(w),stepLook(w)];
   if(fresh)steps.push(stepDepth(w));
   steps.push(stepFeatures(w),stepNotes(w));
@@ -13200,7 +13303,7 @@ function whatsNewSteps(){
   st.push({emoji:gi("tabs"), h:"Finding your way around", sub:"A lot has been added since you last looked. Two minutes, and everything is where you expect it.",
     html:ovPoints([
       [gi("home"),"Home is yours to arrange","<b>Arrange this screen</b>, at the bottom of Home, puts the blocks in your order. Any Business analytics card can be pinned to it."],
-      [gi("settings"),"A map, and a search box","<b>Settings › Setup &amp; help › Where everything is</b> lists every screen on one page, with what to check and how often. Settings itself now has a search box at the top."],
+      [gi("settings"),"Search and help, one button","The magnifier at the top of every screen finds a client, a session, a screen, a setting or an explanation — and, before you type, holds the tips for the screen you are on and a map of every screen with what to check and how often."],
       [gi("trends"),"Trends is now Business analytics","Last on the Practice tab: twenty cards on clients, money, time and you, and a projection of where this year lands."]
     ])});
   st.push({emoji:gi("rooms"), h:"Room fees moved out of the session form", sub:"Logging a session no longer asks whether you have paid for the room.",
@@ -13367,6 +13470,225 @@ function coachPlace(animate){
   bub.style.left=Math.min(Math.max(12,left+w/2-bw/2),Math.max(12,vw-bw-12))+"px";
 }
 
+/* ===== Getting started =====
+   The successor to the setup wizard: the decisions setup skipped, as visible, tickable jobs on
+   Home instead of silent defaults. Every row is derived from the DATA — a client exists, a
+   session is logged, a policy was touched — never from a stored tick, so it can never claim
+   something is done that is not. The two rows that cannot be read from the data ("I'm starting
+   fresh", "I only work from home") are the only stored answers, in settings.start, and travel in
+   a backup like everything else the reader has said.
+   Shown only to an early practice (fewer than START_MAX_SESSIONS sessions) and until dismissed;
+   an established practice that upgrades never sees it — the "Still on defaults" card in
+   Settings › Your practice is the version of this for them.
+   The first row is the one this exists for: somebody with years of records in a spreadsheet or
+   a backup on another phone should be able to bring them in without finding Settings first. */
+const START_MAX_SESSIONS=25;
+function startCfg(){const sg=settings();return (sg.start=sg.start||{});}
+/* Has the cancellation policy ever been decided? normalize() seeds a default (24 hours → 100%,
+   DNA 100%), so absence cannot be the test: it is "still exactly the default and never touched". */
+function cancelChosen(){
+  if(settings().cancelRulesChosen===true)return true;
+  const p=cancelPolicy();
+  const dflt=p.window.length===1&&+p.window[0].hoursBefore===24&&+p.window[0].chargePct===100&&p.dnaChargePct===100;
+  return !dflt;
+}
+function startItems(){
+  const st=startCfg();
+  return [
+    {k:"records",t:"Bring in your existing records",s:"From a spreadsheet, or a GroundWork backup from another device",
+     done:!!st.records||S.sessions.length>=5,act:()=>startRecordsSheet(),
+     alt:{t:"I’m starting fresh",act:()=>startAnswer("records","fresh","Starting fresh — nothing to bring in")}},
+    {k:"client",t:"Add your first client",s:"Codes, not names — AB, JM2, whatever you already use",
+     done:S.clients.length>0,act:()=>clientForm(null)},
+    {k:"session",t:"Log a session",s:"The ＋ button, any time",
+     done:S.sessions.length>0,act:()=>sessionForm(null)},
+    {k:"rooms",t:"Say where you see clients",s:"Rooms and what each one costs you",
+     done:S.rooms.length>1||st.homeOnly===true,act:()=>go("practice",{seg:"rooms"}),
+     alt:{t:"I only work from home",act:()=>startAnswer("homeOnly",true,"Noted — sessions at home cost nothing")}},
+    {k:"policy",t:"Set your cancellation policy",s:"What a missed session is charged",
+     done:cancelChosen(),act:()=>go("settings",{openGroup:"business",focus:"cxCard"})},
+    {k:"paid",t:"Say how you like to be paid",s:"Printed on invoices and payment reminders",
+     done:payToDetails()!=="",act:()=>go("settings",{openGroup:"business",focus:"payToCard"})},
+    {k:"backup",t:"Export your first backup",s:"One file, kept somewhere that is not this device",
+     done:lastBackupTs()>0,act:()=>{if(encReady())encBackupNow();else exportJSON();updateBackupBanner();go("home",{keepScroll:true});}}
+  ];
+}
+function startVisible(){
+  if(startCfg().dismissed)return false;
+  if(S.sessions.length>=START_MAX_SESSIONS)return false;
+  return startItems().some(i=>!i.done);
+}
+async function startAnswer(key,val,msg){
+  startCfg()[key]=val;
+  await commit("Getting started: "+key+" = "+val);
+  closeSheet();toast(msg);go("home",{keepScroll:true});
+}
+function startCardHTML(){
+  if(!startVisible())return "";
+  const items=startItems(), done=items.filter(i=>i.done).length;
+  const row=i=>'<div class="list-item" data-start="'+i.k+'"><div class="li-main">'+
+    '<div class="li-title'+(i.done?' done':'')+'">'+(i.done?'<span class="chip y">✓</span> ':'')+esc(i.t)+'</div>'+
+    (i.done?'':'<div class="li-sub">'+esc(i.s)+(i.alt?' · <span class="taxlink" data-startalt="'+i.k+'">'+esc(i.alt.t)+'</span>':'')+'</div>')+
+    '</div>'+(i.done?'':'<div class="li-right muted">›</div>')+'</div>';
+  /* Undone first, and the records row always leads: it is the reason the card exists. */
+  const ordered=items.filter(i=>!i.done).concat(items.filter(i=>i.done));
+  return '<div class="card startcard" id="startCard">'+
+    '<div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Getting started</h2>'+
+      '<span class="small muted">'+done+' of '+items.length+' done</span></div>'+
+    '<div class="fbar" style="margin:8px 0 6px"><i style="width:'+Math.round(done/items.length*100)+'%"></i></div>'+
+    '<div style="padding:0 2px">'+ordered.map(row).join("")+'</div>'+
+    '<p class="small muted center" style="margin:10px 0 0"><span class="taxlink" id="startHide">Hide this card</span></p></div>';
+}
+function wireStart(v){
+  const host=v.querySelector("#startCard");if(!host)return;
+  const items=startItems();
+  host.querySelectorAll("[data-start]").forEach(li=>li.onclick=()=>{const i=items.find(x=>x.k===li.dataset.start);if(i&&!i.done)i.act();});
+  host.querySelectorAll("[data-startalt]").forEach(a=>a.onclick=e=>{e.stopPropagation();const i=items.find(x=>x.k===a.dataset.startalt);if(i&&i.alt)i.alt.act();});
+  const hide=host.querySelector("#startHide");
+  if(hide)hide.onclick=async()=>{startCfg().dismissed=true;await commit("Getting started card hidden");go("home",{keepScroll:true});
+    toast("Hidden — everything on it is still in Settings and the app map");};
+}
+/* The one sheet somebody with previous records needs: which kind, then the right tool for it.
+   A spreadsheet ADDS (the import merges); a backup REPLACES (it is a whole-state restore) — the
+   wording says which, because that difference is the one that costs somebody their data. */
+function startRecordsSheet(){
+  const body=el('<div></div>');
+  body.innerHTML='<p class="small muted">Which kind do you have?</p>'+
+    ovPoints([
+      [gi("paste"),"A spreadsheet","Excel, Numbers or Google Sheets, one row per session. Paste the rows or pick a .csv — clients and rooms are created for you, and you see a preview before anything is saved. It <b>adds</b> to what is here."],
+      [gi("backup"),"A GroundWork backup","A .json file exported from GroundWork on another phone or computer (Settings › Data &amp; backup › Export backup). It <b>replaces</b> what is here with that copy."],
+      [gi("sprout"),"Nothing yet","Start with your next session. Everything else builds from there."]
+    ])+
+    '<button class="btn full mt" id="rsSheet">'+gi("paste")+' Import a spreadsheet…</button>'+
+    '<button class="btn sec full mt" id="rsBackup">'+gi("backup")+' Restore a backup…</button>'+
+    '<button class="btn ghost full mt" id="rsFresh">I’m starting fresh</button>'+
+    '<input type="file" id="rsFile" accept=".json,application/json" style="display:none">'+
+    '<p class="prev" style="text-align:center">Not sure? A spreadsheet is anything with one row per session. <span class="taxlink" id="rsTpl">Download the template ›</span> to see the columns.</p>';
+  body.querySelector("#rsSheet").onclick=()=>impOpen({done:()=>go("home")});
+  body.querySelector("#rsBackup").onclick=()=>body.querySelector("#rsFile").click();
+  body.querySelector("#rsFile").onchange=e=>{const f=e.target.files[0];if(!f)return;
+    const rd=new FileReader();rd.onload=()=>importFromText(rd.result,"Restored backup");rd.readAsText(f);e.target.value="";};
+  body.querySelector("#rsFresh").onclick=()=>startAnswer("records","fresh","Starting fresh — nothing to bring in");
+  body.querySelector("#rsTpl").onclick=impTemplate;
+  openSheet("Your existing records",body);
+}
+
+/* ===== Still on defaults =====
+   Settings › Your practice, for the business decisions the app is quietly making until the
+   reader makes them. The same idea as Getting started, for the settings that have consequences:
+   a policy nobody set silently charges the full fee, a blank "how to pay" prints a blank
+   invoice. Rows disappear as decisions are made; the card disappears with the last row. */
+function decisionItems(){
+  const sg=settings();
+  const out=[];
+  if(!cancelChosen())out.push({t:"Cancellation policy",s:"Still the default: the full fee, whatever the notice",f:"cxCard"});
+  if(payToDetails()==="")out.push({t:"How you like to be paid",s:"Blank — invoices and reminders cannot say",f:"payToCard"});
+  if(feat("tax")&&!Object.keys(yearMap("taxRegionYears")).length)out.push({t:"Where you pay income tax",s:"Assumed England, Wales or Northern Ireland",f:"regionCard"});
+  if(feat("trends")&&sg.sessionMins==null&&sg.fullWeekSessions==null)out.push({t:"Your working week",s:"Assumed 50-minute sessions and 15 minutes of admin each",f:"weekCard"});
+  return out;
+}
+function decisionsCardHTML(){
+  const items=decisionItems(); if(!items.length)return "";
+  return '<div class="card" id="decisionsCard"><h2>Still on defaults</h2>'+
+    '<p class="small muted">Decisions the app is making for you until you make them.</p>'+
+    '<div style="padding:0 2px">'+items.map(i=>'<div class="list-item" data-decide="'+i.f+'"><div class="li-main"><div class="li-title">'+esc(i.t)+'</div><div class="li-sub">'+esc(i.s)+'</div></div><div class="li-right muted">›</div></div>').join("")+'</div></div>';
+}
+function wireDecisions(v){
+  v.querySelectorAll("[data-decide]").forEach(li=>li.onclick=()=>go("settings",{openGroup:"business",focus:li.dataset.decide}));
+}
+
+/* ===== Search & help =====
+   One button in the header, one sheet: a search box across everything a reader looks for — a
+   client, a session, a room, an analytics card, a screen, a setting, an explanation — and, while
+   the box is empty, the help this screen has: its own first-visit tips replayed, the app map,
+   the tour and What's new. The tips fire once on their own; this is how they get a second life
+   without nagging. */
+const SETTINGS_INDEX=[
+  ["Practice details","name strapline","business","practiceCard"],
+  ["Your working week","session length admin time full week hours","business","weekCard",()=>feat("trends")],
+  ["Cancellations & DNAs","cancellation policy notice charge did not attend missed","business","cxCard"],
+  ["Getting paid","bank details how to pay invoice terms payment reminder chase","business","payToCard"],
+  ["How your figures are counted","cash basis accruals","business","basisCard",()=>feat("tax")],
+  ["Where you pay income tax","scotland region","business","regionCard",()=>feat("tax")],
+  ["Appearance & sound","light dark theme sound effects colour","app","appearanceCard"],
+  ["Features","switch off hide show everything tabs","app","featuresCard"],
+  ["Backup & restore","export restore json backup","data","backupCard"],
+  ["Spreadsheet exports","csv accountant export","data","csvCard"],
+  ["GroundWork Notes","sync schedules notes app","data","notesSyncCard"],
+  ["Import from a spreadsheet","excel numbers sheets old sessions history","data","importCard"],
+  ["Encrypted backup","passphrase encryption","data","encCard"],
+  ["Backup reminders","remind nag","data","bkRemindCard"],
+  ["Undo & history","restore points audit activity undo","data","undoCard"],
+  ["Data health","check data errors duplicates","data","healthCard"],
+  ["Records retention","keep records years gdpr finished clients","records","retentionCard"],
+  ["Privacy & removal","anonymise erase delete remove","records","removalCard"],
+  ["Setup & help","tour tips what's new re-run setup map","help","helpCard"],
+  ["About the tax figures","disclaimer estimate","about","taxAboutCard"],
+  ["About","version privacy policy terms","about","aboutCard"]
+];
+function segOf(tab){return (tab==="tax")?taxSeg:(tab==="money")?moneySeg:(tab==="practice")?pracTab:null;}
+function findIndex(q){
+  const hits=[]; const has=s=>String(s||"").toLowerCase().indexOf(q)>=0;
+  const add=(kind,t,s,act)=>hits.push({kind,t,s,act});
+  S.clients.filter(c=>has(c.code)||has(c.status)||has(c.notes)||has(c.source)).slice(0,6)
+    .forEach(c=>add("Clients",esc(c.code),esc(c.status||""),()=>clientProfile(c)));
+  S.sessions.slice().sort((a,b)=>parseD(b.date)-parseD(a.date))
+    .filter(s=>has(s.client)||has(fmtD(s.date))||has(s.adminNote)||has(s.invoice)||has(s.location)).slice(0,8)
+    .forEach(s=>add("Sessions",esc(s.client)+" · "+fmtDshort(s.date),esc([s.time,s.location,s.adminNote].filter(Boolean).join(" · ")),()=>sessionForm(s)));
+  S.rooms.filter(r=>has(r.location)).slice(0,4).forEach(r=>add("Rooms",esc(r.location),roomCostLabel(r),()=>roomForm(r)));
+  if(feat("trends"))ANA_CARDS.filter(c=>has(c.n)||has(c.d)).slice(0,5)
+    .forEach(c=>add("Business analytics",esc(c.n),esc(c.d),()=>{trendSeg=c.seg;go("practice",{seg:"trends"});}));
+  APP_MAP.forEach(sec=>{
+    if(sec.tab!=="settings"&&!tabEnabled(sec.tab))return;
+    const t=TABS.find(x=>x.id===sec.tab);
+    sec.rows.filter(r=>(!r[3]||r[3]())&&(has(r[1])||has(r[2]))).forEach(r=>add("Screens",
+      (t?esc(t.label)+" › ":"Settings › ")+esc(r[1]),esc(r[2]),
+      sec.tab==="settings"?()=>go("settings",{openGroup:r[0]}):()=>go(sec.tab,r[0]?{seg:r[0]}:{})));});
+  SETTINGS_INDEX.filter(x=>(!x[4]||x[4]())&&(has(x[0])||has(x[1]))).slice(0,6)
+    .forEach(x=>add("Settings",esc(x[0]),"",()=>go("settings",{openGroup:x[2],focus:x[3]})));
+  Object.keys(INFO).filter(k=>has(INFO[k].title)).slice(0,6)
+    .forEach(k=>add("Explanations",esc(INFO[k].title),"",()=>{const b=el('<div></div>');b.innerHTML=INFO[k].html;wireInfo(b);openSheet(INFO[k].title,b);}));
+  APP_JOBS.forEach(j=>j[1].filter(i=>(!i[2]||i[2]())&&has(i[0])).forEach(i=>add("What to do",esc(i[0]),esc(j[0]),i[1])));
+  return hits;
+}
+function findSheet(){
+  const body=el('<div class="findsheet"></div>');
+  body.innerHTML='<input id="findQ" type="search" placeholder="Search clients, sessions, screens, settings…" autocomplete="off" style="width:100%">'+
+    '<div id="findRes"></div>';
+  const q=body.querySelector("#findQ"), res=body.querySelector("#findRes");
+  const acts={};let n=0;const reg=fn=>{const k="f"+(n++);acts[k]=fn;return k;};
+  const row=(t,s,fn)=>'<div class="list-item" data-find="'+reg(fn)+'"><div class="li-main"><div class="li-title">'+t+'</div>'+
+    (s?'<div class="li-sub">'+s+'</div>':'')+'</div><div class="li-right muted">›</div></div>';
+  const wire=()=>res.querySelectorAll("[data-find]").forEach(li=>li.onclick=()=>{closeSheet();const f=acts[li.dataset.find];if(f)f();});
+  const idle=()=>{
+    const tab=cur, seg=segOf(tab);
+    const tip=TIPS.find(x=>x.tab===tab&&(!x.seg||x.seg===seg)&&(!x.ft||feat(x.ft))&&(!x.when||x.when()));
+    let h='<div class="grp-h">Help</div>';
+    if(tip)h+=row("Tips for this screen","A quick look at what is here",()=>{
+      const steps=tip.steps();steps.forEach(s=>{if(!s.tab)s.tab=tip.tab;if(!s.seg&&tip.seg)s.seg=tip.seg;});
+      coachStart(steps,{doneLabel:"Got it",skipLabel:"Close"});});
+    if(startVisible())h+=row("Getting started","The first few jobs, and how far you are",()=>go("home",{focus:"startCard"}));
+    h+=row("Where everything is","Every screen on one page, and what to do how often",()=>appMapSheet());
+    h+=row("Take the guided tour","Eight short stops",()=>startTour());
+    h+=row("What’s new in this update","",()=>showWhatsNew());
+    res.innerHTML=h;wire();
+  };
+  const search=()=>{
+    const s=q.value.trim().toLowerCase();
+    if(!s){idle();return;}
+    const hits=findIndex(s);
+    if(!hits.length){res.innerHTML='<p class="muted small center" style="padding:14px">Nothing matches “'+esc(q.value.trim())+'”.</p>';return;}
+    const kinds=[];hits.forEach(h=>{if(kinds.indexOf(h.kind)<0)kinds.push(h.kind);});
+    res.innerHTML=kinds.map(k=>'<div class="grp-h">'+esc(k)+'</div>'+hits.filter(h=>h.kind===k).map(h=>row(h.t,h.s,h.act)).join("")).join("");
+    wire();
+  };
+  q.oninput=search;
+  q.onkeydown=e=>{if(e.key==="Enter"){const first=res.querySelector("[data-find]");if(first)first.click();}};
+  idle();
+  openSheet("Search & help",body);
+  setTimeout(()=>{try{q.focus();}catch(e){}},60);
+}
+
 /* ===== Where everything is =====
    A map of the app on one sheet, built from the same tab and feature switches the tab bar
    reads, so it never lists a screen this install cannot open. Every row is a link. Reached from
@@ -13458,7 +13780,7 @@ function tourSteps(){
   st.push({emoji:gi("backup"),h:"Back it up",tab:"home",sel:"#settingsBtn",
     body:"Settings → <b>Export backup</b> gives you one file with everything in it. Keep it somewhere that isn’t this device. Undo and restore points live in there too."});
   st.push({emoji:gi("done"),h:"That’s it",
-    body:"The rest explains itself as you go. If you take one habit from this: export a backup after your weekly catch-up. Five seconds, and it’s the whole safety net. Lost later? <b>Settings › Setup &amp; help</b> has a map of every screen."});
+    body:"The rest explains itself as you go. If you take one habit from this: export a backup after your weekly catch-up. Five seconds, and it’s the whole safety net. Lost later? The magnifier at the top finds a client, a screen or a setting, and holds the tips for whatever screen you are on."});
   return st;
 }
 function startTour(){
@@ -13539,7 +13861,7 @@ function coachMaybeTip(tab){
   try{
     if(_coach||_flow||coachTipsOff())return;
     if(document.getElementById("sheet").classList.contains("open"))return;
-    const seg=(tab==="tax")?taxSeg:(tab==="money")?moneySeg:(tab==="practice")?pracTab:null;
+    const seg=segOf(tab);
     const tip=TIPS.find(x=>x.tab===tab&&(!x.seg||x.seg===seg)&&!coachSeen(x.k)
       &&(!x.ft||feat(x.ft))&&(!x.when||x.when()));
     if(!tip)return;
@@ -13813,7 +14135,7 @@ function retentionCardHTML(){
         (r.notesOver?'<button class="btn sm sec" data-rtanon="'+esc(r.code)+'">Anonymise</button>':'')+
         (r.finOver?'<button class="btn sm ghost" data-rters="'+esc(r.code)+'" style="color:var(--bad)">Erase</button>':'')+
       '</div></div>';
-  return '<div class="card"><h2>Records retention</h2>'+
+  return '<div class="card" id="retentionCard"><h2>Records retention</h2>'+
     '<p class="small muted">How long you keep records after a client finishes. Nothing is ever deleted for you. '+infoLink("retention-rationale")+'</p>'+
     '<div class="field2">'+
       '<div><label>Keep clinical notes for (years)</label><input type="number" min="1" max="50" step="1" id="rtNotes" value="'+esc(cfg.notesYears)+'"></div>'+
