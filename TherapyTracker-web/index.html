@@ -510,6 +510,40 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
 .chead{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
   margin:0 0 8px}
 .chead h2{margin:0;display:flex;align-items:center;gap:7px}
+/* The pin. Quiet until it is on — an outline house in the corner of twenty-two cards must not
+   compete with the figures on them, and a pinned one has to be obvious at a glance from across
+   the screen, which is what the filled sage tile does. Padded out past 44px the same way the
+   info dot is, rather than drawn bigger. */
+.pinbtn{display:inline-grid;place-items:center;width:28px;height:28px;flex:none;border-radius:9px;
+  border:1.4px solid color-mix(in srgb,var(--muted) 38%,transparent);background:transparent;
+  color:var(--muted);cursor:pointer;padding:0;position:relative;margin:-3px -2px -3px 0}
+.pinbtn .gi{width:15px;height:15px}
+.pinbtn::after{content:"";position:absolute;inset:-8px}
+.pinbtn:hover,.pinbtn:focus-visible{border-color:var(--brand);color:var(--brand);outline:none}
+/* The glyph is drawn in `--card`, not a literal white: dark's `--brand` is a light mint, and a
+   white house on it is barely there. Painting it in the card's own ground gives a strong
+   contrast in both themes and needs no [data-theme] block of its own. */
+.pinbtn.on{background:var(--brand);border-color:var(--brand);color:var(--card);
+  box-shadow:0 1px 4px color-mix(in srgb,var(--brand) 34%,transparent)}
+.pinbtn.on:hover,.pinbtn.on:focus-visible{color:var(--card)}
+/* The empty state on Home. A dotted outline is the one card shape that reads as "a space waiting
+   to be filled" rather than "a card that has gone wrong" — it must never look like a figure that
+   failed to load. */
+.card.pinempty{border:1.6px dashed color-mix(in srgb,var(--brand) 40%,transparent);
+  background:color-mix(in srgb,var(--brand) 5%,transparent);box-shadow:none;text-align:center}
+.card.pinempty .pinico{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:14px;
+  background:color-mix(in srgb,var(--brand) 14%,transparent);color:var(--brand-dark);margin:2px auto 8px}
+.card.pinempty .pinico .gi{width:22px;height:22px}
+.card.pinempty h2{margin:0 0 4px}
+.card.pinempty p{margin:0 auto 10px;max-width:34em}
+/* The pinned block's own lead-in, so the cards below it read as a group the reader chose rather
+   than as blocks the app decided to show. */
+.pinlead{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  margin:2px 0 6px}
+.pinlead .pintitle{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.pinlead .pintitle .gi{width:13px;height:13px}
+.pinlead .taxlink{font-size:12px}
 .x{font-size:22px;color:var(--muted);background:none;border:0;cursor:pointer;padding:4px 8px}
 .suggest{font-size:11px;color:var(--accent-ink);font-weight:700;margin-left:6px}
 .hint{background:color-mix(in srgb,var(--brand) 10%,transparent);border:1px solid color-mix(in srgb,var(--brand) 24%,transparent);border-radius:14px;padding:10px 12px;font-size:13px;color:var(--brand-dark);margin:10px 0}
@@ -2590,6 +2624,9 @@ const GLYPH={supervision:'<path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h11A2.5 2.5 0 0 1 1
   key:'<circle cx="8.2" cy="14.6" r="4.3"/><path d="M11.3 11.5 20 2.8"/><path d="M16.6 6.2l2.3 2.3M14.2 8.6l2.3 2.3"/>',
   undo:'<path d="M4.5 9.5h9.8a5 5 0 0 1 0 10H8.4"/><path d="M8.2 5.4 4.1 9.5l4.1 4.1"/>',
   folder:'<path d="M3 7.6A2.1 2.1 0 0 1 5.1 5.5h3.6a2.1 2.1 0 0 1 1.6.75l1 1.15H18.9A2.1 2.1 0 0 1 21 9.5v6.9a2.1 2.1 0 0 1-2.1 2.1H5.1A2.1 2.1 0 0 1 3 16.4z"/>',
+  /* The same house the Home tab draws, so "pin this to your home screen" and the tab it lands
+     on are one drawing — the button has to be recognisable as that tab at 15px. */
+  home:'<path d="M3 11 12 4l9 7"/><path d="M5 9.8V20h14V9.8"/>',
   cloud:'<path d="M7.2 18.5h9.4a3.6 3.6 0 0 0 .5-7.15 5.2 5.2 0 0 0-9.95-1.2A4 4 0 0 0 7.2 18.5z"/>'};
 function gi(name,cls){const p=GLYPH[name];if(!p)return "";
   return '<svg class="gi'+(cls?" "+cls:"")+'" viewBox="0 0 24 24" aria-hidden="true">'+p+'</svg>';}
@@ -2700,6 +2737,7 @@ const VIEWS={};
 const HOME_CARDS=[
   {k:"attention",n:"Needs attention",      d:"What needs doing today"},
   {k:"kpis",     n:"The four figures",     d:"Billed, sessions, outstanding, next 7 days"},
+  {k:"pins",     n:"Pinned analytics",     d:"Cards you pinned from Business analytics"},
   {k:"spark",    n:"Revenue trend",        d:"The last 24 weeks"},
   {k:"goals",    n:"Goals",                d:"Payment and completion rings"},
   {k:"log",      n:"Log something",        d:"New session, repeat, supervision"},
@@ -2773,6 +2811,87 @@ function homeArrangeSheet(){
   openSheet("Arrange your home screen",body);
 }
 
+/* ===== The pinned-analytics block on Home =====
+   Whatever the reader pinned, drawn by the analytics' own builders — see ANA_CARDS. The block is
+   one of HOME_CARDS like any other, so where it sits among the rest is already the reader's, and
+   there is no second "show/hide analytics on Home" switch to disagree with the pins themselves.
+
+   With nothing pinned it is the dotted invitation instead, and only once there is enough logged
+   to analyse: a dashed outline saying "pin an analytic here" on somebody's second day is an empty
+   promise about data they do not have yet. ANA_PIN_PROMPT_MIN is the same 20 sessions at which
+   the gradual reveal offers Business analytics in the first place. */
+const ANA_PIN_PROMPT_MIN=20;
+function homePinPromptHTML(){
+  return '<div class="card pinempty" id="pinPrompt">'+
+    '<div class="pinico">'+gi("home")+'</div>'+
+    /* Short, because `.card h2` is uppercase and a sentence in capitals reads as shouting. */
+    '<h2>Pin an analytic here</h2>'+
+    '<p class="small muted">Business analytics works out a couple of dozen things from what you have already logged. Pin the one or two you want to see when you open the app. '+infoDot("home-pins","About pinning")+'</p>'+
+    '<button class="btn sec" id="pinPick">'+gi("trends")+' Choose an analytic</button></div>';
+}
+function homePinsBlock(){
+  if(!anaPinnable())return {html:""};
+  const pins=homePins();
+  if(!pins.length)
+    return {html:S.sessions.length>=ANA_PIN_PROMPT_MIN?homePinPromptHTML():""};
+  const cx=anaCtx();
+  const folds={}; let html="";
+  pins.forEach(k=>{
+    const d=anaCardDef(k); if(!d)return;
+    /* One analytic that throws must not take the whole home screen with it — the crash screen is
+       for the app failing, not for one pinned card. It is logged and left out. */
+    let b; try{b=d.b(cx,d.k)||{};}catch(e){console.error("Pinned analytic failed:",k,e);return;}
+    Object.assign(folds,b.folds||{});
+    html+=b.html||"";
+  });
+  if(!html)return {html:homePinPromptHTML()};
+  return {folds:folds,
+    html:'<div class="pinlead"><span class="pintitle">'+gi("home")+' Pinned '+infoDot("home-pins","About pinning")+'</span>'+
+      '<span class="taxlink" id="pinMore">Business analytics ›</span></div>'+html};
+}
+/* The picker. Staged until Done, the same shape as the arrange sheet — closing discards, and one
+   commit rather than one per row. Readiness is deliberately not shown: working out whether all
+   twenty-two have enough data means running all twenty-two, and a card that is waiting says so in
+   its own words once it is on the screen. */
+function homePinSheet(){
+  if(!anaPinnable()){toast("Business analytics is switched off");return;}
+  let sel=homePins().slice();
+  const body=el('<div></div>');
+  body.innerHTML='<p class="small muted">Pick up to '+ANA_PIN_MAX+'. They are drawn on your home screen exactly as they are in Business analytics, and you can move the block with <b>Arrange this screen</b>.</p>'+
+    '<div id="pkList"></div>'+
+    '<button class="btn full mt" id="pkSave">Done</button>';
+  const list=body.querySelector("#pkList");
+  const paint=()=>{
+    list.innerHTML=TREND_SEGS.map(s=>{
+      const rows=ANA_CARDS.filter(x=>x.seg===s[0]);
+      if(!rows.length)return "";
+      return '<div class="grp-h">'+esc(s[1])+'</div>'+rows.map(e=>{
+        const on=sel.indexOf(e.k)>=0;
+        return '<div class="ftrow'+(on?"":" off")+'"><span class="fic">'+gi(on?"home":"trends")+'</span>'+
+          '<span class="fmain"><span class="fn">'+esc(e.n)+'</span><span class="fd">'+esc(e.d)+'</span></span>'+
+          '<button class="sw'+(on?" on":"")+'" data-pk="'+esc(e.k)+'" aria-label="'+esc(e.n)+'"></button></div>';
+      }).join("");
+    }).join("")+
+    '<p class="small muted center mt">'+sel.length+' of '+ANA_PIN_MAX+' pinned</p>';
+    list.querySelectorAll("[data-pk]").forEach(b=>b.onclick=()=>{
+      const k=b.dataset.pk, i=sel.indexOf(k);
+      if(i>=0)sel.splice(i,1);
+      else if(sel.length>=ANA_PIN_MAX){toast("That is "+ANA_PIN_MAX+" already — turn one off first");return;}
+      else sel.push(k);
+      try{i>=0?Sfx.tick():Sfx.pop();}catch(e){}
+      paint();
+    });
+  };
+  paint();
+  body.querySelector("#pkSave").onclick=async()=>{
+    const before=homePins().join("|");
+    setHomePins(sel);
+    if(homePins().join("|")!==before)await commit("Changed the pinned analytics on the home screen");
+    closeSheet();go("home");
+  };
+  openSheet("Pin to your home screen",body);
+}
+
 VIEWS.home=function(){
   const v=el('<div class="view active"></div>');
   const ty=curTaxYear();
@@ -2833,8 +2952,11 @@ VIEWS.home=function(){
      that they are put in a map first and then emitted in the reader's own order, rather than
      concatenated in ours. A block whose conditions are not met is "" and simply does not appear,
      exactly as before. See HOME_CARDS. */
+  /* Whatever the reader pinned from Business analytics, drawn by those cards' own builders. */
+  const pinsBlock=homePinsBlock();
   const parts={
     attention:(S.sessions.length&&feat("attention")?'<div class="card"><h2>Needs attention</h2><div class="attn" id="attn"></div></div>':''),
+    pins:(pinsBlock.html?'<div id="homePins">'+pinsBlock.html+'</div>':''),
     kpis:`
    <div class="kpis mb" data-coach="home-kpis">
      <div class="kpi"><div class="v" data-to="${billed}" data-fmt="m">${gbp(billed)}</div><div class="l">Billed this tax year</div></div>
@@ -2882,6 +3004,29 @@ VIEWS.home=function(){
   const qs=v.querySelector("#qSup");if(qs)qs.onclick=()=>supervisionForm(null);
   const ht=v.querySelector("#hTour");if(ht)ht.onclick=()=>startTour();
   const ha=v.querySelector("#hArrange");if(ha)ha.onclick=()=>homeArrangeSheet();
+  /* ---- the pinned analytics ----
+     Wired inside their own container, never across the whole view: "Coming up" also renders
+     .list-item[data-id], and those ids are sessions, not clients. One selector over `v` would
+     quietly make every upcoming session open somebody's client record. */
+  const ph=v.querySelector("#homePins");
+  if(ph){
+    ph.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>{
+      const c=S.clients.find(x=>x._id===li.dataset.id); if(c)clientForm(c);});
+    ph.querySelectorAll(".list-item[data-code]").forEach(li=>li.onclick=()=>{
+      const c=S.clients.find(x=>(x.code||"").toLowerCase()===(li.dataset.code||"").toLowerCase());
+      if(c)clientForm(c);});
+    const lpu=ph.querySelector("#lpUnpaid");
+    if(lpu)lpu.onclick=e=>{e.stopPropagation();sessFilter.view="list";sessFilter.seg="unpaid";go("sessions");};
+    wireAgedFolds(ph,pinsBlock.folds||{});
+    /* Unpinning from here removes the card the reader is looking at, so Home redraws — but
+       keepScroll, or unpinning the third of three would fling them back to the top. */
+    wirePins(ph,()=>go("home",{keepScroll:true}));
+    wireInfo(ph);
+    const pm=ph.querySelector("#pinMore");if(pm)pm.onclick=()=>go("practice",{seg:"trends"});
+    const pk=ph.querySelector("#pinPick");if(pk)pk.onclick=()=>homePinSheet();
+    ph.querySelectorAll(".svgwrap").forEach(w=>scrollChart(w,null));
+    requestAnimationFrame(()=>ph.querySelectorAll(".funnel .fbar>i").forEach(i=>{i.style.width=(+i.dataset.w)+"%";}));
+  }
   /* Same treatment the charts get: built before the view is attached, so it has no width yet.
      Land on this week rather than on the same date last year. */
   scrollChart(v.querySelector(".hmgrid"),null);
@@ -4567,15 +4712,94 @@ function trendsHeadline(active){
       '<span class="trs">'+esc(x[1])+' \u203a</span></button>';}).filter(Boolean);
   return tiles.length?'<div class="trhead rawscroll">'+tiles.join("")+'</div>':"";
 }
+/* ===== Pinning an analytic to the home screen (Sep 2026) =====
+   Twenty-two analytics, and most people open the app for one of them. Business analytics is two
+   taps and a section away, which is two taps too many for a figure somebody wants to see every
+   morning — so any card here can be pinned, and Home draws that card, whole, in the reader's own
+   order of blocks.
+
+   Three rules this follows:
+   - **The pinned card is the SAME card, not a summary of it.** It is built by the same function
+     that draws it on Trends, so the two can never disagree — the mistake would be a second,
+     smaller rendering of "days to payment" that rounds differently or ages out on a different
+     window. That is also why each analytic is its own builder function (see below): Home must be
+     able to draw one card without running the other six in its section.
+   - **`homePins` lives in settings, like `homeOrder`**, so a pin travels with a backup onto a new
+     phone. A key this build no longer has is dropped on read rather than migrated — same repair
+     as homeOrder(), for the same reason.
+   - **There is a cap.** Home is the screen you glance at; pinning eight analytics to it turns it
+     back into Trends with extra scrolling, and every pinned card is real work on the app's
+     hottest render. Four is enough for "the figures I check", and the message says what to do. */
+const ANA_PIN_MAX=4;
+function anaPinnable(){try{return feat("trends")&&!plusLocked("trends");}catch(e){return false;}}
+function anaCardDef(k){return ANA_CARDS.find(x=>x.k===k)||null;}
+function homePins(){return (settings().homePins||[]).filter(k=>!!anaCardDef(k)).slice(0,ANA_PIN_MAX);}
+function homePinned(k){return homePins().indexOf(k)>=0;}
+function setHomePins(a){
+  const clean=(a||[]).filter(k=>!!anaCardDef(k)).slice(0,ANA_PIN_MAX);
+  if(!clean.length)delete settings().homePins; else settings().homePins=clean;
+}
+/* The small house in a card's top corner. Returns nothing at all when Business analytics is off
+   or behind the gate — a control that pins a card the reader cannot open is not a control. */
+function pinBtn(k){
+  if(!k||!anaPinnable())return "";
+  const on=homePinned(k);
+  return '<button type="button" class="pinbtn'+(on?" on":"")+'" data-pin="'+esc(k)+'"'+
+    ' aria-pressed="'+(on?"true":"false")+'"'+
+    ' title="'+(on?"On your home screen":"Pin to your home screen")+'"'+
+    ' aria-label="'+(on?"Remove from your home screen":"Pin to your home screen")+'">'+gi("home")+'</button>';
+}
+/* Repaint every pin on screen rather than redraw the card. A pin toggled halfway down Trends must
+   not throw the reader back to the top, and the same analytic can be showing its pin in two
+   places at once (a card and the picker sheet). */
+function paintPins(host){
+  (host||document).querySelectorAll("[data-pin]").forEach(b=>{
+    const on=homePinned(b.dataset.pin);
+    b.classList.toggle("on",on);
+    b.setAttribute("aria-pressed",on?"true":"false");
+    b.setAttribute("title",on?"On your home screen":"Pin to your home screen");
+    b.setAttribute("aria-label",on?"Remove from your home screen":"Pin to your home screen");
+  });
+}
+async function homePinToggle(k){
+  const def=anaCardDef(k); if(!def)return null;
+  const cur=homePins(), had=cur.indexOf(k)>=0;
+  if(!had&&cur.length>=ANA_PIN_MAX){
+    toast("Home holds "+ANA_PIN_MAX+" pinned analytics — unpin one first");
+    return null;
+  }
+  setHomePins(had?cur.filter(x=>x!==k):cur.concat([k]));
+  await commit(had?("Unpinned “"+def.n+"” from the home screen"):("Pinned “"+def.n+"” to the home screen"));
+  try{had?Sfx.tick():Sfx.pop();}catch(e){}
+  toast(had?"Removed from your home screen":"Pinned to your home screen");
+  return !had;
+}
+/* `after` is what the screen wants to happen once the pin has changed. Trends repaints the
+   buttons and stays put; Home redraws itself, because the card the reader just unpinned is the
+   one they are looking at. */
+function wirePins(host,after){
+  (host||document).querySelectorAll("[data-pin]").forEach(b=>b.onclick=async ev=>{
+    ev.stopPropagation();
+    const r=await homePinToggle(b.dataset.pin);
+    if(r===null)return;
+    if(after)after(b.dataset.pin,r); else paintPins();
+  });
+}
 function anaCard(title,infoKey,inner,opt){
   opt=opt||{};
-  return '<div class="card'+(opt.cls?" "+opt.cls:"")+'">'+cardHead(title,infoKey,opt.right)+
+  /* The pin sits to the LEFT of anything else the card puts in its heading row, because it is
+     the one control that is in the same place on every card — a reader who has found it once
+     must not have to look for it again on the next one. */
+  const right=(opt.pin?pinBtn(opt.pin):"")+(opt.right||"");
+  return '<div class="card'+(opt.cls?" "+opt.cls:"")+'">'+cardHead(title,infoKey,right)+
     (opt.lead?'<p class="small muted" style="margin:-4px 0 10px">'+opt.lead+'</p>':'')+inner+'</div>';
 }
 /* A card that cannot say anything yet says exactly what it is waiting for. Never an empty chart:
-   a blank axis reads as "broken", a sentence reads as "not yet". */
-function anaWaiting(title,infoKey,need){
-  return anaCard(title,infoKey,'<div class="anawait">'+gi("clock")+'<span>'+need+'</span></div>');
+   a blank axis reads as "broken", a sentence reads as "not yet".
+   It still carries its pin: an analytic that is one month of history away is exactly the one
+   somebody wants on their home screen, and it fills itself in when the records arrive. */
+function anaWaiting(title,infoKey,need,pin){
+  return anaCard(title,infoKey,'<div class="anawait">'+gi("clock")+'<span>'+need+'</span></div>',{pin:pin});
 }
 function anaKpis(items){
   return '<div class="kpis mb">'+items.filter(Boolean).map(x=>
@@ -4641,31 +4865,74 @@ function anaBarRow(label,valueText,pct,cls){
    Sections are built only when opened — anaCohorts() and clientAttendance() across a whole
    client list are not cheap, and nobody looks at all four at once. */
 
+/* ---- one analytic, one function ----
+   These were inline in the three section builders until pinning arrived (Sep 2026), which needs
+   to draw ONE of them on its own: Home renders exactly the cards the reader pinned, and building
+   a whole section to pull one card out of it would run every other analytic in that section for
+   nothing. So each card is now its own builder.
+
+   The shape is `(cx, pin) -> {html, folds?, folded?}`:
+   - `cx` is the shared client context (anaCtx) — passed in so a screen drawing several of these
+     walks the client list once instead of once per card. A card that needs nothing from it
+     ignores the argument.
+   - `pin` is the card's registry key, handed in rather than written out here, so the key lives in
+     exactly one place (ANA_CARDS) and a card cannot end up with a pin that toggles a different
+     one. It is also what makes a card unpinnable: pass nothing and no button is drawn.
+   - `folds` are the lazily-built blocks the caller hands to wireAgedFolds, and `folded` is how
+     many rows went into them — the clients section prints a line saying so. */
+
+/* One section's worth, in registry order — which is the order these cards have always been read
+   in. The folds of every card in it are merged into one map because wireAgedFolds is given the
+   whole host, not a card. */
+function anaSection(seg,cx){
+  cx=cx||anaCtx();
+  const folds={}; let html="", folded=0;
+  ANA_CARDS.filter(x=>x.seg===seg).forEach(x=>{
+    const b=x.b(cx,x.k)||{};
+    html+=b.html||""; folded+=b.folded||0;
+    Object.assign(folds,b.folds||{});
+  });
+  return {html,folds,folded};
+}
+/* The shared client context. Built once per screen and handed to every card that needs it: the
+   three lookups at the top are a pass over the sessions each, and the attendance list is a pass
+   over the sessions PER CLIENT — which is why it is lazy and cached rather than computed here.
+   Two cards on Home asking for it must not mean walking the whole practice twice. */
+function anaCtx(){
+  const counts=clientSessionCounts(), lastSeen=lastSessionDates();
+  const withSess=S.clients.map(c=>({c,n:counts[c.code.toLowerCase()]||0}));
+  const cx={counts,lastSeen,withSess,base:withSess.filter(x=>x.n>=1).length,_att:null};
+  cx.att=()=>cx._att||(cx._att=S.clients.map(c=>({c,a:clientAttendance(c)})).filter(x=>x.a&&x.a.n>=2));
+  cx.current=c=>trendsIsCurrent(c,lastSeen[((c&&c.code)||"").toLowerCase()]);
+  return cx;
+}
+
 /* ---- MONEY: what arrives, when, and what it costs to run ---- */
-function trendsMoneyHTML(){
-  let out="";
+function acSeasonality(cx,pin){
   const seas=anaSeasonality();
-  out+= seas.ready
+  return {html: seas.ready
     ? anaCard("Seasonality","ana-seasonality",
         anaRefChart(seas.months.map(m=>({l:m.name,v:m.idx})),100,{refLabel:"100"})+
         '<p class="small muted" style="margin:8px 0 0">100 is your average month ('+gbp(seas.overall)+'). '+
           (seas.high&&seas.low?'<b>'+esc(seas.high.name)+'</b> typically runs '+Math.abs(seas.high.idx-100)+'% '+(seas.high.idx>=100?"above":"below")+' it; <b>'+esc(seas.low.name)+'</b> '+Math.abs(seas.low.idx-100)+'% '+(seas.low.idx>=100?"above":"below")+'.':'')+'</p>',
-        {lead:"Each month against your own average, from "+Math.round(seas.span/12*10)/10+" years of history."})
-    : anaWaiting("Seasonality","ana-seasonality",seas.need);
-
+        {lead:"Each month against your own average, from "+Math.round(seas.span/12*10)/10+" years of history.",pin:pin})
+    : anaWaiting("Seasonality","ana-seasonality",seas.need,pin)};
+}
+function acFloor(cx,pin){
   const fl=anaFloor();
-  out+= fl.ready
+  return {html: fl.ready
     ? anaCard("Your floor","ana-floor",
         anaKpis([[gbp(fl.worst.revenue),"Worst month · "+esc(fl.worst.l),"bad"],
                  [gbp(fl.median),"Typical month"],
                  [gbp(fl.best.revenue),"Best month · "+esc(fl.best.l),"good"]])+
         chartBars(fl.months.map(m=>({l:m.l,v:m.revenue})),true)+
         '<p class="small muted" style="margin:8px 0 0">Your worst month ran <b>'+fl.spread+'% below</b> typical. That gap is what a buffer is for.</p>',
-        {lead:"The last twelve complete months, before costs and before tax."})
-    : anaWaiting("Your floor","ana-floor",fl.need);
-
+        {lead:"The last twelve complete months, before costs and before tax.",pin:pin})
+    : anaWaiting("Your floor","ana-floor",fl.need,pin)};
+}
+function acErosion(cx,pin){
   const fe=anaFeeErosion();
-  out+= fe.ready
+  return {html: fe.ready
     ? anaCard("What a session actually earns","ana-erosion",
         anaKpis([[gbp(fe.eff),"Per session booked"],
                  [gbp(fe.att),"Per session that went ahead","good"],
@@ -4688,15 +4955,16 @@ function trendsMoneyHTML(){
           ', while your fees themselves '+
           (fe.headChange>0?'rose by '+gbp(fe.headChange):fe.headChange<0?'fell by '+gbp(Math.abs(fe.headChange)):'held steady')+
           '.'+(fe.headChange-fe.change>0.5?' Some of the rise is not reaching you.':'')+'</p>',
-        {lead:"Averages over "+fe.months+" months. Solid line is what you billed, dashed is what the same slots were worth at full fee \u2014 the figures beside the lines are the latest month."})
-    : anaWaiting("What a session actually earns","ana-erosion",fe.need);
-
+        {lead:"Averages over "+fe.months+" months. Solid line is what you billed, dashed is what the same slots were worth at full fee \u2014 the figures beside the lines are the latest month.",pin:pin})
+    : anaWaiting("What a session actually earns","ana-erosion",fe.need,pin)};
+}
+function acDaysToPay(cx,pin){
   const dtp=anaDaysToPay();
   /* Two different practices, two different cards. One is paid up front and wants to know how
      firmly that holds; one waits and wants to know how long. Printing "typically 0 days" at the
      first and a chart of zeroes at both is how this card came to say nothing to anybody. */
   const dtpWait=dtp.ready&&dtp.nLate>=3;
-  out+= dtp.ready
+  return {html: dtp.ready
     ? anaCard("Days to payment","ana-dtp",
         anaKpis([[dtp.upfrontPct+"%","Settled on the day or before",dtp.upfrontPct>=80?"good":""],
                  [dtpWait?dtp.avg+"d":"—","Typical wait on the rest",
@@ -4724,9 +4992,10 @@ function trendsMoneyHTML(){
               : dtp.recentAvg<dtp.olderAvg
               ? 'Of those, money is arriving <b>'+(dtp.olderAvg-dtp.recentAvg)+' days faster</b> than in the '+plural(dtp.compareMonths,"month")+' before that.'
               : 'Steady against the '+plural(dtp.compareMonths,"month")+' before that.')+'</p>':"")),
-        {lead:"How much of your work is paid up front, and how long the rest takes."})
-    : anaWaiting("Days to payment","ana-dtp",dtp.need);
-
+        {lead:"How much of your work is paid up front, and how long the rest takes.",pin:pin})
+    : anaWaiting("Days to payment","ana-dtp",dtp.need,pin)};
+}
+function acLatePayers(cx,pin){
   const lp=anaLatePayers();
   /* One row per client, headed by the direction of travel rather than by a balance. The chip is
      the DRIFT — how their recent paying compares with their own earlier paying — because that is
@@ -4746,7 +5015,7 @@ function trendsMoneyHTML(){
       '<div class="li-right">'+(r.owed?'<b style="color:var(--bad)">'+gbp(r.owed)+'</b>'
         :r.typical!=null?'<span class="small muted">'+r.typical+'d</span>':'<span class="small muted">up to date</span>')+
       '</div></div>';
-  out+= lp.ready
+  return {html: lp.ready
     ? anaCard("Who pays late","ana-late",
         (lp.trended.length
           ? anaKpis([[lp.slowing.length,"Getting slower",lp.slowing.length?"bad":"good"],
@@ -4764,11 +5033,12 @@ function trendsMoneyHTML(){
         lp.rows.slice(0,12).map(lpRow).join("")+
         (lp.rows.length>12?'<p class="small muted" style="margin:8px 0 0">Showing the 12 with the most movement, of '+lp.rows.length+'.</p>':'')+
         '<p class="small muted" style="margin:8px 0 0">Chasing what is outstanding <i>today</i> is a job, not a trend \u2014 that lives on <span class="taxlink" id="lpUnpaid">Sessions \u203a Unpaid \u203a</span> with a Chase button on it.</p>',
-        {lead:"Whether each client\u2019s paying is drifting, measured against their own earlier record \u2014 not against a calendar."})
-    : anaWaiting("Who pays late","ana-late",lp.need);
-
+        {lead:"Whether each client\u2019s paying is drifting, measured against their own earlier record \u2014 not against a calendar.",pin:pin})
+    : anaWaiting("Who pays late","ana-late",lp.need,pin)};
+}
+function acCostRatio(cx,pin){
   const cr=anaCostRatio();
-  out+= cr.ready
+  return {html: cr.ready
     ? anaCard("What the practice costs to run","ana-costratio",
         anaKpis([[cr.now.ratio+"%","Of turnover, last 12 months",cr.now.ratio>50?"bad":""],
                  [cr.delta==null?"—":(cr.delta>0?"+":"")+cr.delta+" pts","vs the year before",cr.delta==null?"":(cr.delta>0?"bad":"good")],
@@ -4782,16 +5052,14 @@ function trendsMoneyHTML(){
              cr.now.sup?'<b>'+gbp(cr.now.sup)+'</b> of supervision':''].filter(Boolean).join(' and ')+
             ' — neither is entered in Costs &amp; income, but both are money the practice spent to run.</p>'
           : ''),
-        {lead:"Of every pound that came in, how much left again before tax."})
-    : anaWaiting("What the practice costs to run","ana-costratio",cr.need);
-  return out;
+        {lead:"Of every pound that came in, how much left again before tax.",pin:pin})
+    : anaWaiting("What the practice costs to run","ana-costratio",cr.need,pin)};
 }
 
 /* ---- TIME: what an hour is worth, and how full the weeks are ---- */
-function trendsTimeHTML(){
-  let out="";
+function acHourlyRate(cx,pin){
   const hr=anaHourlyRate();
-  out+= hr.ready
+  return {html: hr.ready
     ? anaCard("Effective hourly rate","ana-hourly",
         anaKpis([[gbp(hr.rate),"Per hour, all in","good"],
                  [gbp(hr.perSession),"Average fee per session"],
@@ -4804,11 +5072,12 @@ function trendsTimeHTML(){
           '. Your fee is spread over <b>'+hr.hours+' hours</b>, not '+hr.attended+
           ' — which is why this sits below '+gbp(hr.perSession)+'.</p>'+
         '<p class="prev">Session length and admin time come from <b>Settings › Your practice › Your working week</b>.</p>',
-        {lead:"Everything billed in the last year, over every hour it actually took."})
-    : anaWaiting("Effective hourly rate","ana-hourly",hr.need);
-
+        {lead:"Everything billed in the last year, over every hour it actually took.",pin:pin})
+    : anaWaiting("Effective hourly rate","ana-hourly",hr.need,pin)};
+}
+function acCapacity(cx,pin){
   const cap=anaCapacity();
-  out+= cap.ready
+  return {html: cap.ready
     ? anaCard("How full your weeks are","ana-capacity",
         anaKpis([[cap.avg,"Sessions a week, typically"],
                  [cap.pct+"%","Of a full week",cap.pct>=90?"bad":cap.pct>=60?"good":""],
@@ -4818,11 +5087,12 @@ function trendsTimeHTML(){
           (cap.declared
             ? 'Measured against the <b>'+cap.full+' sessions</b> you called a full week.'
             : 'You have not said what a full week looks like for you, so this uses your busiest week — <b>'+cap.full+' sessions</b> — as the yardstick. '+infoLink("full-week","Set your own"))+'</p>',
-        {lead:"Average sessions a week against a full one."})
-    : anaWaiting("How full your weeks are","ana-capacity",cap.need);
-
+        {lead:"Average sessions a week against a full one.",pin:pin})
+    : anaWaiting("How full your weeks are","ana-capacity",cap.need,pin)};
+}
+function acSlots(cx,pin){
   const sl=anaSlots();
-  out+= sl.ready
+  return {html: sl.ready
     ? anaCard("Slot reliability","ana-slots",
         sl.slots.slice(0,10).map(s=>anaBarRow(
           '<b>'+esc(s.label)+'</b> <span class="muted">· '+plural(s.n,"booking")+'</span>',
@@ -4831,11 +5101,12 @@ function trendsTimeHTML(){
         (sl.weak.length
           ? '<p class="small muted" style="margin:10px 0 0"><b>'+esc(sl.weak[0].label)+'</b> is your least reliable slot at '+sl.weak[0].pct+'%. Usually the answer is to stop offering it rather than to keep chasing whoever is in it.</p>'
           : '<p class="small muted" style="margin:10px 0 0">Every regular slot holds above 80%. That is unusually good.</p>'),
-        {lead:"Slots used at least three times in the last six months."})
-    : anaWaiting("Slot reliability","ana-slots",sl.need);
-
+        {lead:"Slots used at least three times in the last six months.",pin:pin})
+    : anaWaiting("Slot reliability","ana-slots",sl.need,pin)};
+}
+function acWeeksWorked(cx,pin){
   const ww=anaWeeksWorked();
-  out+= ww.ready
+  return {html: ww.ready
     ? anaCard("Weeks actually worked","ana-weeks",
         anaKpis([[ww.worked,"Weeks with sessions"],
                  [ww.off,"Weeks off"],
@@ -4845,16 +5116,14 @@ function trendsTimeHTML(){
           (ww.partial?'You have '+ww.span+' weeks of history so far. ':'Over the last year. ')+
           'Sole traders usually price as though they work 46 to 48 weeks — you worked <b>'+ww.worked+'</b>.'+
           (ww.longestFrom?' The longest quiet spell started '+fmtDM(ww.longestFrom)+'.':'')+'</p>',
-        {lead:"Weeks with at least one session in them."})
-    : anaWaiting("Weeks actually worked","ana-weeks",ww.need);
-  return out;
+        {lead:"Weeks with at least one session in them.",pin:pin})
+    : anaWaiting("Weeks actually worked","ana-weeks",ww.need,pin)};
 }
 
 /* ---- YOU: the practitioner, not the practice ---- */
-function trendsYouHTML(){
-  let out="";
+function acSupervisionCadence(cx,pin){
   const sc=anaSupervisionCadence();
-  out+= sc.ready
+  return {html: sc.ready
     ? anaCard("Supervision cadence","ana-supcadence",
         anaKpis([[sc.current==null?"—":sc.current+":1","Clinical hrs per supervision",(sc.current!=null&&sc.current>sc.target)?"bad":"good"],
                  [sc.sinceLast+"d","Since your last one",sc.sinceLast>42?"bad":""],
@@ -4862,11 +5131,12 @@ function trendsYouHTML(){
         anaRefChart(sc.quarters.map(q=>({l:q.l,v:q.ratio})),sc.target,{refLabel:"1:6",invert:true,fmt:v=>v+":1"})+
         '<p class="small muted" style="margin:8px 0 0">Bars <b>below</b> the line are comfortable; above it means more clinical hours per supervision than the 1:6 guideline. '+
           (sc.over?'<b>'+plural(sc.over,"quarter")+'</b> ran over.':'No quarter has run over.')+'</p>',
-        {lead:"Clinical hours for every hour of supervision, by quarter."})
-    : anaWaiting("Supervision cadence","ana-supcadence",sc.need);
-
+        {lead:"Clinical hours for every hour of supervision, by quarter.",pin:pin})
+    : anaWaiting("Supervision cadence","ana-supcadence",sc.need,pin)};
+}
+function acLoad(cx,pin){
   const ld=anaLoad();
-  out+= ld.ready
+  return {html: ld.ready
     ? anaCard("Your load","ana-load",
         anaKpis([[ld.avgPerDay,"Sessions on a working day"],
                  [ld.heavyDays,ld.heavyThreshold+"+ session days",ld.heavyDays>20?"bad":""],
@@ -4880,11 +5150,12 @@ function trendsYouHTML(){
           : '<p class="small muted">No day in the last year had '+ld.heavyThreshold+' or more sessions.</p>')+
         '<p class="small muted" style="margin:10px 0 0">'+plural(ld.daysWorked,"working day")+' in the last year'+
           (ld.runs.length?', and '+plural(ld.runDays,"day")+' where '+ld.runMin+' or more ran back to back with no real gap.':'.')+'</p>',
-        {lead:"What the diary already knows about how hard the year has been."})
-    : anaWaiting("Your load","ana-load",ld.need);
-
+        {lead:"What the diary already knows about how hard the year has been.",pin:pin})
+    : anaWaiting("Your load","ana-load",ld.need,pin)};
+}
+function acCPD(cx,pin){
   const cp=anaCPD();
-  out+= cp.ready
+  return {html: cp.ready
     ? anaCard("CPD trajectory","ana-cpd",
         anaKpis([[cp.total,"Hours in 12 months",cp.total>=cp.target?"good":""],
                  [cp.pace,"Hours a year at your current pace",cp.onTrack?"good":"bad"],
@@ -4907,10 +5178,267 @@ function trendsYouHTML(){
           : (cp.onTrack
             ? '<div class="vmsg ok" style="margin-top:10px">'+cp.total+' hours so far, but the last 90 days run at <b>'+cp.pace+' a year</b> — keep that up and you clear '+cp.target+'.</div>'
             : '<div class="vmsg warn" style="margin-top:10px">'+cp.total+' of '+cp.target+' hours, and the last 90 days work out at <b>'+cp.pace+' a year</b> — '+cp.shortfall+' short. A running total would still look fine here; the pace is the part that has slipped.</div>')),
-        {lead:"Not just the total — the rate you are currently going at."})
-    : anaWaiting("CPD trajectory","ana-cpd",cp.need);
-  return out;
+        {lead:"Not just the total — the rate you are currently going at.",pin:pin})
+    : anaWaiting("CPD trajectory","ana-cpd",cp.need,pin)};
 }
+
+/* ---- CLIENTS: who stays, who drifts, and how long the work runs ----
+   Two of these (Review status, Long-term clients) have nothing to say about some practices, and
+   on Trends they simply do not appear. A card the reader has PINNED must not vanish like that —
+   an empty space where a chosen figure used to be reads as a fault — so they render an all-clear
+   form instead and flag it `empty`, which the Trends section drops and Home keeps. */
+function acFunnel(cx,pin,foot){
+  const base=cx.base, max=Math.max(1,base);
+  const tiers=[{t:1,l:"In therapy",d:"1+ sessions",e:"sprout"},{t:6,l:"Building",d:"6+ sessions",e:"sapling"},{t:12,l:"Established",d:"12+ sessions",e:"tree"},{t:20,l:"Long-term",d:"20+ sessions",e:"evergreen"}];
+  const rows=tiers.map(tr=>{const n=cx.withSess.filter(x=>x.n>=tr.t).length;const pct=base?Math.round(n/base*100):0;const w=Math.round(n/max*100);
+    return '<div class="fr"><div class="ftop"><span>'+gi(tr.e)+' <b>'+tr.l+'</b> · '+tr.d+'</span><span>'+n+' '+(n===1?'client':'clients')+(tr.t>1&&base?' · '+pct+'%':'')+'</span></div><div class="fbar"><i data-w="'+w+'" style="width:0"></i></div></div>';}).join("");
+  /* The locked view adds a line at the FOOT of this card. It used to be spliced in with
+     .replace('</div></div>', …), which matched the end of the FIRST funnel row — so the
+     reassurance landed under "In therapy" and read as a caption for that one tier. The
+     footer is passed in instead, and there is no string to match against. */
+  return {html:'<div class="card">'+cardHead("Client retention funnel","ana-funnel",pinBtn(pin))+
+    '<p class="small muted" style="margin:-4px 0 10px">How your clients progress over time, by number of sessions.</p>'+
+    '<div class="funnel">'+rows+'</div>'+(foot||"")+'</div>',funnel:true};
+}
+/* The one card here that is a list of people to contact.
+   Drifting and Review status are one ladder, not two lists of the same names: anyone whose gap
+   has passed three of their own intervals is Review status's, and anaDrifting has already handed
+   them over. The lead says which job this card is. */
+function acDrifting(cx,pin){
+  const dr=anaDrifting();
+  const driftHandover=dr.review.length
+    ? '<p class="small muted" style="margin:10px 0 0">'+plural(dr.review.length,"other client")+
+      ' ha'+(dr.review.length===1?'s':'ve')+' gone past three of their intervals — those are in <b>Review status</b>, where the question is the status rather than the text message.</p>'
+    : '';
+  return {html: dr.rows.length
+    ? anaCard("Drifting away","ana-drifting",
+        dr.rows.slice(0,12).map(r=>'<div class="list-item" data-id="'+r.c._id+'"><div class="li-main">'+
+          '<div class="li-title">'+esc(r.c.code)+' <span class="chip '+(r.ratio>=2.5?"n":"f")+'">'+r.ratio+'× their gap</span></div>'+
+          '<div class="li-sub">Last seen '+fmtDMY(r.last)+' · '+r.gap+' days ago · '+esc(r.c.frequency||"")+
+            (r.missed?' · '+plural(r.missed,"recent miss"):'')+'</div></div>'+
+          '<div class="li-right"><span class="small muted">nothing booked</span></div></div>').join("")+driftHandover,
+        {cls:"driftcard",pin:pin,lead:plural(dr.rows.length,"client")+" you have not marked as finished, still inside three of their own intervals, with no next session in the diary. Early enough that a text is all it takes."})
+    : anaCard("Drifting away","ana-drifting",
+        '<div class="allclear"><span class="ace">'+gi("done")+'</span>Everyone current has a next session booked or was seen recently</div>'+driftHandover,
+        {pin:pin})};
+}
+function acReview(cx,pin){
+  const review=cx.att().filter(x=>x.a.currentPause);
+  const head='<div class="chead"><h2>'+gi("pause")+' Review status '+infoDot("ana-review","About Review status")+'</h2>'+pinBtn(pin)+'</div>';
+  if(!review.length)return {empty:true,html:'<div class="card">'+head+
+    '<div class="allclear"><span class="ace">'+gi("done")+'</span>No ongoing client has gone quiet for three of their own intervals</div></div>'};
+  return {html:'<div class="card" style="border:1px solid var(--accent)">'+head+
+    '<p class="small muted" style="margin:0 0 6px">These clients are marked <b>Ongoing</b> but haven’t had a session in 3× their usual interval or more. Consider updating them to <b>Paused</b> or <b>Finished</b>.</p>'+
+    review.slice().sort((a,b)=>b.a.currentPause.days-a.a.currentPause.days).map(x=>'<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+' <span class="chip f">'+x.a.currentPause.days+'d gap</span></div><div class="li-sub">Last session '+fmtDMY(x.a.last)+' · '+esc(x.c.frequency||"")+'</div></div><div class="li-right"><span class="small muted">tap to update ›</span></div></div>').join("")+'</div>'};
+}
+function acAttendance(cx,pin){
+  const attRows=cx.att();
+  const attPctChip=p=>'<span class="chip '+(p>=85?'s':p>=65?'f':'n')+'">'+p+'%</span>';
+  const fmtRange=(a,b)=>fmtDM(a)+'–'+fmtDM(b);
+  const pauseNote=a=>{const parts=[];
+    if(a.pauses.length)parts.push(a.pauses.length+' pause'+(a.pauses.length>1?'s':'')+' (excluded): '+a.pauses.map(p=>fmtRange(p.from,p.to)).join(', '));
+    if(a.currentPause)parts.push('on a pause since '+fmtDM(a.currentPause.from)+' ('+a.currentPause.days+'d)');
+    return parts.length?'<div class="li-sub" style="color:var(--accent-ink)">'+gi("pause")+' '+esc(parts.join(' · '))+'</div>':'';};
+  const attAvg=attRows.length?Math.round(attRows.reduce((s,x)=>s+x.a.pct,0)/attRows.length):0;
+  const attSorted=attRows.slice().sort((a,b)=>a.a.pct-b.a.pct||b.a.n-a.a.n);
+  const attLi=x=>{const a=x.a;
+    return '<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+' '+attPctChip(a.pct)+'</div><div class="li-sub">'+a.attended+' of '+a.expected+' expected · '+esc(x.c.frequency||"")+'</div>'+pauseNote(a)+'</div><div class="li-right"><span class="small muted">since '+fmtDM(a.first)+'</span></div></div>';};
+  const grpAvg=arr=>arr.length?Math.round(arr.reduce((s,x)=>s+x.a.pct,0)/arr.length):0;
+  const attAged=attSorted.filter(x=>!cx.current(x.c));
+  const attFold=attAged.length>=AGED_MIN;
+  const attCur=attFold?attSorted.filter(x=>cx.current(x.c)):attSorted;
+  const attOld=attFold?attAged:[];
+  const attSection=(title,arr)=>arr.length?'<div class="grp-h">'+title+' <span class="muted" style="font-weight:600">· '+arr.length+' client'+(arr.length>1?'s':'')+' · avg '+grpAvg(arr)+'%</span></div>'+arr.map(attLi).join(""):"";
+  const attOldSessions=attOld.reduce((s,x)=>s+x.a.n,0);
+  /* Only the exceptions are listed. A roll-call of every current client, each with a green
+     chip saying they turn up, is a list nobody reads to the bottom — and the ones worth
+     seeing are at the bottom, because it sorts worst-first. So the card now leads with the
+     clients whose attendance has slipped below ATT_OK_PCT or who are sitting in a pause
+     right now, and everybody else folds into one row carrying their count and average. They
+     are still in the KPIs and still in the chart; only the individual rows fold. */
+  const attNeeds=attCur.filter(x=>x.a.pct<ATT_OK_PCT||x.a.currentPause);
+  const attOk=attCur.filter(x=>!(x.a.pct<ATT_OK_PCT||x.a.currentPause));
+  const attOkFold=attOk.length>=ATT_FOLD_MIN;
+  const attOkSessions=attOk.reduce((s,x)=>s+x.a.n,0);
+  const attSeries=rollingAttendanceSeries(attRows);   /* the chart keeps everyone — it is history */
+  return {folded:attOld.length+(attOkFold?attOk.length:0),
+    folds:{attok:()=>attOk.map(attLi).join(""),att:()=>attOld.map(attLi).join("")},
+    html:'<div class="card">'+cardHead("Attendance","attendance-mechanics",pinBtn(pin))+
+      anaKpis([[attAvg+"%","Avg attendance"],[attRows.length,"Clients tracked"]])+
+      (attRows.length?'<p class="small muted" style="margin:0 0 2px">3-month rolling attendance rate across all tracked clients.</p>'+chartAttendance(attSeries):"")+
+      (attSorted.length
+        ? (attNeeds.length
+            ? attSection('Worth a look · under '+ATT_OK_PCT+'% or on a pause',attNeeds)
+            : (attOk.length?'<div class="allclear" style="margin-top:8px"><span class="ace">'+gi("done")+'</span>Everyone you are currently seeing is attending as expected</div>':''))+
+          (attOk.length
+            ? (attOkFold
+                ? agedFold("attok","Attending as expected · "+plural(attOk.length,"client"),
+                    'avg '+grpAvg(attOk)+'% attendance · '+plural(attOkSessions,"session")+' between them')
+                : attSection('Attending as expected',attOk))
+            : '')+
+          (attOld.length?agedFold("att","Finished & long inactive · "+plural(attOld.length,"client"),
+            'avg '+grpAvg(attOld)+'% attendance · '+plural(attOldSessions,"session")+' between them'):"")
+        :'<p class="muted small">Need at least two sessions per client to measure attendance.</p>')+'</div>'};
+}
+function acCohorts(cx,pin){
+  const co=anaCohorts();
+  return {html: co.ready
+    ? anaCard("Cohort retention","ana-cohorts",
+        '<div class="rawscroll"><table><thead><tr><th>Started</th><th class="num">Clients</th>'+
+          co.marks.map(w=>'<th class="num">'+w+' wk</th>').join("")+'</tr></thead><tbody>'+
+        co.cohorts.map(c=>'<tr><td><b>'+esc(c.label)+'</b></td><td class="num">'+c.n+'</td>'+
+          c.marks.map(m=>'<td class="num">'+(m.pct==null?'<span class="muted">–</span>':
+            '<span class="chip '+(m.pct>=70?"y":m.pct>=40?"f":"n")+'">'+m.pct+'%</span>')+'</td>').join("")+
+          '</tr>').join("")+'</tbody></table></div>'+
+        '<p class="small muted" style="margin:8px 0 0">Read across a row: of the clients who started then, how many were still coming that many weeks later. A dash means <b>not yet</b>, never nought — the column only fills in once every client in that group has had those weeks to run.</p>',
+        {pin:pin,lead:"Whether the work you take on is holding better than it used to."})
+    : anaWaiting("Cohort retention","ana-cohorts",co.need,pin)};
+}
+function acEpisodes(cx,pin){
+  const ep=anaEpisodes();
+  /* The finished median on its own is the number that reads too low, because short work
+     finishes first and the long-running clients are all still on the books. Saying so — and
+     showing the floor the answer cannot be below — is the whole correction. */
+  const epBias=ep.ready&&ep.beyond
+    ? '<p class="small muted" style="margin:8px 0 0"><b>'+plural(ep.beyond,"client")+'</b> you are still seeing ha'+(ep.beyond===1?'s':'ve')+
+      ' already passed '+ep.median+' sessions, so the finished figure is reading low: short pieces of work finish first and end up over-represented in it. '+
+      'Counting everyone at the length they have reached so far — which can only grow — the typical length is <b>at least '+ep.floor+'</b>.'+
+      (ep.ongoingMedian!=null?' Work still going is at '+ep.ongoingMedian+' sessions and counting.':'')+'</p>'
+    : "";
+  return {html: ep.ready
+    ? anaCard("How long clients stay","ana-episodes",
+        anaKpis([[ep.median,"Sessions, typical finished piece of work"],
+                 [ep.floor==null?"—":"≥ "+ep.floor,"At least, counting work still going"],
+                 [ep.n,"Completed pieces of work"],
+                 [ep.ongoing,"Still in progress"]])+
+        epBias+
+        (ep.byYear.length>1
+          ? chartBars(ep.byYear.map(y=>({l:y.y,v:y.median})),false)+
+            '<p class="small muted" style="margin:8px 0 0">Median sessions by the year the work started. '+
+              (ep.byYear.length>1&&ep.byYear[ep.byYear.length-1].median>ep.byYear[0].median
+                ? 'Your work is running <b>longer</b> than it used to.'
+                : ep.byYear[ep.byYear.length-1].median<ep.byYear[0].median
+                ? 'Your work is running <b>shorter</b> than it used to.'
+                : 'Steady over the years.')+'</p>'
+          : '')+
+        (ep.longest?'<p class="small muted" style="margin:8px 0 0">Longest completed: <b>'+esc(ep.longest.code)+'</b>, '+plural(ep.longest.n,"session")+'.</p>':''),
+        {pin:pin,lead:"Only finished work counts — a client you are still seeing has not finished yet."})
+    : anaWaiting("How long clients stay","ana-episodes",ep.need,pin)};
+}
+function acSources(cx,pin){
+  const src=anaSources();
+  return {html: src.ready
+    ? anaCard("Where clients come from","ana-sources",
+        '<div class="rawscroll"><table><thead><tr><th>Source</th><th class="num">Clients</th><th class="num">Median sess</th><th class="num">Still current</th><th class="num">Billed</th></tr></thead><tbody>'+
+        src.rows.map(r=>'<tr'+(r.unknown?' class="muted"':'')+'><td>'+esc(r.src)+'</td><td class="num">'+r.n+'</td><td class="num"><b>'+r.median+'</b></td>'+
+          '<td class="num">'+r.stick+'%</td><td class="num">'+gbp(r.revenue)+'</td></tr>').join("")+
+        '</tbody></table></div>'+
+        (src.unset?'<p class="small muted" style="margin:8px 0 0"><b>Unknown</b> is '+plural(src.unset,"client")+' with nothing filled in — counted so the table adds up to your whole practice, but it is not a source. Fill a few in and the comparison gets sharper.</p>':'')+
+        '<p class="small muted" style="margin:6px 0 0">The column that matters is <b>median sessions</b>, not how many enquired.</p>',
+        {pin:pin,lead:"Grouped by what you typed in “How they found you”."})
+    : anaWaiting("Where clients come from","ana-sources",src.need,pin)};
+}
+function acLongterm(cx,pin){
+  const deep=cx.withSess.filter(x=>x.n>=20).sort((a,b)=>b.n-a.n);
+  const deepLi=x=>'<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+'</div><div class="li-sub">'+esc(x.c.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>';
+  const head=cardHead("Long-term clients","ana-longterm",pinBtn(pin));
+  if(!deep.length)return {empty:true,html:'<div class="card">'+head+
+    '<p class="small muted" style="margin:-4px 0 0">Nobody has reached 20 sessions yet.</p></div>'};
+  const deepAged=deep.filter(x=>!cx.current(x.c));
+  const deepFold=deepAged.length>=AGED_MIN;
+  const deepCur=deepFold?deep.filter(x=>cx.current(x.c)):deep;
+  const deepOld=deepFold?deepAged:[];
+  const deepOldSessions=deepOld.reduce((s,x)=>s+x.n,0);
+  return {folded:deepOld.length,folds:{deep:()=>deepOld.map(deepLi).join("")},
+    html:'<div class="card">'+head+'<p class="small muted" style="margin:-4px 0 6px">Clients seen for 20+ sessions.</p>'+
+      deepCur.map(deepLi).join("")+
+      (deepOld.length?agedFold("deep","Finished & long inactive · "+plural(deepOld.length,"client"),
+        plural(deepOldSessions,"session")+' between them'):"")+'</div>'};
+}
+/* ---- MONEY: the missed-sessions card, whose whole point is what those sessions cost ---- */
+function acMissed(cx,pin){
+  const t=today();
+  const missed=S.sessions.filter(isCancelled);
+  const totalLC=missed.length;
+  const totalDNA=missed.filter(isDNA).length;
+  const lcPct=S.sessions.length?Math.round(totalLC/S.sessions.length*1000)/10:0;
+  let lost=0,charged=0;
+  missed.forEach(s=>{const d=derive(s);lost+=Math.max(0,(d.fullRate||0)-(d.rate||0));charged+=(d.rate||0);});
+  const byClient={};
+  S.sessions.forEach(s=>{const k=(s.client||"").toLowerCase();if(!k)return;
+    const e=byClient[k]||(byClient[k]={code:s.client,total:0,lc:0,dna:0,lost:0,recent:0,prev:0,last:null});
+    e.total++;
+    if(isCancelled(s)){e.lc++;if(isDNA(s))e.dna++;
+      const dv=derive(s);e.lost+=Math.max(0,(dv.fullRate||0)-(dv.rate||0));
+      const d=parseD(s.date);if(d){if(!e.last||d>e.last)e.last=d;
+        const days=(t-d)/86400000;if(days<=90)e.recent++;else if(days<=180)e.prev++;}}});
+  const lcClients=Object.values(byClient).filter(e=>e.lc>0).sort((a,b)=>b.lc-a.lc||b.total-a.total);
+  const affected=lcClients.length;
+  let recent90=0,prev90=0;
+  missed.forEach(s=>{const d=parseD(s.date);if(!d)return;const days=(t-d)/86400000;if(days<=90)recent90++;else if(days<=180)prev90++;});
+  let lost90=0;
+  missed.forEach(s=>{const d=parseD(s.date);if(!d||(t-d)/86400000>90)return;
+    const dv=derive(s);lost90+=Math.max(0,(dv.fullRate||0)-(dv.rate||0));});
+  const projLost=Math.round(lost90*(365/90));
+  const trendChip=(r,p)=>r>p?'<span class="chip n">↑ rising</span>':r<p?'<span class="chip y">↓ falling</span>':'<span class="chip na">→ steady</span>';
+  const pctOf=e=>e.total?Math.round(e.lc/e.total*1000)/10:0;
+  const rateChip=e=>{const p=pctOf(e);return '<span class="chip '+(p>=15?'n':p>=5?'f':'s')+'">'+p+'%</span>';};
+  const lcLi=e=>{const cl=S.clients.find(c=>(c.code||"").toLowerCase()===(e.code||"").toLowerCase());
+    return '<div class="list-item"'+(cl?' data-id="'+cl._id+'"':'')+'><div class="li-main"><div class="li-title">'+esc(e.code)+' '+rateChip(e)+'</div><div class="li-sub">'+e.lc+' of '+e.total+' sessions'+(e.dna?' · '+e.dna+' DNA':'')+(e.lost>0?' · '+gbp(Math.round(e.lost))+' not charged':'')+(e.last?' · last '+fmtDMY(e.last):'')+'</div></div><div class="li-right">'+trendChip(e.recent,e.prev)+'</div></div>';};
+  const lcOf=e=>S.clients.find(c=>(c.code||"").toLowerCase()===(e.code||"").toLowerCase());
+  const lcAged=lcClients.filter(e=>!cx.current(lcOf(e)));
+  const lcFold=lcAged.length>=AGED_MIN;
+  const lcCur=lcFold?lcClients.filter(e=>cx.current(lcOf(e))):lcClients;
+  const lcOld=lcFold?lcAged:[];
+  const lcOldMissed=lcOld.reduce((s,e)=>s+e.lc,0), lcOldLost=lcOld.reduce((s,e)=>s+e.lost,0);
+  infoDef("missed-sessions-detail","Missed sessions",
+    (projLost>0?'<p class="small">At the last 90 days’ rate that is about <b>'+gbp(projLost)+' a year</b> in fees you don’t charge.</p>':'')+
+    '<p class="small">The per-client % is each client’s share of their own sessions.</p>'+
+    '<p class="small">“Fees not charged” is the full fee less what you actually billed, across every missed session. It moves when you change your cancellation policy — which is the point of having one.</p>');
+  return {folded:lcOld.length,folds:{lc:()=>lcOld.map(lcLi).join("")},
+    html:'<div class="card">'+cardHead("Missed sessions","missed-sessions-detail",pinBtn(pin))+
+      anaKpis([[totalLC,"Missed"+(totalDNA?' · '+totalDNA+' DNA':'')],
+               [lcPct+"%","Of all sessions"],
+               [gbp(Math.round(lost)),"Fees not charged",lost>0?"bad":""],
+               [gbp(Math.round(charged)),"Charged anyway"],
+               [affected,"Clients affected"],
+               [recent90,"In the last 90 days"]])+
+      '<p class="small muted" style="margin:0 0 6px">Trend '+trendChip(recent90,prev90)+' — '+recent90+' in the last 90 days vs '+prev90+' in the previous 90.</p>'+
+      (lcClients.length?lcCur.map(lcLi).join("")+
+          (lcOld.length?agedFold("lc","Finished & long inactive · "+plural(lcOld.length,"client"),
+            plural(lcOldMissed,"missed session")+(lcOldLost>0?' · '+gbp(Math.round(lcOldLost))+' not charged':'')):"")
+        :'<p class="muted small">No missed sessions recorded yet.</p>')+'</div>'};
+}
+
+/* ===== The registry =====
+   Every analytic, in the order its section reads, with the name the pin picker and the audit log
+   use. The key is what `settings.homePins` stores, so it is permanent: rename the card all you
+   like, never the key. Home builds from this and nothing else — a card that is not here cannot be
+   pinned, which is the whole of the decision about what may sit on the home screen. */
+const ANA_CARDS=[
+  {k:"funnel",     seg:"clients",n:"Client retention funnel",   d:"How clients progress, by number of sessions", b:acFunnel},
+  {k:"drifting",   seg:"clients",n:"Drifting away",             d:"Who you have not seen in a while, with nothing booked", b:acDrifting},
+  {k:"review",     seg:"clients",n:"Review status",             d:"Ongoing clients who have gone quiet", b:acReview},
+  {k:"attendance", seg:"clients",n:"Attendance",                d:"Who turns up, and whose attendance has slipped", b:acAttendance},
+  {k:"cohorts",    seg:"clients",n:"Cohort retention",          d:"Whether the work is holding better than it used to", b:acCohorts},
+  {k:"episodes",   seg:"clients",n:"How long clients stay",     d:"Typical length of a piece of work", b:acEpisodes},
+  {k:"sources",    seg:"clients",n:"Where clients come from",   d:"Which referral sources bring people who stay", b:acSources},
+  {k:"longterm",   seg:"clients",n:"Long-term clients",         d:"Clients seen for 20+ sessions", b:acLongterm},
+  {k:"seasonality",seg:"money",  n:"Seasonality",               d:"Each month against your own average", b:acSeasonality},
+  {k:"floor",      seg:"money",  n:"Your floor",                d:"Your worst, typical and best month", b:acFloor},
+  {k:"erosion",    seg:"money",  n:"What a session actually earns", d:"What you billed against what your fees say", b:acErosion},
+  {k:"dtp",        seg:"money",  n:"Days to payment",           d:"How much is paid up front, and how long the rest takes", b:acDaysToPay},
+  {k:"latepayers", seg:"money",  n:"Who pays late",             d:"Whose paying is drifting, against their own record", b:acLatePayers},
+  {k:"costratio",  seg:"money",  n:"What the practice costs to run", d:"How much of every pound leaves again before tax", b:acCostRatio},
+  {k:"missed",     seg:"money",  n:"Missed sessions",           d:"Cancellations, DNAs and the fees not charged", b:acMissed},
+  {k:"hourly",     seg:"time",   n:"Effective hourly rate",     d:"Everything billed over every hour it took", b:acHourlyRate},
+  {k:"capacity",   seg:"time",   n:"How full your weeks are",   d:"Average sessions a week against a full one", b:acCapacity},
+  {k:"slots",      seg:"time",   n:"Slot reliability",          d:"Which times of the week actually hold", b:acSlots},
+  {k:"weeks",      seg:"time",   n:"Weeks actually worked",     d:"Weeks with sessions, weeks off, longest break", b:acWeeksWorked},
+  {k:"supcadence", seg:"you",    n:"Supervision cadence",       d:"Clinical hours per supervision, against 1:6", b:acSupervisionCadence},
+  {k:"load",       seg:"you",    n:"Your load",                 d:"Heavy days and back-to-back runs", b:acLoad},
+  {k:"cpd",        seg:"you",    n:"CPD trajectory",            d:"Hours logged, and the pace you are going at", b:acCPD}
+];
 
 VIEWS.practice=function(){
   const v=el('<div class="view active"></div>');
@@ -4997,21 +5525,11 @@ VIEWS.practice=function(){
      anaCohorts() are both real work, and nobody reads all four at once. */
   function renderMetrics(){
     const locked=plusLocked("trends");
-    const counts=clientSessionCounts();
-    const lastSeen=lastSessionDates();   /* drives the current/historical split on every list below */
-    const withSess=S.clients.map(c=>({c,n:counts[c.code.toLowerCase()]||0}));
-    const base=withSess.filter(x=>x.n>=1).length;
-    const max=Math.max(1,base);
-    const tiers=[{t:1,l:"In therapy",d:"1+ sessions",e:"sprout"},{t:6,l:"Building",d:"6+ sessions",e:"sapling"},{t:12,l:"Established",d:"12+ sessions",e:"tree"},{t:20,l:"Long-term",d:"20+ sessions",e:"evergreen"}];
-    const rows=tiers.map(tr=>{const n=withSess.filter(x=>x.n>=tr.t).length;const pct=base?Math.round(n/base*100):0;const w=Math.round(n/max*100);
-      return '<div class="fr"><div class="ftop"><span>'+gi(tr.e)+' <b>'+tr.l+'</b> · '+tr.d+'</span><span>'+n+' '+(n===1?'client':'clients')+(tr.t>1&&base?' · '+pct+'%':'')+'</span></div><div class="fbar"><i data-w="'+w+'" style="width:0"></i></div></div>';}).join("");
-    /* The locked view adds a line at the FOOT of this card. It used to be spliced in with
-       .replace('</div></div>', …), which matched the end of the FIRST funnel row — so the
-       reassurance landed under "In therapy" and read as a caption for that one tier. The
-       footer is passed in instead, and there is no string to match against. */
-    const funnelCard=foot=>'<div class="card">'+cardHead("Client retention funnel","ana-funnel")+
-      '<p class="small muted" style="margin:-4px 0 10px">How your clients progress over time, by number of sessions.</p>'+
-      '<div class="funnel">'+rows+'</div>'+(foot||"")+'</div>';
+    /* One pass over the client list for the whole screen — every card that needs it is handed
+       this same context. See anaCtx. */
+    const cx=anaCtx();
+    const base=cx.base, withSess=cx.withSess;
+    const funnelCard=foot=>acFunnel(cx,"funnel",foot).html;
     /* ---- the sneak peek ----
        A hard lock showed a paragraph describing charts nobody had seen, which is a poor advert
        and a slightly insulting one: the data is the therapist's own. So the retention funnel —
@@ -5062,214 +5580,32 @@ VIEWS.practice=function(){
     }
 
     /* ---- CLIENTS section ----
+       The cards themselves live up with the rest of the analytics (see the per-card builders);
+       what is left here is the order they read in, the pair of KPIs that sit between the funnel
+       and the lists, and the line that explains the \u2304 rows. `empty` cards \u2014 Review status with
+       nobody to review, Long-term clients with nobody past twenty \u2014 are dropped rather than shown
+       saying so, which is how this screen has always behaved; Home keeps them, because a card the
+       reader pinned must not silently disappear.
        Returns {html, folds}: the folded blocks are built on first open, not now (see agedFold). */
     function clientsSection(){
-      const t=today();
-      const deep=withSess.filter(x=>x.n>=20).sort((a,b)=>b.n-a.n);
-      const deepLi=x=>'<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+'</div><div class="li-sub">'+esc(x.c.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>';
-      const deepAged=deep.filter(x=>!trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()]));
-      const deepFold=deepAged.length>=AGED_MIN;
-      const deepCur=deepFold?deep.filter(x=>trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()])):deep;
-      const deepOld=deepFold?deepAged:[];
-      const deepOldSessions=deepOld.reduce((s,x)=>s+x.n,0);
+      const folds={}; let folded=0;
+      const add=k=>{const d=anaCardDef(k); if(!d)return "";
+        const b=d.b(cx,d.k)||{};
+        if(b.empty)return "";
+        Object.assign(folds,b.folds||{}); folded+=b.folded||0; return b.html||"";};
+      const funnel=add("funnel");
+      const rest=["drifting","review","attendance","cohorts","episodes","sources","longterm"].map(add).join("");
       const totalSessions=withSess.reduce((a,x)=>a+x.n,0);
       const avg=base?Math.round(totalSessions/base*10)/10:0;
-
-      /* ---- attendance ---- */
-      const attRows=S.clients.map(c=>({c,a:clientAttendance(c)})).filter(x=>x.a&&x.a.n>=2);
-      const attPctChip=p=>'<span class="chip '+(p>=85?'s':p>=65?'f':'n')+'">'+p+'%</span>';
-      const fmtRange=(a,b)=>fmtDM(a)+'–'+fmtDM(b);
-      const pauseNote=a=>{const parts=[];
-        if(a.pauses.length)parts.push(a.pauses.length+' pause'+(a.pauses.length>1?'s':'')+' (excluded): '+a.pauses.map(p=>fmtRange(p.from,p.to)).join(', '));
-        if(a.currentPause)parts.push('on a pause since '+fmtDM(a.currentPause.from)+' ('+a.currentPause.days+'d)');
-        return parts.length?'<div class="li-sub" style="color:var(--accent-ink)">'+gi("pause")+' '+esc(parts.join(' · '))+'</div>':'';};
-      const attAvg=attRows.length?Math.round(attRows.reduce((s,x)=>s+x.a.pct,0)/attRows.length):0;
-      const attSorted=attRows.slice().sort((a,b)=>a.a.pct-b.a.pct||b.a.n-a.a.n);
-      const attLi=x=>{const a=x.a;
-        return '<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+' '+attPctChip(a.pct)+'</div><div class="li-sub">'+a.attended+' of '+a.expected+' expected · '+esc(x.c.frequency||"")+'</div>'+pauseNote(a)+'</div><div class="li-right"><span class="small muted">since '+fmtDM(a.first)+'</span></div></div>';};
-      const grpAvg=arr=>arr.length?Math.round(arr.reduce((s,x)=>s+x.a.pct,0)/arr.length):0;
-      const attAged=attSorted.filter(x=>!trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()]));
-      const attFold=attAged.length>=AGED_MIN;
-      const attCur=attFold?attSorted.filter(x=>trendsIsCurrent(x.c,lastSeen[(x.c.code||"").toLowerCase()])):attSorted;
-      const attOld=attFold?attAged:[];
-      const attSection=(title,arr)=>arr.length?'<div class="grp-h">'+title+' <span class="muted" style="font-weight:600">· '+arr.length+' client'+(arr.length>1?'s':'')+' · avg '+grpAvg(arr)+'%</span></div>'+arr.map(attLi).join(""):"";
-      const attOldSessions=attOld.reduce((s,x)=>s+x.a.n,0);
-      /* Only the exceptions are listed. A roll-call of every current client, each with a green
-         chip saying they turn up, is a list nobody reads to the bottom — and the ones worth
-         seeing are at the bottom, because it sorts worst-first. So the card now leads with the
-         clients whose attendance has slipped below ATT_OK_PCT or who are sitting in a pause
-         right now, and everybody else folds into one row carrying their count and average. They
-         are still in the KPIs and still in the chart; only the individual rows fold. */
-      const attNeeds=attCur.filter(x=>x.a.pct<ATT_OK_PCT||x.a.currentPause);
-      const attOk=attCur.filter(x=>!(x.a.pct<ATT_OK_PCT||x.a.currentPause));
-      const attOkFold=attOk.length>=ATT_FOLD_MIN;
-      const attOkSessions=attOk.reduce((s,x)=>s+x.a.n,0);
-      const attSeries=rollingAttendanceSeries(attRows);   /* the chart keeps everyone — it is history */
-      const attCard='<div class="card">'+cardHead("Attendance","attendance-mechanics")+
-        anaKpis([[attAvg+"%","Avg attendance"],[attRows.length,"Clients tracked"]])+
-        (attRows.length?'<p class="small muted" style="margin:0 0 2px">3-month rolling attendance rate across all tracked clients.</p>'+chartAttendance(attSeries):"")+
-        (attSorted.length
-          ? (attNeeds.length
-              ? attSection('Worth a look · under '+ATT_OK_PCT+'% or on a pause',attNeeds)
-              : (attOk.length?'<div class="allclear" style="margin-top:8px"><span class="ace">'+gi("done")+'</span>Everyone you are currently seeing is attending as expected</div>':''))+
-            (attOk.length
-              ? (attOkFold
-                  ? agedFold("attok","Attending as expected · "+plural(attOk.length,"client"),
-                      'avg '+grpAvg(attOk)+'% attendance · '+plural(attOkSessions,"session")+' between them')
-                  : attSection('Attending as expected',attOk))
-              : '')+
-            (attOld.length?agedFold("att","Finished & long inactive · "+plural(attOld.length,"client"),
-              'avg '+grpAvg(attOld)+'% attendance · '+plural(attOldSessions,"session")+' between them'):"")
-          :'<p class="muted small">Need at least two sessions per client to measure attendance.</p>')+'</div>';
-      /* ---- ongoing clients on a current pause: prompt to review status ---- */
-      const review=attRows.filter(x=>x.a.currentPause);
-      const reviewCard=review.length?'<div class="card" style="border:1px solid var(--accent)"><h2>'+gi("pause")+' Review status</h2>'+
-        '<p class="small muted" style="margin:0 0 6px">These clients are marked <b>Ongoing</b> but haven’t had a session in 3× their usual interval or more. Consider updating them to <b>Paused</b> or <b>Finished</b>.</p>'+
-        review.sort((a,b)=>b.a.currentPause.days-a.a.currentPause.days).map(x=>'<div class="list-item" data-id="'+x.c._id+'"><div class="li-main"><div class="li-title">'+esc(x.c.code)+' <span class="chip f">'+x.a.currentPause.days+'d gap</span></div><div class="li-sub">Last session '+fmtDMY(x.a.last)+' · '+esc(x.c.frequency||"")+'</div></div><div class="li-right"><span class="small muted">tap to update ›</span></div></div>').join("")+'</div>':'';
-
-      /* ---- drifting away: the one card here that is a list of people to contact ---- */
-      /* Drifting and Review status are one ladder, not two lists of the same names: anyone whose
-         gap has passed three of their own intervals is Review status's, and anaDrifting has
-         already handed them over. The lead says which job this card is. */
-      const dr=anaDrifting();
-      const driftHandover=dr.review.length
-        ? '<p class="small muted" style="margin:10px 0 0">'+plural(dr.review.length,"other client")+
-          ' ha'+(dr.review.length===1?'s':'ve')+' gone past three of their intervals — those are in <b>Review status</b> below, where the question is the status rather than the text message.</p>'
-        : '';
-      const driftCard=dr.rows.length
-        ? anaCard("Drifting away","ana-drifting",
-            dr.rows.slice(0,12).map(r=>'<div class="list-item" data-id="'+r.c._id+'"><div class="li-main">'+
-              '<div class="li-title">'+esc(r.c.code)+' <span class="chip '+(r.ratio>=2.5?"n":"f")+'">'+r.ratio+'× their gap</span></div>'+
-              '<div class="li-sub">Last seen '+fmtDMY(r.last)+' · '+r.gap+' days ago · '+esc(r.c.frequency||"")+
-                (r.missed?' · '+plural(r.missed,"recent miss"):'')+'</div></div>'+
-              '<div class="li-right"><span class="small muted">nothing booked</span></div></div>').join("")+driftHandover,
-            {cls:"driftcard",lead:plural(dr.rows.length,"client")+" you have not marked as finished, still inside three of their own intervals, with no next session in the diary. Early enough that a text is all it takes."})
-        : anaCard("Drifting away","ana-drifting",
-            '<div class="allclear"><span class="ace">'+gi("done")+'</span>Everyone current has a next session booked or was seen recently</div>'+driftHandover);
-
-      const co=anaCohorts();
-      const cohortCard=co.ready
-        ? anaCard("Cohort retention","ana-cohorts",
-            '<div class="rawscroll"><table><thead><tr><th>Started</th><th class="num">Clients</th>'+
-              co.marks.map(w=>'<th class="num">'+w+' wk</th>').join("")+'</tr></thead><tbody>'+
-            co.cohorts.map(c=>'<tr><td><b>'+esc(c.label)+'</b></td><td class="num">'+c.n+'</td>'+
-              c.marks.map(m=>'<td class="num">'+(m.pct==null?'<span class="muted">–</span>':
-                '<span class="chip '+(m.pct>=70?"y":m.pct>=40?"f":"n")+'">'+m.pct+'%</span>')+'</td>').join("")+
-              '</tr>').join("")+'</tbody></table></div>'+
-            '<p class="small muted" style="margin:8px 0 0">Read across a row: of the clients who started then, how many were still coming that many weeks later. A dash means <b>not yet</b>, never nought — the column only fills in once every client in that group has had those weeks to run.</p>',
-            {lead:"Whether the work you take on is holding better than it used to."})
-        : anaWaiting("Cohort retention","ana-cohorts",co.need);
-
-      const ep=anaEpisodes();
-      /* The finished median on its own is the number that reads too low, because short work
-         finishes first and the long-running clients are all still on the books. Saying so — and
-         showing the floor the answer cannot be below — is the whole correction. */
-      const epBias=ep.ready&&ep.beyond
-        ? '<p class="small muted" style="margin:8px 0 0"><b>'+plural(ep.beyond,"client")+'</b> you are still seeing ha'+(ep.beyond===1?'s':'ve')+
-          ' already passed '+ep.median+' sessions, so the finished figure is reading low: short pieces of work finish first and end up over-represented in it. '+
-          'Counting everyone at the length they have reached so far — which can only grow — the typical length is <b>at least '+ep.floor+'</b>.'+
-          (ep.ongoingMedian!=null?' Work still going is at '+ep.ongoingMedian+' sessions and counting.':'')+'</p>'
-        : "";
-      const epCard=ep.ready
-        ? anaCard("How long clients stay","ana-episodes",
-            anaKpis([[ep.median,"Sessions, typical finished piece of work"],
-                     [ep.floor==null?"—":"≥ "+ep.floor,"At least, counting work still going"],
-                     [ep.n,"Completed pieces of work"],
-                     [ep.ongoing,"Still in progress"]])+
-            epBias+
-            (ep.byYear.length>1
-              ? chartBars(ep.byYear.map(y=>({l:y.y,v:y.median})),false)+
-                '<p class="small muted" style="margin:8px 0 0">Median sessions by the year the work started. '+
-                  (ep.byYear.length>1&&ep.byYear[ep.byYear.length-1].median>ep.byYear[0].median
-                    ? 'Your work is running <b>longer</b> than it used to.'
-                    : ep.byYear[ep.byYear.length-1].median<ep.byYear[0].median
-                    ? 'Your work is running <b>shorter</b> than it used to.'
-                    : 'Steady over the years.')+'</p>'
-              : '')+
-            (ep.longest?'<p class="small muted" style="margin:8px 0 0">Longest completed: <b>'+esc(ep.longest.code)+'</b>, '+plural(ep.longest.n,"session")+'.</p>':''),
-            {lead:"Only finished work counts — a client you are still seeing has not finished yet."})
-        : anaWaiting("How long clients stay","ana-episodes",ep.need);
-
-      const src=anaSources();
-      const srcCard=src.ready
-        ? anaCard("Where clients come from","ana-sources",
-            '<div class="rawscroll"><table><thead><tr><th>Source</th><th class="num">Clients</th><th class="num">Median sess</th><th class="num">Still current</th><th class="num">Billed</th></tr></thead><tbody>'+
-            src.rows.map(r=>'<tr'+(r.unknown?' class="muted"':'')+'><td>'+esc(r.src)+'</td><td class="num">'+r.n+'</td><td class="num"><b>'+r.median+'</b></td>'+
-              '<td class="num">'+r.stick+'%</td><td class="num">'+gbp(r.revenue)+'</td></tr>').join("")+
-            '</tbody></table></div>'+
-            (src.unset?'<p class="small muted" style="margin:8px 0 0"><b>Unknown</b> is '+plural(src.unset,"client")+' with nothing filled in — counted so the table adds up to your whole practice, but it is not a source. Fill a few in and the comparison gets sharper.</p>':'')+
-            '<p class="small muted" style="margin:6px 0 0">The column that matters is <b>median sessions</b>, not how many enquired.</p>',
-            {lead:"Grouped by what you typed in “How they found you”."})
-        : anaWaiting("Where clients come from","ana-sources",src.need);
-
-      const foldedTotal=attOld.length+deepOld.length+(attOkFold?attOk.length:0);
-      const html=(foldedTotal?'<p class="small muted" style="margin:-2px 0 10px">Lists here lead with the clients worth a look. Anyone attending as expected, finished, or not seen for over a year folds into a ⌄ summary row — they still count in every total and chart. Tap one to see them.</p>':'')+
-        funnelCard()+
+      const html=(folded?'<p class="small muted" style="margin:-2px 0 10px">Lists here lead with the clients worth a look. Anyone attending as expected, finished, or not seen for over a year folds into a \u2304 summary row \u2014 they still count in every total and chart. Tap one to see them.</p>':'')+
+        funnel+
         anaKpis([[base,"Clients seen"],[avg,"Avg sessions / client"]])+
-        driftCard+reviewCard+attCard+cohortCard+epCard+srcCard+
-        (deep.length?'<div class="card"><h2>Long-term clients</h2><p class="small muted" style="margin:0 0 6px">Clients seen for 20+ sessions.</p>'+
-          deepCur.map(deepLi).join("")+
-          (deepOld.length?agedFold("deep","Finished & long inactive · "+plural(deepOld.length,"client"),
-            plural(deepOldSessions,"session")+' between them'):"")+'</div>':'');
-      return {html,folds:{attok:()=>attOk.map(attLi).join(""),att:()=>attOld.map(attLi).join(""),
-        deep:()=>deepOld.map(deepLi).join("")},funnel:true};
+        rest;
+      return {html,folds,funnel:true};
     }
 
-    /* ---- MONEY section: the analytics engine, plus the missed-sessions card whose whole point
-       is what those sessions cost ---- */
-    function moneySection(){
-      const t=today();
-      const missed=S.sessions.filter(isCancelled);
-      const totalLC=missed.length;
-      const totalDNA=missed.filter(isDNA).length;
-      const lcPct=S.sessions.length?Math.round(totalLC/S.sessions.length*1000)/10:0;
-      let lost=0,charged=0;
-      missed.forEach(s=>{const d=derive(s);lost+=Math.max(0,(d.fullRate||0)-(d.rate||0));charged+=(d.rate||0);});
-      const byClient={};
-      S.sessions.forEach(s=>{const k=(s.client||"").toLowerCase();if(!k)return;
-        const e=byClient[k]||(byClient[k]={code:s.client,total:0,lc:0,dna:0,lost:0,recent:0,prev:0,last:null});
-        e.total++;
-        if(isCancelled(s)){e.lc++;if(isDNA(s))e.dna++;
-          const dv=derive(s);e.lost+=Math.max(0,(dv.fullRate||0)-(dv.rate||0));
-          const d=parseD(s.date);if(d){if(!e.last||d>e.last)e.last=d;
-            const days=(t-d)/86400000;if(days<=90)e.recent++;else if(days<=180)e.prev++;}}});
-      const lcClients=Object.values(byClient).filter(e=>e.lc>0).sort((a,b)=>b.lc-a.lc||b.total-a.total);
-      const affected=lcClients.length;
-      let recent90=0,prev90=0;
-      missed.forEach(s=>{const d=parseD(s.date);if(!d)return;const days=(t-d)/86400000;if(days<=90)recent90++;else if(days<=180)prev90++;});
-      let lost90=0;
-      missed.forEach(s=>{const d=parseD(s.date);if(!d||(t-d)/86400000>90)return;
-        const dv=derive(s);lost90+=Math.max(0,(dv.fullRate||0)-(dv.rate||0));});
-      const projLost=Math.round(lost90*(365/90));
-      const trendChip=(r,p)=>r>p?'<span class="chip n">↑ rising</span>':r<p?'<span class="chip y">↓ falling</span>':'<span class="chip na">→ steady</span>';
-      const pctOf=e=>e.total?Math.round(e.lc/e.total*1000)/10:0;
-      const rateChip=e=>{const p=pctOf(e);return '<span class="chip '+(p>=15?'n':p>=5?'f':'s')+'">'+p+'%</span>';};
-      const lcLi=e=>{const cl=S.clients.find(c=>(c.code||"").toLowerCase()===(e.code||"").toLowerCase());
-        return '<div class="list-item"'+(cl?' data-id="'+cl._id+'"':'')+'><div class="li-main"><div class="li-title">'+esc(e.code)+' '+rateChip(e)+'</div><div class="li-sub">'+e.lc+' of '+e.total+' sessions'+(e.dna?' · '+e.dna+' DNA':'')+(e.lost>0?' · '+gbp(Math.round(e.lost))+' not charged':'')+(e.last?' · last '+fmtDMY(e.last):'')+'</div></div><div class="li-right">'+trendChip(e.recent,e.prev)+'</div></div>';};
-      const lcOf=e=>S.clients.find(c=>(c.code||"").toLowerCase()===(e.code||"").toLowerCase());
-      const lcAged=lcClients.filter(e=>!trendsIsCurrent(lcOf(e),lastSeen[(e.code||"").toLowerCase()]));
-      const lcFold=lcAged.length>=AGED_MIN;
-      const lcCur=lcFold?lcClients.filter(e=>trendsIsCurrent(lcOf(e),lastSeen[(e.code||"").toLowerCase()])):lcClients;
-      const lcOld=lcFold?lcAged:[];
-      const lcOldMissed=lcOld.reduce((s,e)=>s+e.lc,0), lcOldLost=lcOld.reduce((s,e)=>s+e.lost,0);
-      infoDef("missed-sessions-detail","Missed sessions",
-        (projLost>0?'<p class="small">At the last 90 days’ rate that is about <b>'+gbp(projLost)+' a year</b> in fees you don’t charge.</p>':'')+
-        '<p class="small">The per-client % is each client’s share of their own sessions.</p>'+
-        '<p class="small">“Fees not charged” is the full fee less what you actually billed, across every missed session. It moves when you change your cancellation policy — which is the point of having one.</p>');
-      const lcCard='<div class="card">'+cardHead("Missed sessions","missed-sessions-detail")+
-        anaKpis([[totalLC,"Missed"+(totalDNA?' · '+totalDNA+' DNA':'')],
-                 [lcPct+"%","Of all sessions"],
-                 [gbp(Math.round(lost)),"Fees not charged",lost>0?"bad":""],
-                 [gbp(Math.round(charged)),"Charged anyway"],
-                 [affected,"Clients affected"],
-                 [recent90,"In the last 90 days"]])+
-        '<p class="small muted" style="margin:0 0 6px">Trend '+trendChip(recent90,prev90)+' — '+recent90+' in the last 90 days vs '+prev90+' in the previous 90.</p>'+
-        (lcClients.length?lcCur.map(lcLi).join("")+
-            (lcOld.length?agedFold("lc","Finished & long inactive · "+plural(lcOld.length,"client"),
-              plural(lcOldMissed,"missed session")+(lcOldLost>0?' · '+gbp(Math.round(lcOldLost))+' not charged':'')):"")
-          :'<p class="muted small">No missed sessions recorded yet.</p>')+'</div>';
-      return {html:trendsMoneyHTML()+lcCard,folds:{lc:()=>lcOld.map(lcLi).join("")}};
-    }
+    /* ---- MONEY section ---- */
+    function moneySection(){return anaSection("money",cx);}
 
     /* ---- the sub-nav, and lazy section rendering ---- */
     body.innerHTML=segBar("trseg",TREND_SEGS,trendSeg)+
@@ -5278,8 +5614,8 @@ VIEWS.practice=function(){
     const host=body.querySelector("#trbody");
     const draw=()=>{
       const built = trendSeg==="money" ? moneySection()
-                  : trendSeg==="time"  ? {html:trendsTimeHTML(),folds:{}}
-                  : trendSeg==="you"   ? {html:trendsYouHTML(),folds:{}}
+                  : trendSeg==="time"  ? anaSection("time",cx)
+                  : trendSeg==="you"   ? anaSection("you",cx)
                   : clientsSection();
       host.innerHTML=trendsHeadline(trendSeg)+built.html;
       host.querySelectorAll("[data-jump]").forEach(b=>b.onclick=()=>pick(b.dataset.jump));
@@ -5295,6 +5631,9 @@ VIEWS.practice=function(){
       /* folded rows are built the first time each block is opened, not now */
       wireAgedFolds(host,built.folds);
       wireInfo(host);
+      /* Repaint the buttons rather than redraw the section: a pin tapped halfway down a long
+         section must not throw the reader back to the top of it. */
+      wirePins(host,()=>paintPins(host));
       host.querySelectorAll(".svgwrap,.hmgrid").forEach(w=>scrollChart(w,null));
       requestAnimationFrame(()=>{
         if(built.funnel)host.querySelectorAll(".funnel .fbar>i").forEach(i=>{i.style.width=(+i.dataset.w)+"%";});
@@ -7166,6 +7505,18 @@ infoDef("referral-source","How they found you",
   '<p class="small">Fill it in and <b>Practice › Business analytics › Clients</b> can tell you which sources bring people who stay, rather than just who enquires. It is the one thing in the app that can change what you do about finding clients.</p>'+
   '<p class="small muted">It is cleared if you ever anonymise a client, because free text can name people.</p>');
 
+infoDef("ana-review","Review status",
+  '<p class="small">A client marked <b>Ongoing</b> who has not had a session in <b>three times their own usual interval</b> shows up here. For somebody weekly that is three weeks; for somebody monthly, three months.</p>'+
+  '<p class="small">It is not a judgement about the work — it is a prompt to make the record say what is actually happening, because an out-of-date status quietly distorts attendance, retention and every list that leads with “current clients”.</p>'+
+  '<p class="small muted">Anyone whose gap is shorter than that is in <b>Drifting away</b> instead, where the answer is usually a text rather than a change of status.</p>');
+infoDef("ana-longterm","Long-term clients",
+  '<p class="small">Everyone you have seen for <b>20 or more sessions</b>, most first. Cancelled and missed sessions are not counted — this is work that actually happened.</p>'+
+  '<p class="small muted">Once enough of them have finished or gone quiet for a year, they fold into a single ⌄ row rather than sitting at the top of the list for ever.</p>');
+infoDef("home-pins","Pinning an analytic to your home screen",
+  '<p class="small">Any card in <b>Business analytics</b> can sit on your home screen. Tap the small '+gi("home")+' in its top corner and it appears there, drawn by exactly the same code — it is the same card, not a shortened version of it, so the two can never tell you different things.</p>'+
+  '<p class="small">You can pin up to <b>'+ANA_PIN_MAX+'</b>. Home is the screen you glance at; past four it becomes Business analytics with more scrolling.</p>'+
+  '<p class="small">Where the pinned block sits among everything else on Home is up to you — <b>Arrange this screen</b> at the bottom of Home moves it.</p>'+
+  '<p class="small muted">Pins are kept with your settings, so they travel in a backup and come back on a new device.</p>');
 infoDef("ana-funnel","The retention funnel",
   '<p class="small">Every client you have ever seen, counted at four depths. A client at 12 sessions is counted in all three bands below 12 as well — it is a funnel, not four separate groups.</p>'+
   '<p class="small">The percentages are of everyone who ever started. A practice where most people stop after one or two sessions and one where most reach twelve are doing very different work, and this is the quickest way to see which yours is.</p>'+

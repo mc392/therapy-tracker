@@ -280,6 +280,8 @@ S = {
     taxPot: {},         // {bufferPct, balance, balanceAt} (v6)
     taxMoments: {},     // seasonal-prompt id → date dismissed — see taxMoments()
     coach: {},          // {seen:[tip keys], off} — first-visit tips (v6)
+    homeOrder: [],      // HOME_CARDS keys, the reader's own order (absent = the default)
+    homePins: [],       // ANA_CARDS keys pinned to Home, max ANA_PIN_MAX (absent = none)
     onboarded, onboardedAt, setupRuns
   }
 }
@@ -508,6 +510,7 @@ Six collapsible `<details class="sgrp">` groups (**business / app** / data / rec
   - **Order only, never hiding.** Whether a block exists at all is already `feat()` in Settings › App preferences. A second switch answering nearly the same question is how a card ends up on in one place and off in another.
   - `_homeVisible` is set by the last render and read by `homeArrangeSheet()`. Recomputing it there would mean walking every session again to ask whether the revenue trend qualifies, and the sheet can only be opened from a Home that has just rendered. The arrows swap a block with its nearest **visible** neighbour, so anything off-screen keeps its index and comes back roughly where it was.
   - Staged until **Done**, like the guided flows: closing discards, and one `commit()` rather than one per arrow tap.
+- **`pins` is the block of analytics the reader pinned** (Sep 2026) — see **Pinned analytics** below. It sits third by default, after the four figures, and moves with the rest in the arrange sheet. With nothing pinned it is the dotted invitation instead, and only past `ANA_PIN_PROMPT_MIN` (20 sessions): a dashed "pin an analytic here" on somebody's second day is an empty promise about data they do not have. Its rows are wired **inside `#homePins`, never across the view** — "Coming up" renders `.list-item[data-id]` where the id is a *session*, and one selector over `v` would make every upcoming session open somebody's client record, silently.
 
 ## Invoices, receipts and chasing (Sep 2026)
 `receiptSheet(c,{kind})` offers three documents rather than a statement with a "paid only" tick, because they differ only in which sessions they carry and what the total says: **statement** (everything in the period), **receipt** (the paid ones) and **invoice** (the unpaid ones, with a due date and how to pay).
@@ -582,6 +585,8 @@ npm run test:tax             # tests/tax-tests.js in a headless browser instead 
 npm run test:behaviour       # opens the sheets, clicks Save, asserts what landed in S
 npm run test:rent            # room rent: rhythms, date ranges, the ledger, and the ungated card
 npm run test:tiers           # the Plus/Pro gate matrix, and what an untiered entitlement means
+npm run test:pins            # pinning an analytic to Home: the registry, the cap, the picker,
+                             #   and that Home's copy of a card is identical to Trends'
 ```
 
 **`scripts/check-behaviour.mjs` is the only test that presses a button.** The tax suite checks the
@@ -729,6 +734,50 @@ Three rules every one of them follows — a wrong figure here is worse than no f
 - **Never invent a trend from nothing.** Each returns `{ready:false, need:"<what is missing>"}` and the view prints that sentence instead of a chart (`anaWaiting`). Twenty-four weeks of zero is not a seasonal pattern.
 - **Cancellations are not attendance.** `isCancelled()` sessions are excluded wherever the question is "did I see someone" (hours, capacity, load, episode length) and included wherever it is "what did this earn" (revenue, fee erosion) — a charged late cancellation is real money.
 - **Only whole periods.** `anaMonthlySeries(n)` starts at *last* month; a month still running would drag every average down and recover on the 1st.
+
+### One analytic, one function — and the registry (Sep 2026)
+Each card is its own builder, `(cx, pin) -> {html, folds?, folded?, empty?, funnel?}`, and
+**`ANA_CARDS` is the list of all of them** — key, section, name, one-line description, builder.
+They were inline in the three section functions until pinning arrived, which needs to draw **one**
+card on its own: Home renders exactly what the reader pinned, and building a whole section to pull
+one card out would run every other analytic in it for nothing.
+- **`anaSection(seg, cx)`** is a section: registry order, one merged `folds` map (because
+  `wireAgedFolds` is given a host, not a card) and the `folded` count the Clients section prints a
+  line about. `trendsMoneyHTML`/`TimeHTML`/`YouHTML` are gone — they were three copies of it.
+- **`cx` is `anaCtx()`, built once per screen.** `counts`, `lastSeen`, `withSess`, `base` are a
+  pass over the sessions each; **`cx.att()` is lazy and cached** because `clientAttendance()` is a
+  pass over the sessions *per client*, and Attendance and Review status both want it. Never call
+  `clientAttendance` across the client list again from inside a card.
+- **The key lives in `ANA_CARDS` and nowhere else.** It is passed *into* the builder as `pin`, so a
+  card cannot end up drawing a button that toggles a different analytic. Keys are what
+  `settings.homePins` stores: rename a card freely, never its key.
+- **`empty:true` is "this card has nothing to say about this practice"** — Review status with
+  nobody to review, Long-term clients with nobody past twenty. The Trends section **drops** those
+  (which is how it has always behaved); Home **keeps** them, because a card the reader pinned must
+  not silently vanish — an empty space where a chosen figure used to be reads as a fault.
+
+### Pinned analytics (Sep 2026)
+Any card in Business analytics can be pinned to Home with the small house (`pinBtn`) in its heading
+row. `settings.homePins` holds the keys.
+- **The pinned card is the SAME card, not a summary of it** — the same builder, the same figures,
+  so the two screens can never disagree. A second, smaller rendering of "days to payment" that
+  rounds differently or uses a different window is the failure this design exists to prevent, and
+  `npm run test:pins` asserts the two renderings are character-for-character equal for all of them.
+- **`ANA_PIN_MAX` is 4.** Home is the screen you glance at, and every pinned card is real work on
+  the app's hottest render. A fifth is refused with a message, never silently swapped in.
+- **`homePins()` repairs on read, like `homeOrder()`** — a key this build does not have is dropped,
+  so an old backup can never put a card on Home that no longer exists. In settings rather than
+  localStorage (so a pin travels in a backup), and nothing is stored while nothing is pinned.
+- **`plusLocked("trends")` or `feat("trends")` off ⇒ `pinBtn()` returns nothing and the Home block
+  is empty.** A control that pins a card the reader cannot open is not a control; the locked view's
+  free funnel is a shopfront, not a pinnable card.
+- **Toggling from Trends repaints the buttons (`paintPins`), never redraws the section** — a pin
+  tapped halfway down must not throw the reader back to the top. Home redraws itself with
+  `keepScroll`, because the card being unpinned is the one on screen.
+- `homePinSheet()` is the picker behind the empty card's button: grouped by section, staged until
+  **Done**, one `commit()`. Readiness is deliberately **not** shown — working out whether all
+  twenty-two have enough data means running all twenty-two, and a card that is waiting says so in
+  its own words once it is on the screen.
 
 ### The four sections
 `TREND_SEGS` / `trendSeg`, with its own segment bar inside the view, and above the cards a **headline strip** (`trendsHeadline`) carrying one real figure from each of the three sections you are *not* reading, each tapping through to it — navigation as much as decoration. Same contract as everything else here: `trendsHeadFig()` returns `null` rather than invent one, the tile is left out, and if none of the three is ready the strip does not render. **Sections are built only when opened** — `clientAttendance()` across a whole client list and `anaCohorts()` are both real work, and changing section redraws `#trbody` only, never `go()`, so the reader is not thrown to the top of Practice.
