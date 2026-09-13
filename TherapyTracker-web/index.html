@@ -1004,10 +1004,27 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 .aged .agbody{padding:2px 9px 6px}
 
 /* ===== cancellation policy rows ===== */
-.cxrow{display:flex;align-items:center;gap:7px;margin:0 0 8px}
-.cxrow input{width:76px;margin:0;padding:9px 10px;text-align:right}
+/* Two number inputs and three labels do not fit one row of a 270px card on a phone. As a plain
+   flex row the inputs were the only things that could shrink, so they went from 76px to 41px and
+   clipped the digits inside them - a control whose value you cannot read. Each half is now a
+   phrase that wraps as a unit ("at least 24 hrs notice" / "charge 100%") and the inputs refuse to
+   shrink at all: a second line is always better than an unreadable number. */
+.cxrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 9px;margin:0 0 12px}
+/* Each rule is two lines on a phone, so without this the halves of two rules sit at the same
+   spacing as the halves of one and read as four separate settings. */
+.cxrow+.cxrow{border-top:1px solid var(--line);padding-top:12px}
+.cxpart{display:inline-flex;align-items:center;gap:6px}
+/* Written in the base selector's shape on purpose. A plain `.cxrow input` loses to
+   `input:not([type=checkbox]):not([type=radio]){width:100%}` on source order, so the 76px this
+   rule used to ask for never applied at all - the control was a 100%-wide flex item squeezed down
+   to whatever was left, which is exactly how the digits came to be clipped. Same trap, and the
+   same fix, as the date/time block further up. */
+.cxrow input:not([type=checkbox]):not([type=radio]){width:74px;flex:none;margin:0;padding:9px 10px;text-align:right}
 .cxrow .cxl{font-size:13px;color:var(--muted);white-space:nowrap}
-.cxrow .rmx{margin-left:auto}
+.cxrow .rmx{margin-left:auto;flex:none;background:none;border:0;cursor:pointer;
+  color:var(--muted);padding:7px;border-radius:10px;line-height:0}
+.cxrow .rmx .gi{width:15px;height:15px}
+.cxrow .rmx:hover{color:var(--bad);background:color-mix(in srgb,var(--bad) 12%,transparent)}
 
 /* ===== swipeable session rows ===== */
 .swrow{position:relative;overflow:hidden;border-radius:10px}
@@ -1176,6 +1193,13 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
    in for a screen not bought yet, and the picture on the redemption sheet. The ring is a
    ::before rather than a gradient border, because .card is a translucent glass surface and a
    border-box gradient would have to repaint the fill and lose the blur behind it. */
+/* `.plusgate` above sets `padding:4px 2px 2px` for a paid SURFACE dropped inside a sheet that
+   already has its own padding. On a `.card` that same rule beat `.card{padding:18px}` on source
+   order - equal specificity, later in the file - so a gate card had two pixels of side padding and
+   its full-width button sat hard against the gold ring, which read as a second outline on the
+   button rather than as a frame around it. Put the card's own padding back; the ring is drawn by
+   `::before`/`::after` at `left:0;right:0` and is unaffected. */
+.card.plusgate{padding:20px 18px 18px}
 .card.plusgate{position:relative;overflow:hidden;
   border-color:color-mix(in srgb,var(--tg3) 40%,var(--hair));
   box-shadow:var(--shadow),inset 0 1px 0 var(--hair),0 0 15px -3px var(--tgglow)}
@@ -1260,13 +1284,34 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 td .taxmask{font-size:11.5px;padding:2px 7px;gap:4px;white-space:nowrap}
 td .taxmask .gi{width:12px;height:12px}
 .nv .taxmask.big{margin-top:2px}
+/* ===== The companion-app card (Settings › Data & backup) =====
+   GroundWork Notes is a whole second app, and the card that sets up the link between the two sat
+   in a stack of identical plain cards - the one thing on that screen nobody would guess was
+   there. It gets the brand's own wash and a mark, and it is the only card on the screen that
+   does. Deliberately NOT the gold gate treatment even though the sync is a paid feature: gold
+   means "this is being sold to you here", and what this card is doing is pointing at a sibling
+   product. The tap is still what asks for payment (see the tier tag on the button). */
+.card.companion{border-color:color-mix(in srgb,var(--brand) 45%,var(--hair));
+  background:color-mix(in srgb,var(--brand) 9%,var(--card));
+  box-shadow:var(--shadow),inset 0 1px 0 var(--hair),0 0 18px -8px color-mix(in srgb,var(--brand) 60%,transparent)}
+.compmark{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;
+  margin:0 0 10px;color:#fff;background:linear-gradient(135deg,var(--gs1),var(--gs2));
+  box-shadow:0 6px 14px -9px color-mix(in srgb,var(--brand) 90%,transparent)}
+.compmark .gi{width:20px;height:20px}
+.compeyebrow{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--brand-dark);margin:0 0 2px}
 /* The sneak peek: a locked card that still says something true about THIS practice. Left-aligned
    inside a centred gate, because these are rows of fact rather than sales copy. */
 .plusgate.peek{text-align:left}
 .plusgate.peek h2,.plusgate.peek>.small{text-align:center}
 .plusgate.peek .plmark{margin-bottom:10px}
-.peekrow{display:flex;gap:12px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--line)}
-.peekfig{flex:none;min-width:74px;font-weight:800;font-size:15px;color:var(--brand-dark);
+/* `baseline`, not `flex-start`: the figure is 15px and the heading beside it 13.5px, so aligning
+   their boxes left the number sitting a pixel high against the words it belongs to. Sharing a
+   baseline is what makes the pair read as one line. The figure is centred in its column because
+   the column is a fixed width and the figures are not - "1 client" and "£79.48" ranged left
+   against a 74px column look like two different indents. */
+.peekrow{display:flex;gap:12px;align-items:baseline;padding:11px 0;border-top:1px solid var(--line)}
+.peekfig{flex:none;min-width:78px;text-align:center;font-weight:800;font-size:15px;color:var(--brand-dark);
   font-variant-numeric:tabular-nums;line-height:1.35}
 .peekh{font-size:13.5px;font-weight:700;color:var(--ink);line-height:1.35}
 .peeks{font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.45}
@@ -4873,28 +4918,50 @@ function anaCapacity(){
     spare:Math.max(0,Math.round((full-avg)*10)/10)};
 }
 
-/* SLOT RELIABILITY - which day-and-time slots actually hold.
-   A slot that is booked ten times and missed four is not a slot that works, and the fix is
-   usually to stop offering it rather than to chase the client. */
+/* YOUR REGULAR SLOTS - which days and hours the working week is actually built on.
+   This was "Slot reliability", a bar per slot showing the share of its bookings that went ahead,
+   and the trouble with that question is that the answer is nearly always "almost all of them"
+   (Sep 2026). A slot is only in the records BECAUSE it was booked, and a booked session is kept
+   far more often than not, so every practice read as a wall of 90-somethings sorted into an order
+   nobody could act on. The fact worth knowing is the shape of the week - where the hours sit, how
+   much of the practice rides on one hour of one day, and which day carries the most. Reliability
+   has not been dropped, because a slot that genuinely leaks is worth naming; it is a footnote
+   under the picture rather than the picture. */
 function anaSlots(){
   const t=today(), from=addDays(t,-183);
   const rows=anaDer().filter(x=>x.dt>=from&&x.dt<=t&&x.s.time);
-  const by={};
+  const by={},byDay={};
   rows.forEach(x=>{
     const day=x.dt.getDay(), hh=String(x.s.time).slice(0,2);
     const k=day+"|"+hh;
     const g=by[k]||(by[k]={day,hh,n:0,attended:0,missed:0});
     g.n++; if(isCancelled(x.s))g.missed++; else g.attended++;
+    byDay[day]=(byDay[day]||0)+1;
   });
+  const total=rows.length;
   const slots=Object.keys(by).map(k=>by[k]).filter(g=>g.n>=3)
     .map(g=>Object.assign(g,{pct:Math.round(g.attended/g.n*100),
+      /* Share of every timed booking in the window - what the bars compare, and the reason a
+         slot used twice a week reads differently from one used twice a term. */
+      share:total?Math.round(g.n/total*100):0,
       /* SLOT_DAYS holds lowercase keys for the schedule matcher, not display text - the
          readable name is in SLOT_DAY_NAMES, keyed by those. */
       label:SLOT_DAY_NAMES[SLOT_DAYS[g.day]]+" "+g.hh+":00"}))
     .sort((a,b)=>b.n-a.n||b.pct-a.pct);
   if(slots.length<2)return {ready:false,need:"A few repeated slots. Log six months of sessions and the pattern appears."};
-  const weak=slots.filter(s=>s.pct<80).sort((a,b)=>a.pct-b.pct);
-  return {ready:true,slots,weak,total:rows.length};
+  /* Days count EVERY timed booking, not only the ones in a repeating slot: "which day am I
+     busiest" is a question about the day, and a one-off on a Thursday still happened. */
+  const days=Object.keys(byDay).map(d=>({day:+d,n:byDay[d],share:total?Math.round(byDay[d]/total*100):0,
+      label:SLOT_DAY_NAMES[SLOT_DAYS[+d]]})).sort((a,b)=>b.n-a.n);
+  const inSlots=slots.reduce((a,x)=>a+x.n,0);
+  const top3=slots.slice(0,3).reduce((a,x)=>a+x.n,0);
+  const weak=slots.filter(x=>x.pct<80).sort((a,b)=>a.pct-b.pct);
+  return {ready:true,slots,weak,days,total,busiest:slots[0],busiestDay:days[0],
+    /* How much of the practice rides on very little of the week. Concentration is a fact about
+       risk in the diary, not a compliment about consistency - losing one regular Tuesday client
+       is a different size of event at 40% than at 12%. */
+    top3Pct:total?Math.round(top3/total*100):0,
+    regularPct:total?Math.round(inSlots/total*100):0};
 }
 
 /* WEEKS ACTUALLY WORKED - sole traders price as though they work 48 weeks a year.
@@ -5964,17 +6031,28 @@ function acCapacity(cx,pin){
 }
 function acSlots(cx,pin){
   const sl=anaSlots();
-  return {html: sl.ready
-    ? anaCard("Slot reliability","ana-slots",
-        sl.slots.slice(0,10).map(s=>anaBarRow(
-          '<b>'+esc(s.label)+'</b> <span class="muted">· '+plural(s.n,"booking")+'</span>',
-          s.pct+'% went ahead'+(s.missed?' · '+s.missed+' missed':''),
-          s.pct, s.pct<70?"warnbar":"")).join("")+
-        (sl.weak.length
-          ? '<p class="small muted" style="margin:10px 0 0"><b>'+esc(sl.weak[0].label)+'</b> is your least reliable slot at '+sl.weak[0].pct+'%. Usually the answer is to stop offering it rather than to keep chasing whoever is in it.</p>'
-          : '<p class="small muted" style="margin:10px 0 0">Every regular slot holds above 80%. That is unusually good.</p>'),
-        {lead:"Slots used at least three times in the last six months.",pin:pin})
-    : anaWaiting("Slot reliability","ana-slots",sl.need,pin)};
+  if(!sl.ready)return {html:anaWaiting("Your regular slots","ana-slots",sl.need,pin)};
+  /* Bars are drawn against the BUSIEST slot rather than against 100%. A share is a share of the
+     whole week, so even a dominant slot rarely clears 20% and an honest 0-100 axis would draw ten
+     stubs of almost the same length - the comparison the reader came for is between the slots. */
+  const top=sl.busiest.share||1;
+  return {html: anaCard("Your regular slots","ana-slots",
+    sl.slots.slice(0,10).map(x=>anaBarRow(
+      '<b>'+esc(x.label)+'</b>',
+      plural(x.n,"session")+' · '+x.share+'% of your week'+(x.pct<80?' · <span style="color:var(--warn)">'+x.missed+' missed</span>':''),
+      Math.round(x.share/top*100), x.pct<80?"warnbar":"")).join("")+
+    '<p class="small muted" style="margin:10px 0 0">Your week is built on <b>'+esc(sl.busiest.label)+'</b>, and '+
+      esc(sl.busiestDay.label)+' carries the most overall at '+sl.busiestDay.share+'% of everything you book. '+
+      'Your top three slots are '+sl.top3Pct+'% of it'+
+      (sl.top3Pct>=45?' - enough that losing one of those clients would be felt.':'.')+'</p>'+
+    /* The leaky slot is named with its booking count, because it is often not one of the ten
+       listed above - the list is ordered by size and a slot that keeps falling over is usually a
+       small one. Without the count the reader is being told about a row they cannot see. */
+    (sl.weak.length&&sl.weak[0].n>=5
+      ? '<p class="small muted" style="margin:6px 0 0"><b>'+esc(sl.weak[0].label)+'</b> is the one that leaks: '+
+        sl.weak[0].pct+'% of its '+plural(sl.weak[0].n,"booking")+' go ahead. Usually the answer is to stop offering that hour rather than to keep chasing whoever is in it.</p>'
+      : ''),
+    {lead:"Every day and hour you have used at least three times in the last six months, biggest first.",pin:pin})};
 }
 function acWeeksWorked(cx,pin){
   const ww=anaWeeksWorked();
@@ -6306,7 +6384,7 @@ const ANA_CARDS=[
   {k:"missed",     seg:"money",  n:"Missed sessions",           d:"Cancellations, DNAs and the fees not charged", b:acMissed},
   {k:"hourly",     seg:"time",   n:"Effective hourly rate",     d:"Everything billed over every hour it took", b:acHourlyRate},
   {k:"capacity",   seg:"time",   n:"How full your weeks are",   d:"Average sessions a week against a full one", b:acCapacity},
-  {k:"slots",      seg:"time",   n:"Slot reliability",          d:"Which times of the week actually hold", b:acSlots},
+  {k:"slots",      seg:"time",   n:"Your regular slots",        d:"The days and hours your week is actually built on", b:acSlots},
   {k:"weeks",      seg:"time",   n:"Weeks actually worked",     d:"Weeks with sessions, weeks off, longest break", b:acWeeksWorked},
   {k:"supcadence", seg:"you",    n:"Supervision cadence",       d:"Clinical hours per supervision, against 1:6", b:acSupervisionCadence},
   {k:"load",       seg:"you",    n:"Your load",                 d:"Heavy days and back-to-back runs", b:acLoad},
@@ -6434,13 +6512,13 @@ VIEWS.practice=function(){
               missedPk.length
                 /* The Money tab's blurred tile promises "where this year lands" is behind the
                    gate, and this row is where that promise is kept - name it first. */
-                ? "in fees you chose not to charge on "+plural(missedPk.length,"missed session")+". Also: projections of your earnings this year, seasonality, your worst month, and days to payment."
-                : "Projections of your earnings this year - plus seasonality, your worst and best month, days to payment and what the practice costs to run.")+
+                ? "in fees you chose not to charge on "+plural(missedPk.length,"missed session")+". Also: where this year lands on three bases, seasonality, your worst month, and days to payment."
+                : "Where this year lands on three bases - plus seasonality, your worst and best month, days to payment and what the practice costs to run.")+
             peek("Time · what an hour is really worth",
               hrPk.ready?gbp(hrPk.rate):"-",
               hrPk.ready
-                ? "an hour once admin and supervision are counted, against "+gbp(hrPk.perSession)+" a session. Also: how full your weeks are and which slots hold."
-                : "Your effective hourly rate, how full your weeks are, which slots reliably hold, and how many weeks you actually worked.")+
+                ? "an hour once admin and supervision are counted, against "+gbp(hrPk.perSession)+" a session. Also: how full your weeks are and the days and hours your week is built on."
+                : "Your effective hourly rate, how full your weeks are, the days and hours your week is built on, and how many weeks you actually worked.")+
             peek("You · supervision, load and CPD",
               wwPk.ready?wwPk.worked+" wks":(capPk.ready?capPk.avg+"/wk":"-"),
               wwPk.ready
@@ -8430,10 +8508,11 @@ infoDef("ana-capacity","How full your weeks are",
   '<p class="small">Average sessions a week over the last six months, against a full week.</p>'+
   '<p class="small">If you have told the app what a full week looks like for you (<b>Settings › Your practice</b>), that is what it measures against. If you have not, it uses the <b>busiest week you actually worked</b> - a fact rather than a target, and it says which it used.</p>'+
   '<p class="small">Running consistently near full is the moment to raise fees rather than take more on. Running well under it, with the diary open, is a marketing question rather than a pricing one.</p>');
-infoDef("ana-slots","Slot reliability",
-  '<p class="small">Every day-and-hour you have used at least three times in the last six months, and how often those sessions actually went ahead.</p>'+
-  '<p class="small">A slot that is booked ten times and missed four is not a slot that works. Usually the fix is to stop offering it - late Friday and the first hour of Monday are the usual suspects - rather than to keep chasing whoever is in it.</p>'+
-  '<p class="small muted">Cancellations and DNAs both count as missed here, whatever you charged for them.</p>');
+infoDef("ana-slots","Your regular slots",
+  '<p class="small">Every day-and-hour you have used at least three times in the last six months, biggest first, with the share of your bookings that sits in each.</p>'+
+  '<p class="small">The bars are drawn against your <b>busiest</b> slot rather than against a hundred per cent - the point is how the slots compare with each other, and no single hour of one day is ever much of a whole week on its own. The percentage beside each one is the true share.</p>'+
+  '<p class="small">What to do with it: the shape of the week is what you are protecting when somebody asks to move, and the top-three figure is how exposed you are. Three slots carrying half your practice means one client leaving is a bad month, not a rounding error.</p>'+
+  '<p class="small muted">A slot only appears here because it was booked, and booked sessions are kept far more often than not - so this used to be a card of near-identical reliability percentages that told nobody anything. A slot is now only singled out for reliability when under 80% of it goes ahead <b>and</b> it has been booked at least five times - one in three of a slot used three times is not a pattern worth dropping an hour over. Cancellations and DNAs both count as missed, whatever you charged for them.</p>');
 infoDef("ana-weeks","Weeks actually worked",
   '<p class="small">How many weeks in the last year had at least one session in them.</p>'+
   '<p class="small">Sole traders price as though they work 46 to 48 weeks. Almost nobody does, once illness, holidays, quiet spells and Christmas are counted - and the difference between the year you priced for and the year you worked is a large part of why a practice can feel busy and still be tight.</p>');
@@ -8979,20 +9058,13 @@ function drawNow(host){
 
   /* Same source, same words as the pot card on Pot & payments - that screen is the detail home
      and this is a summary of it, so the two cannot tell different stories. */
-  /* The next bill belongs in the same breath as the surplus. The pot's floor is tax ALREADY
-     EARNED, so for much of a year it can sit near nothing while a real payment is weeks away -
-     and without this line the summary said "that is yours to spend" about money HMRC has already
-     asked for, while Pot & payments, which does carry byNext, said the opposite. */
-  const nextLine=(pot.next&&pot.vsNext!=null)
-    ?'<div class="small" style="margin-top:6px;font-weight:600">By '+fmtD(pot.next.due)+' you need '+money(pot.byNext)+' - '+
-      (pot.vsNext>=0?'you are '+money(pot.vsNext)+' ahead of that already.':money(-pot.vsNext)+' still to put aside.')+'</div>':'';
-  const verdict=pot.balance==null?''
-    :'<div class="vmsg '+((pot.vsFloor<0||pot.vsNext<0)?'err':pot.over<0?'warn':'ok')+'" style="margin-top:12px">'+
-      (pot.vsFloor<0?'You have '+money(pot.balance)+' put by, '+money(-pot.vsFloor)+' short of the tax you have already earned.'
-       :pot.over<0?'You have '+money(pot.balance)+' put by - enough for the tax so far, '+money(-pot.over)+' short of your buffer.'
-       :pot.vsNext<0?'You have '+money(pot.balance)+' put by - enough for the tax earned so far, but not for the next bill.'
-       :'You have '+money(pot.balance)+' put by - '+money(pot.over)+' more than you need today. That is yours to spend.')+
-      nextLine+'</div>';
+  /* The "you have X put by" verdict, and the next-bill line nested inside it, both went with the
+     balance field they were built on (Sep 2026 - see the pot card on Pot & payments). Both were
+     gated on `pot.vsNext`, which is null unless a balance was recorded, so neither survives its
+     removal; and the reason the next bill had to be said here - that the pot's floor is tax
+     ALREADY EARNED and can sit near nothing while a real payment is weeks away - is answered by
+     the Next payment card directly below, which carries the same amount and the same date. */
+  const verdict='';
   const potCard='<div class="card nowcard" id="nowPot">'+
     '<div class="row" style="justify-content:space-between;align-items:baseline;gap:8px">'+
       '<h2 style="margin:0">Keep in your pot</h2><span class="small muted" style="white-space:nowrap">pot &amp; payments ›</span></div>'+
@@ -9711,11 +9783,7 @@ function drawPayments(host){
       bufOpts.map(pc=>'<button data-b="'+pc+'" class="'+(cfg.bufferPct===pc?"on":"")+'">'+pc+'%</button>').join("")+'</div>'+
     '<div class="row mt" style="gap:8px;align-items:center"><span class="small muted">or set your own</span>'+
       '<input type="number" min="0" max="100" step="1" id="bufIn" value="'+esc(cfg.bufferPct)+'" style="max-width:110px;margin:0"></div>'+
-    '<label style="margin-top:16px">What’s actually in your tax account?</label>'+
-    '<div class="row" style="gap:8px;align-items:center">'+
-      '<input type="number" min="0" step="1" id="potBal" placeholder="Not recorded" value="'+(cfg.balance==null?"":esc(cfg.balance))+'" style="margin:0">'+
-      '<button class="btn sec sm" id="potBalSave">Save</button></div>'+
-    '<p class="prev">'+(cfg.balanceAt?'Last updated '+fmtD(cfg.balanceAt)+'. ':'')+'Optional - it only ever tells you where you stand. Nothing here moves any money.</p>'+
+    '<p class="prev">A buffer is what makes the rest of your income genuinely yours. '+infoLink("potbuffer","How much is enough")+'</p>'+
     '</div>';
   const potCard=potLocked?potLockedCard:'<div class="card" data-coach="pot"><h2>Your tax pot</h2>'+
     '<p class="small muted">What to keep back so the bill is already covered when it lands - and, just as importantly, what is <i>not</i> tax money and is yours to spend.</p>'+
@@ -9736,21 +9804,13 @@ function drawPayments(host){
     '<div class="row mt" style="gap:8px;align-items:center"><span class="small muted">or set your own</span>'+
       '<input type="number" min="0" max="100" step="1" id="bufIn" value="'+esc(cfg.bufferPct)+'" style="max-width:110px;margin:0"></div>'+
     '<p class="prev">A buffer is what makes the rest of your income genuinely yours. '+infoLink("potbuffer","How much is enough")+'</p>'+
-    '<label style="margin-top:16px">What’s actually in your tax account?</label>'+
-    '<div class="row" style="gap:8px;align-items:center">'+
-      '<input type="number" min="0" step="1" id="potBal" placeholder="Not recorded" value="'+(cfg.balance==null?"":esc(cfg.balance))+'" style="margin:0">'+
-      '<button class="btn sec sm" id="potBalSave">Save</button></div>'+
-    '<p class="prev">'+(cfg.balanceAt?'Last updated '+fmtD(cfg.balanceAt)+'. ':'')+'Optional - it only ever tells you where you stand. Nothing here moves any money.</p>'+
-    (pot.balance!=null
-      ? '<div class="vmsg '+(pot.vsFloor<0?'err':pot.over<0?'warn':'ok')+'" style="margin-top:12px">'+
-        (pot.vsFloor<0
-          ? '⚠️ <b>'+money(-pot.vsFloor)+' short.</b> You have '+money(pot.balance)+' put by against '+money(pot.floor)+' of tax you have already earned - before any buffer.'
-          : pot.over<0
-          ? '<b>Covered, but no buffer left.</b> '+money(pot.balance)+' put by covers the '+money(pot.floor)+' you owe on what you have earned; you are '+money(-pot.over)+' below your own '+cfg.bufferPct+'% cushion.'
-          : '✓ <b>'+money(pot.over)+' more than you need.</b> '+money(pot.balance)+' put by against a target of '+money(pot.target)+', buffer included. That surplus is not tax money.')+
-        (pot.next&&pot.vsNext!=null?'<div class="small" style="margin-top:6px;font-weight:600">By '+fmtD(pot.next.due)+' you need '+money(pot.byNext)+' - '+(pot.vsNext>=0?'you are '+money(pot.vsNext)+' ahead of that already.':money(-pot.vsNext)+' still to put aside.')+'</div>':'')+
-        '</div>'
-      : (pot.next?'<div class="vmsg ok" style="margin-top:12px">Next out: <b>'+money(pot.byNext)+'</b> by <b>'+fmtD(pot.next.due)+'</b>.</div>':''))+
+    /* "What's actually in your tax account?" was removed in Sep 2026. It was a figure the app
+       could never check, went stale the moment anything was paid in or out, and every sentence it
+       produced ("that surplus is not tax money") was only as true as the last time somebody
+       remembered to retype it. The target and the next bill are worked out from the records and
+       are the two numbers this card exists for. `taxPot()` still returns balance, over and vsFloor
+       from a stored figure - the engine is pure and tested, and it is the view that stopped asking. */
+    (pot.next?'<div class="vmsg ok" style="margin-top:12px">Next out: <b>'+money(pot.byNext)+'</b> by <b>'+fmtD(pot.next.due)+'</b>.</div>':'')+
     '<div class="acc-work" style="margin-top:10px"><div>At this rate '+esc(pot.ty)+'’s own tax comes to about <b>'+money(pot.projected)+'</b>, so the pot needs roughly <b>'+money(pot.yearEnd)+'</b> put by for it by 5 April '+(parseInt(pot.ty)+1)+'.</div>'+
       '<div class="small muted" style="margin-top:5px">Setting aside '+Math.round(pot.rate*100)+'% of every payment as it arrives gets you there without ever having to think about it again.</div></div>'+
     '</div>';
@@ -9811,13 +9871,6 @@ function drawPayments(host){
     await commit("Tax pot buffer: "+n+"%");go("tax",{keepScroll:true});};
   host.querySelectorAll("#bufSeg button").forEach(b=>b.onclick=()=>saveBuf(b.dataset.b));
   const bi=host.querySelector("#bufIn"); if(bi)bi.onchange=()=>saveBuf(bi.value);
-  const bs=host.querySelector("#potBalSave");
-  if(bs)bs.onclick=async()=>{const raw=host.querySelector("#potBal").value.trim();
-    const tp=settings().taxPot=settings().taxPot||{};
-    if(raw===""){delete tp.balance;delete tp.balanceAt;await commit("Tax pot balance cleared");toast("Cleared");}
-    else{const n=+raw; if(isNaN(n)||n<0){toast("Enter an amount");Sfx.error();return;}
-      tp.balance=n;tp.balanceAt=isoD(t);await commit("Tax pot balance: "+gbp(Math.round(n)));toast("Saved");Sfx.pop();}
-    go("tax",{keepScroll:true});};
 }
 /* Is this year running materially away from the instalments last year set? Only speaks up when
    the gap is both proportionally large and worth acting on in cash terms -- a nudge on a 30
@@ -10307,13 +10360,16 @@ function wireCancelRules(v){
   const draw=()=>{
     const w=rules().window.slice().sort((a,b)=>(+b.hoursBefore||0)-(+a.hoursBefore||0));
     host.innerHTML=w.length?w.map((r,i)=>
+      /* Two phrases rather than five loose items in a row: on a phone the second half drops to
+         its own line whole, instead of the inputs being squeezed until the digits clip. */
       '<div class="cxrow" data-i="'+i+'">'+
-        '<span class="cxl">at least</span>'+
-        '<input type="number" min="0" step="1" data-f="hoursBefore" value="'+(+r.hoursBefore||0)+'">'+
-        '<span class="cxl">hrs notice →</span>'+
-        '<input type="number" min="0" max="100" step="5" data-f="chargePct" value="'+(+r.chargePct||0)+'">'+
-        '<span class="cxl">%</span>'+
-        '<button class="rmx" data-x="'+i+'" title="Remove">✕</button>'+
+        '<span class="cxpart"><span class="cxl">at least</span>'+
+          '<input type="number" min="0" step="1" data-f="hoursBefore" value="'+(+r.hoursBefore||0)+'" aria-label="Hours of notice">'+
+          '<span class="cxl">hrs notice</span></span>'+
+        '<span class="cxpart"><span class="cxl">charge</span>'+
+          '<input type="number" min="0" max="100" step="5" data-f="chargePct" value="'+(+r.chargePct||0)+'" aria-label="Percentage charged">'+
+          '<span class="cxl">%</span></span>'+
+        '<button class="rmx" data-x="'+i+'" title="Remove" aria-label="Remove this notice period">'+gi("close")+'</button>'+
       '</div>').join("")
       :'<p class="small muted">No notice periods set - a late cancellation will be charged in full.</p>';
     host.innerHTML+='<p class="small muted mt">Read from most notice to least. '+infoDot("cancel-rules","How the notice periods work")+'</p>';
@@ -10618,8 +10674,9 @@ VIEWS.settings=function(){
        </div>
      </details>
    </div>
-   <div class="card" id="notesSyncCard">${cardHead("GroundWork Notes","notes-sync")}
-     <p class="small muted" style="margin:-2px 0 0">Sends the companion notes app how often you see each client. <b>Client codes and times only</b> - no names, no fees, nothing clinical.</p>
+   <div class="card companion" id="notesSyncCard"><div class="compmark">${gi("notes")}</div>
+     <p class="compeyebrow">Companion app</p>${cardHead("GroundWork Notes","notes-sync")}
+     <p class="small muted" style="margin:-2px 0 0">Where the notes themselves live. This sends it how often you see each client, so it knows what still needs writing up - <b>client codes and times only</b>, no names, no fees, nothing clinical.</p>
      <div class="row mt" style="flex-wrap:wrap;gap:8px">
        <button class="btn" id="rosterSync">↻ Sync schedules</button>
      </div>
@@ -10627,19 +10684,19 @@ VIEWS.settings=function(){
    </div>
    <div class="card" id="importCard">${cardHead("Import from a spreadsheet","sheet-import")}
      <p class="small muted" style="margin:-2px 0 0">Arriving from Excel, Numbers or Sheets? This <b>adds</b> to what you have - it never replaces it.</p>
-     <button class="btn sec full mt" id="impSheet">📥 Import old sessions…</button>
+     <button class="btn sec full mt" id="impSheet">${gi("import")} Import old sessions…</button>
    </div>
    <div class="card webonly" id="storageCard"><h2>Storage on this device</h2>
      <p class="small" id="stStatus" style="font-weight:600">Checking…</p>
      <p class="small muted" id="stHint"></p>
      <button class="btn sec mt" id="stAsk" style="display:none">Ask the browser to protect it</button>
    </div>
-   <div class="card" id="encCard">${cardHead("Encrypted backup 🔐","encrypted-backup-detail")}
+   <div class="card" id="encCard">${cardHead("Encrypted backup","encrypted-backup-detail")}
      <p class="small muted" style="margin:-2px 0 0">Protect backups with a passphrase. <b>Forget it and they cannot be opened.</b></p>
      <p class="small" id="encStatus" style="font-weight:600"></p>
      <div class="row mt" style="flex-wrap:wrap;gap:8px">
        <button class="btn sec" id="encSet"></button>
-       <button class="btn" id="encNow" style="display:none">🔐 Encrypt &amp; save now</button>
+       <button class="btn" id="encNow" style="display:none">${gi("key")} Encrypt &amp; save now</button>
        <button class="btn sec" id="encAuto" style="display:none">Choose auto-save file</button>
        <button class="btn ghost" id="encOff" style="display:none">Turn off</button>
      </div>
@@ -10878,7 +10935,8 @@ VIEWS.settings=function(){
       const h=on&&_db?await kvGet("encHandle"):null;
       st.textContent=on?("On - backups are encrypted."+(h?" Auto-save file set ✓":(window.showSaveFilePicker?" No auto-save file yet.":" (Auto-save unavailable on this device - use Encrypt & save.)"))):"Off - backups are plain .json.";
       st.style.color=on?"var(--good)":"var(--muted)";
-      setB.textContent=on?"Change passphrase":"🔐 Set a passphrase";
+      /* innerHTML, not textContent: the label carries a glyph. */
+      setB.innerHTML=on?"Change passphrase":gi("key")+" Set a passphrase";
       nowB.style.display=on?"inline-flex":"none";
       autoB.style.display=(on&&window.showSaveFilePicker)?"inline-flex":"none";
       offB.style.display=on?"inline-flex":"none";
