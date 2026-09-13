@@ -7,7 +7,7 @@
  "testData": {
   "profile": "winding-down",
   "anchor": "2026-09-05",
-  "describes": "Five and a half years, 30 clients, 28 of them finished — a practice winding down to two clients.",
+  "describes": "Five and a half years, 30 clients, 28 of them finished - a practice winding down to two clients.",
   "generatedBy": "scripts/make-test-data.mjs",
   "device": null
  },

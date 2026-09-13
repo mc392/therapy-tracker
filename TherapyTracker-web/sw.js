@@ -1,7 +1,7 @@
 /* Bumped for the GroundWork rename, then again for the new icon artwork: the manifest and the
    icons are all served cache-first, so without a new cache name an installed device keeps the old
    name and the old icon on its Home Screen. */
-const C="tt-v6";
+const C="tt-v7";
 /* The app shell must be precached at install time. The service worker does not control the
    navigation that registers it, so without this a first-time visitor who goes offline before
    their second visit gets nothing at all. */
@@ -15,8 +15,8 @@ const cacheable=r=>!!r&&r.ok&&r.status===200;
 self.addEventListener("install",e=>{
   e.waitUntil((async()=>{
     const c=await caches.open(C);
-    await c.addAll(SHELL);                                  // must succeed — this is the app
-    await Promise.all(STATIC.map(u=>c.add(u).catch(()=>{})));// nice to have — never block install
+    await c.addAll(SHELL);                                  // must succeed - this is the app
+    await Promise.all(STATIC.map(u=>c.add(u).catch(()=>{})));// nice to have - never block install
     await self.skipWaiting();
   })());
 });
@@ -47,7 +47,7 @@ self.addEventListener("fetch",e=>{
           e.waitUntil(caches.open(C).then(c=>c.put(req,copy)));
           return resp;
         }
-        // Reachable but broken (deploy blip, gateway error) — prefer a known-good cached app
+        // Reachable but broken (deploy blip, gateway error) - prefer a known-good cached app
         return (await shellFallback(req))||resp;
       }catch(err){
         const hit=await shellFallback(req);

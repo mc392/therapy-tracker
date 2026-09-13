@@ -6,7 +6,7 @@
  * WHY THIS EXISTS
  *   Everything in the native block is behind `Capacitor.isNativePlatform()`, so none of it runs
  *   in a browser and none of the existing harnesses touch a line of it. It is also the code that
- *   decides whether a therapist's records reach her iCloud Drive — the one part of this app that
+ *   decides whether a therapist's records reach her iCloud Drive - the one part of this app that
  *   fails silently by design (a background copy that toasted on every failure would be worse than
  *   one that does not). Written without an iPhone and shipped untested, "silently" is exactly what
  *   it would do.
@@ -18,7 +18,7 @@
  *   which is what lets the launch-time conflict check be tested at all. Nothing in
  *   TherapyTracker-web is stubbed, patched or copied: the app under test is the app.
  *
- *   The Swift half is NOT covered — there is no compiler on a build machine. What is asserted
+ *   The Swift half is NOT covered - there is no compiler on a build machine. What is asserted
  *   here is the contract between the two: which methods are called, in what order, and what the
  *   web layer does with each answer. `npm run check:drift` asserts the plugin declares them.
  */
@@ -60,7 +60,7 @@ function serve() {
 
 /* ---------------- the fake phone ----------------
    Serialised into the page before index.html's own scripts run. The folder and the Documents
-   directory live in localStorage so a reload — which is how the launch check is reached — finds
+   directory live in localStorage so a reload - which is how the launch check is reached - finds
    them exactly where a real device would. */
 function fakePhone() {
   const K = "__phone";
@@ -118,7 +118,7 @@ function fakePhone() {
       phone.nextPick = null; flush();
       return Object.assign({ picked: true }, describe(a));
     },
-    /* Drops the bookmark. The folder and everything in it stay exactly where they are — that is
+    /* Drops the bookmark. The folder and everything in it stay exactly where they are - that is
        the user's folder, and this app has no business deleting from it. */
     folderForget: async () => { note("folderForget"); phone = load() || phone;
       if (phone.folder) phone.folder.bookmarked = false; flush(); return { set: false }; },
@@ -167,11 +167,22 @@ function fakePhone() {
     }
   };
 
+  /* The calendar screen and the share sheet, both recording what they were handed so a test
+     can ask which one an export actually reached. `window.__ics.mode` drives the failure paths:
+     "ok" presents, "none" is iOS reporting it had no preview, "throw" is a reject, and
+     "missing" removes the method altogether - an older build of the app. */
+  window.__ics = { mode: "ok", opened: [], shared: [] };
+  GroundWorkNative.openCalendarFile = async ({ text, filename }) => {
+    if (window.__ics.mode === "throw") throw new Error("no view controller");
+    window.__ics.opened.push({ filename, text });
+    return { shown: window.__ics.mode === "ok" };
+  };
+
   window.Capacitor = {
     isNativePlatform: () => true,
     Plugins: {
       GroundWorkNative, Filesystem,
-      Share: { share: async () => ({}) },
+      Share: { share: async (a) => { window.__ics.shared.push(a && a.title); return {}; } },
       SplashScreen: { hide: async () => {} },
       LocalNotifications: {
         checkPermissions: async () => ({ display: "denied" }),
@@ -194,7 +205,7 @@ const SETTLE = 2900;   /* the folder write is debounced 2s behind commit() */
 
 /* `dismiss` is only for the very first launch, which lands in the setup wizard. On any later
    launch it must stay off: closing the sheet here races the folder question that checkFolder()
-   opens a moment after S is ready, and shuts it — which looks exactly like the app never asking. */
+   opens a moment after S is ready, and shuts it - which looks exactly like the app never asking. */
 async function bootApp(page, url, dismiss) {
   await page.goto(url, { waitUntil: "load" });
   await page.waitForFunction(() => typeof S !== "undefined" && S && Array.isArray(S.sessions), null, { timeout: 20000 });
@@ -256,7 +267,7 @@ async function main() {
   page.on("dialog", (d) => { dialogs.push(d.message()); d.dismiss().catch(() => {}); });
 
   await bootApp(page, url, true);
-  /* Not now, thank you — the one-time offer is tested on its own at the end. */
+  /* Not now, thank you - the one-time offer is tested on its own at the end. */
   await page.evaluate(() => localStorage.setItem("tt_folder_asked", "1"));
   await seed(page);
 
@@ -447,7 +458,7 @@ async function main() {
     localNag);
   st = await state(page);
   check(!!(st.folder && st.folder.files["GroundWork records.json"]), "folder.local.write",
-    "a local folder is still written to — it just does not answer the reminder");
+    "a local folder is still written to - it just does not answer the reminder");
 
   /* ---- 9. Stopping leaves the user's files where they are ---- */
   const filesBefore = Object.keys(st.folder.files).length;
@@ -459,7 +470,7 @@ async function main() {
   await page.waitForTimeout(SETTLE);
   st = await state(page);
   check(st.folder && Object.keys(st.folder.files).length === filesBefore, "forget.keepsFiles",
-    "stopping deletes nothing from the folder — those files are the user's",
+    "stopping deletes nothing from the folder - those files are the user's",
     st.folder && Object.keys(st.folder.files).length);
   check(!!st.docs["GroundWork auto-backup.json"], "forget.fallsBack",
     "and the copy in the app's own Documents takes over again", Object.keys(st.docs));
@@ -471,6 +482,46 @@ async function main() {
   check(offered, "offer.once", "somebody with records and no folder is offered one, once");
   const askedFlag = await page.evaluate(() => localStorage.getItem("tt_folder_asked"));
   check(askedFlag === "1", "offer.remembered", "and is not asked again whatever the answer", askedFlag);
+
+  /* ---- 11. A calendar file goes to the event screen, not the share sheet ----
+     The share sheet offers Save to Files, AirDrop and WhatsApp, none of which is Calendar, and
+     somebody who picks Save to Files is left holding a file with no way in. Every failure path
+     below must still end at the share sheet, though: a file the reader cannot reach at all is
+     worse than one behind an awkward sheet. */
+  const runExport = (name, type, mode) => page.evaluate(([n2, t2, m2]) => {
+    window.__ics.mode = m2;
+    window.__ics.opened = []; window.__ics.shared = [];
+    download(n2, "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", t2);
+    return new Promise((r) => setTimeout(() => r({
+      opened: window.__ics.opened.slice(), shared: window.__ics.shared.slice() }), 260));
+  }, [name, type, mode]);
+
+  let r = await runExport("groundwork-sessions-2026-09-13-to-2026-09-19.ics", "text/calendar", "ok");
+  check(r.opened.length === 1 && r.shared.length === 0, "ics.toEventScreen",
+    "an .ics opens iOS's own event screen and never reaches the share sheet", r);
+  check(r.opened[0] && /\.ics$/.test(r.opened[0].filename) && /BEGIN:VCALENDAR/.test(r.opened[0].text),
+    "ics.handsOverFile", "and is handed the real file, by name", r.opened[0] && r.opened[0].filename);
+
+  r = await runExport("groundwork-backup.json", "application/json", "ok");
+  check(r.opened.length === 0 && r.shared.length === 1, "ics.othersUnchanged",
+    "every other export still goes to the share sheet exactly as before", r);
+
+  r = await runExport("groundwork-sessions-2026-09-13.csv", "text/csv", "ok");
+  check(r.opened.length === 0 && r.shared.length === 1, "ics.csvUnchanged",
+    "a CSV is a document to file away and is untouched by this", r);
+
+  r = await runExport("x.ics", "text/calendar", "none");
+  check(r.opened.length === 1 && r.shared.length === 1, "ics.fallbackNoPreview",
+    "iOS reporting no preview falls back to the share sheet rather than doing nothing", r);
+
+  r = await runExport("x.ics", "text/calendar", "throw");
+  check(r.opened.length === 0 && r.shared.length === 1, "ics.fallbackThrow",
+    "a rejected call falls back to the share sheet", r);
+
+  await page.evaluate(() => { delete Capacitor.Plugins.GroundWorkNative.openCalendarFile; });
+  r = await runExport("x.ics", "text/calendar", "ok");
+  check(r.opened.length === 0 && r.shared.length === 1, "ics.fallbackOldBuild",
+    "a build whose plugin has no openCalendarFile falls back to the share sheet", r);
 
   check(consoleErrors.length === 0, "page.clean", "no uncaught error anywhere in the run", consoleErrors.slice(0, 4));
   check(dialogs.length === 0, "page.noAlerts", "nothing had to fall back to a native alert()", dialogs.slice(0, 4));

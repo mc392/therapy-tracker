@@ -1,4 +1,4 @@
-# GroundWork on iOS — the native wrapper
+# GroundWork on iOS - the native wrapper
 
 The iOS app is not a second GroundWork. It is the same `TherapyTracker-web/index.html`,
 running inside a Capacitor shell that adds the handful of things a browser tab cannot do.
@@ -24,7 +24,7 @@ wrapper can reach the web deploy. The PWA is unaffected by everything in this do
 
 ## The three rules that stop the two builds drifting apart
 
-**1. There is exactly one copy of the app.** `webDir` is `TherapyTracker-web` — the live
+**1. There is exactly one copy of the app.** `webDir` is `TherapyTracker-web` - the live
 folder, not a snapshot of it. `ios/App/App/public/` is a build output: gitignored, deleted
 and rewritten by every `npm run sync`. A stale copy cannot be committed because no copy is
 ever committed.
@@ -37,7 +37,7 @@ if(!(CAP && CAP.isNativePlatform && CAP.isNativePlatform())) return;   /* web: n
 ```
 
 In a browser that IIFE returns on its first statement. It then *wraps* functions the app
-already has — `download()`, `printReceipt()`, `VIEWS.settings` — rather than restating any
+already has - `download()`, `printReceipt()`, `VIEWS.settings` - rather than restating any
 of their logic, so a change to an export or a receipt is picked up by the iOS build for
 free. Verified: on the web `window.download` is untouched, `VIEWS.settings` is unwrapped,
 `window.Capacitor` is undefined and no lock overlay exists in the DOM.
@@ -45,7 +45,7 @@ free. Verified: on the web `window.download` is untouched, `VIEWS.settings` is u
 **3. The seams are asserted.** `npm run check` fails the build if any name the native layer
 reaches for has been renamed, if the `isNativePlatform()` guard is removed, if a second
 `index.html` appears, or if the custom plugin falls out of the Xcode target or the
-registration list. Drift here is silent otherwise — rename `download()` and the web app
+registration list. Drift here is silent otherwise - rename `download()` and the web app
 keeps working perfectly while the iOS share sheet just stops appearing.
 
 ## Commands
@@ -56,7 +56,7 @@ npm run sync    # copy web assets, re-add and re-register the plugin, install ar
 npm run ios     # check, sync, then open Xcode
 ```
 
-A fresh clone has no app icon or launch image until the first `npm run sync` — the six PNGs
+A fresh clone has no app icon or launch image until the first `npm run sync` - the six PNGs
 in the asset catalog are 9MB of copies of two files already in `icon-ideas/groundwork/`, so
 they are gitignored and regenerated rather than committed. Sync before you build.
 
@@ -70,9 +70,10 @@ the copied bundle (5.8MB that has no business in an app binary).
 
 | | What it replaces on the web | Where |
 |---|---|---|
-| **Face ID / Touch ID lock** | nothing — the PWA has no lock at all | custom Swift plugin |
+| **Face ID / Touch ID lock** | nothing - the PWA has no lock at all | custom Swift plugin |
 | **Daily reminders** | the Attention feed, which cannot speak while the app is shut | `@capacitor/local-notifications` |
 | **Share sheet for exports** | `<a download>`, which does nothing in a WKWebView | `@capacitor/filesystem` + `@capacitor/share` |
+| **The "Add All" event screen** | the share sheet, which offers everything except Calendar | custom Swift plugin |
 | **Receipts as real PDFs** | `window.print()`, a no-op in a WKWebView | custom Swift plugin |
 | **The records folder** | the File System Access API, which iOS does not have | custom Swift plugin |
 | **Automatic backups** | the same, for anyone with no folder chosen | `@capacitor/filesystem` |
@@ -87,11 +88,53 @@ localStorage, not in `S`. `S` travels in backups, and restoring a backup onto a 
 must not silently switch that phone's lock off, tell it that a copy it has never written was
 saved five minutes ago, or point it at a folder it has no permission to open.
 
+## Calendar files open the event screen, not the share sheet (Sep 2026)
+
+`download()` is wrapped once for every export, and an `.ics` is the single file that does not
+want what that wrapping gives. Everything else here is a document to put somewhere. A calendar
+file is a **list of events to accept**, and iOS already has the screen for it - the one Safari
+shows when you tap a downloaded `.ics`, headed *2 Events* with an **Add All** button.
+
+Handing it to `UIActivityViewController` instead offered Save to Files, AirDrop, Messages and
+WhatsApp, none of which is Calendar. The reader who picked Save to Files was then holding a file
+in a folder with no obvious way in - and the web build, going through Safari, had the good screen
+all along. The iPhone app was the worse of the two for the one export whose entire purpose is
+landing in a calendar.
+
+- **`openCalendarFile`** writes the text to `temporaryDirectory` and presents
+  `UIDocumentInteractionController.presentPreview`, which is the Quick Look route Safari itself
+  takes. No calendar permission is asked for and none is needed: the app never reads or writes
+  the user's calendar, it hands iOS a file and iOS asks the questions.
+- **The branch is on the FILE, not the call site** (`isCalendarFile` tests the `.ics` extension
+  or a `text/calendar` type), so the session button and both calendar windows are covered once
+  and any future `.ics` is covered for free.
+- **Every failure path still ends at the share sheet.** There are three real ones and all three
+  are tested: an older build of the app whose plugin has no `openCalendarFile` at all, a reject,
+  and `{shown:false}` - iOS saying it had no preview to offer. A file the reader cannot reach at
+  all is worse than one behind an awkward sheet, so none of them may end in nothing happening.
+- **`sanitise()` grew an `ext` argument** for this. It forced `.pdf` onto every name, because the
+  receipt path was its only caller for a year. The extension is load-bearing here - it is what
+  tells Quick Look to hand the file to Calendar rather than showing it as text.
+- **`check-drift.mjs` asserts both halves**, the same shape as the records folder and StoreKit:
+  drop the Swift method and the web layer's guard quietly falls back to the share sheet, so
+  nothing fails, nothing errors, and the feature has simply reverted to the behaviour it was
+  built to replace. `npm run test:folder` drives the routing against a fake Capacitor - the
+  Swift itself has never been compiled, same caveat as everything else here.
+
+**What this does NOT fix: "Add All" does not apply UPDATES.** Re-exporting a session that is
+already in the calendar updates it only when the reader taps into that individual event in the
+preview; the bulk Add All button adds rather than reconciles. That is Apple's importer, it is
+identical on the web build, and no change to the file controls it - the UID and rising `SEQUENCE`
+are already what the format asks for. The only way to guarantee an update is to stop handing over
+a file and write the events directly with **EventKit**, keyed on an identifier stored per session
+- which is the two-way-sync feature, with a calendar permission prompt and an iOS-only surface.
+Not done, deliberately; see the note in CLAUDE.md.
+
 ## The records folder
 
 **The feature this section exists for: your practice is kept in a folder you own, and there is
-nothing to remember.** GroundWork Notes has always worked this way — the counsellor picks a
-folder, normally inside her own iCloud Drive, and the app writes into it — and it is the thing
+nothing to remember.** GroundWork Notes has always worked this way - the counsellor picks a
+folder, normally inside her own iCloud Drive, and the app writes into it - and it is the thing
 people notice about that app. This is the same idea in GroundWork.
 
 Pick a folder once, in **Settings › This iPhone › Where your records are saved**, and every save
@@ -111,14 +154,14 @@ iCloud Drive/GroundWork/
 
 It is **not** a rewrite of the store, and it is not sync. `S` is one object read synchronously
 from IndexedDB on every render, and it stays that way; the folder holds the durable copy of it.
-Export and Restore are untouched and are still how records move between devices — which is what
+Export and Restore are untouched and are still how records move between devices - which is what
 the "Multi-tab / multi-device writes" limitation in `CLAUDE.md` still says, unchanged.
 
-### Native side — `GroundWorkRecordsFolder.swift`
+### Native side - `GroundWorkRecordsFolder.swift`
 
 A browser cannot hold a durable grant to a folder on iOS at all, which is why this needs Swift.
 `UIDocumentPickerViewController(forOpeningContentTypes: [.folder])` gets the grant and a
-**security-scoped bookmark** in `UserDefaults` makes it durable across launches — the same
+**security-scoped bookmark** in `UserDefaults` makes it durable across launches - the same
 mechanism, and the same traps, as `VaultBookmark` and `RosterBookmark` in GroundWork Notes.
 
 - **The security scope must be held while the bookmark is made.** A picked URL is unusable
@@ -131,7 +174,7 @@ mechanism, and the same traps, as `VaultBookmark` and `RosterBookmark` in Ground
   iCloud rebuilding its local copy, must not present as "your records are gone".
 - **Reads and writes are coordinated** (`NSFileCoordinator`) and atomic. The folder is very
   likely a file-provider folder with another process watching it, and an uncoordinated write can
-  be uploaded half-finished — which for a whole-state file is the difference between a backup and
+  be uploaded half-finished - which for a whole-state file is the difference between a backup and
   a brick.
 - **iCloud placeholders are downloaded and waited on** before a read, and the "is it there?"
   check comes *after* the download for the reason the notes app documents: an un-downloaded file
@@ -145,7 +188,7 @@ mechanism, and the same traps, as `VaultBookmark` and `RosterBookmark` in Ground
 - **Forgetting the folder drops the bookmark and deletes nothing.** Those are the user's files in
   the user's folder.
 
-### Web side — inside the native guard
+### Web side - inside the native guard
 
 Four rules the JS depends on. Breaking any of them is silent.
 
@@ -164,7 +207,7 @@ Four rules the JS depends on. Breaking any of them is silent.
   - **No marker, but this device has written here before → adopt it and stamp one.** The one-time
     migration for folders written before markers existed. A folder this device has *never* written
     to still asks, which is the case that matters: a new phone pointed at records already there.
-  - **A folder that will not accept the marker** degrades to that same rule — it behaves as a
+  - **A folder that will not accept the marker** degrades to that same rule - it behaves as a
     single-writer folder and logs a warning. Correct for one device, and it cannot silently
     overwrite a second one, because a second device's own marker would still be there to find.
 - **A folder write that fails falls back to the copy on the phone.** The Documents copy below is
@@ -173,7 +216,7 @@ Four rules the JS depends on. Breaking any of them is silent.
 - **`markBackedUp()` is called only for a folder in iCloud Drive.** This is the single change to
   the manual-backup nag and it is the whole point of the feature. A folder under "On My iPhone"
   is not off this phone, so the reminder stays on and the settings card says why.
-- **Reading the folder back goes through `importFromText()`** — `importJSON()` minus the file
+- **Reading the folder back goes through `importFromText()`** - `importJSON()` minus the file
   input, split out for this. Same passphrase prompt, same `validateImport`, same two tiers of
   `restoreConfirm`. A folder is a friendlier source than a download, not a safer one.
 
@@ -194,12 +237,12 @@ Two independent causes, either of which is enough on its own:
   device wrote, so the file always looks as though somebody else touched it.
 - **The WebView is suspended on backgrounding, mid-write.** `flushAutoBackup()` fires from
   `appStateChange`; the native `folderWrite` runs on its own dispatch queue and completes, because
-  the app still has background time — and iOS suspends JS before the continuation that records
+  the app still has background time - and iOS suspends JS before the continuation that records
   `tt_folder_status.mtime` ever runs. The file changed, and nothing in the web layer knows it.
 
 The lesson generalises past this feature: **a filesystem timestamp is not an identity.** Anything
 that needs to know whether *this* app wrote *that* file has to write that fact down. Slack on the
-comparison does not fix it — the drift is unbounded in the first case and the record is simply
+comparison does not fix it - the drift is unbounded in the first case and the record is simply
 absent in the second.
 
 ### What is tested, and what is not
@@ -209,7 +252,7 @@ browser against the real `index.html`, with a fake Capacitor installed by `addIn
 folder and a fake Documents directory, both kept in localStorage so they survive the reload that
 the launch-time conflict check needs. Twenty-nine assertions, including the whole conflict →
 restore → resume path, the fallback when the folder refuses a write, and each of the three marker
-cases above — a drifted date that must stay quiet, a pre-marker folder that must be adopted once,
+cases above - a drifted date that must stay quiet, a pre-marker folder that must be adopted once,
 and a genuine second device that must still be caught. It needs Playwright,
 which is deliberately not a dependency:
 
@@ -218,7 +261,7 @@ npm i --no-save playwright
 npm run test:folder
 ```
 
-**The Swift half has never been compiled** — there is no Xcode here, the same caveat as the watch
+**The Swift half has never been compiled** - there is no Xcode here, the same caveat as the watch
 app. What the harness pins down is the *contract* between the two halves: which methods are
 called, in what order, and what the web layer does with each answer. `npm run check:drift`
 asserts that the plugin declares and implements every one of them and that the web layer still
@@ -227,13 +270,13 @@ the file appears in Files; make an edit and watch it rewrite; delete the app, re
 same folder and confirm the records come back; and edit from a second device to see the
 two-copies question.
 
-## Automatic backups — the copy on the phone itself
+## Automatic backups - the copy on the phone itself
 
 What every iPhone got before there was a records folder, and still what an iPhone with **no
 folder chosen** gets. It is the fallback, in both senses: it is what you have if you never pick a
 folder, and it is what comes back if the folder you picked stops answering.
 
-Every `commit()` — the app's single save choke point — also writes a backup file, debounced 2s,
+Every `commit()` - the app's single save choke point - also writes a backup file, debounced 2s,
 into the app's own **Documents** directory:
 
 ```
@@ -245,7 +288,7 @@ On My iPhone/GroundWork/
 ```
 
 - **`encReady()` decides per write**, so a passphrase set halfway through the week takes effect
-  on the next save — and the now-superseded live file in the other mode is deleted rather than
+  on the next save - and the now-superseded live file in the other mode is deleted rather than
   left sitting in Files. The **dated** copies are left alone: they are the only record of what
   the data looked like on those days, they cannot be re-encrypted without the state that made
   them, and deleting somebody's restore points as a side effect of setting a passphrase would
@@ -259,7 +302,7 @@ On My iPhone/GroundWork/
   mid-sentence is worse than one that fails quietly. The only caller that speaks is the
   **Back up now** button in Settings › This iPhone, which is a deliberate user action.
 - **The `commit` wrap is transparent.** It awaits the original, fires the backup and forgets it,
-  and returns the original's `true`/`false` — callers check that value, and a failed IndexedDB
+  and returns the original's `true`/`false` - callers check that value, and a failed IndexedDB
   write must still raise the red save banner. A failed backup can neither block a save nor mask
   a failed one.
 - **It flushes on backgrounding.** iOS suspends the WebView and a pending 2s timer with it, so
@@ -273,7 +316,7 @@ Two Info.plist keys are what make any of this reachable by a human: `UIFileShari
 them. With them, the folder appears in the Files app under On My iPhone.
 
 **This copy never answers the manual-backup nag.** A copy sitting on the same phone protects
-nobody who has iCloud Backup switched off — which is exactly the person the banner is for — so
+nobody who has iCloud Backup switched off - which is exactly the person the banner is for - so
 `markBackedUp()` is not called here, and the banner's detail line just appends "(an automatic
 copy is kept on this iPhone)". A **records folder in iCloud Drive** is the thing that answers it.
 
@@ -285,31 +328,31 @@ and is cleared the moment the folder fails a write.
 
 ## The watch app
 
-`ios/App/GroundWorkWatch/` — a SwiftUI watchOS app, embedded in the iPhone app, that does one
+`ios/App/GroundWorkWatch/` - a SwiftUI watchOS app, embedded in the iPhone app, that does one
 thing: time a session and tap the wrist twice, at ten minutes left and at time.
 
 It is the first code in this repository that is **not** the web app. That cuts against rule 1
 above, and it is only tolerable because the watch app owns no logic and no data: there is no
 `derive()`, no fee history, no client list, no `S`. It holds two integers and a date. Nothing
-is synced, in either direction — see `docs/watchos-companion-ideas.md` for what stage 2 would
+is synced, in either direction - see `docs/watchos-companion-ideas.md` for what stage 2 would
 add and why it is a bigger piece of work than this was.
 
 ### Why a timer at all
 
-Therapists watch the clock constantly, and being *seen* to watch it has a clinical cost —
+Therapists watch the clock constantly, and being *seen* to watch it has a clinical cost -
 which is what the clock-behind-the-client's-head and the phone-face-down-on-the-table are
 both working around. A tap on the wrist is the version that costs the client nothing, and it
 is the one thing in this whole product that a phone genuinely cannot do.
 
 ### The two rules, both from the same fact
 
-**watchOS suspends the app the moment the wrist drops** — a second or two after the therapist
+**watchOS suspends the app the moment the wrist drops** - a second or two after the therapist
 stops looking at it, and then for the next forty-nine minutes.
 
 1. **The end date is the state. Nothing counts down.** Every number on screen derives from
    `Date()` against `endsAt`, and the digits themselves are drawn by `Text(timerInterval:)` /
    `ProgressView(timerInterval:)`, which keep counting without the app being scheduled to
-   redraw — including in the dimmed Always On state. A decrementing counter would have stopped
+   redraw - including in the dimmed Always On state. A decrementing counter would have stopped
    with the app and looked perfectly healthy doing it.
 2. **The taps are scheduled with the system, not fired by us.** A `Timer` in a suspended app
    does not fire, and the tap *is* the feature. Both cues are `UNTimeIntervalNotificationTrigger`
@@ -323,10 +366,10 @@ Two consequences worth knowing before changing anything here:
 
 - **`AppDelegate` exists solely to present a notification while the app is frontmost.** watchOS
   suppresses that by default, so without it the therapist *looking at the timer* is the one
-  person who gets no tap at ten minutes — exactly backwards. It plays the haptic itself and
+  person who gets no tap at ten minutes - exactly backwards. It plays the haptic itself and
   returns `[.banner]` rather than `[.sound]`, so there is no second tap to collide with.
 - **A refusal has to be visible.** Permission is asked for at the first Start, which is where
-  it makes sense — but a timer without its taps is just a clock, and the watch already has one.
+  it makes sense - but a timer without its taps is just a clock, and the watch already has one.
   `cuesBlocked` puts a line on the screen rather than letting someone trust a cue that will
   never come. Worth pressing Start once before a real client rather than during one.
 
@@ -336,7 +379,7 @@ still delivered. The settings screen says so.
 ### The session length is on the watch, not in `S`
 
 `docs/watchos-companion-ideas.md` proposed a `settings.sessionMins` on the phone as part of
-this stage. It was left out, because with no sync the phone cannot tell the watch anything —
+this stage. It was left out, because with no sync the phone cannot tell the watch anything -
 it would have been a setting in the web app that changed nothing anywhere, which is the kind
 of thing that quietly rots. Length and warning offset live in the watch's own `UserDefaults`.
 When stage 2 lands and the phone can push, that is the moment for the phone to become the
@@ -347,7 +390,7 @@ source of the number.
 `scripts/add-watch-target.mjs` adds the target, idempotently, and runs from `npm run sync` for
 the same reason `add-native-plugin.mjs` does: `npx cap add ios` regenerates `ios/` from
 Capacitor's template, which knows nothing about anything we wrote. The failure it prevents is
-a quiet one — a regenerated project builds and ships an iPhone app with nothing on the wrist.
+a quiet one - a regenerated project builds and ships an iPhone app with nothing on the wrist.
 
 Three details in that script are load-bearing:
 
@@ -366,12 +409,12 @@ Three details in that script are load-bearing:
 
 `npm run check` asserts the target is present, that all four Swift files are actually compiled
 by it, that the embed phase and the dependency exist, and that the watch's
-`WKCompanionAppBundleIdentifier` still matches `capacitor.config.json`'s `appId` — change the
+`WKCompanionAppBundleIdentifier` still matches `capacitor.config.json`'s `appId` - change the
 app id and the watch app stops installing, with the reason in a device log rather than a build
 error.
 
 The app icon is the same 1024 master as the iPhone app, installed by `install-assets.mjs` and
-gitignored like the others. The accent colour is `#5C7A6D`, the brand sage — deliberately the
+gitignored like the others. The accent colour is `#5C7A6D`, the brand sage - deliberately the
 header's darker value rather than the icon's `#6A8B7C`, because the Start button puts white
 text on it and `#6A8B7C` would be 3.75:1. Same rule as the header gradient in CLAUDE.md.
 
@@ -384,7 +427,7 @@ that is all that has been proven. Before it goes anywhere:
 - build the App scheme in Xcode and let it create the watch scheme,
 - run it in the watch simulator: start, background, relaunch mid-session, confirm the
   countdown is still right; confirm both notifications arrive,
-- register `uk.co.charlottebloortherapy.groundwork.watchkitapp` — CI signs with
+- register `uk.co.charlottebloortherapy.groundwork.watchkitapp` - CI signs with
   `-allowProvisioningUpdates`, which can create it, but the first archive is the moment to
   find out it cannot,
 - then the only test that matters: wear it through a real fifty minutes and see whether the
@@ -394,7 +437,7 @@ that is all that has been proven. Before it goes anywhere:
 
 GroundWork Notes has no design system to copy: twelve SwiftUI view files contain thirteen styling
 calls between them, and the main screens contain none. What reads as "native" there is iOS 26
-drawing stock `TabView`, `List` and `Toggle`. So none of it was ported — the parts worth having
+drawing stock `TabView`, `List` and `Toggle`. So none of it was ported - the parts worth having
 were rebuilt in CSS, in the **shared** stylesheet rather than behind the native guard, because a
 floating bar and heavier switches say "modern mobile app" rather than "iPhone" and so cost the
 Android and desktop builds nothing. Details and the traps are in CLAUDE.md § Mobile chrome.
@@ -410,14 +453,14 @@ look like they are imitating a platform they do not run on. If the goal ever bec
 `CapacitorBridge.registerPlugins()` reads `packageClassList` from the *generated*
 `ios/App/App/capacitor.config.json` and calls `NSClassFromString` on each name. The CLI
 builds that list from npm dependencies only. An app-local plugin therefore compiles,
-links, and is never registered — `Capacitor.Plugins.GroundWorkNative` is simply
+links, and is never registered - `Capacitor.Plugins.GroundWorkNative` is simply
 `undefined`, every call quietly takes the web fallback, and nothing is logged anywhere.
 `scripts/register-native-plugin.mjs` appends the class after each sync; the drift check
 asserts it.
 
 **`UIMarkupTextPrintFormatter` deadlocks the main thread.** Handing HTML straight to a
 `UIPrintPageRenderer` freezes the app: the formatter needs to render the markup, that
-render wants the main run loop, and the promise never settles — no crash, no log, just a
+render wants the main run loop, and the promise never settles - no crash, no log, just a
 dead UI. The working route is to load the HTML into an offscreen `WKWebView` and take
 `viewPrintFormatter()` only once `didFinish` has fired, so the layout is already done
 before the renderer asks for a page count.
@@ -439,7 +482,7 @@ reminders (permission requested only on opt-in; three notifications scheduled wi
 Attention-feed text), backup export → share sheet → Save to Files, and receipt → 20KB
 one-page PDF → share sheet with AirPrint. Web build re-checked after every change.
 
-**Automatic backups are not yet verified on a device or in the simulator** — the web build and
+**Automatic backups are not yet verified on a device or in the simulator** - the web build and
 the drift/syntax checks pass, but the Documents write, the daily rotation, the prune and the
 Files-app visibility all need a run in Xcode. Do that before it ships.
 

@@ -2,9 +2,9 @@
  *
  * The web app deploys itself on every push; the iPhone app does not, because it bundles a
  * COPY of the web app that only changes when someone runs a sync and makes a build. This
- * script is that ritual, in the order that matters, so the two ways of getting it wrong —
+ * script is that ritual, in the order that matters, so the two ways of getting it wrong -
  * shipping a bundle that predates your changes, and reusing a build number Apple has
- * already seen — are both impossible rather than merely unlikely.
+ * already seen - are both impossible rather than merely unlikely.
  *
  *   npm run release                 bump the build number, sync, commit, print the tag
  *   npm run release -- --version 1.1   also set the marketing version
@@ -37,21 +37,21 @@ function fail(message, remedy) {
   process.exit(1);
 }
 
-/* 1 — a build you cannot identify later is worse than no build at all. */
+/* 1 - a build you cannot identify later is worse than no build at all. */
 const dirty = capture("git", ["status", "--porcelain"]);
 if (dirty && !dryRun) {
   fail(
     "The working tree has uncommitted changes.",
-    "Commit or stash them first — a TestFlight build has to correspond to a commit."
+    "Commit or stash them first - a TestFlight build has to correspond to a commit."
   );
 }
 
-/* 2 — the same checks the repo runs everywhere else. Cheap, and catches a renamed
+/* 2 - the same checks the repo runs everywhere else. Cheap, and catches a renamed
    function that would break a native feature while the web app carries on working. */
 console.log("\n  Checking…");
 if (!dryRun) run("npm", ["run", "check"]);
 
-/* 3 — the build number. Apple refuses a duplicate outright, and it is the most common
+/* 3 - the build number. Apple refuses a duplicate outright, and it is the most common
    upload failure by a wide margin. Read the highest value present rather than assuming
    both build configurations agree, then set both. */
 const pbx = await readFile(PBXPROJ, "utf8");
@@ -96,13 +96,13 @@ if (dryRun) {
 
 await writeFile(PBXPROJ, updated);
 
-/* 4 — rebuild the bundled copy of the web app. Without this the archive would ship
+/* 4 - rebuild the bundled copy of the web app. Without this the archive would ship
    whatever the last sync left behind, which is the failure this whole script exists to
    make impossible. */
 console.log("\n  Syncing the web app into the iOS bundle…");
 run("npm", ["run", "sync"]);
 
-/* 5 — commit the bump, so the tag names a commit that actually describes the build. */
+/* 5 - commit the bump, so the tag names a commit that actually describes the build. */
 run("git", ["add", "ios/App/App.xcodeproj/project.pbxproj"]);
 run("git", ["commit", "-m", `Cut iOS build ${nextBuild} (version ${nextVersion})`]);
 run("git", ["tag", tag]);

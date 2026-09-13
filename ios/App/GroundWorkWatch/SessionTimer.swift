@@ -4,7 +4,7 @@ import WatchKit
 
 /// The one piece of state this app has: when the session ends.
 ///
-/// Everything here is shaped by a single fact — **watchOS suspends the app the moment the
+/// Everything here is shaped by a single fact - **watchOS suspends the app the moment the
 /// wrist drops**, which happens a second or two after the therapist stops looking at it and
 /// then lasts for the next forty-nine minutes. Two consequences, and between them they are
 /// the whole design:
@@ -15,7 +15,7 @@ import WatchKit
 ///    have stopped along with the app, and would have looked fine while doing it.
 /// 2. **The taps are scheduled with the system, not fired by us.** A `Timer` in a suspended
 ///    app does not fire, and the tap at ten-minutes-left is the entire reason this app
-///    exists — it cannot be the part that quietly does not happen. Both cues are local
+///    exists - it cannot be the part that quietly does not happen. Both cues are local
 ///    notifications, handed to `UNUserNotificationCenter` when Start is pressed and
 ///    withdrawn on Stop.
 ///
@@ -26,7 +26,7 @@ import WatchKit
 final class SessionTimer: ObservableObject {
 
     /// Session lengths worth offering. Fifty minutes is the therapeutic hour and the
-    /// default; the rest are the ones that actually come up — a short assessment, a double.
+    /// default; the rest are the ones that actually come up - a short assessment, a double.
     static let lengths = [30, 45, 50, 60, 80, 90]
 
     /// How long before the end to tap. `0` is no warning tap at all, for someone who only
@@ -51,7 +51,7 @@ final class SessionTimer: ObservableObject {
     @Published private(set) var startedAt: Date?
     @Published private(set) var endsAt: Date?
 
-    /// True once the warning point has passed, and once the end has. Cosmetic — see the
+    /// True once the warning point has passed, and once the end has. Cosmetic - see the
     /// note on `armFlips()`.
     @Published private(set) var isWarning = false
     @Published private(set) var isOverrun = false
@@ -128,7 +128,7 @@ final class SessionTimer: ObservableObject {
             return
         }
         endsAt = ends
-        // The two keys are written together, so the fallback should never be needed — but a
+        // The two keys are written together, so the fallback should never be needed - but a
         // start date equal to the end date would give the countdown a zero-width range to
         // draw, so it reconstructs one from the chosen length instead.
         startedAt = store.object(forKey: Key.startedAt) as? Date
@@ -138,7 +138,7 @@ final class SessionTimer: ObservableObject {
     // MARK: - The cues
 
     /// Both taps, scheduled in one go. Asking for permission here rather than at launch
-    /// means the prompt arrives attached to the thing it is for — but it also means the
+    /// means the prompt arrives attached to the thing it is for - but it also means the
     /// very first session can lose its cues to a prompt still sitting on screen, which is
     /// why `cuesBlocked` exists and why the first Start is worth doing before a real client
     /// rather than during one.

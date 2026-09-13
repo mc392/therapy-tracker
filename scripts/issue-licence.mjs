@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-/* Mints GroundWork Plus licences — comps, gifts, founding members, testers.
+/* Mints GroundWork Pro licences - comps, gifts, founding members, testers.
    See docs/monetisation.md §6.3 for why this exists and what it is (and is not) for.
 
    The private key NEVER goes in this repo. --keygen writes it outside the tree and patches
    only the PUBLIC key into index.html, because a public key cannot mint anything. That is the
    whole point: one person bypassing the gate in devtools is already possible and already
-   accepted, but a key generator circulating so that anyone can is a different problem — and a
+   accepted, but a key generator circulating so that anyone can is a different problem - and a
    symmetric secret embedded in the app would be exactly that.
 
    ECDSA P-256, not Ed25519: WebCrypto has had P-256 everywhere for years, while Ed25519 only
@@ -16,6 +16,19 @@
      node scripts/issue-licence.mjs --keygen [--key-file <path>]
      node scripts/issue-licence.mjs --kind founding --name "Charlotte Bloor" --forever
      node scripts/issue-licence.mjs --kind gift --name "A N Other" --months 12
+     node scripts/issue-licence.mjs --kind comp --name "Charlotte Bloor" --forever --tax-through 2027-28
+
+   THE SUBSCRIPTION AND THE TAX YEARS ARE GRANTED SEPARATELY, and that is deliberate rather than
+   fiddly. A licence always grants GroundWork Pro; it grants TAX YEARS only if --tax-through names
+   one, and then every year up to and including it. Comping the subscription is cheap and routine;
+   comping the tax engine is the thing with the April rates work behind it, so it should be a
+   decision somebody types rather than something that rides along.
+
+     --tax-through 2026-27    unlocks 2026-27 and every earlier tax year
+     (omitted)                grants Pro only - tax figures stay masked
+
+   There is no --tier any more. The Plus rung was withdrawn in Sep 2026 and a licence carrying it
+   reads as Pro, the same default the app applies to a licence with no tier at all.
 */
 import { generateKeyPairSync, createPrivateKey, createPublicKey, sign, randomUUID } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
@@ -48,20 +61,20 @@ if (flag("keygen")) {
   const privJwk = privateKey.export({ format: "jwk" });
 
   mkdirSync(dirname(keyFile), { recursive: true });
-  writeFileSync(keyFile, JSON.stringify({ note: "GroundWork Plus licence signing key — keep this private and backed up", privateJwk: privJwk }, null, 2) + "\n", { mode: 0o600 });
+  writeFileSync(keyFile, JSON.stringify({ note: "GroundWork Plus licence signing key - keep this private and backed up", privateJwk: privJwk }, null, 2) + "\n", { mode: 0o600 });
 
   const html = readFileSync(HTML, "utf8");
-  if (!html.includes(MARKER)) die(`${HTML} no longer contains ${MARKER} — has the Plus block been renamed?`);
+  if (!html.includes(MARKER)) die(`${HTML} no longer contains ${MARKER} - has the Plus block been renamed?`);
   const literal = `{kty:"EC",crv:"P-256",x:"${pubJwk.x}",y:"${pubJwk.y}",ext:true}`;
   const patched = html.replace(
     new RegExp(`const PLUS_PUBKEY=.*?; ${MARKER.replace(/[*/]/g, "\\$&")}`),
     `const PLUS_PUBKEY=${literal}; ${MARKER}`
   );
-  if (patched === html) die("Could not patch PLUS_PUBKEY — the line has changed shape; do it by hand.");
+  if (patched === html) die("Could not patch PLUS_PUBKEY - the line has changed shape; do it by hand.");
   writeFileSync(HTML, patched);
 
   console.log(`\n  Private key written to ${keyFile} (mode 600).`);
-  console.log("  BACK IT UP. It is not in the repo and it cannot be recovered — losing it means");
+  console.log("  BACK IT UP. It is not in the repo and it cannot be recovered - losing it means");
   console.log("  re-keying, which invalidates every licence already issued.\n");
   console.log(`  Public key patched into ${HTML}. Commit that; never commit the private key.\n`);
   process.exit(0);
@@ -87,7 +100,15 @@ if (!flag("forever")) {
   die(`--forever is only for --kind founding or comp. A perpetual ${kind} is a support\n  obligation with no end date and no way to revoke it (there is no revocation list).`);
 }
 
+const taxThrough = opt("tax-through", null);
+if (taxThrough !== null && !/^\d{4}-\d{2}$/.test(taxThrough))
+  die(`--tax-through must be a tax year like 2026-27`);
+/* Short keys on purpose: the payload is base64 in a string somebody has to paste, and every byte
+   of it is a character they can get wrong. `tx` is the tax year watermark, absent where no tax
+   year is granted - which is the common case, and keeps a plain Pro licence as short as it has
+   always been. There is no `t` any more: one rung, and the app reads its absence as that rung. */
 const payload = { v: 1, k: kind, n: name, exp, id: randomUUID().slice(0, 8) };
+if (taxThrough) payload.tx = taxThrough;
 const encoded = b64u(Buffer.from(JSON.stringify(payload), "utf8"));
 
 const { privateJwk } = JSON.parse(readFileSync(keyFile, "utf8"));
@@ -95,9 +116,10 @@ const key = createPrivateKey({ key: privateJwk, format: "jwk" });
 /* ieee-p1363 = raw r||s, which is what WebCrypto's ECDSA verify expects. Node's default is DER. */
 const sig = sign("sha256", Buffer.from(encoded, "utf8"), { key, dsaEncoding: "ieee-p1363" });
 
-console.log(`\n  ${kind} licence for ${name}`);
+console.log(`\n  ${kind} licence for ${name} (GroundWork Pro)`);
+console.log(`  ${taxThrough ? `tax years through ${taxThrough}` : "no tax years - figures stay masked"}`);
 console.log(`  ${exp ? `expires ${exp.slice(0, 10)}` : "no expiry"} · id ${payload.id}\n`);
 console.log(`${encoded}.${b64u(sig)}\n`);
-console.log("  Record the id, name and expiry somewhere OUTSIDE this repo — it holds personal");
+console.log("  Record the id, name and expiry somewhere OUTSIDE this repo - it holds personal");
 console.log("  data, and it is the only way to know later what you issued. There is no");
 console.log("  revocation: expiry is the only lever.\n");

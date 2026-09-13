@@ -1,4 +1,4 @@
-# GroundWork — implementation task index
+# GroundWork - implementation task index
 
 Orchestration plan produced from the 30 Aug 2026 release review. Each task file is
 **self-contained**: give one file to one Claude Code session, in the order below.
@@ -9,29 +9,29 @@ Kickoff prompt for every session:
 
 Rules that apply to EVERY task in this repo (repeat offenders are called out per-task):
 
-- The canonical app is `TherapyTracker-web/index.html` — one file, no build step. Use the
+- The canonical app is `TherapyTracker-web/index.html` - one file, no build step. Use the
   Read/Edit file tools, never bash `cat`/`sed` (see CLAUDE.md § Known gotchas), and never
   script a bulk rewrite of the file.
-- Run `npm run check` before finishing — it asserts every name the native iOS shell wraps.
+- Run `npm run check` before finishing - it asserts every name the native iOS shell wraps.
 - Do not bump the service-worker cache name unless you changed an icon or the manifest
   (HTML is network-first; `index.html` changes need no bump).
 - Do not "fix" the multi-tab/multi-device overwrite opportunistically (CLAUDE.md § Known
-  limitations) — T3 handles its user-facing edge deliberately.
+  limitations) - T3 handles its user-facing edge deliberately.
 - Existing installs must never lose a tab, a feature, or a figure. When in doubt, gate new
   behaviour on fresh installs only, the way `normalize()` and `settings.reveal` already do.
 - Update the relevant CLAUDE.md section when you change behaviour it documents.
 
 | # | Task file | Model | Depends on | One-line scope |
 |---|---|---|---|---|
-| 1 | T1-seed-cleanup.md | Sonnet | — | Remove Charlotte's personal data from the fresh-install seed |
+| 1 | T1-seed-cleanup.md | Sonnet | - | Remove Charlotte's personal data from the fresh-install seed |
 | 2 | T2-beta-gate.md | Sonnet | T1 | Delete the beta gate; relocate its warnings for the store build |
 | 3 | T3-restore-hardening.md | **Opus** | T2 | Restore-from-backup gets a real gate + freshness comparison |
-| 4 | T4-native-auto-backup.md | **Opus** | — | Automatic on-device backups in the iOS app |
-| 5 | T5-simple-home.md | **Opus** | — | Slim simple-mode Home; re-tier the gradual reveal |
-| 6 | T7a-tax-at-a-glance.md | **Opus** | — | New default Tax view: three numbers + seasonal moment cards |
+| 4 | T4-native-auto-backup.md | **Opus** | - | Automatic on-device backups in the iOS app |
+| 5 | T5-simple-home.md | **Opus** | - | Slim simple-mode Home; re-tier the gradual reveal |
+| 6 | T7a-tax-at-a-glance.md | **Opus** | - | New default Tax view: three numbers + seasonal moment cards |
 | 7 | T7b-tax-guided-flows.md | **Opus** | T7a | Guided wizards for the infrequent tax jobs |
 | 8 | T6-copy-pass.md | Sonnet | T5, T7a | One-sentence rule per card; label renames |
-| 9 | T9-tax-tests.md | Sonnet | — | Test coverage for cancellation charging |
+| 9 | T9-tax-tests.md | Sonnet | - | Test coverage for cancellation charging |
 | 10 | T8-listing-and-policy.md | Sonnet | T4 | True up App Store listing copy and privacy.html |
 
 Sequencing notes:
@@ -51,10 +51,9 @@ Same rules and same kickoff prompt.
 
 | # | Task file | Model | Depends on | One-line scope |
 |---|---|---|---|---|
-| T10 | T10-training-record.md | **Opus** | — | The trainee record: per-session duration, type, three-way medium, supervision hours, placements, personal therapy, CPD reflection (schema v10) |
-
+| T10 | T10-training-record.md | **Opus** | - | The trainee record: per-session duration, type, three-way medium, supervision hours, placements, personal therapy, CPD reflection (schema v11) |
 T10 is Stage 1 of `docs/institutional-partnerships-2026-09.md` and is safe to implement
-regardless of how that plan's Stage 0 (find a partner course) turns out — the fields are worth
+regardless of how that plan's Stage 0 (find a partner course) turns out - the fields are worth
 having for any trainee. It also contains the one live correction in that plan: supervision is
 counted as entries today, not hours.
 

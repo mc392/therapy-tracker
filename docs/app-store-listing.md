@@ -20,9 +20,9 @@ paste; the account itself (step 5) is the one thing only Charlotte can do.
 | Support URL | https://mc392.github.io/therapy-tracker/ | the Pages site already deploys |
 | Privacy Policy URL | https://mc392.github.io/therapy-tracker/privacy.html | already live |
 
-The companion app, GroundWork Notes, will also list under Business — the two listings should read as one family, not as a clinical tool paired with an admin tool.
+The companion app, GroundWork Notes, will also list under Business - the two listings should read as one family, not as a clinical tool paired with an admin tool.
 
-## Privacy nutrition label — "Data Not Collected"
+## Privacy nutrition label - "Data Not Collected"
 
 The app has no backend, no accounts and no analytics; everything lives in IndexedDB and
 localStorage on the device. Answer **"No"** to "Do you or your third-party partners collect
@@ -31,7 +31,7 @@ the strongest trust signal on the page.
 
 Two things to keep true, because this answer stops being honest the moment either changes:
 
-- **No analytics SDK, ever** — not Firebase, not Sentry, not a crash reporter. Adding one
+- **No analytics SDK, ever** - not Firebase, not Sentry, not a crash reporter. Adding one
   means re-answering the questionnaire.
 - **The share sheet is not collection.** Exports go where the therapist sends them. Apple
   does not count a user-initiated share as data the developer collects.
@@ -57,38 +57,38 @@ inside a web view. Any one would likely clear 4.2; five is comfortable.
 
 ## Screenshots
 
-Required: **6.9" iPhone** (1320×2868). One set is enough — App Store Connect scales down
+Required: **6.9" iPhone** (1320×2868). One set is enough - App Store Connect scales down
 for smaller classes. Capture on an iPhone 17 Pro Max simulator with demo data, not real
 client records.
 
 Suggested five, in order:
-1. **Home** — the Attention feed with a couple of items, plus the money tiles.
-2. **Sessions** — the list with paid/unpaid states visible.
-3. **Money or Tax** — the tax estimate, the thing that replaces the spreadsheet.
-4. **Settings › This iPhone** — the Face ID lock and reminders. This is the 4.2 evidence.
-5. **A receipt PDF in the share sheet** — the native output.
+1. **Home** - the Attention feed with a couple of items, plus the money tiles.
+2. **Sessions** - the list with paid/unpaid states visible.
+3. **Money or Tax** - the tax estimate, the thing that replaces the spreadsheet.
+4. **Settings › This iPhone** - the Face ID lock and reminders. This is the 4.2 evidence.
+5. **A receipt PDF in the share sheet** - the native output.
 
 ## Copy
 
 **Promotional text** (170 chars, editable without review):
-> Private, offline records for a therapy practice — sessions, clients, rooms, supervision
+> Private, offline records for a therapy practice - sessions, clients, rooms, supervision
 > and tax. Nothing leaves your phone.
 
-**Description** — App Store tab → the version → **Description** (4000 chars). This is the only
+**Description** - App Store tab → the version → **Description** (4000 chars). This is the only
 field the subscription block belongs in. Not Promotional Text (170 chars, and editable without
 review, so required disclosure does not belong there), not What's New, and not the
 subscription's own localised description, which is a short line describing the subscription
 itself.
 
 Paid features are marked **(Plus)** in the bullets. Apple does flag descriptions that advertise
-features without saying they need a purchase, and it is also just honest — drop the markers if
+features without saying they need a purchase, and it is also just honest - drop the markers if
 you would rather, but then expect the question at review.
 
 (first three lines are what people actually read):
 > GroundWork keeps the admin side of a therapy practice in one place: sessions, clients,
 > room costs, supervision hours and a running estimate of what you will owe HMRC.
 >
-> Everything stays on your phone. There is no account, no cloud, and no analytics — your
+> Everything stays on your phone. There is no account, no cloud, and no analytics - your
 > records are not sent anywhere, and Face ID keeps them shut when the app is closed.
 >
 > • Log a session in seconds, or type it: "AB tue 14:00 paid"
@@ -97,22 +97,26 @@ you would rather, but then expect the question at review.
 > • Receipts and statements for clients as PDFs, printed or shared straight from the app
 > • Supervision and CPD hours tracked against the 1:6 ratio, with accreditation totals (Plus)
 > • A UK tax estimate that updates as you work, with your business costs counted in (Plus)
-> • Quarterly figures for Making Tax Digital (Plus)
-> • Retention and attendance trends across your practice (Plus)
+> • Quarterly figures for Making Tax Digital (Pro + that tax year)
+> • Retention and attendance trends across your practice (Pro)
 > • Automatic on-device backups kept in your iPhone's own backup, plus encrypted backups you can export yourself
 >
 > GroundWork records attendance and money. It is not a clinical record and holds no session
-> notes — keep those where you keep them now. Tax figures are estimates to help you plan,
+> notes - keep those where you keep them now. Tax figures are estimates to help you plan,
 > not advice, and the app cannot file for you.
 >
-> Logging sessions, clients, rooms, supervision, receipts and every backup and export are
-> free and always will be. GroundWork Plus adds the year-end work: tax, business costs,
-> the MTD quarters, trends, accreditation hours, notes sync and extra colour schemes.
+> Logging sessions, clients, rooms, supervision, receipts, what your rooms cost you and every
+> backup and export are free and always will be. GroundWork Pro adds business analytics, your
+> business costs, accreditation hours and notes sync.
 >
-> GroundWork Plus is an auto-renewing annual subscription, £29.99/year.
-> Payment is charged to your Apple ID at confirmation of purchase.
-> It renews automatically unless cancelled at least 24 hours before the end
-> of the current period. Manage or cancel in your Apple ID account settings.
+> Working out your tax is not part of Pro. Each UK tax year is a separate one-off purchase on
+> top of Pro, because the bands, thresholds and rules are fixed to a single year and to where
+> you pay tax. Buying one year includes every earlier year, and it does not expire.
+>
+> GroundWork Pro is an auto-renewing monthly subscription. Payment is charged to your Apple ID
+> at confirmation of purchase. It renews automatically unless cancelled at least 24 hours
+> before the end of the current period. Manage or cancel in your Apple ID account settings.
+> Tax years are one-off purchases and do not renew.
 >
 > Terms of Use: https://mc392.github.io/therapy-tracker/terms.html
 > Privacy Policy: https://mc392.github.io/therapy-tracker/privacy.html
@@ -126,7 +130,7 @@ you would rather, but then expect the question at review.
 
 ## Before submitting
 
-- Read `terms.html` §4 on tax figures once more — it is the paragraph most likely to draw a
+- Read `terms.html` §4 on tax figures once more - it is the paragraph most likely to draw a
   reviewer question, and it needs to be as plain as the description above.
 - Run one TestFlight build first (roadmap step 9). The wrapper has only been exercised in
   the simulator; Face ID, notification delivery and AirPrint all want real hardware.
@@ -134,9 +138,9 @@ you would rather, but then expect the question at review.
 
 ## Subscription block for the app Description
 
-App Store Connect has **no Terms of Use URL field** — only Privacy Policy has one. Guideline
+App Store Connect has **no Terms of Use URL field** - only Privacy Policy has one. Guideline
 3.1.2 wants functional links to both in the binary (the paywall has them) and in the store
-metadata, which means the app **Description** — the field on the version page, not the
+metadata, which means the app **Description** - the field on the version page, not the
 subscription's own short localised description.
 
 It is already folded into the Description draft above, so there is nothing separate to paste.
@@ -144,43 +148,49 @@ It is already folded into the Description draft above, so there is nothing separ
 Leave **License Agreement** on Apple's Standard EULA; a custom one is entered as text, not a
 URL, and the link in the Description is what the guideline asks for.
 
-## Subscription image
+## Subscription and purchase images - one per product
 
-`TherapyTracker-web/icon-ideas/groundwork/subscription-plus-1024.png` — 1024×1024, opaque, no
-rounded corners (Apple masks its own). Used for offer-code redemption, win-back offers, and the
-product page if App Store Promotion is enabled.
+Each subscription and non-consumable in App Store Connect has its own image:
 
-Regenerate with `node scripts/render-subscription-image.mjs`; the `.html` beside it is the
-source, and it reuses the same SVG geometry as the app's launch screen so the mark cannot drift
-from the one shipping in `index.html`. Colours are sampled from `icon-1024.png` rather than
-guessed: `#6B8B7C` → `#3C4F44`, bars at 55% / 78% / 100% white.
+| Product | Image | Regenerate |
+|---|---|---|
+| GroundWork Pro (monthly) | `icon-ideas/groundwork/subscription-pro-1024.png` | `node scripts/render-subscription-image.mjs subscription-pro-1024` |
+| UK tax year | **not drawn yet** | reuse the Pro (gold) artwork until one exists; the tax years wear the same gold |
 
-It carries **no text** on purpose: Apple shows the subscription's name and description beside
-the image, so a word here would be redundant and could not be localised.
+`subscription-plus-1024.{html,png}` is the **withdrawn chrome tier** and is now obsolete - the tier
+does not exist and nothing in the app renders chrome any more. Delete it when these are next
+regenerated.
 
-**The three bars are a tier ladder.** Gold is on the third one alone because Plus is the top
-tier. A free tier is bar 1, already there and already plain.
+They are 1024×1024, opaque, no rounded corners (Apple masks its own). Used for offer-code
+redemption, win-back offers, and the product page if App Store Promotion is enabled. The `.html`
+beside each is the source, and both reuse the same SVG geometry as the app's launch screen so the
+mark cannot drift from the one shipping in `index.html`. Colours are sampled from `icon-1024.png`
+rather than guessed: `#6B8B7C` → `#3C4F44`, bars at 55% / 78% / 100% white.
 
-**The middle tier now has its own image**, not a variant of this one:
-`TherapyTracker-web/icon-ideas/groundwork/subscription-business-1024.html` /
-`.png` — same plate, same regeneration command with the basename as an argument
-(`node scripts/render-subscription-image.mjs subscription-business-1024`), a violet neon glow on
-bar 2 instead of gold on bar 3, bar 3 back to the plain fade bar 1 carries. Violet (not a second
-metal) because a cool silver tried first sat too close in lightness to the sage plate to read at
-this scale — see the in-app `--tier2-*` tokens in `index.html`, picked from the same comparison
-and used for the matching Business analytics accent. Name TBC — see `docs/monetisation.md`.
-Putting gold on every bar, or the glow on more than one, would retire the ladder as a way of
-saying anything.
+They carry **no text** on purpose: Apple shows each subscription's name and description beside
+its image, so a word here would be redundant and could not be localised.
+
+**The three bars are a tier ladder, and each image lights the rung it sells.** Bar 1 is free and
+is always plain. Bar 2 is Plus and carries a **chrome** rim in the Plus image. Bar 3 is Pro and
+carries a **gold** rim in the Pro image. One metal per rung, silver below gold, is a ladder
+anybody can read without being told - and it is the same pair the app paints its own locks and
+launch screen in (`--tier2-*` chrome, `--tier3-*` gold in `index.html`). Bar 2 was violet while
+the middle tier was unnamed and unbuilt; it became chrome in Sep 2026 when the tier became real.
+
+Putting the metal on more than one bar per image, or gold on the middle rung, would retire the
+ladder as a way of saying anything.
 
 ## Subscription review screenshot
 
-`TherapyTracker-web/icon-ideas/groundwork/paywall-review-screenshot.png` — 1320×2868, the
+`TherapyTracker-web/icon-ideas/groundwork/paywall-review-screenshot.png` - 1320×2868, the
 *App Review Information* screenshot on the subscription itself. Customers never see it; it
-exists so a reviewer can find where the purchase is offered.
+exists so a reviewer can find where the purchase is offered. One sheet offers both
+subscriptions, so the same screenshot serves both records; `--reason trends` renders the version
+that leads with Plus if a reviewer of that product would rather see it lit.
 
 Generated by `node scripts/render-paywall-screenshot.mjs --price "£39.99"`, which exists to
 break a genuine deadlock: App Store Connect wants this screenshot before the subscription can
-leave *Missing Metadata*, and StoreKit cannot fetch a *Missing Metadata* product — so a
+leave *Missing Metadata*, and StoreKit cannot fetch a *Missing Metadata* product - so a
 TestFlight paywall can only say "Subscription unavailable right now" until the screenshot is
 already uploaded. The script renders the real `openPlusSheet()` from `index.html` with only the
 store stubbed, so nothing about the layout or copy is a mock-up.

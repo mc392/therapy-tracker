@@ -2,7 +2,7 @@
  *
  * The two apps have to agree on which dates a client's cadence produces. They are written in
  * different languages, in different repositories, and a disagreement between them shows up as
- * the wrong dates being offered to a counsellor — which nobody would notice for months.
+ * the wrong dates being offered to a counsellor - which nobody would notice for months.
  *
  * The cases below are the same ones asserted in GroundWork Notes'
  * `Tests/NotesVaultCoreTests/SessionScheduleTests.swift`, with the same expected output. If a
@@ -25,9 +25,9 @@ const source = readFileSync(join(root, "TherapyTracker-web", "index.html"), "utf
    own markers. Both are asserted, so a rename fails here rather than silently testing nothing. */
 function extract(from, to) {
   const start = source.indexOf(from);
-  if (start < 0) throw new Error(`check-schedule-parity: "${from}" is no longer in index.html — has it been renamed?`);
+  if (start < 0) throw new Error(`check-schedule-parity: "${from}" is no longer in index.html - has it been renamed?`);
   const end = source.indexOf(to, start);
-  if (end < 0) throw new Error(`check-schedule-parity: "${to}" is no longer in index.html — has it been renamed?`);
+  if (end < 0) throw new Error(`check-schedule-parity: "${to}" is no longer in index.html - has it been renamed?`);
   return source.slice(start, end);
 }
 
@@ -113,8 +113,8 @@ const cases = [
     ["2026-08-24 15:00", "2026-08-17 15:00"]],
 
   // Three days forward is the outer edge of the snap and the case most easily got wrong:
-  // it must be kept, not pulled back a week. (Widening the window the other way — accepting
-  // a four-day pull — is caught by the Friday/Monday case above.)
+  // it must be kept, not pulled back a week. (Widening the window the other way - accepting
+  // a four-day pull - is caught by the Friday/Monday case above.)
   ["a three-day forward snap is kept rather than pulled back a week",
     () => expected("2026-08-03T09:00", { cadenceDays: 7, usualDay: "thu", usualTime: "09:00" }, [], "2026-08-14T12:00"),
     ["2026-08-13 09:00"]],
@@ -152,7 +152,7 @@ for (const [name, run, want] of cases) {
 
 if (failed) {
   console.error(`\n  ${failed} of ${cases.length} schedule cases disagree with GroundWork Notes.`);
-  console.error("  Fix both implementations and docs/schedule-sync.md together — never just one.");
+  console.error("  Fix both implementations and docs/schedule-sync.md together - never just one.");
   process.exit(1);
 }
-console.log(`  schedule prediction matches GroundWork Notes — ${cases.length} cases`);
+console.log(`  schedule prediction matches GroundWork Notes - ${cases.length} cases`);

@@ -1,9 +1,9 @@
-# Product proposals — September 2026
+# Product proposals - September 2026
 
 Four open questions raised in the September feedback round.
 
-**Three of the four are now built** (§1 analytics, §2 colour schemes, §3 the Trends peek). §4 —
-selling seats to training courses — is still a proposal and would need a decision, and an answer
+**Three of the four are now built** (§1 analytics, §2 colour schemes, §3 the Trends peek). §4 -
+selling seats to training courses - is still a proposal and would need a decision, and an answer
 from Apple, before any code. Each section says at its head what actually happened; where the
 original reasoning is still worth having it is kept below the outcome rather than rewritten.
 
@@ -12,21 +12,25 @@ Where the two disagree, monetisation.md wins until this one is promoted.
 
 ---
 
-## 1. More trends and business analytics — **shipped**, except two
+## 1. More trends and business analytics - **shipped**, except two
 
 All of §1.1–§1.5 is built and live behind **Practice › Trends**, apart from two items the author
 declined: **income concentration** (§1.1 #1) and **committed vs speculative** (§1.1 #3). The
 numbering below is kept as written so the two gaps stay visible rather than being tidied away.
 
-**What shipped:** twenty analytics as pure `ana*` functions, in four sections — Clients, Money,
-Time, You — each section built only when opened. Every card is a heading, an info dot and the
+**What shipped:** twenty analytics as pure `ana*` functions, in four sections - Clients, Money,
+Time, You - each section built only when opened. Every card is a heading, an info dot and the
 figures; a card that cannot say anything yet says what it is waiting for instead of drawing an
 empty chart. Three settings were added to feed them (`sessionMins`, `adminMinsPerSession`,
 `fullWeekSessions`) plus an optional `source` on a client. Mechanics are in CLAUDE.md
 § *Practice analytics*.
 
-**The tier split below is still a proposal** — nothing about pricing or geography has changed
-yet. What has changed is that the analytics now exist to sell.
+**The tier split below SHIPPED in Sep 2026**, with one change: the names. The middle tier is
+**GroundWork Plus** (the table below calls it "Insights") and the top tier became **GroundWork
+Pro**. Contents are exactly as proposed - the tax bundle (`tax`, `finances`, `mtd`) is Pro's, and
+everything else that was gated is Plus's. Mechanics are in CLAUDE.md § GroundWork Plus & Pro, the
+decision record is `docs/monetisation.md` §3, and the gate matrix is asserted by
+`npm run test:tiers`. Pricing is still open.
 
 
 ### The problem with the current shape
@@ -34,7 +38,7 @@ yet. What has changed is that the analytics now exist to sell.
 *(As it stood before this work.)* `PLUS_FEATURES` was
 `tax · finances · mtd · trends · accreditation · notesSync · palettes`. Four of those seven were
 UK tax machinery. That made GroundWork Plus, in practice, **a UK tax product with some analytics
-attached** — fine for Charlotte and useless for a therapist in Dublin, Toronto or Auckland
+attached** - fine for Charlotte and useless for a therapist in Dublin, Toronto or Auckland
 running exactly the same practice with exactly the same problems.
 
 Trends was four cards: a retention funnel, attendance against agreed frequency, missed sessions,
@@ -46,7 +50,7 @@ is what makes the split below worth considering at all.
 | Tier | Contents | Market |
 |---|---|---|
 | **Free** | Logging, clients, rooms, supervision, receipts, spreadsheet import, every backup and export, the retention funnel | Everyone, everywhere |
-| **Insights** | Everything in §1.1–§1.5 below — all now built | **Worldwide** — no tax content, no jurisdiction |
+| **Insights** | Everything in §1.1–§1.5 below - all now built | **Worldwide** - no tax content, no jurisdiction |
 | **Plus** | Insights **+** Tax, Costs & income, MTD | UK only |
 
 That gives the "layer below tax" the feedback asked for, and it is the layer that can be sold in
@@ -57,7 +61,7 @@ justify itself on depth instead, which is what the list below is for.
 **Everything below is computed from data the app already holds**, with the marked exceptions that
 needed one new field each (all since added). No new sync, no server, no new permissions.
 
-### 1.1 Will the money keep coming? — income stability
+### 1.1 Will the money keep coming? - income stability
 
 These are the questions a self-employed person actually lies awake about, and not one of them
 is answered anywhere in the app today.
@@ -71,11 +75,11 @@ is answered anywhere in the app today.
    cannot be got from a spreadsheet without effort.
 3. **Committed vs speculative.** For the next eight weeks: what is actually booked, versus what
    your recent run-rate implies you'd normally earn. `incomeForecast()` already does one month
-   of this — extending it and showing the gap is the useful part.
+   of this - extending it and showing the gap is the useful part.
 4. **Your floor.** Worst month in the last twelve, best month, and the median. Three numbers
    that say how volatile the practice really is.
 
-### 1.2 What is an hour actually worth? — capacity and pricing
+### 1.2 What is an hour actually worth? - capacity and pricing
 
 5. **Effective hourly rate.** Revenue ÷ (clinical hours **+** supervision **+** a declared
    admin overhead per session). Most therapists have never calculated this and are startled by
@@ -84,18 +88,18 @@ is answered anywhere in the app today.
 6. **Capacity used.** Sessions per week against a "full week" the therapist declares once.
    Answers "am I full?" and "can I afford to be choosier?" without guessing.
 7. **Slot reliability.** Which day-and-time slots reliably fill and which repeatedly sit empty
-   or get cancelled. Directly actionable — it tells you to stop offering Friday at five.
+   or get cancelled. Directly actionable - it tells you to stop offering Friday at five.
 8. **Weeks actually worked.** Working weeks in the year vs weeks off. Sole traders
    systematically overestimate this and price as though they work 48 weeks.
 
-### 1.3 Is the work getting stickier? — client lifecycle
+### 1.3 Is the work getting stickier? - client lifecycle
 
 9. **Cohort retention curve.** Of the clients who started in each quarter, what proportion were
    still coming at 4, 8, 12 and 24 weeks. The retention funnel says *where clients are now*;
    this says *whether your intake is improving*, which is a different and better question.
 10. **Median episode length, trended.** *"Your work now averages 14 sessions, up from 9 two
     years ago."*
-11. **Drifting away — a list, not a chart.** Clients whose gap since the last session exceeds
+11. **Drifting away - a list, not a chart.** Clients whose gap since the last session exceeds
     1.5× their own usual interval **and** who have nothing booked. `clientSchedule()` and
     `freqDays()` already compute everything this needs. This is the most immediately useful item
     in the whole list, because it is a list of people to text this afternoon.
@@ -103,7 +107,7 @@ is answered anywhere in the app today.
     most reliably. *Needs one new optional field on a client: `source`.* It is the only analytic
     here that changes what a therapist **does** about marketing, and it is cheap.
 
-### 1.4 Am I being paid? — money hygiene, no tax involved
+### 1.4 Am I being paid? - money hygiene, no tax involved
 
 13. **Days to payment, trended.** Average days between session and payment, over time.
     *"You are being paid 31 days after the session; two years ago it was 12."* Nothing in the
@@ -111,11 +115,11 @@ is answered anywhere in the app today.
 14. **Who pays late.** Per client: average days to pay, and how often a payment passed 30 days.
 15. **Cost ratio.** Costs as a percentage of turnover, trended, by category. This is business
     reporting, not tax reporting, and works in any country.
-16. **Fee erosion.** Your *effective* average fee per session — after reduced cancellation
-    charges, legacy rates and mix shift — plotted against your headline rate. Practices very
+16. **Fee erosion.** Your *effective* average fee per session - after reduced cancellation
+    charges, legacy rates and mix shift - plotted against your headline rate. Practices very
     often raise the headline and see the effective figure fall. Nobody notices without the chart.
 
-### 1.5 Am I all right? — the differentiator
+### 1.5 Am I all right? - the differentiator
 
 Nobody else in this market reports on the practitioner, and it fits the brand better than any
 amount of revenue analysis.
@@ -139,19 +143,19 @@ own: it is a list of people to text this afternoon rather than a picture to admi
 
 ---
 
-## 2. Colour schemes — **removed**
+## 2. Colour schemes - **removed**
 
 The recommendation below was to make palettes free and drop them from the tier. The decision
 taken went one step further: **colour schemes are switched off entirely.** Sage is the only
 scheme, the picker is gone from Settings and from the setup wizard, and `palettes` is out of
 `PLUS_FEATURES`.
 
-Nothing was deleted. `PALETTES_ENABLED=false` is the entire switch — the palette data, the
+Nothing was deleted. `PALETTES_ENABLED=false` is the entire switch - the palette data, the
 `html[data-palette]` CSS, the picker markup and the wizard step are all still in the file and
 still work. `settings.palette` is deliberately never cleared, so anyone who had chosen Ocean gets
 Ocean back the moment the flag flips. The original reasoning follows, unchanged.
 
-**Recommendation (as written): no — and go further. Make every palette free, and take `palettes`
+**Recommendation (as written): no - and go further. Make every palette free, and take `palettes`
 out of `PLUS_FEATURES` entirely.**
 
 The reasoning:
@@ -161,7 +165,7 @@ The reasoning:
 - **It introduces a second billing model.** Per-colour unlocks mean non-consumable StoreKit
   products: a product ID per colour, each through App Review, each localised, plus a
   restore-purchases flow and a second entitlement store beside `tt_plus`. That lands in exactly
-  the place the code is deliberately simple — `plusActive()` is synchronous, called from render
+  the place the code is deliberately simple - `plusActive()` is synchronous, called from render
   paths, and fails open on every error path. A per-item entitlement matrix is the wrong shape
   for that function and would have to be threaded through `paletteLocked()`, `applyPalette()`
   and the head script that paints before first paint.
@@ -171,11 +175,11 @@ The reasoning:
 - **A locked colour is the most visible and least defensible thing in the tier.** It is on
   screen every day and it costs nothing to serve. It buys resentment at a discount.
 
-Dropping palettes leaves the tier reading as *the analytics and the tax engine* — a cleaner and
+Dropping palettes leaves the tier reading as *the analytics and the tax engine* - a cleaner and
 much more defensible story than *analytics, tax, and also some colours*.
 
 **If colour must be monetised at all**, the honest version is one non-consumable "Supporter"
-purchase that unlocks *all* palettes — a single product, a single flag, no matrix, and framed as
+purchase that unlocks *all* palettes - a single product, a single flag, no matrix, and framed as
 a tip rather than a gate. Only worth building if there is evidence people ask for it.
 
 *What was actually done: `PALETTES_ENABLED=false`, `applyPalette()` forced to sage, the
@@ -185,7 +189,7 @@ that slot instead.*
 
 ---
 
-## 3. A sneak peek at Trends — **shipped**, then widened
+## 3. A sneak peek at Trends - **shipped**, then widened
 
 Trends previously replaced its whole view with `plusLockHTML()`: a paragraph describing four
 charts nobody had seen. That is a poor advert and a slightly insulting one, because the data
@@ -211,7 +215,7 @@ number. The button reads *See all twenty*.
 The principle, for reuse elsewhere: **show the cheapest real section, and quantify the rest
 using the reader's own data.** Never describe a locked feature in the abstract.
 
-Not extended to Tax deliberately — a partial tax figure is a wrong tax figure, and the
+Not extended to Tax deliberately - a partial tax figure is a wrong tax figure, and the
 disclaimer machinery (`taxAcked()`) exists precisely to stop people acting on numbers they have
 not been walked through.
 
@@ -233,8 +237,8 @@ Not branding. **Evidence.**
 A counselling course, placement provider or charity has to know that its trainees are
 accumulating client hours, meeting the supervision ratio and logging CPD. Today that is
 collected on spreadsheets, paper logs and email chasing. GroundWork already computes every one
-of those figures — `mountAccreditation()` implements BACP Form 3A, the 1:6 ratio and the hour
-totals — for a completely different reason.
+of those figures - `mountAccreditation()` implements BACP Form 3A, the 1:6 ratio and the hour
+totals - for a completely different reason.
 
 So the pitch to an organisation is: *your trainees get a proper practice tool for their
 placement year, and you get a consistent, checkable hours report instead of forty different
@@ -255,7 +259,7 @@ client data lives.
 
 **The report is the product.** A **Placement Report** the trainee generates and sends
 themselves: client hours, supervision hours, the ratio, CPD hours, a date range, the practice
-name, and a checksum so a tutor can tell it has not been edited by hand. Aggregate hours only —
+name, and a checksum so a tutor can tell it has not been edited by hand. Aggregate hours only -
 no client codes, no fees, nothing session-level.
 
 ### The invariant this must not break
@@ -264,7 +268,7 @@ no client codes, no fees, nothing session-level.
 access whatsoever.** There is no server, no sync, no org-side dashboard. The trainee exports;
 the trainee sends. This has to be stated in as many words on the redemption screen, because a
 trainee handed a code by their course will otherwise reasonably assume their tutor can see
-their clients — and if they assume that, they will not log honestly, which destroys the value
+their clients - and if they assume that, they will not log honestly, which destroys the value
 of the whole thing.
 
 A later, optional addition that keeps the invariant: a static verifier page where a tutor pastes
@@ -278,7 +282,7 @@ existing system to switch away from. Trainees qualify, go into private practice,
 they already know. There is no cheaper way to reach that audience.
 
 Indicative pricing, to be tested rather than trusted: per-seat annual at a real discount to the
-£29.99 retail price — say £15/seat at 20+ seats — invoiced directly.
+£29.99 retail price - say £15/seat at 20+ seats - invoiced directly.
 
 ### Open questions before any code
 
@@ -292,6 +296,6 @@ Indicative pricing, to be tested rather than trusted: per-seat annual at a real 
   Australian equivalents each count hours slightly differently. Supporting one badly is worse
   than supporting one well, so pick deliberately.
 - **What happens at the end of the course.** The trainee's records are theirs and must remain
-  fully exportable when the seat lapses — the data-plane invariant in monetisation.md §2.1
+  fully exportable when the seat lapses - the data-plane invariant in monetisation.md §2.1
   applies here exactly as it does to a lapsed personal subscription. A trainee must never lose
   access to their own client history because a course did not renew.

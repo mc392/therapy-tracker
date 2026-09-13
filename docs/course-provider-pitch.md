@@ -7,8 +7,8 @@ this supports. This is a script and a leave-behind, not a feature list.*
 **Read this first.** At the stage this is written for, GroundWork does **not** yet produce a
 CPCAB or BACP training form, does not calculate against a course's rule pack, and has no
 signatures. Stage 0 is a conversation about a problem, not a demo of a finished product. The
-pitch below is written to be honest about that, because the alternative — implying it exists,
-then asking them to wait two terms — loses the one thing this whole route depends on, which is
+pitch below is written to be honest about that, because the alternative - implying it exists,
+then asking them to wait two terms - loses the one thing this whole route depends on, which is
 a course lead willing to put their name to a calculation. **If you cannot say the paragraph in
 §4 out loud without wincing, the pitch is not ready.**
 
@@ -22,16 +22,16 @@ a course lead willing to put their name to a calculation. **If you cannot say th
 > spends a chunk of every term chasing the gaps, correcting the totals and finding out in April
 > that a trainee has been under their supervision ratio since January.
 >
-> That is the bit I want to talk about. Not the trainees' record-keeping — yours.
+> That is the bit I want to talk about. Not the trainees' record-keeping - yours.
 
 **Then stop and let them talk.** The single most valuable output of the whole meeting is their
-own answer to *"how much time does that actually cost you?"* — because it is the business case,
+own answer to *"how much time does that actually cost you?"* - because it is the business case,
 and it has to come from them. Do not fill the silence with features.
 
 **Listen for the three things that decide whether this is viable:**
 
 1. **Who owns the definition of a client hour on this course?** Them, or the awarding body? If
-   they cannot approve a calculation, this partnership cannot work in the form described here —
+   they cannot approve a calculation, this partnership cannot work in the form described here -
    and it is better to find out in minute four than in month four.
 2. **Where do completed forms end up?** SharePoint, Moodle, email, paper. This decides whether
    "the trainee saves a file and uploads it" is fine or a dead end.
@@ -67,7 +67,7 @@ that produces worse data than the spreadsheet did.
 
 - **They log the session once.** Hours, supervision position and course requirements update
   themselves.
-- **They also get a real practice tool** — who is booked, who owes them money, invoices and
+- **They also get a real practice tool** - who is booked, who owes them money, invoices and
   statements, and a tax estimate for when they start charging. That is the part that makes them
   open it every week rather than the night before a deadline, and it is the reason the hours are
   accurate.
@@ -78,7 +78,7 @@ that produces worse data than the spreadsheet did.
 ## 4. The paragraph that has to be said out loud
 
 > **You will not be able to see your trainees' records. There is no dashboard, no login for you,
-> and nothing is sent anywhere automatically. The app has no server — the records sit on the
+> and nothing is sent anywhere automatically. The app has no server - the records sit on the
 > trainee's own device and in their own cloud folder. The trainee generates a report and sends
 > it to you, exactly as they send you a spreadsheet today.**
 
@@ -89,10 +89,10 @@ The honest one: it is a limitation, and they should hear it from us.
 The one that matters more: **a trainee who believes their tutor can see their client list will
 not log honestly.** They will keep a second, private, truthful record, and the moment that
 happens everything the course was buying is worthless. The absence of a dashboard is not a gap
-in the product — it is the thing that makes the data trustworthy.
+in the product - it is the thing that makes the data trustworthy.
 
 If they push for a dashboard, that is a real conversation and the answer is not "later". The
-answer is: *even aggregated, on a cohort of twelve, those statistics identify people — and the
+answer is: *even aggregated, on a cohort of twelve, those statistics identify people - and the
 moment there is a server holding trainee data, everything I just told you about privacy stops
 being true.*
 
@@ -102,13 +102,13 @@ being true.*
 
 Not a purchase. Not a commitment. **Three things, in this order:**
 
-1. **Their actual forms** — the Word documents, the trainee template, the tutor's reconciliation
+1. **Their actual forms** - the Word documents, the trainee template, the tutor's reconciliation
    sheet. Not descriptions of them.
 2. **An hour to walk through how hours are counted on their course**, in enough detail to write
    it down: what counts, what does not, how a 50-minute session is credited, the supervision
    ratio and minimum frequency, how group supervision is weighted, the in-person/remote split,
    the minimum client count, personal therapy.
-3. **Their review of that written statement** — and, if it is right, their agreement to approve
+3. **Their review of that written statement** - and, if it is right, their agreement to approve
    it for one cohort.
 
 That third one is the whole ask. Everything else follows from it.
@@ -128,7 +128,7 @@ These are not tone preferences. Each one is either untrue or would sink the part
 |---|---|
 | "Guarantees compliance" | "Supports compliance against the versioned rules your course approves" |
 | "BACP-approved" / "CPCAB-approved" | Name what is actually true: it implements the published ratio and hour rules, and *you* approve the interpretation |
-| "Your data is outside GDPR" | "We never receive or store your trainees' client records" — the accurate claim, and enough |
+| "Your data is outside GDPR" | "We never receive or store your trainees' client records" - the accurate claim, and enough |
 | "You'll be able to see cohort progress" | See §4. Not later, not in a future version |
 | "It handles every professional body" | One framework, done properly, for one course. The second one comes after the first works |
 | Anything implying the training forms exist today | Stage 0 is a conversation about a problem. Do not demo what is not built |
@@ -139,7 +139,7 @@ These are not tone preferences. Each one is either untrue or would sink the part
 
 Do not lead with it. If asked:
 
-Per-seat annual, at a real discount to the £29.99 retail price — indicatively £12–15 a seat at
+Per-seat annual, at a real discount to the £29.99 retail price - indicatively £12–15 a seat at
 20+ seats, invoiced directly. Priced to be trivially approvable out of a course budget rather
 than to be a revenue line, because the point is that trainees who qualify keep using it.
 
@@ -158,13 +158,13 @@ Two things to volunteer without being asked, because they will be the objections
 Cold-emailing course administrators has a poor hit rate and puts the pitch in front of someone
 who cannot say yes to §5.3.
 
-1. **Supervisors who take trainees** — Charlotte's own network first. They see the forms, they
+1. **Supervisors who take trainees** - Charlotte's own network first. They see the forms, they
    sign some of them, and they are talking to the course anyway.
 2. **Placement coordinators.** A coordinator drowning in hours forms is a warmer lead than
    anyone, and their complaint carries into the course from a direction that is hard to ignore.
 3. **The course lead**, ideally introduced by one of the above.
 
-**Target profile:** a CPCAB Level 4 Therapeutic Counselling provider — public forms, objective
+**Target profile:** a CPCAB Level 4 Therapeutic Counselling provider - public forms, objective
 hour rules, a mode-split rule, minimum client counts, a real evidence portfolio. Second choice:
 a BACP-aligned diploma with placements and multiple supervisor reports.
 
