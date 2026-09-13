@@ -13327,7 +13327,7 @@ function whatsNewSteps(){
   st.push({emoji:gi("tabs"), h:"Finding your way around", sub:"A lot has been added since you last looked. Two minutes, and everything is where you expect it.",
     html:ovPoints([
       [gi("home"),"Home is yours to arrange","<b>Arrange this screen</b>, at the bottom of Home, puts the blocks in your order. Any Business analytics card can be pinned to it."],
-      [gi("settings"),"Search and help, one button","The magnifier at the top of every screen finds a client, a session, a screen, a setting or an explanation - and, before you type, holds the tips for the screen you are on and a map of every screen with what to check and how often."],
+      [gi("settings"),"Search and help, one button","The magnifier at the top of every screen finds a client, a session, a screen, a setting or an explanation - and, before you type, holds the tips for the screen you are on, a map of every screen, and what to do and how often."],
       [gi("trends"),"Trends is now Business analytics","Last on the Practice tab: twenty cards on clients, money, time and you, and a projection of where this year lands."]
     ])});
   st.push({emoji:gi("rooms"), h:"Room fees moved out of the session form", sub:"Logging a session no longer asks whether you have paid for the room.",
@@ -13701,7 +13701,8 @@ function findSheet(){
       const steps=tip.steps();steps.forEach(s=>{if(!s.tab)s.tab=tip.tab;if(!s.seg&&tip.seg)s.seg=tip.seg;});
       coachStart(steps,{doneLabel:"Got it",skipLabel:"Close"});});
     if(startVisible())h+=row("Getting started","The first few jobs, and how far you are",()=>go("home",{focus:"startCard"}));
-    h+=row("Where everything is","Every screen on one page, and what to do how often",()=>appMapSheet());
+    h+=row("What to do, and how often","Weekly, monthly, and the once-a-year jobs",()=>appJobsSheet());
+    h+=row("Where everything is","Every screen on one page",()=>appMapSheet());
     h+=row("Take the guided tour","Eight short stops",()=>startTour());
     h+=row("What’s new in this update","",()=>showWhatsNew());
     res.innerHTML=h;wire();
@@ -13726,8 +13727,13 @@ function findSheet(){
    A map of the app on one sheet, built from the same tab and feature switches the tab bar
    reads, so it never lists a screen this install cannot open. Every row is a link. Reached from
    Settings › Setup & help, from the empty Home screen, and named at the end of the tour and of
-   What's new - the places somebody goes when they are lost. Below the map, the jobs the app
-   expects and roughly how often, each a link too: the answer to "what should I be doing in here". */
+   What's new - the places somebody goes when they are lost.
+   APP_JOBS - the jobs the app expects and roughly how often, each a link too - used to be a
+   second section at the bottom of this same sheet. It moved to its own sheet (`appJobsSheet()`,
+   Sep 2026), reached from Search & help as the row right under Getting started: "where is
+   everything" and "what should I be doing in here" are two different questions and a reader
+   asking one was made to scroll past the other to get an answer. `findIndex()`'s "What to do"
+   search hits still read APP_JOBS directly. */
 const APP_MAP=[
   {tab:"home",rows:[[null,"Home","your four figures, what needs attention, what is coming up, and anything you have pinned"]]},
   {tab:"sessions",rows:[["upcoming","Upcoming","what is booked"],["unpaid","Unpaid","payments to chase"],
@@ -13780,14 +13786,27 @@ function appMapSheet(){
       const fn=sec.tab==="settings"?()=>go("settings",{openGroup:r[0]}):()=>go(sec.tab,r[0]?{seg:r[0]}:{});
       h+=row(r[1],r[2],reg(fn));});
   });
-  h+='<div class="grp-h" style="margin-top:18px">'+gi("calendar")+' What to do, and how often</div>';
-  APP_JOBS.forEach(job=>{
-    const its=job[1].filter(i=>!i[2]||i[2]()); if(!its.length)return;
-    h+='<div class="small muted" style="font-weight:700;margin:10px 2px 2px">'+esc(job[0])+'</div>'+its.map(i=>row(i[0],"",reg(i[1]))).join("");
-  });
   body.innerHTML=h;
   body.querySelectorAll("[data-map]").forEach(li=>li.onclick=()=>{closeSheet();const f=acts[li.dataset.map];if(f)f();});
   openSheet("Where everything is",body);
+}
+/* ===== What to do, and how often =====
+   The jobs half of the old app map, split out Sep 2026 into its own sheet reached from
+   Search & help - see the note above APP_MAP. Same row/link mechanics as appMapSheet(). */
+function appJobsSheet(){
+  const body=el('<div class="appmap"></div>');
+  const acts={}; let n=0;
+  const reg=fn=>{const k="j"+(n++);acts[k]=fn;return k;};
+  const row=(label,sub,key)=>'<div class="list-item" data-map="'+key+'"><div class="li-main"><div class="li-title">'+esc(label)+'</div>'+
+    (sub?'<div class="li-sub">'+esc(sub)+'</div>':'')+'</div><div class="li-right muted">›</div></div>';
+  let h='<p class="small muted">Every row is a link.</p>';
+  APP_JOBS.forEach(job=>{
+    const its=job[1].filter(i=>!i[2]||i[2]()); if(!its.length)return;
+    h+='<div class="grp-h" style="margin-top:14px">'+esc(job[0])+'</div>'+its.map(i=>row(i[0],"",reg(i[1]))).join("");
+  });
+  body.innerHTML=h;
+  body.querySelectorAll("[data-map]").forEach(li=>li.onclick=()=>{closeSheet();const f=acts[li.dataset.map];if(f)f();});
+  openSheet("What to do, and how often",body);
 }
 
 /* ---- the tour: what is worth knowing before you have used any of it ---- */

@@ -101,7 +101,8 @@ async function inPage(profile) {
     ["client form", () => clientForm(S.clients[0])],
     ["peer supervision form", () => peerForm(null)],
     ["CPD settings", () => cpdSettingsSheet()],
-    ["where everything is", () => appMapSheet()]
+    ["where everything is", () => appMapSheet()],
+    ["what to do, and how often", () => appJobsSheet()]
   ];
   for (const [name, open] of sheets) {
     try { open(); } catch (e) { ok("opens: " + name, false, e.message); continue; }
@@ -113,7 +114,7 @@ async function inPage(profile) {
   /* ---- the app map: every row is a link that lands somewhere ---- */
   appMapSheet();
   const rowCount = document.querySelectorAll("#sheetBody [data-map]").length;
-  ok("app map lists the screens and the jobs", rowCount >= 20, rowCount);
+  ok("app map lists the screens", rowCount >= 15, rowCount);
   ok("app map leaves out a switched-off feature",
     !!(() => { S.settings.features.raw = false; appMapSheet();
       const gone = ![...document.querySelectorAll("#sheetBody .li-title")].some((n) => n.textContent === "Table");
@@ -124,13 +125,28 @@ async function inPage(profile) {
     const label = row.querySelector(".li-title").textContent;
     try { row.click(); } catch (e) { ok("map row works: " + label, false, e.message); continue; }
     await sleep(20);
-    /* a screen row closes the sheet and lands on a tab; a job row may open a form instead */
-    ok("map row works: " + label, !sheetOpen() || sheetTitle() !== "Where everything is", sheetTitle());
+    /* every row here is now a screen link, so it always closes the sheet and lands on a tab */
+    ok("map row works: " + label, !sheetOpen(), sheetTitle());
     if (sheetOpen()) closeSheet();
   }
   ok("a Settings row opens its group", (() => { appMapSheet();
     const r = [...document.querySelectorAll("#sheetBody [data-map]")].find((n) => n.querySelector(".li-title").textContent === "Data & backup");
     r.click(); const d = document.querySelector('.sgrp[data-g="data"]'); return curTab() === "settings" && d && d.open; })());
+
+  /* ---- what to do, and how often: its own sheet since Sep 2026, jobs may open a form ---- */
+  appJobsSheet();
+  const jobRowCount = document.querySelectorAll("#sheetBody [data-map]").length;
+  ok("the jobs sheet lists the weekly-to-yearly jobs", jobRowCount >= 8, jobRowCount);
+  for (let i = 0; i < jobRowCount; i++) {
+    appJobsSheet();
+    const row = document.querySelectorAll("#sheetBody [data-map]")[i];
+    const label = row.querySelector(".li-title").textContent;
+    try { row.click(); } catch (e) { ok("job row works: " + label, false, e.message); continue; }
+    await sleep(20);
+    /* a job row closes the sheet and lands on a tab, or opens a form (e.g. logging a session) */
+    ok("job row works: " + label, !sheetOpen() || sheetTitle() !== "What to do, and how often", sheetTitle());
+    if (sheetOpen()) closeSheet();
+  }
 
   /* ---- an empty Home offers the map, and the map opens from it ---- */
   (() => { const keep = S.sessions; S.sessions = []; go("home");
@@ -196,6 +212,13 @@ async function inPage(profile) {
   go("home"); findSheet(); await sleep(80);
   ok("the sheet opens with help rows before anything is typed",
     sheetOpen() && sheetTitle() === "Search & help" && document.querySelectorAll("#findRes [data-find]").length >= 3);
+  const idleTitles = [...document.querySelectorAll("#findRes .li-title")].map((n) => n.textContent);
+  const gsIdx = idleTitles.indexOf("Getting started"), jobsIdx = idleTitles.indexOf("What to do, and how often");
+  ok("'What to do, and how often' is its own row" + (gsIdx >= 0 ? ", right after Getting started" : ""),
+    jobsIdx >= 0 && (gsIdx < 0 || jobsIdx === gsIdx + 1), idleTitles.join(" | "));
+  const jobsRow = [...document.querySelectorAll("#findRes [data-find]")].find((n) => n.textContent.includes("What to do, and how often"));
+  if (jobsRow) { jobsRow.click(); await sleep(20); ok("it opens the jobs sheet", sheetOpen() && sheetTitle() === "What to do, and how often"); closeSheet(); }
+  go("home"); findSheet(); await sleep(80);
   const q = document.getElementById("findQ");
   const code = S.clients[0] && S.clients[0].code;
   if (code) { q.value = code; q.oninput(); ok("a client code finds the client", /Clients/.test(document.getElementById("findRes").textContent) && document.querySelector("#findRes [data-find]"), code); }
