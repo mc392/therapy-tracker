@@ -786,6 +786,19 @@ row. `settings.homePins` holds the keys.
 - **`plusLocked("trends")` or `feat("trends")` off ⇒ `pinBtn()` returns nothing and the Home block
   is empty.** A control that pins a card the reader cannot open is not a control; the locked view's
   free funnel is a shopfront, not a pinnable card.
+- **Behind the gate the invitation still appears, at the FOOT of Home** (`homePinLockedHTML()`,
+  Sep 2026). Trends under the gate is a sneak peek rather than a wall, so the screen a locked
+  reader opens every morning must not be the one place that says nothing about it. Four rules,
+  each borrowed from a neighbour: it renders **outside `HOME_CARDS`** and last, so a card nobody
+  has paid for can neither sit above the reader's own figures nor take an arranged block's slot
+  (`homePinsBlock()` still returns `""` while the gate is down, and `_homeVisible` still has no
+  `pins` in it); **`feat("trends")` off shows nothing**, because switched off is a preference and
+  there is nothing to sell - the same split Money's projection tile makes; it obeys the **same
+  `ANA_PIN_PROMPT_MIN`** as the real invitation; and a **lapsed** subscriber with pins still
+  stored is told they are saved rather than watching them vanish. The button lands on Business
+  analytics with **no `focus`**, for the reason `goProjection()` does. `homePinSheet()` answers
+  the two states separately as well - switched off is a toast about the switch, locked opens the
+  paywall sheet.
 - **Toggling from Trends repaints the buttons (`paintPins`), never redraws the section** - a pin
   tapped halfway down must not throw the reader back to the top. Home redraws itself with
   `keepScroll`, because the card being unpinned is the one on screen.

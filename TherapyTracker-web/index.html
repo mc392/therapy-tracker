@@ -2922,12 +2922,54 @@ function homePinsBlock(){
     html:'<div class="pinlead"><span class="pintitle">'+gi("home")+' Pinned '+infoDot("home-pins","About pinning")+'</span>'+
       '<span class="taxlink" id="pinMore">Business analytics ›</span></div>'+html};
 }
+/* ---- the same invitation for somebody behind the gate, at the FOOT of the screen ----
+   Business analytics under the gate is a sneak peek, not a wall (see renderMetrics): the funnel
+   renders in full on real numbers and the rest is named with one real figure each. Home said
+   nothing at all about any of it, so the one screen a locked reader opens every morning was also
+   the one place the shopfront was missing.
+
+   It sits at the bottom, outside HOME_CARDS, and that is deliberate on both counts. A card
+   nobody has paid for does not belong above the figures the reader already owns, and it must
+   never take an arranged block's slot - `homeOrder()` is the reader's own order of their own
+   blocks, and this is not one of them. `homePinsBlock()` therefore still renders nothing while
+   the gate is down, exactly as before.
+
+   Three conditions, each the rule that already governs its neighbours:
+   - `feat("trends")` off is a PREFERENCE the reader set, so there is nothing to sell her - the
+     same split Money's projection tile makes between switched off and locked.
+   - the same ANA_PIN_PROMPT_MIN as the real invitation: a dashed promise about analytics on
+     somebody's second day is an empty one whether or not they could pay for it.
+   - somebody whose subscription has LAPSED with cards still pinned is told where they went and
+     that they are still saved, rather than watching them disappear off Home unexplained. */
+function homePinLockedHTML(){
+  if(!feat("trends")||!plusLocked("trends"))return "";
+  const held=homePins().length;
+  if(!held&&S.sessions.length<ANA_PIN_PROMPT_MIN)return "";
+  const t=featureTier("trends")||"plus";
+  return '<div class="card pinempty" id="pinLocked">'+
+    '<div class="pinico">'+gi("home")+'</div>'+
+    '<h2>Pin an analytic here</h2>'+
+    /* One short sentence, the reasoning behind the dot - the Sep 2026 copy rule. The button
+       below already makes the offer, so the paragraph does not have to describe the sneak peek
+       as well as the pinning. */
+    '<p class="small muted">'+
+      (held
+        ? 'The '+plural(held,"analytic")+' you pinned '+(held===1?"is":"are")+' still saved, and '+(held===1?"comes":"come")+' back here with '+esc(tierName(t))+'. '
+        : 'A couple of dozen figures, worked out from sessions you have already logged. Any of them can sit here with '+esc(tierName(t))+'. ')+
+      infoDot("home-pins","About pinning")+'</p>'+
+    '<button class="btn sec" id="pinLockGo">'+gi("trends")+' See what is behind this '+tierTagHTML(t)+'</button></div>';
+}
 /* The picker. Staged until Done, the same shape as the arrange sheet - closing discards, and one
    commit rather than one per row. Readiness is deliberately not shown: working out whether all
    twenty-two have enough data means running all twenty-two, and a card that is waiting says so in
    its own words once it is on the screen. */
 function homePinSheet(){
-  if(!anaPinnable()){toast("Business analytics is switched off");return;}
+  /* Two different answers, because they are two different facts: switched off is the reader's
+     own preference and the fix is a switch; not pinnable with the feature ON is the gate, a
+     billing state, and the fix is the sheet that explains it. One toast for both sent half of
+     them to a switch that was already in the right position. */
+  if(!feat("trends")){toast("Business analytics is switched off");return;}
+  if(!anaPinnable()){openPlusSheet("trends");return;}
   let sel=homePins().slice();
   const body=el('<div></div>');
   body.innerHTML='<p class="small muted">Pick up to '+ANA_PIN_MAX+'. They are drawn on your home screen exactly as they are in Business analytics, and you can move the block with <b>Arrange this screen</b>.</p>'+
@@ -3079,8 +3121,10 @@ VIEWS.home=function(){
   _homeVisible=order.filter(k=>parts[k]);
   const arrangeRow=_homeVisible.length>1
     ? '<p class="small muted center" style="margin:16px 0 0"><span class="taxlink" id="hArrange">Arrange this screen ›</span></p>' : '';
+  /* Last of the cards, below everything the reader owns and above the arrange link, which is a
+     footer utility rather than content. Empty for everyone who is not behind the gate. */
   v.innerHTML=(S.sessions.length?"":'<div class="hint" style="font-size:14px">👋 <b>Nothing logged yet.</b> Tap <b>＋ New session</b> to start, or restore a backup from another device in <b>⚙ Settings › Data &amp; backup</b>. <span class="taxlink" id="hTour">Take the guided tour ›</span> &nbsp;·&nbsp; <span class="taxlink" id="hMap">Where everything is ›</span></div>')+
-    order.map(k=>parts[k]||"").join("")+arrangeRow;
+    order.map(k=>parts[k]||"").join("")+homePinLockedHTML()+arrangeRow;
   const up=v.querySelector("#up");
   if(!upcoming.length)up.innerHTML='<p class="muted small">No future sessions logged.</p>';
   else up.innerHTML=upcoming.slice(0,12).map(x=>{const d=x.d;
@@ -3125,6 +3169,18 @@ VIEWS.home=function(){
     const pk=ph.querySelector("#pinPick");if(pk)pk.onclick=()=>homePinSheet();
     ph.querySelectorAll(".svgwrap").forEach(w=>scrollChart(w,null));
     requestAnimationFrame(()=>ph.querySelectorAll(".funnel .fbar>i").forEach(i=>{i.style.width=(+i.dataset.w)+"%";}));
+  }
+  /* The locked invitation at the foot of the screen. Wired here rather than inside the #homePins
+     block on purpose - it is not part of it, and under the gate that block does not exist.
+     It lands on Business analytics, which under the gate IS the sneak peek: the reader's own
+     funnel plus one real figure from each locked section, with the way in on it. Same posture
+     as goProjection() - a shopfront, not a wall - so no focus id, because the card that would
+     be focused is not rendered under the gate. */
+  const plc=v.querySelector("#pinLocked");
+  if(plc){
+    wireInfo(plc);
+    const plg=plc.querySelector("#pinLockGo");
+    if(plg)plg.onclick=()=>go("practice",{seg:"trends"});
   }
   /* Same treatment the charts get: built before the view is attached, so it has no width yet.
      Land on this week rather than on the same date last year. */

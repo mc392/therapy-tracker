@@ -207,7 +207,45 @@ const results = await page.evaluate(async (env) => {
   try { localStorage.setItem("tt_plus_gate", "on"); localStorage.setItem("tt_plus", JSON.stringify({ active: false })); } catch (e) {}
   ok("behind the paywall nothing is pinnable either",
     !plusLocked("trends") || (!anaPinnable() && homePinsBlock().html === ""));
+
+  /* ---- 8b. …but Home still says the invitation exists, at the bottom ----
+     Business analytics under the gate is a sneak peek rather than a wall, so the screen the
+     reader opens every morning must not be silent about it. The rules, from the comment on
+     homePinLockedHTML(): shown only when the feature is ON and merely locked, only past the
+     same session floor as the real invitation, LAST among the cards, and never inside the
+     pinned block or among the blocks the arrange sheet can move. */
+  if (plusLocked("trends")) {
+    setHomePins([]);
+    go("home"); await sleep(150);
+    const inv = document.querySelector("#pinLocked");
+    ok("behind the paywall Home still offers the invitation", !!inv);
+    ok("…and not the pinnable one", !document.querySelector("#pinPrompt"));
+    ok("…drawn as the same dotted invitation", inv && inv.classList.contains("pinempty"));
+    ok("…naming the tier it needs", inv && /Plus|Pro/.test(inv.querySelector(".tiertag") ? inv.querySelector(".tiertag").textContent : ""));
+    ok("…outside the pinned block, which is still empty",
+      inv && !inv.closest("#homePins") && homePinsBlock().html === "");
+    ok("…and outside the blocks the reader can arrange", _homeVisible.indexOf("pins") < 0);
+    const cards = [...document.querySelectorAll("#main .view > .card")];
+    ok("…last of the cards on the screen", cards.length && cards[cards.length - 1] === inv,
+      cards.length && cards[cards.length - 1].id);
+    /* A dashed promise about analytics is empty on somebody's second day whether or not they
+       could pay for it - the locked card obeys the same floor as the unlocked one. */
+    const full = S; const tiny = JSON.parse(JSON.stringify(st));
+    tiny.sessions = tiny.sessions.slice(0, ANA_PIN_PROMPT_MIN - 1);
+    S = tiny; ok("a practice with too little logged is not offered it", homePinLockedHTML() === "");
+    S = full;
+    sg.features = sg.features || {}; sg.features.trends = false;
+    ok("switched off is a preference, so there is nothing to sell", homePinLockedHTML() === "");
+    delete sg.features.trends;
+    /* It leads to the sneak peek - the reader's own funnel plus a real figure from each locked
+       section - not to an empty screen and not to a wall. */
+    document.querySelector("#pinLocked #pinLockGo").click(); await sleep(200);
+    ok("…and it lands on the Business analytics sneak peek",
+      pracTab === "trends" && !!document.querySelector(".plusgate.peek"));
+  }
   try { localStorage.removeItem("tt_plus"); localStorage.removeItem("tt_plus_gate"); } catch (e) {}
+  go("home"); await sleep(120);
+  ok("with the gate lifted the invitation is gone again", !document.querySelector("#pinLocked"));
 
   /* ---- 9. the picker ---- */
   setHomePins([]);
