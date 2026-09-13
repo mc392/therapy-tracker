@@ -3256,28 +3256,70 @@ function hrsLabel(n){return r1(n)+" hr"+(r1(n)===1?"":"s");}
    not there. `fmtD` is the same shape with the year on it. */
 function fmtRD(d){return fmtD(d);}
 
-/* How an attended session becomes an hour, and the single most important thing this feature
-   has to be honest about.
+/* How an attended session becomes an hour.
 
-   GroundWork stores a session, not a duration — `sessionMins()` is one practice-wide setting.
-   So "clinical hours" here is always a multiplication, never a sum of recorded lengths, and
-   every report SAYS SO in as many words. A therapist whose 90-minute couple work is counted
-   as 50 minutes must be able to see that from the page rather than discover it from a tutor.
-   (Per-session duration is the schema-v10 job — docs/tasks/T10-training-record.md.)
+   **A 50-minute session IS one clinical hour.** That is the convention across UK counselling
+   training and accreditation — the "therapeutic hour" is 50 minutes with the remaining ten for
+   notes — so counting a standard session as 0.83 hours of elapsed time understates a trainee's
+   hours by a sixth against the figure their course is actually asking for. `clinical` is
+   therefore the DEFAULT, and `actual` is there for the minority of forms that genuinely want
+   elapsed clock time.
 
-   The two modes are a real institutional difference, not a preference: some courses credit a
-   50-minute session as one clinical hour, others want elapsed time. */
+   Other session lengths are the real problem, and GroundWork cannot fully solve it yet: it
+   stores a session, not a duration, so `sessionMins()` — one practice-wide setting — is all
+   there is. Three things follow, and all three are deliberate:
+
+   - `prorata` exists for a practice whose sessions are not the standard length. A 90-minute
+     session is 1.8 clinical hours, a 25-minute one is 0.5, measured against the 50-minute hour.
+   - When the practice length is NOT a standard hour (under 45 or over 60 minutes) and the
+     report is still counting one hour each, `mismatch` is set and the block prints a warning.
+     Silently reporting a practice of 90-minute sessions as one hour each understates it badly,
+     and the therapist is the only person who can know which their course wants.
+   - Every mode prints its own arithmetic, so a tutor can check the total rather than trust it.
+
+   Per-session duration is docs/tasks/T10-training-record.md; when it lands, these three modes
+   keep their meanings and only the source of `mins` changes. */
+const CLINICAL_HOUR_MINS=50;          /* the therapeutic hour — 50 minutes, not 60 */
+const REPORT_HOUR_MODES=[
+  ["clinical","One clinical hour per session"],
+  ["prorata", "Pro rata against the 50-minute hour"],
+  ["actual",  "Actual elapsed time"]
+];
+function reportHourMode(spec){
+  const m=(spec&&spec.opts||{}).hourMode;
+  return REPORT_HOUR_MODES.some(x=>x[0]===m)?m:"clinical";   /* an unknown stored mode falls back */
+}
 function reportHours(ctx){
-  const n=ctx.attended.length, mins=sessionMins();
-  const clinical=(ctx.spec.opts||{}).hourMode==="clinical";
-  const hours=clinical?n:(n*mins/60);
+  const n=ctx.attended.length, mins=sessionMins(), mode=reportHourMode(ctx.spec);
+  const plural=n===1?"":"s";
+  let hours, basis;
+  if(mode==="actual"){
+    hours=n*mins/60;
+    basis=n+" attended session"+plural+" × "+mins+" minutes of elapsed time = "+hrsLabel(hours);
+  }else if(mode==="prorata"){
+    const per=mins/CLINICAL_HOUR_MINS;
+    hours=n*per;
+    basis=n+" attended session"+plural+" × "+mins+" minutes ÷ the "+CLINICAL_HOUR_MINS+
+      "-minute clinical hour = "+r1(per)+" clinical hours each = "+hrsLabel(hours);
+  }else{
+    hours=n;
+    basis=n+" attended session"+plural+" counted as one clinical hour each — the "+
+      CLINICAL_HOUR_MINS+"-minute therapeutic hour, which is what your sessions are set to"+
+      (mins===CLINICAL_HOUR_MINS?"":" (yours are "+mins+" minutes)")+".";
+  }
+  /* A practice whose sessions are not a standard hour, still counting one hour each. The
+     therapist is the only person who can know which their course wants, so say it, don't fix it. */
+  const standard=mins>=45&&mins<=60;
+  const mismatch=(mode==="clinical"&&!standard)
+    ? ("Your sessions are "+mins+" minutes, which is not the standard 50-to-60-minute hour, and "+
+       "this report is counting each of them as one clinical hour. Pro rata they would be "+
+       hrsLabel(n*mins/CLINICAL_HOUR_MINS)+". Check which your course asks for.")
+    : "";
   return {
-    sessions:n, mins:mins, clinical:clinical, hours:hours,
-    basis:clinical
-      ? n+" attended session"+(n===1?"":"s")+" counted as one clinical hour each"
-      : n+" attended session"+(n===1?"":"s")+" × "+mins+" minutes = "+hrsLabel(n*mins/60),
+    sessions:n, mins:mins, mode:mode, hours:hours, basis:basis, mismatch:mismatch,
     caveat:"GroundWork records a session, not its length, so every session is counted at the "+
-      "practice session length ("+mins+" minutes). A session that actually ran longer or shorter is not reflected here."
+      "practice session length ("+mins+" minutes). A session that actually ran longer or shorter "+
+      "is not reflected here."
   };
 }
 
@@ -3297,6 +3339,7 @@ const REPORT_SECTIONS={
         kpis:[{v:r1(h.hours),l:"Client hours"},{v:h.sessions,l:"Sessions attended"},
               {v:nClients,l:"Distinct clients"},{v:ctx.missed.length,l:"Missed (not counted)"}],
         work:[h.basis,
+          h.mismatch?("<b>"+esc(h.mismatch)+"</b>"):"",
           "Missed sessions are excluded: "+ctx.missed.length+" cancellation"+(ctx.missed.length===1?"":"s")+
             " or non-attendance in this period "+(ctx.missed.length?"were":"was")+" left out of every hours figure above.",
           first?("First attended session "+fmtD(first.s.date)+", most recent "+fmtD(last.s.date)+"."):""].filter(Boolean),
@@ -3319,7 +3362,9 @@ const REPORT_SECTIONS={
   clients:{n:"Per client",d:"One row per client code — sessions, hours, first and last date.",
     build:ctx=>{
       if(!ctx.attended.length)return null;
-      const h=reportHours(ctx), per=h.clinical?1:(h.mins/60);
+      /* One session's worth of hours, whichever mode is in force — derived from the block
+         total so a per-client row can never disagree with the headline above it. */
+      const h=reportHours(ctx), per=h.sessions?(h.hours/h.sessions):0;
       const by={};
       ctx.attended.forEach(x=>{const c=(x.s.client||"—").trim()||"—";
         const e=by[c]||(by[c]={n:0,first:null,last:null,modes:{}});
@@ -3454,11 +3499,11 @@ const REPORT_TEMPLATES=[
   {k:"bacp-trainee", n:"Trainee placement record", body:"BACP-aligned training",
    sub:"Supervised client hours excluding missed sessions, the supervision ratio and the mode split — the four things a placement review asks for.",
    source:"Shaped from BACP's published trainee expectations: supervised client hours, supervision at least fortnightly and roughly 1 hour per 8 client hours.",
-   range:"all", sections:["hours","modes","missed","supervision","ratio","declaration"], opts:{hourMode:"actual"}},
+   range:"all", sections:["hours","modes","missed","supervision","ratio","declaration"], opts:{hourMode:"clinical"}},
   {k:"bacp-3a", n:"Accreditation hours & ratio", body:"BACP accreditation (Form 3A)",
    sub:"Clinical hours, supervision hours and the 1:6 ratio, with peer hours shown separately.",
    source:"Shaped from the hour and ratio figures BACP's accreditation route asks for. The same arithmetic as Supervision › Insights.",
-   range:"all", sections:["hours","supervision","ratio","peer","declaration"], opts:{hourMode:"actual"}},
+   range:"all", sections:["hours","supervision","ratio","peer","declaration"], opts:{hourMode:"clinical"}},
   {k:"bacp-cpd", n:"Annual CPD record", body:"BACP membership",
    sub:"A year of CPD hours by kind, with supervision counted or not as you have set it.",
    source:"Shaped from BACP's expectation of around 30 hours of CPD a year, evidenced on request.",
@@ -3466,7 +3511,7 @@ const REPORT_TEMPLATES=[
   {k:"cpcab-l4", n:"Client log & practice hours", body:"CPCAB Level 4 and similar diplomas",
    sub:"The session-by-session log, distinct client count and in-person share — plus supervision.",
    source:"Shaped from CPCAB's published Level 4 requirements: contracted one-to-one hours with a minimum number of clients, missed sessions excluded, and a cap on work that is not in person.",
-   range:"all", sections:["hours","clients","modes","sessionlog","missed","supervision","declaration"], opts:{hourMode:"actual"}},
+   range:"all", sections:["hours","clients","modes","sessionlog","missed","supervision","declaration"], opts:{hourMode:"clinical"}},
   {k:"ukcp-cpd", n:"Five-year CPD record", body:"UKCP",
    sub:"A rolling five years of CPD with the annual shape visible underneath.",
    source:"Shaped from UKCP's baseline of 250 hours over five years with a minimum in any one year. Individual colleges can and do ask for more.",
@@ -3490,7 +3535,7 @@ const REPORT_TEMPLATES=[
 function reportTemplate(k){return REPORT_TEMPLATES.find(t=>t.k===k)||REPORT_TEMPLATES[REPORT_TEMPLATES.length-1];}
 function reportSpecFrom(tpl){
   return {_id:uid(),name:tpl.n,template:tpl.k,range:tpl.range,from:"",to:"",
-    sections:tpl.sections.slice(),opts:Object.assign({hourMode:"actual"},tpl.opts||{}),notes:""};
+    sections:tpl.sections.slice(),opts:Object.assign({hourMode:"clinical"},tpl.opts||{}),notes:""};
 }
 
 /* Saved reports live in settings, not localStorage: a report someone built is theirs, it
@@ -3684,7 +3729,13 @@ function reportDrawEdit(host){
       (tpl.source?'<p class="small muted" style="margin:6px 0 0">'+esc(tpl.source)+'</p>':'')+
       '<div style="margin-top:12px">'+reportRangeControls(sp)+'</div>'+
       '<label style="margin-top:12px">How a session is counted '+infoDot("reports-hours","How client hours are counted")+'</label>'+
-      '<select id="rpHour">'+opts2([["actual","Its actual length ("+sessionMins()+" minutes)"],["clinical","One clinical hour each"]],(sp.opts||{}).hourMode==="clinical"?"clinical":"actual")+'</select>'+
+      '<select id="rpHour">'+opts2(REPORT_HOUR_MODES.map(m=>[m[0],
+        m[0]==="clinical"?(m[1]+" — the "+CLINICAL_HOUR_MINS+"-minute hour")
+        :m[0]==="prorata"?(m[1]+" ("+sessionMins()+" min = "+r1(sessionMins()/CLINICAL_HOUR_MINS)+" hrs)")
+        :(m[1]+" ("+sessionMins()+" min = "+r1(sessionMins()/60)+" hrs)")]),reportHourMode(sp))+'</select>'+
+      (sessionMins()>=45&&sessionMins()<=60?''
+        :'<p class="small muted" style="margin:6px 0 0">Your sessions are set to <b>'+sessionMins()+
+         ' minutes</b>, which is not the standard 50-to-60-minute hour. Check which basis your course asks for.</p>')+
       '<label style="margin-top:12px">Note for the form <span class="muted small">(optional — printed at the top)</span></label>'+
       '<input id="rpNote" maxlength="120" value="'+esc(sp.notes||"")+'" placeholder="e.g. Placement at …, cohort 2026">'+
     '</div>'+
@@ -6926,9 +6977,13 @@ infoDef("reports-what","What a report is, and what it isn’t",
   '<p class="small"><b>Nothing clinical is in it.</b> Clients appear by their confidential code. No names, no fees, no income and no notes are included in any section, on any template.</p>'+
   '<p class="small"><b>It is a report, not a signed record.</b> The signature block prints lines for a person to sign by hand. GroundWork does not lock a report against later editing, so a figure on it can change if you edit the sessions behind it.</p>');
 infoDef("reports-hours","How client hours are counted",
-  '<p class="small">GroundWork records that a session happened, not how long it ran — session length is one practice-wide setting (Settings › App preferences). So client hours here are always <b>attended sessions × your session length</b>, and every report prints that arithmetic rather than just the answer.</p>'+
+  '<p class="small"><b>A 50-minute session is one clinical hour.</b> That is the convention across UK counselling training and accreditation — the therapeutic hour is 50 minutes, with the rest of the hour for notes — so that is how reports count by default. Counting a standard session as 0.83 hours of elapsed time would understate your hours by a sixth against the figure your course is actually asking for.</p>'+
   '<p class="small"><b>Missed sessions never count.</b> A cancellation or a non-attendance is left out of every hours figure, whether or not you charged for it — what it earned is a separate question, answered under Money.</p>'+
-  '<p class="small"><b>“One clinical hour each”</b> is the other counting mode. Some courses credit a 50-minute session as a full clinical hour; others want elapsed time. Pick the one your course actually uses — on a 50-minute session it changes the total by a fifth.</p>');
+  '<p class="small">There are three ways to count, and your course decides which:</p>'+
+  '<p class="small"><b>One clinical hour per session</b> — the default, and right for sessions of about 50 to 60 minutes.<br>'+
+  '<b>Pro rata against the 50-minute hour</b> — for sessions that are not a standard length. A 90-minute session is 1.8 clinical hours; a 25-minute one is 0.5.<br>'+
+  '<b>Actual elapsed time</b> — clock time, for the minority of forms that ask for it. A 50-minute session is 0.83 hours.</p>'+
+  '<p class="small">GroundWork records that a session happened, not how long it ran — session length is one practice-wide setting (Settings › App preferences). If yours is not a standard hour and you are still counting one hour each, the report says so on the page rather than quietly reporting a figure that may be wrong in either direction.</p>');
 infoDef("poa","Payments on account",
   '<p class="small">Once a year\u2019s tax bill passes \u00a3'+POA_THRESHOLD+', HMRC stops waiting for the next one. It asks you to pay <b>half of it again in advance</b> on 31 January, and the other half on 31 July, as instalments towards the year you are currently in.</p>'+
   '<p class="small">So your first big January is roughly <b>one and a half times</b> the tax on that year: the year\u2019s own bill, plus the first instalment towards the next one. The January after that is usually smaller, because two instalments have already gone in.</p>'+

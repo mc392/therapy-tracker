@@ -719,12 +719,29 @@ sections and gets one page — client hours, the in-person share, supervision an
 - **Every date in a report carries its year** (`fmtRD`, not `fmtDshort`). "Mon, 05 Dec" is the
   right in-context format on a screen showing this month and useless on a four-year report read
   by a tutor who was not there.
+- **A 50-minute session IS one clinical hour, and `clinical` is therefore the DEFAULT.**
+  `CLINICAL_HOUR_MINS` is 50, not 60 — the therapeutic hour is 50 minutes with the rest for
+  notes, and that is the convention across UK counselling training and accreditation. Counting
+  a standard session as elapsed time (0.83 hrs) understates a trainee's hours **by a sixth**
+  against the figure their course is actually asking for. The report shipped defaulting to
+  elapsed time; that was wrong and was corrected the same day.
+- **Three modes, in `REPORT_HOUR_MODES`, and the course decides which.** `clinical` (one hour
+  per session), `prorata` (`mins / CLINICAL_HOUR_MINS` — a 90-minute session is 1.8 hours, a
+  25-minute one 0.5) and `actual` (elapsed clock time). `reportHourMode(spec)` is the one place
+  the mode is read and **falls back to `clinical` for a mode it does not recognise**, so a spec
+  restored from another build never produces `NaN` hours.
+- **A non-standard session length counting one hour each is warned about on the page**, not
+  silently reported. `reportHours().mismatch` fires when `sessionMins()` is outside 45–60 and
+  the mode is `clinical`, and names the pro-rata figure. Counting 90-minute sessions as one
+  hour each understates by nearly half, and only the therapist knows which basis her course
+  wants — so say it, never quietly pick.
 - **`reportHours()` is the honest bit and must stay that way.** GroundWork stores a session,
-  not a duration, so client hours are always *attended sessions × `sessionMins()`* — never a
-  sum of recorded lengths — and every report prints that arithmetic and the caveat beside it.
-  The `hourMode` option ("its actual length" vs "one clinical hour each") is a real
-  institutional difference, not a preference: on a 50-minute session it moves the total by a
-  fifth. Per-session duration is `docs/tasks/T10-training-record.md`.
+  not a duration, so every figure comes from `sessionMins()` — one practice-wide setting, never
+  a sum of recorded lengths — and every report prints its own arithmetic and the caveat beside
+  it. Per-client rows derive their per-session figure from `h.hours / h.sessions`, so a row can
+  never disagree with the headline above it whatever mode is in force. Per-session duration is
+  `docs/tasks/T10-training-record.md`; when it lands the three modes keep their meanings and
+  only the source of `mins` changes.
 - **Missed sessions never count toward hours**, whether or not they were charged — what a late
   cancellation earned is a separate question, answered under Money. A future booking is not a
   delivered hour either; `reportCtx` clamps the range end to `today()`. Both are tested by

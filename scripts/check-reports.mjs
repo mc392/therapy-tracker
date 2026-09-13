@@ -80,7 +80,9 @@ function inPage(state) {
     ok("tpl." + t.k, `${t.k}: ${built.blocks.length} blocks over ${built.range.label}`);
   });
 
-  /* ---- 2. client hours, recomputed from the rule, not from the function ---- */
+  /* ---- 2. client hours, recomputed from the rule, not from the function ----
+     THE RULE: a 50-minute session is one clinical hour, so the default counts each attended
+     session as 1.0. Missed sessions are excluded. Nothing in the future counts. */
   const t = today(), mins = sessionMins();
   const spec = reportSpecFrom(reportTemplate("bacp-3a"));   /* range "all" */
   const rg = reportRange(spec);
@@ -88,7 +90,10 @@ function inPage(state) {
   const inRange = (d) => { const x = d ? parseD(d) : null; return !!x && x >= rg.from && x <= end; };
   const expAttended = S.sessions.filter((s) => inRange(s.date) && !isCancelled(s));
   const expMissed = S.sessions.filter((s) => inRange(s.date) && isCancelled(s));
-  const expHours = expAttended.length * mins / 60;
+
+  if (reportHourMode(spec) !== "clinical")
+    no("hours.default", `a new report defaults to "${reportHourMode(spec)}" — the 50-minute clinical hour is the convention and must be the default`);
+  else ok("hours.default", "a new report counts one clinical hour per session by default");
 
   const built = reportBuild(spec);
   const hb = built.blocks.find((b) => b.key === "hours");
@@ -96,8 +101,8 @@ function inPage(state) {
   else {
     const got = +hb.kpis.find((k) => k.l === "Client hours").v;
     const gotSess = +hb.kpis.find((k) => k.l === "Sessions attended").v;
-    if (!near(got, Math.round(expHours * 10) / 10)) no("hours.value", `client hours ${got}, rule says ${Math.round(expHours * 10) / 10} (${expAttended.length} attended x ${mins} mins)`);
-    else ok("hours.value", `${got} client hours = ${expAttended.length} attended x ${mins} mins`);
+    if (got !== expAttended.length) no("hours.value", `client hours ${got}, rule says ${expAttended.length} (one clinical hour per attended session)`);
+    else ok("hours.value", `${got} client hours = ${expAttended.length} attended sessions at one clinical hour each`);
     if (gotSess !== expAttended.length) no("hours.sessions", `reports ${gotSess} attended, rule says ${expAttended.length}`);
     else ok("hours.sessions", `${gotSess} attended sessions`);
     const gotMissed = +hb.kpis.find((k) => k.l.indexOf("Missed") === 0).v;
@@ -134,13 +139,54 @@ function inPage(state) {
     S.sessions = S.sessions.filter((s) => s._id !== "probe-future");
   }
 
-  /* ---- 3. the two counting modes differ by exactly the rule ---- */
-  const clin = JSON.parse(JSON.stringify(spec)); clin.opts.hourMode = "clinical";
-  const cb = reportBuild(clin).blocks.find((b) => b.key === "hours");
-  if (cb) {
-    const got = +cb.kpis.find((k) => k.l === "Client hours").v;
-    if (got !== expAttended.length) no("hours.clinical", `"one clinical hour each" gave ${got} for ${expAttended.length} sessions`);
-    else ok("hours.clinical", `"one clinical hour each" = ${got} hours for ${got} sessions`);
+  /* ---- 3. all three counting modes, each against its own rule ---- */
+  const hoursIn = (mode) => {
+    const sp2 = JSON.parse(JSON.stringify(spec)); sp2.opts.hourMode = mode;
+    const b = reportBuild(sp2).blocks.find((x) => x.key === "hours");
+    return b ? +b.kpis.find((k) => k.l === "Client hours").v : null;
+  };
+  const n = expAttended.length;
+  [["clinical", n],
+   ["prorata", Math.round(n * (mins / CLINICAL_HOUR_MINS) * 10) / 10],
+   ["actual", Math.round(n * (mins / 60) * 10) / 10]].forEach(([mode, want]) => {
+    const got = hoursIn(mode);
+    if (!near(got, want, 0.15)) no("hours." + mode, `"${mode}" gave ${got}, rule says ${want} for ${n} sessions of ${mins} min`);
+    else ok("hours." + mode, `"${mode}" = ${got} hours for ${n} sessions of ${mins} min`);
+  });
+  /* An unknown stored mode must fall back, not produce NaN — a spec restored from an older or
+     newer build is the realistic way this happens. */
+  const junk = JSON.parse(JSON.stringify(spec)); junk.opts.hourMode = "whatever-v11-calls-it";
+  if (reportHourMode(junk) !== "clinical") no("hours.fallback", "an unknown hour mode did not fall back to clinical");
+  else ok("hours.fallback", "an unknown stored hour mode falls back to the clinical hour");
+
+  /* ---- 3b. a practice whose sessions are not a standard hour gets warned ----
+     Counting 90-minute sessions as one hour each understates by nearly half, and only the
+     therapist knows which their course wants — so the report has to say so on the page. */
+  const sgWas = S.settings.sessionMins;
+  S.settings.sessionMins = 90;
+  const warned = reportBuild(spec).blocks.find((b) => b.key === "hours");
+  const warnText = (warned.work || []).join(" ");
+  if (warnText.indexOf("90 minutes") < 0 || warnText.indexOf("Pro rata") < 0)
+    no("hours.mismatch", "a 90-minute practice counting one hour each was not warned on the page");
+  else ok("hours.mismatch", "a non-standard session length counting one hour each is flagged in the report");
+  S.settings.sessionMins = 50;
+  const quiet = reportBuild(spec).blocks.find((b) => b.key === "hours");
+  if ((quiet.work || []).join(" ").indexOf("not the standard") >= 0)
+    no("hours.mismatch", "a 50-minute practice was warned about its session length — it is the standard");
+  else ok("hours.noFalseWarn", "a standard 50-minute practice is not warned");
+  S.settings.sessionMins = sgWas;
+
+  /* ---- 3c. a per-client row's hours must agree with the headline ---- */
+  const cspec = reportSpecFrom(reportTemplate("cpcab-l4"));
+  const cBuilt = reportBuild(cspec);
+  const cHours = cBuilt.blocks.find((b) => b.key === "hours");
+  const cTable = cBuilt.blocks.find((b) => b.key === "clients");
+  if (cHours && cTable) {
+    const sumRows = cTable.table.rows.reduce((a, r) => a + parseFloat(r[2]), 0);
+    const head = +cHours.kpis.find((k) => k.l === "Client hours").v;
+    if (Math.abs(sumRows - head) > 0.6)
+      no("clients.sum", `per-client hours add to ${Math.round(sumRows * 10) / 10}, headline says ${head}`);
+    else ok("clients.sum", `per-client hours add to the headline (${Math.round(sumRows * 10) / 10} vs ${head})`);
   }
 
   /* ---- 4. the ratio is the two figures above it, divided ---- */
