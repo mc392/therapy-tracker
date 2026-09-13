@@ -3326,7 +3326,7 @@ VIEWS.home=function(){
     mk("✅",goals.complete,"Sessions completed",!goals.complete)+
     '</div></div>';
   const topClients=S.clients.map(c=>({code:c.code,_id:c._id,n:cCounts[c.code.toLowerCase()]||0,status:c.status})).filter(x=>x.n>=6).sort((a,b)=>b.n-a.n).slice(0,3);
-  const loyalCard=topClients.length?'<div class="card"><h2>Longstanding clients</h2><p class="small muted" style="margin:0 0 4px">Clients you’ve seen over many sessions.</p>'+topClients.map((x,i)=>{const medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":"•";return'<div class="list-item" data-cid="'+x._id+'"><div class="li-main"><div class="li-title">'+medal+' '+esc(x.code)+'</div><div class="li-sub">'+esc(x.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>';}).join("")+'</div>':'';
+  const loyalCard=topClients.length?'<div class="card"><h2>Longstanding clients</h2>'+topClients.map((x,i)=>{const medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":"•";return'<div class="list-item" data-cid="'+x._id+'"><div class="li-main"><div class="li-title">'+medal+' '+esc(x.code)+'</div><div class="li-sub">'+esc(x.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>';}).join("")+'</div>':'';
   const weekRev={};
   der.forEach(x=>{const dd=parseD(x.s.date);if(!dd)return;const k=isoD(weekStart(x.s.date));weekRev[k]=(weekRev[k]||0)+(x.d.rate||0);});
   const curWk=weekStart(isoD(t)); // Monday of the current week; build 24 consecutive weeks back from here (empty weeks = £0)
@@ -3344,7 +3344,6 @@ VIEWS.home=function(){
      shape, which is the whole point of it. */
   const heatCard=der.some(x=>{const d=parseD(x.s.date);return d&&d<=t;})
     ? '<div class="card"><div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Your year</h2><span class="small muted">last 12 months</span></div>'+
-      '<p class="small muted" style="margin:4px 0 10px">One square per day, one column per week.</p>'+
       yearHeatmapHTML()+'</div>'
     : '';
   /* Every block on this screen, keyed. Built the same way it always was - the only change is
@@ -4374,7 +4373,7 @@ VIEWS.sessions=function(){
       const wM=addDays(new Date(t.getFullYear(),t.getMonth()+1,t.getDate()),-1);
       const card=el('<div class="card mt" id="calExport"></div>');
       card.innerHTML=cardHead("Add to your calendar","calendar-export")+
-        '<p class="small muted">Sends these sessions to the calendar app you already use. It is a copy, not a live link.</p>'+
+        '<p class="small muted">Sends these sessions to the calendar app you already use.</p>'+
         '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sec" id="ics7">Next 7 days</button>'+
         '<button class="btn sec" id="icsM">Next month</button></div>'+
         '<p class="small muted mt" style="margin-bottom:0">From today, whichever month you are looking at \u00b7 7 days: '+
@@ -5820,7 +5819,7 @@ function acErosion(cx,pin){
             ? 'The gap is <b>fee written off on sessions that didn\u2019t happen</b> \u2014 and nothing else. Over these '+
               fe.months+' months '+plural(fe.missed,"session")+' of '+fe.sessions+' were missed, costing <b>'+gbp(fe.lost)+'</b>'+
               (fe.missedCharged?' after the '+fe.missedCharged+' you did charge for':'')+'.'
-            : 'Every session you booked was billed in full \u2014 nothing was written off.')+'</p>'+
+            : 'Every session you booked was billed in full.')+'</p>'+
         /* Two trends, not one. A practice can raise its fees and watch its take stand still, and
            that is the sentence this card exists to be able to write. */
         '<p class="small muted" style="margin:4px 0 0">Over these '+fe.months+' months what you <b>earn</b> per session '+
@@ -5851,7 +5850,7 @@ function acDaysToPay(cx,pin){
         (dtpWait?chartLine(dtp.series.filter(x=>x.v!=null).map(x=>({l:x.l,v:x.v}))):"")+
         '<p class="small muted" style="margin:8px 0 0">'+
           plural(dtp.nUpfront,"payment")+' of '+dtp.n+' arrived on the day or before'+
-          (dtp.nAdvance?' \u2014 '+dtp.nAdvance+' of them genuinely in advance, typically '+
+          (dtp.nAdvance?' \u2014 '+dtp.nAdvance+' of them in advance, typically '+
             dtp.advanceAvg+' day'+(dtp.advanceAvg===1?'':'s')+' early':'')+'.'+
           (dtpWait?' The other '+plural(dtp.nLate,"payment")+' took '+dtp.avg+' day'+(dtp.avg===1?'':'s')+
             ' at the median, longest '+dtp.worst+'.':'')+'</p>'+
@@ -5905,8 +5904,8 @@ function acLatePayers(cx,pin){
           : '')+
         lp.rows.slice(0,12).map(lpRow).join("")+
         (lp.rows.length>12?'<p class="small muted" style="margin:8px 0 0">Showing the 12 with the most movement, of '+lp.rows.length+'.</p>':'')+
-        '<p class="small muted" style="margin:8px 0 0">Chasing what is outstanding <i>today</i> is a job, not a trend \u2014 that lives on <span class="taxlink" id="lpUnpaid">Sessions \u203a Unpaid \u203a</span> with a Chase button on it.</p>',
-        {lead:"Whether each client\u2019s paying is drifting, measured against their own earlier record \u2014 not against a calendar.",pin:pin})
+        '<p class="small muted" style="margin:8px 0 0">Chasing what is outstanding <i>today</i> can be done in <span class="taxlink" id="lpUnpaid">Sessions \u203a Unpaid \u203a</span>.</p>',
+        {lead:"Whether each client\u2019s paying is drifting, measured against their own earlier record.",pin:pin})
     : anaWaiting("Who pays late","ana-late",lp.need,pin)};
 }
 function acCostRatio(cx,pin){
@@ -5923,9 +5922,9 @@ function acCostRatio(cx,pin){
           ? '<p class="small muted" style="margin:10px 0 0">Includes '+
             [cr.now.rooms?'<b>'+gbp(cr.now.rooms)+'</b> of room fees charged against individual sessions':'',
              cr.now.sup?'<b>'+gbp(cr.now.sup)+'</b> of supervision':''].filter(Boolean).join(' and ')+
-            ' - neither is entered in Costs &amp; income, but both are money the practice spent to run.</p>'
+            '.</p>'
           : ''),
-        {lead:"Of every pound that came in, how much left again before tax.",pin:pin})
+        {lead:"Of every pound that came in, how much left before tax.",pin:pin})
     : anaWaiting("What the practice costs to run","ana-costratio",cr.need,pin)};
 }
 
@@ -6070,7 +6069,7 @@ function acFunnel(cx,pin,foot){
      reassurance landed under "In therapy" and read as a caption for that one tier. The
      footer is passed in instead, and there is no string to match against. */
   return {html:'<div class="card">'+cardHead("Client retention funnel","ana-funnel",pinBtn(pin))+
-    '<p class="small muted" style="margin:-4px 0 10px">How your clients progress over time, by number of sessions.</p>'+
+    '<p class="small muted" style="margin:-4px 0 10px">How your clients progress over time.</p>'+
     '<div class="funnel">'+rows+'</div>'+(foot||"")+'</div>',funnel:true};
 }
 /* The one card here that is a list of people to contact.
@@ -6081,7 +6080,7 @@ function acDrifting(cx,pin){
   const dr=anaDrifting();
   const driftHandover=dr.review.length
     ? '<p class="small muted" style="margin:10px 0 0">'+plural(dr.review.length,"other client")+
-      ' ha'+(dr.review.length===1?'s':'ve')+' gone past three of their intervals - those are in <b>Review status</b>, where the question is the status rather than the text message.</p>'
+      ' ha'+(dr.review.length===1?'s':'ve')+' gone past three of their intervals - those are in <b>Review status</b>.</p>'
     : '';
   return {html: dr.rows.length
     ? anaCard("Drifting away","ana-drifting",
@@ -6163,7 +6162,7 @@ function acCohorts(cx,pin){
           c.marks.map(m=>'<td class="num">'+(m.pct==null?'<span class="muted">–</span>':
             '<span class="chip '+(m.pct>=70?"y":m.pct>=40?"f":"n")+'">'+m.pct+'%</span>')+'</td>').join("")+
           '</tr>').join("")+'</tbody></table></div>'+
-        '<p class="small muted" style="margin:8px 0 0">Read across a row: of the clients who started then, how many were still coming that many weeks later. A dash means <b>not yet</b>, never nought - the column only fills in once every client in that group has had those weeks to run.</p>',
+        '<p class="small muted" style="margin:8px 0 0">Read across a row: of the clients who started then, how many were still coming that many weeks later. A dash means <b>not yet</b> - the column only fills in once every client in that group has had those weeks to run.</p>',
         {pin:pin,lead:"Whether the work you take on is holding better than it used to."})
     : anaWaiting("Cohort retention","ana-cohorts",co.need,pin)};
 }
@@ -6380,7 +6379,7 @@ VIEWS.practice=function(){
         return '<div class="list-item" data-id="'+rm._id+'"><div class="li-main"><div class="li-title">'+esc(rm.location)+
           (monthly?' <span class="chip f">rent</span>':'')+'</div><div class="li-sub">'+sub+'</div></div>'+
           '<div class="li-right">'+roomCostLabel(rm)+'</div></div>';}).join("")+'</div>'+
-        '<p class="small muted">Tap a room to edit it, change what it costs from a date, or switch it between a per-session cost and a rent (history is kept, like client rates).</p>'+
+        '<p class="small muted">Tap a room to edit it.</p>'+
         (S.rooms.some(rm=>roomBilling(rm)==="monthly")||anyPerUseRoom()
           ? '<button class="btn sec full mt" id="rGoMoney">What is owed on these rooms \u203a</button>'
           : '');
@@ -6423,20 +6422,20 @@ VIEWS.practice=function(){
         funnelCard('<p class="plkeep">'+gi("done")+' This one is yours to keep.</p>')+
         '<div class="card plusgate peek tier-'+(featureTier("trends")||"pro")+'"><div class="plmark">'+gi("trends")+'</div>'+
           '<h2>Twenty more, from the same records</h2>'+
-          '<p class="small muted">Nothing to set up and nothing to enter - all of it is worked out from sessions you have already logged. Here is what four of them currently say about your practice.</p>'+
+          '<p class="small muted">All worked out from sessions you have already logged. Here is what four of them currently say about your practice.</p>'+
           '<div class="mt">'+
             peek("Clients · who stays and who drifts",
               drPk.rows.length?plural(drPk.rows.length,"client"):(base?base+" tracked":"-"),
               drPk.rows.length
-                ? drPk.rows.length+" you have not seen in a while with nothing booked, plus retention by cohort, how long work runs, and where clients come from."
+                ? drPk.rows.length+" you have not seen in a while. Plus retention by cohort, how long work runs, and where clients come from."
                 : "Nobody is drifting right now. Also: retention by cohort, how long work runs, and which referral sources bring people who stay.")+
             peek("Money · what arrives and what it costs",
               lostPeek>0?gbp(Math.round(lostPeek)):(avgPeek?avgPeek+" avg":"-"),
               missedPk.length
                 /* The Money tab's blurred tile promises "where this year lands" is behind the
                    gate, and this row is where that promise is kept - name it first. */
-                ? "in fees you chose not to charge on "+plural(missedPk.length,"missed session")+". Also: where this year lands on three bases, seasonality, your worst month and days to payment."
-                : "Where this year lands - revenue and profit before tax on three bases - plus seasonality, your worst and best month, days to payment and what the practice costs to run.")+
+                ? "in fees you chose not to charge on "+plural(missedPk.length,"missed session")+". Also: projections of your earnings this year, seasonality, your worst month, and days to payment."
+                : "Projections of your earnings this year - plus seasonality, your worst and best month, days to payment and what the practice costs to run.")+
             peek("Time · what an hour is really worth",
               hrPk.ready?gbp(hrPk.rate):"-",
               hrPk.ready
@@ -6685,7 +6684,7 @@ function roomForm(rm){
         '<button class="btn sec full mt" id="chB">\u21c4 Switch to '+(monthly?"a per-session cost":"a rent")+'\u2026</button>'+
         '<p class="small muted" style="margin:5px 0 0">'+(monthly
           ? 'Sessions here would start carrying a per-session room cost again from the date you choose.'
-          : 'A rent you pay whether or not you use the room \u2014 sessions here stop carrying a room cost from the date you choose.')+'</p>')+
+          : 'A rent you pay whether or not you use the room')+'</p>')+
     '<button class="btn full mt" id="rSave">Save room</button>'+
     (isNew?"":'<button class="btn danger full mt" id="rDel">Delete room</button>');
 
@@ -6718,7 +6717,7 @@ function roomForm(rm){
     }else{
       mountSchedulePicker(host.querySelector("#r_sched"),sched,{
         label:"When do you pay for this room?",
-        hint:"So the app can remind you before it\u2019s due. Payments show up under <b>Money \u203a Costs &amp; income</b>, where you tick them off."});
+        hint:"So we can remind you before it\u2019s due. Payments show up under <b>Money \u203a Costs &amp; income</b>."});
     }
   };
 
@@ -6731,7 +6730,7 @@ function roomForm(rm){
   }else{
     if(!monthly)mountSchedulePicker(body.querySelector("#r_sched"),sched,{
       label:"When do you pay for this room?",
-      hint:"So the app can remind you before it\u2019s due. Payments show up under <b>Money \u203a Costs &amp; income</b>, where you tick them off."});
+      hint:"So the app can remind you before it\u2019s due. Payments show up under <b>Money \u203a Costs &amp; income</b>."});
     body.querySelector("#rhist").innerHTML='<details><summary>'+(monthly?'Rent history':'Cost history')+' ('+hist.length+')</summary>'+
       (hist.length?hist.map(r=>'<div class="audit-row"><b>'+gbp(monthly?r.amount:r.rate)+(monthly?rentUnit(r.freq):'')+'</b> from '+fmtD(r.effectiveFrom)+
         (monthly&&r.endDate?' to '+fmtD(r.endDate):'')+'</div>').join("")
@@ -7121,7 +7120,7 @@ function roomRentCard(){
         ? 'Nothing due in the next few weeks.'
         : 'No rent is being charged at the moment - set one on the room in <b>Practice › Rooms</b>.')+'</p>';
   return '<div class="card" id="roomRentCard"><h2>Room rent</h2>'+
-    '<p class="small muted">Rooms you pay for whether or not you use them. Each charge is raised on the rent\u2019s own rhythm - tick it off when you pay. '+infoLink("payments-due-ticking")+'</p>'+
+    '<p class="small muted">Rooms you pay for whether or not you use them. '+infoLink("payments-due-ticking")+'</p>'+
     ((overdue.length||next)?'<div class="kpis mt" style="grid-template-columns:1fr 1fr">'+
       '<div class="kpi'+(owed?' bad':'')+'"><div class="v">'+gbp(Math.round(owed))+'</div><div class="l">overdue</div></div>'+
       '<div class="kpi"><div class="v">'+(next?gbp(Math.round(next.amount)):'\u2014')+'</div><div class="l">'+(next?'next, '+esc(fmtDshort(next.due)):'nothing scheduled')+'</div></div></div>':'')+
@@ -7223,7 +7222,7 @@ function roomFeesCard(){
     '<div class="li-right" style="display:flex;align-items:center;gap:8px">'+gbp(x.d.roomRate||0)+
       '<button class="btn sm ghost" data-unsettle="'+esc(x.s._id)+'">Undo</button></div></div>';
   return '<div class="card" id="roomFeesCard">'+cardHead("Room fees","room-fees-raised")+
-    '<p class="small muted">What your sessions have run up in rooms you pay for by the hour. Every session raises its own fee - you settle them here.</p>'+
+    '<p class="small muted">Rooms you pay for by the hour.</p>'+
     (rows.length
       ? '<div class="kpis mt" style="grid-template-columns:1fr 1fr">'+
           '<div class="kpi'+(totalDue?' bad':'')+'"><div class="v">'+gbp(Math.round(totalDue))+'</div><div class="l">due now</div></div>'+
@@ -7637,7 +7636,7 @@ function rentSyncSchedule(rm,fromISO,freq){
 function taxBasis(){const b=settings().taxBasis;return b==="accruals"?"accruals":"cash";}
 function basisLabel(){return taxBasis()==="cash"?"Cash basis":"Accruals basis";}
 function basisNote(){return taxBasis()==="cash"
-  ? "Counted when the money moved \u2014 HMRC's default for sole traders. Sessions count when paid; costs count when you tick them off (or on their due date if you have not)."
+  ? "HMRC's default for sole traders. Sessions count when paid; costs count when you tick them off (or on their due date if you have not)."
   : "Counted when the work was done and costs fell due, whether or not they have been settled. This is an election you make on your tax return.";}
 
 /* ===== Use of home =====
@@ -8242,7 +8241,7 @@ function basisCardHTML(){
       '<div class="seg" id="basisSeg" style="display:inline-flex"><button data-b="cash" class="'+(taxBasis()==="cash"?"on":"")+'">Cash</button>'+
         '<button data-b="accruals" class="'+(taxBasis()==="accruals"?"on":"")+'">Accruals</button></div></div>'+
     '<p class="small muted mt">'+basisNote()+'</p>'+
-    (taxBasis()==="cash"?'<p class="small muted">Sessions you have not been paid for yet are not in these totals \u2014 they arrive in the year the money does.</p>':'')+
+    (taxBasis()==="cash"?'<p class="small muted"></p>':'')+
 
     '</div>';
 }
@@ -8606,7 +8605,7 @@ VIEWS.money=function(){
             '<div class="l">Where '+esc(pj.ty)+' lands\u00a0\u203a</div></div>';
     const fcFoot=!trOn
       ? 'Everything on this tab has <b>actually happened</b>. Projections live in <b>Business analytics</b>, which is switched off in <b>Settings › App preferences</b>.'
-      : 'Everything on this tab has <b>actually happened</b>. What the whole year may come to is worked out in <b>Business analytics</b>. '+
+      : 'Everything on this tab has <b>actually happened</b>. Projections live in <b>Business analytics</b>. '+
         '<span class="taxlink" id="mProjMore">'+(pjLocked?'See what is behind this':'Where this year lands')+' \u203a</span>';
     const fcCard='<div class="card"><h2>This month &amp; year at a glance</h2>'+
       '<div class="kpis mt">'+
@@ -8670,9 +8669,7 @@ VIEWS.money=function(){
        purchase, the other is a preference the reader set themselves. */
     if(plusLocked("finances")){
       body.innerHTML=rooms+plusLockHTML("finances","Costs & other income",
-        "Insurance, supervision, CPD, travel and everything else the practice costs you, plus any "+
-        "income that is not a client session \u2014 taken off the profit your tax is worked out from. "+
-        "What your rooms cost you stays here, free.");
+        "Track all your other income and costs (insurance, supervision, CPD, travel and everything else the practice costs you.");
       plusWireLocks(body); wireRoomFees(body); wireRoomRent(body); wirePaymentsDue(body); return;
     }
     body.innerHTML=rooms+(feat("finances")?financeCards()
@@ -8691,7 +8688,7 @@ VIEWS.money=function(){
    read every month and the caveat has to travel with them. One definition, because "Now" and
    "Estimate" both carry it and two copies would eventually say two different things. */
 function taxDisclaimBar(){
-  return '<div class="vmsg warn" style="margin-bottom:12px">'+gi("scales")+' <b>Estimates, not tax advice.</b> Worked out from what you have entered, using published HMRC rates. '+
+  return '<div class="vmsg warn" style="margin-bottom:12px">'+gi("scales")+' <b>Estimates, not tax advice.</b> Uses published HMRC rates to help you plan and trust your return. '+
     '<span class="taxlink" id="taxDiscMore">What this means ›</span></div>';
 }
 function wireTaxDisclaimBar(host){
@@ -8940,8 +8937,8 @@ function drawNow(host){
           ? "Everything on this tab is set up and ready. Unlocking the "+ty+" tax year works out what "+
             "you are on track to owe, what to keep back for it, and when it leaves - and every earlier "+
             "tax year with it."
-          : "Working out tax needs GroundWork Pro, which is where what the practice costs you is "+
-            "entered, and then the "+ty+" tax year itself. Nothing you have entered is affected.")+
+          : "Working out tax needs GroundWork Pro for a full record of business costs"+
+            ", and then the "+ty+" tax code. Nothing you have entered is affected.")+
       '<div data-coach="now">'+
         slot("nowOwe","On track to owe for "+esc(ty),"worked out from what you have been paid")+
         slot("nowPot","Keep in your pot","what should be set aside today")+
@@ -9702,7 +9699,7 @@ function drawPayments(host){
      therapist's own settings, one of them is a number she typed, and a setting she cannot reach is
      a setting the app has taken off her over money. Only the worked-out figures mask. */
   const potLockedCard='<div class="card" data-coach="pot"><h2>Your tax pot</h2>'+
-    '<p class="small muted">What to keep back so the bill is already covered when it lands - and, just as importantly, what is <i>not</i> tax money and is yours to spend.</p>'+
+    '<p class="small muted">What to keep back so the bill is already covered when it lands.</p>'+
     '<div class="kpis mt">'+
       '<div class="kpi"><div class="v">'+taxMaskHTML(ty,"big")+'</div><div class="l">of everything you’re paid, set aside</div></div>'+
       '<div class="kpi"><div class="v">'+taxMaskHTML(ty,"big")+'</div><div class="l">should be put by today</div></div>'+
@@ -9759,7 +9756,7 @@ function drawPayments(host){
     '</div>';
 
   const dueCard='<div class="card" data-coach="due"><h2>What HMRC will ask for</h2>'+
-    '<p class="small muted">One line per date the money actually leaves your account. A single 31 January is usually <b>two things at once</b>: the balancing payment that finishes one tax year, and the first instalment towards the next. '+infoLink("balancing","What these are")+'</p>'+
+    '<p class="small muted">31 January is usually <b>two things at once</b>: the balancing payment that finishes one tax year, and the first instalment towards the next. '+infoLink("balancing","What these are")+'</p>'+
     (due.length?'<div style="padding:0 2px">'+due.map(rowHTML).join("")+'</div>'
       :'<p class="muted small">Nothing due - no tax year has produced a bill yet.</p>')+
     driftMsg+
@@ -9800,8 +9797,7 @@ function drawPayments(host){
     '</div>';
 
   host.innerHTML=(potLocked?taxMaskCard(ty,"Your "+ty+" figures are not calculated yet",
-      "Every date below is real and every setting on this screen still works. What needs the "+ty+
-      " tax year is the arithmetic: the pot, the instalments and what each date comes to.")
+      "")
     :'')+potCard+dueCard+actCard;
   wireInfo(host); plusWireLocks(host);
   host.querySelectorAll("[data-due]").forEach(n=>n.onclick=()=>taxDueSheet(n.dataset.due));
@@ -10106,14 +10102,14 @@ function drawAllowances(host){
   const slInf=yearValue("studentLoanYears",ty,"none"), slKey=SL_PLANS[slInf.v]?slInf.v:"none";
   const slOwn=yearMap("studentLoanYears")[ty]!=null, slP=SL_PLANS[slKey];
   const slCard='<div class="card"><h2>Student loan</h2>'+
-    '<p class="small muted">Repayments are collected with your tax in the same January bill, so they belong in the pot \u2014 but they are never part of a payment on account.</p>'+
+    '<p class="small muted">Repayments are collected with your tax in the same January bill, so they belong in the pot, but they are never part of a payment on account.</p>'+
     (slP
       ? '<div class="vmsg ok">\ud83d\udd12 <b>'+esc(slP.n)+'</b> is what '+esc(ty)+' uses \u2014 9% is not deducted until profit passes \u00a3'+slP.thr.toLocaleString("en-GB")+'.'+
         (slInf.inherited?' <b>Carried forward from '+esc(slInf.from)+'</b>, so it has no setting of its own yet.':'')+'</div>'
       : '<div class="vmsg">No student loan is being repaid in '+esc(ty)+'.'+(slInf.inherited?' Carried forward from '+esc(slInf.from)+'.':'')+'</div>')+
     '<label style="margin-top:12px">Plan for '+esc(ty)+'</label>'+
     '<select id="slSel">'+opts2([["none","No student loan"]].concat(Object.keys(SL_PLANS).filter(k=>k!=="none").map(k=>[k,SL_PLANS[k].n+" \u2014 from \u00a3"+SL_PLANS[k].thr.toLocaleString("en-GB")+" at "+Math.round(SL_PLANS[k].rate*100)+"%"])),slKey)+'</select>'+
-    '<p class="prev">Changing this sets '+esc(ty)+' and every later year. Earlier years keep what they had \u2014 the year you finish repaying, the years you were repaying stay right.</p>'+
+    '<p class="prev">Changing this sets '+esc(ty)+' and every later year.</p>'+
     (slOwn&&slInf.from===ty
       ? '<p class="small muted mt"><span class="taxlink" id="slClr">Clear '+esc(ty)+'\u2019s own setting and carry the earlier year forward again \u203a</span></p>'
       : '')+
@@ -10128,7 +10124,7 @@ function drawAllowances(host){
   const regOwn=yearMap("taxRegionYears")[ty]!=null;
   const regName=k=>k==="scotland"?"Scotland":"England, Wales or NI";
   const regCard='<div class="card">'+cardHead("Where you pay income tax","tax-region")+
-    '<p class="small muted">Scotland sets its own income tax bands. Everything else \u2014 the personal allowance, both classes of National Insurance \u2014 is the same wherever you live.</p>'+
+    '<p class="small muted">Scotland sets its own income tax bands. Everything else is the same wherever you live.</p>'+
     '<div class="vmsg'+(regKey==="scotland"?" ok":"")+'">'+(regKey==="scotland"?"\ud83c\udff4 ":"")+
       '<b>'+esc(ty)+'</b> is worked out at <b>'+(regKey==="scotland"?"Scottish rates":"the rates for England, Wales and Northern Ireland")+'</b>.'+
       (regInf.inherited?' <b>Carried forward from '+esc(regInf.from)+'</b>, so it has no setting of its own yet.':'')+'</div>'+
@@ -10136,7 +10132,7 @@ function drawAllowances(host){
     '<div class="seg" id="alRegSeg" style="display:inline-flex">'+
       '<button data-r="rUK" class="'+(regKey==="rUK"?"on":"")+'">England, Wales or NI</button>'+
       '<button data-r="scotland" class="'+(regKey==="scotland"?"on":"")+'">Scotland</button></div>'+
-    '<p class="prev">Changing this sets '+esc(ty)+' and every later year. Earlier years keep the bands they were actually assessed under \u2014 which is the point: a move does not reach backwards.</p>'+
+    '<p class="prev">Changing this sets '+esc(ty)+' and every later year. Earlier years keep the bands they were actually assessed under</p>'+
     (regOwn&&regInf.from===ty
       ? '<p class="small muted mt"><span class="taxlink" id="regClr">Clear '+esc(ty)+'\u2019s own setting and carry the earlier year forward again \u203a</span></p>'
       : '')+
@@ -10149,7 +10145,7 @@ function drawAllowances(host){
     : '';
   const yearCard='<div class="card"><h2>Settings that follow the tax year</h2>'+
     reviewRow+
-    '<p class="small muted">Pick a year \u2014 everything below applies to it and to later years, until you change it again. '+infoLink("carryforward","How that works")+'</p>'+
+    '<p class="small muted">Pick a year and everything below applies to it and to later years, until you change it again. '+infoLink("carryforward","How that works")+'</p>'+
     yearStrip+
     (status.filed?'<div class="vmsg warn" style="margin-top:10px">\ud83d\uddc4 You have marked <b>'+esc(ty)+'</b> as filed. Changing anything below changes figures you have already submitted \u2014 if this is a correction, keep a note of what you changed and why.</div>':'')+
     '</div>';
@@ -10172,7 +10168,7 @@ function drawAllowances(host){
       '<button data-m="actual" class="'+(uohEdit==="actual"?"on":"")+'">Actual costs</button>'+
     '</div>'+
     '<div id="uohBody" class="mt"></div>'+
-    '<p class="small muted mt">Goes in box 21 of your tax return. Mortgage <b>capital</b> repayments are never allowable \u2014 only the interest.</p>'+
+    '<p class="small muted mt">Goes in box 21 of your tax return. Mortgage <b>capital</b> repayments are never allowable, only the interest.</p>'+
     '<label class="colchk" style="margin-top:14px"><input type="checkbox" id="uohFiled"'+(status.filed?" checked":"")+'> I have filed my '+esc(ty)+' return</label>'+
     '<p class="prev">Only a reminder to yourself \u2014 it never locks anything or changes a figure.</p>'+
     '</div>';
@@ -10215,7 +10211,7 @@ function drawAllowances(host){
       bodyEl.innerHTML='<label>Hours a month you worked at home in '+esc(ty)+'</label>'+
         '<input type="number" min="0" max="744" step="1" id="uohH" value="'+esc(draft.hours)+'">'+
         '<p class="small muted">Count everything, not just sessions: notes, admin, CPD, supervision you attend from home.'+
-        (suggested?' You logged about <b>'+suggested+' sessions a month</b> at home recently \u2014 your real hours will be higher than that.':'')+'</p>'+
+        (suggested?' You logged about <b>'+suggested+' sessions a month</b> at home recently, your real hours will be higher than that.':'')+'</p>'+
         '<div class="acc-work"><div>25\u201350 hrs = \u00a310/mo</div><div>51\u2013100 hrs = \u00a318/mo</div><div>101+ hrs = \u00a326/mo</div>'+
         '<div class="small muted" style="margin-top:5px">Under 25 hours a month there is no flat-rate claim. At '+esc(draft.hours||0)+' hrs this is <b>'+money(simpAmt)+'/mo</b>.</div></div>';
       bodyEl.querySelector("#uohH").onchange=async e=>{
@@ -10586,7 +10582,6 @@ VIEWS.settings=function(){
    <details class="sgrp" data-g="app"><summary><span class="sgt">App preferences</span><span class="sgs">How the app looks and sounds, and which parts of it you use</span></summary><div class="sgb">
    ${plusSettingsCardHTML()}
    <div class="card" id="appearanceCard"><h2>Appearance &amp; sound</h2>
-     <p class="small muted">${PALETTES_ENABLED?"Colour scheme, light/dark":"Light or dark"} and sound effects. Stored on this device.</p>
      ${PALETTES_ENABLED?`<label>Colour scheme</label>
      <div class="palgrid" id="setPalMain">${PALETTES.filter(p=>p.free).map(p=>paletteOptionHTML(p,p.k===curPalette())).join("")}</div>
      <details class="dz" id="setPalMore"${PALETTES.some(p=>!p.free&&p.k===curPalette())?" open":""}><summary>More colour schemes (${PALETTES.filter(p=>!p.free).length})</summary>
