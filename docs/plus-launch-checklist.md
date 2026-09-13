@@ -101,6 +101,31 @@ handling existing subscribers explicitly, so treat £1.99 as a floor rather than
 **Three products, two kinds.** Do them in this order; the first is the one that lets a TestFlight
 build sell anything at all.
 
+### What exists so far (Sept 2026)
+
+Created in App Store Connect. **The numbers are Apple's own internal IDs, not anything the app
+uses** - nothing needs pasting into the code, and no rebuild is needed. They are recorded here
+because they are what App Store Connect URLs and its API address a product by, and because they
+are the fastest way to point at the right product in a support conversation.
+
+| Product | Product ID (what the app asks StoreKit for) | Apple ID |
+|---|---|---|
+| GroundWork Pro, monthly | `uk.co.charlottebloortherapy.groundwork.pro.monthly` | `6811661858` |
+| UK tax year 2026-27 | `uk.co.charlottebloortherapy.groundwork.taxyear.2026` | `6811663965` |
+
+Both **Product IDs match the code exactly** - checked against
+`GroundWorkNativePlugin.swift` (`subscriptionIDs`, `taxYearPrefix` + `taxYearsForSale`) and against
+`TAX_PACK_PREFIX` in `index.html`. That is the string that has to be right; the Apple ID plays no
+part in fetching a product.
+
+**The legacy annual has not been created, and should not be.** Nobody holds it, so it would be a
+product with no purpose. The app still *asks* StoreKit for it and that is harmless: StoreKit
+returns only the products it finds and silently omits the rest, and the paywall reads its price
+from the monthly one regardless. Leave the mapping in the Swift - it costs nothing and it is the
+thing that would matter if a subscriber ever did exist.
+
+---
+
 > **Before anything else: the Paid Applications agreement must be fully active.**
 > Business → *Agreements, Tax, and Banking* → accept it, then complete **bank details and tax
 > forms**. Until every part of that is done, **every product returns empty with no error of any
