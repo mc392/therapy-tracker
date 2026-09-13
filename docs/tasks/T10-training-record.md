@@ -1,6 +1,12 @@
-# T10 — The trainee record: schema v9
+# T10 — The trainee record: schema v10
 
 **Model:** Opus · **Depends on:** nothing · **Touches:** `TherapyTracker-web/index.html`, `CLAUDE.md`, `scripts/make-test-data.mjs` (optional)
+
+> **Note (13 Sep 2026): v9 was taken by the report creator** (`settings.reports`, Practice ›
+> Reports). This task is now **v10**. That feature also added the first real consumer of these
+> fields — `reportHours()` currently counts every session at the practice session length and
+> says so on the page, which is exactly the gap change 1 closes. Read CLAUDE.md § *Reports for
+> courses and professional bodies* before starting.
 
 ## Why
 
@@ -126,13 +132,13 @@ exactly:
   still exported, still restored, still read by anything that reads it. Same rule as every other
   `feat()` flag: off = hidden, never deleted.
 
-### 9. Schema v9
+### 9. Schema v10
 
-`SCHEMA_VERSION` 8 → 9, with the migration note added to the ordered block in `normalize()` in
+`SCHEMA_VERSION` 9 → 10, with the migration note added to the ordered block in `normalize()` in
 the house style (the existing v7→v8 paragraph is the model).
 
-The justification to write down: **a v9 backup can hold a 90-minute couple session by telephone
-at an approved placement, and 18 hours of supervision across 12 entries.** A v8 build has none
+The justification to write down: **a v10 backup can hold a 90-minute couple session by telephone
+at an approved placement, and 18 hours of supervision across 12 entries.** A v9 build has none
 of those fields — it would read that session as 50 minutes, in person, individual, and that
 supervision as 12 hours, then save every one of those losses back over good data.
 `validateImport()` already refuses a newer backup; this bump is what makes it fire.
@@ -142,7 +148,7 @@ Seed the new arrays in `normalize()` (`st.placements=st.placements||[]`,
 
 ### 10. CLAUDE.md
 
-Update § *State / data model* (the `S` shape and the new arrays), § *Schema versioning* (the v9
+Update § *State / data model* (the `S` shape and the new arrays), § *Schema versioning* (the v10
 paragraph), § *Setup wizard* (the `training` flag), and § *CPD* (the personal-therapy split).
 Add a short § *The trainee record* explaining why duration, type, medium and placement exist at
 all — a later reader needs to know these are institutional-reporting fields, not features.
@@ -175,6 +181,6 @@ all — a later reader needs to know these are institutional-reporting fields, n
 - Extend `check-behaviour.mjs`: open the session form, save with a blank Minutes box, assert
   `s.mins` is **absent** (not 50). Then save with 90 and assert it stores 90. Same for a
   supervision entry's hours.
-- By hand: an existing backup restores with every figure identical. Export a v9 backup, confirm
-  `schemaVersion: 9`; confirm a v8 build refuses it with the `validateImport` message.
+- By hand: an existing backup restores with every figure identical. Export a v10 backup, confirm
+  `schemaVersion: 10`; confirm a v9 build refuses it with the `validateImport` message.
 - With `training` off, no new control appears anywhere.
