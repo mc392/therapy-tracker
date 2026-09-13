@@ -1,4 +1,4 @@
-# Selling the tax package — and getting out of MTD's way
+# Selling the tax package - and getting out of MTD's way
 
 > **Naming, Sep 2026:** the tax bundle this document is about now belongs to **GroundWork Pro**,
 > the top of two tiers. Every "Plus" below means Pro; the new GroundWork Plus is the rung beneath
@@ -20,13 +20,13 @@ not be for years. If Plus is sold on Making Tax Digital, the majority hear a fea
 rule that does not apply to them and stop listening.
 
 **"I'm already paying for MTD software."** The therapist who *is* over the threshold has,
-by definition, already solved the filing problem — or is about to, with a monthly subscription
+by definition, already solved the filing problem - or is about to, with a monthly subscription
 to a bookkeeping package. Asking them for a second subscription on top invites exactly the
 question we lose: *why am I paying twice to do my tax?*
 
 Both objections are reasonable. Neither is answered by listing features harder. They are
 answered by being specific about **which of three people we are talking to**, and by being
-honest about the boundary of what this app does — because that boundary, said out loud, is
+honest about the boundary of what this app does - because that boundary, said out loud, is
 what makes the rest of the pitch believable.
 
 ---
@@ -36,12 +36,12 @@ what makes the rest of the pitch believable.
 The pitch is one sentence, and everything below is an elaboration of it:
 
 > **You are already typing every session into GroundWork. That is the digital record MTD asks
-> for. Plus turns it into the four quarterly figures and hands them over as a file — so the
+> for. Plus turns it into the four quarterly figures and hands them over as a file - so the
 > only thing left to buy is something that presses Submit, and HMRC lists free ones.**
 
 The load-bearing word is **instead**. GroundWork Plus is not a companion purchase alongside
 bookkeeping software; for a single-handed therapist with no stock, no payroll, no VAT and one
-kind of income, it is a cheaper substitute for one — with session-level detail a general
+kind of income, it is a cheaper substitute for one - with session-level detail a general
 bookkeeping package cannot see, because it does not know what a room costs by the hour or what
 a late cancellation was charged at.
 
@@ -50,12 +50,12 @@ a late cancellation was charged at.
 MTD for Income Tax needs three things: digital records, quarterly updates, and a final
 declaration through software HMRC has recognised.
 
-- **Digital records — GroundWork already is one.** Every session, every cost, dated,
+- **Digital records - GroundWork already is one.** Every session, every cost, dated,
   categorised, and mapped to an SA103 box. It is not a shoebox being retro-fitted; the
   therapist entered it as the work happened.
-- **The quarterly figures — that is `mtdQuarters()`.** Four periods, on the basis in force,
+- **The quarterly figures - that is `mtdQuarters()`.** Four periods, on the basis in force,
   reconciled to `tyNet` (there is a test).
-- **The submission — this app cannot do it, and says so.** Sending an update needs an OAuth
+- **The submission - this app cannot do it, and says so.** Sending an update needs an OAuth
   client secret, HMRC's fraud-prevention headers, and HMRC recognition of the software itself.
   All three need a server. An offline single-file PWA cannot have them, and pretending
   otherwise would be the worst thing this app could claim.
@@ -65,22 +65,22 @@ often free, while a full bookkeeping package priced to do all three is not. HMRC
 list of recognised software, including free options and bridging tools that submit from a
 spreadsheet for a few tens of pounds a year.
 
-### The digital-link argument — why an exported file matters
+### The digital-link argument - why an exported file matters
 
 This is the technical detail that turns the export from a convenience into the thing that makes
 the route work, and it is worth understanding before writing any copy about it.
 
 MTD requires **digital links** between the records and the submission. Data has to move
 electronically. A human reading a figure off one screen and typing it into another **breaks the
-link** — copy-and-paste and re-keying are exactly what the rule prohibits. Bridging software
+link** - copy-and-paste and re-keying are exactly what the rule prohibits. Bridging software
 exists to be the digital end of that chain: it takes a spreadsheet and submits from it.
 
 Which means: **a file is not the same as a number on screen.** The `.csv` export is what a
 bridging tool or a spreadsheet actually reads. That is why the CSV was added (Sept 2026)
-alongside the JSON, and why the export button is not a nice-to-have sitting under the table —
+alongside the JSON, and why the export button is not a nice-to-have sitting under the table -
 it is the join between what this app is good at and what it deliberately refuses to do.
 
-### What we will not claim — the guard-rails
+### What we will not claim - the guard-rails
 
 These are absolute. The app's credibility on tax is its single most valuable asset and it is
 built entirely on never having overstated anything.
@@ -90,10 +90,10 @@ built entirely on never having overstated anything.
 | "MTD compliant" / "HMRC approved" / "HMRC recognised" | "Keeps the records and produces the figures. The submission is done by software HMRC has recognised." |
 | "File your MTD return from GroundWork" | "Hand the figures to your accountant, or to software that files." |
 | "Replaces your accountant" | "Gives your accountant the year already added up." |
-| "Free MTD filing" | "HMRC lists the recognised software, and some of it is free." — link, never a promise. |
+| "Free MTD filing" | "HMRC lists the recognised software, and some of it is free." - link, never a promise. |
 | Naming or recommending a bridging vendor in the app | Link to HMRC's own list. It stays current; we would not. |
 | "This satisfies the digital-link rule" | "Moving a file rather than re-typing figures is what keeps the chain digital." State the rule, not a verdict on their setup. |
-| "Imports straight into your bridging software" / naming the `hmrcField` column as a filing instruction | "Each row names its SA103 box and the matching field in HMRC's own developer documentation." The column exists to save the filer guessing which figure is which — it is a label, not a submission format, and **no GroundWork export has ever been tested against a real bridging tool**. Expect the consumer to map these columns onto their own. |
+| "Imports straight into your bridging software" / naming the `hmrcField` column as a filing instruction | "Each row names its SA103 box and the matching field in HMRC's own developer documentation." The column exists to save the filer guessing which figure is which - it is a label, not a submission format, and **no GroundWork export has ever been tested against a real bridging tool**. Expect the consumer to map these columns onto their own. |
 
 The last row matters most. Whether a *particular* chain of tools satisfies the rules for a
 *particular* person is a question about their circumstances, and the app has said from the
@@ -106,7 +106,7 @@ first screen that it does not know those. Describe the mechanism; never issue th
 Do not average these into one. The averaged pitch is the one that fails on both objections at
 once.
 
-### A. Under the threshold — most therapists, most of the time
+### A. Under the threshold - most therapists, most of the time
 
 **MTD is not the pitch and should barely appear.** Sell Self Assessment:
 
@@ -125,7 +125,7 @@ are already in the shape it wants.* That is a reassurance, not a feature.
 This is where the "instead of" pitch lands hardest, and where the arithmetic is worth showing:
 
 - Full bookkeeping software priced for a business that has invoices, banking and VAT.
-- Versus: GroundWork Plus, plus a recognised submission tool from HMRC's list — free at the
+- Versus: GroundWork Plus, plus a recognised submission tool from HMRC's list - free at the
   simple end, and low tens of pounds a year for spreadsheet bridging.
 
 Do not put vendor names or prices in the app. They go stale, and naming one is an endorsement
@@ -135,7 +135,7 @@ we are not qualified to give. Show the *shape* of the comparison and link to HMR
 
 Split this, because the honest answer differs and getting it wrong costs trust:
 
-- **Their package does real bookkeeping** — invoices, bank feeds, a second business. GroundWork
+- **Their package does real bookkeeping** - invoices, bank feeds, a second business. GroundWork
   is not replacing it and we should not suggest it does. The pitch here is different work
   entirely: per-session room fees, cancellations charged at a policy percentage, supervision
   hours against the 1:6 ratio, attendance against the frequency that was agreed. A bookkeeping
@@ -145,7 +145,7 @@ Split this, because the honest answer differs and getting it wrong costs trust:
   submission tool does the same job from records they are keeping anyway.
 
 **Ask which one they are before pitching.** In the app this is not a question we can ask, so
-the copy describes the route and lets the reader place themselves — which is why the MTD screen
+the copy describes the route and lets the reader place themselves - which is why the MTD screen
 says what GroundWork does, what it does not, and what they still need, rather than making a
 claim about their situation.
 
@@ -155,9 +155,9 @@ claim about their situation.
 
 | Where | Change |
 |---|---|
-| Tax › Making Tax Digital | Rebuilt around the route. "What this does / what you still need", the digital-link point, and a link to HMRC's own software list. The old copy ended on *"this app cannot file for you"* — a true sentence and a dead end. |
+| Tax › Making Tax Digital | Rebuilt around the route. "What this does / what you still need", the digital-link point, and a link to HMRC's own software list. The old copy ended on *"this app cannot file for you"* - a true sentence and a dead end. |
 | MTD export | `.csv` alongside `.json`, both rendered from one `mtdRows()` shape so they cannot disagree. CSV leads: it is the format bridging software and accountants read. Every quarter emits the same fixed set of rows (zeros included) and each row names its SA103 box and the matching HMRC API property, so a mapping set up once keeps working. |
-| Info topics | `mtd-what`, `mtd-route`, `mtd-exports` — the mechanism, the boundary and which file is for what, behind dots rather than on screen. |
+| Info topics | `mtd-what`, `mtd-route`, `mtd-exports` - the mechanism, the boundary and which file is for what, behind dots rather than on screen. |
 | Paywall (`PLUS_SELL`, `openPlusSheet`) | Reordered around what the tier is actually for, and led with the free/paid boundary rather than a feature list. The stale "extra colour schemes" line went with it. |
 | Settings card | Same copy, same order, no colour schemes. |
 | Tax lock card | Says what the tab does for you before it asks for money. |
@@ -168,8 +168,8 @@ claim about their situation.
 
 ## 5. Open questions this does not settle
 
-- **Price** is still open (`docs/monetisation.md` §7). The anchor argument in §3B —
-  bookkeeping software versus a submission tool — is the right frame for setting it, and it is
+- **Price** is still open (`docs/monetisation.md` §7). The anchor argument in §3B -
+  bookkeeping software versus a submission tool - is the right frame for setting it, and it is
   a lower anchor than "what a therapist pays an accountant". Both are defensible; they are not
   the same number.
 - **Whether to publish the comparison outside the app**, on a marketing page where naming

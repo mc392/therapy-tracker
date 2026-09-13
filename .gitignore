@@ -1,7 +1,7 @@
 .idea/
 .claude/
 
-# Local data & backups — NEVER commit real client data to this (public) repo
+# Local data & backups - NEVER commit real client data to this (public) repo
 therapy-tracker-data*.json
 therapy-tracker-backup-*.json
 
@@ -18,7 +18,7 @@ ios/App/App/public/
 # Derived artwork: 9MB of PNGs copied out of icon-ideas/groundwork/ by
 # scripts/install-assets.mjs on every sync. The sources are already in the repo; committing
 # six near-duplicates of them, again on every artwork change, is not worth it. Contents.json
-# IS committed — that is the configuration, not the output.
+# IS committed - that is the configuration, not the output.
 ios/App/App/Assets.xcassets/Splash.imageset/*.png
 ios/App/App/Assets.xcassets/AppIcon.appiconset/*.png
 ios/App/GroundWorkWatch/Assets.xcassets/AppIcon.appiconset/*.png

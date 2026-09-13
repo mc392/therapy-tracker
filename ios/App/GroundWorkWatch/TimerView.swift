@@ -3,7 +3,7 @@ import SwiftUI
 /// The whole app: one screen that is either offering to start a session or counting one.
 ///
 /// The numbers are drawn with `Text(timerInterval:)` and `ProgressView(timerInterval:)`
-/// rather than from a published property, because those two keep counting on their own —
+/// rather than from a published property, because those two keep counting on their own -
 /// through the dimmed Always On state, and without the app being scheduled to redraw. It is
 /// the same principle as `SessionTimer` keeping dates instead of a counter: on a watch, the
 /// less that depends on this app running, the more of it survives the wrist going down.
@@ -69,7 +69,7 @@ struct TimerView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 // Counting up from the end. The range's far end is arbitrary and never
-                // reached — SessionTimer treats anything past two hours as abandoned.
+                // reached - SessionTimer treats anything past two hours as abandoned.
                 Text(timerInterval: ends...ends.addingTimeInterval(4 * 60 * 60), countsDown: false)
                     .font(.system(size: 34, weight: .medium, design: .rounded))
                     .monospacedDigit()
@@ -97,7 +97,7 @@ struct TimerView: View {
     }
 
     /// The timer without its taps is a clock, and there is one of those on the watch face
-    /// already — so a refusal has to be visible rather than discovered halfway through a
+    /// already - so a refusal has to be visible rather than discovered halfway through a
     /// session that ran twenty minutes long.
     private var blockedNote: some View {
         Text("Notifications are off, so there will be no tap. Turn them on for GroundWork in the Watch app.")

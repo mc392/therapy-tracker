@@ -10,7 +10,7 @@
  *
  *   Three properties are asserted, and all three are rules from CLAUDE.md rather than readings
  *   taken off the functions:
- *     1. An AMOUNT change never moves the day a charge lands on — that is what stops a
+ *     1. An AMOUNT change never moves the day a charge lands on - that is what stops a
  *        correction shifting historical rent between tax years.
  *     2. A step with no `freq` and no `endDate` behaves exactly as it did before either field
  *        existed: monthly, from the first step's own day, for ever. Every rent ever entered is
@@ -134,7 +134,7 @@ const results = await page.evaluate(async () => {
   setup([{ effectiveFrom: "2025-01-06", amount: 150, freq: "weekly" }]);
   const led = ledgerBetween(parseD("2026-04-06"), parseD("2027-04-05"), {});
   /* Counted from the rule, not assumed: the rent falls on the anchor's weekday, 6 Apr 2026 IS
-     that weekday, and the tax year runs to 5 Apr 2027 — so the window holds one charge on day 0
+     that weekday, and the tax year runs to 5 Apr 2027 - so the window holds one charge on day 0
      and one every 7 days after it. That comes to 53, not 52, which is the real-world fact a
      weekly tenant meets roughly every seventh year and a hard-coded 52 would quietly lose. */
   const weeks = Math.floor((parseD("2027-04-05") - parseD("2026-04-06")) / (7 * 864e5)) + 1;

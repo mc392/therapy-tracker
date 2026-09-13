@@ -9,7 +9,7 @@
  *
  *   That gap is not theoretical. When room-fee settling moved out of the session form (Sep 2026)
  *   the form stopped reading `roomPaid` from a control it no longer renders. Had it gone on
- *   reading it, every save would have silently blanked a settlement — no error, no failing engine
+ *   reading it, every save would have silently blanked a settlement - no error, no failing engine
  *   test, no crash. Only pressing Save and looking at the record afterwards catches that.
  *
  * EXPECTATIONS COME FROM THE RULE, NEVER FROM THE FUNCTION
@@ -41,7 +41,7 @@ const dataDir = join(root, "tests", "test-data");
 /* Four profiles, chosen for what each one exercises rather than for coverage's sake:
      winding-down      per-session room fees in volume, every session charged in full
      chaotic-payments  cancellations at 0/50/75/100%, so the fee-erosion gap is non-zero
-     online-only       paid in advance — the days-to-payment split has something to split
+     online-only       paid in advance - the days-to-payment split has something to split
      established       four years, a fee rise, a room rate rise                              */
 const PROFILES = ["winding-down", "chaotic-payments", "online-only", "established"];
 
@@ -192,11 +192,11 @@ async function inPage() {
     ok("no gap means nothing was written off", fe.gap > 0 || fe.lost === 0);
   }
 
-  /* ===== Who pays late: drift, not debt — current clients lead, ex-clients trail ===== */
+  /* ===== Who pays late: drift, not debt - current clients lead, ex-clients trail ===== */
   const lp = anaLatePayers();
   if (!lp.ready) skip("late-payer checks", lp.need);
   else {
-    /* "Trended" is the business question — current clients with enough history for a trend — so
+    /* "Trended" is the business question - current clients with enough history for a trend - so
        it is recomputed from the raw per-row fields (drift, current), not lifted from lp.trended. */
     const trended = lp.rows.filter((r) => r.drift != null && r.current);
     ok("clients with enough history get a trend", trended.length > 0, trended.length);
@@ -221,7 +221,7 @@ async function inPage() {
 let failed = 0;
 for (const name of PROFILES) {
   const file = readdirSync(dataDir).find((f) => f.includes(name) && f.endsWith(".json"));
-  if (!file) { console.log(`✗ ${name} — fixture not found`); failed++; continue; }
+  if (!file) { console.log(`✗ ${name} - fixture not found`); failed++; continue; }
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const errs = [];
   page.on("pageerror", (e) => errs.push("pageerror: " + e.message));
@@ -231,7 +231,7 @@ for (const name of PROFILES) {
   const state = JSON.parse(readFileSync(join(dataDir, file), "utf8"));
   await page.evaluate((st) => {
     window.commit = async () => true;                 /* reads and in-memory edits only */
-    /* `S` is a top-level `let` — it lives in the global LEXICAL scope, so assigning window.S
+    /* `S` is a top-level `let` - it lives in the global LEXICAL scope, so assigning window.S
        would create a second copy that nothing reads. Assign the bare name. */
     S = normalize(JSON.parse(JSON.stringify(st.state || st)));
     S.settings.onboarded = true;
@@ -251,7 +251,7 @@ for (const name of PROFILES) {
     bad.forEach((r) => console.log(`    ✗ ${r.name}${r.detail ? "  [" + r.detail + "]" : ""}`));
     [...new Set(errs)].slice(0, 5).forEach((e) => console.log("    " + e));
   } else {
-    console.log(`✓ ${name} — ${results.length - skipped.length} checks` +
+    console.log(`✓ ${name} - ${results.length - skipped.length} checks` +
       (skipped.length ? ` (${skipped.length} n/a: ${skipped.map((s) => s.detail).join("; ")})` : ""));
   }
   await page.close();

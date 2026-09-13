@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-/* Mints GroundWork Plus licences — comps, gifts, founding members, testers.
+/* Mints GroundWork Plus licences - comps, gifts, founding members, testers.
    See docs/monetisation.md §6.3 for why this exists and what it is (and is not) for.
 
    The private key NEVER goes in this repo. --keygen writes it outside the tree and patches
    only the PUBLIC key into index.html, because a public key cannot mint anything. That is the
    whole point: one person bypassing the gate in devtools is already possible and already
-   accepted, but a key generator circulating so that anyone can is a different problem — and a
+   accepted, but a key generator circulating so that anyone can is a different problem - and a
    symmetric secret embedded in the app would be exactly that.
 
    ECDSA P-256, not Ed25519: WebCrypto has had P-256 everywhere for years, while Ed25519 only
@@ -53,20 +53,20 @@ if (flag("keygen")) {
   const privJwk = privateKey.export({ format: "jwk" });
 
   mkdirSync(dirname(keyFile), { recursive: true });
-  writeFileSync(keyFile, JSON.stringify({ note: "GroundWork Plus licence signing key — keep this private and backed up", privateJwk: privJwk }, null, 2) + "\n", { mode: 0o600 });
+  writeFileSync(keyFile, JSON.stringify({ note: "GroundWork Plus licence signing key - keep this private and backed up", privateJwk: privJwk }, null, 2) + "\n", { mode: 0o600 });
 
   const html = readFileSync(HTML, "utf8");
-  if (!html.includes(MARKER)) die(`${HTML} no longer contains ${MARKER} — has the Plus block been renamed?`);
+  if (!html.includes(MARKER)) die(`${HTML} no longer contains ${MARKER} - has the Plus block been renamed?`);
   const literal = `{kty:"EC",crv:"P-256",x:"${pubJwk.x}",y:"${pubJwk.y}",ext:true}`;
   const patched = html.replace(
     new RegExp(`const PLUS_PUBKEY=.*?; ${MARKER.replace(/[*/]/g, "\\$&")}`),
     `const PLUS_PUBKEY=${literal}; ${MARKER}`
   );
-  if (patched === html) die("Could not patch PLUS_PUBKEY — the line has changed shape; do it by hand.");
+  if (patched === html) die("Could not patch PLUS_PUBKEY - the line has changed shape; do it by hand.");
   writeFileSync(HTML, patched);
 
   console.log(`\n  Private key written to ${keyFile} (mode 600).`);
-  console.log("  BACK IT UP. It is not in the repo and it cannot be recovered — losing it means");
+  console.log("  BACK IT UP. It is not in the repo and it cannot be recovered - losing it means");
   console.log("  re-keying, which invalidates every licence already issued.\n");
   console.log(`  Public key patched into ${HTML}. Commit that; never commit the private key.\n`);
   process.exit(0);
@@ -109,6 +109,6 @@ const sig = sign("sha256", Buffer.from(encoded, "utf8"), { key, dsaEncoding: "ie
 console.log(`\n  ${kind} licence for ${name} (${tier === "pro" ? "GroundWork Pro" : "GroundWork Plus"})`);
 console.log(`  ${exp ? `expires ${exp.slice(0, 10)}` : "no expiry"} · id ${payload.id}\n`);
 console.log(`${encoded}.${b64u(sig)}\n`);
-console.log("  Record the id, name and expiry somewhere OUTSIDE this repo — it holds personal");
+console.log("  Record the id, name and expiry somewhere OUTSIDE this repo - it holds personal");
 console.log("  data, and it is the only way to know later what you issued. There is no");
 console.log("  revocation: expiry is the only lever.\n");

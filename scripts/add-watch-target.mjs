@@ -3,7 +3,7 @@
    Same job, and the same reasoning, as add-native-plugin.mjs: `npx cap add ios` regenerates
    ios/ from Capacitor's template, which knows nothing about anything we wrote ourselves. The
    difference is that this one adds a whole target rather than a file, so the failure it
-   guards against is bigger — a regenerated project would build and ship an iPhone app with
+   guards against is bigger - a regenerated project would build and ship an iPhone app with
    no watch app inside it, and nothing about that looks wrong until someone goes looking for
    the app on their wrist.
 
@@ -45,14 +45,14 @@ if (already) {
    getFirstTarget() returns, so it had better be the iPhone app. */
 const host = proj.getFirstTarget();
 if (!host || String(host.firstTarget.name).replace(/"/g, "") !== "App")
-  throw new Error("The first Xcode target is not App — refusing to embed the watch app in it");
+  throw new Error("The first Xcode target is not App - refusing to embed the watch app in it");
 
-/* watch2_app is the target type that gets the right embed phase — a PBXCopyFilesBuildPhase
+/* watch2_app is the target type that gets the right embed phase - a PBXCopyFilesBuildPhase
    into $(CONTENTS_FOLDER_PATH)/Watch. Its product type is the old watchOS 2 one, though, and
    this is a single-target watch app (no WatchKit extension bundle, WKApplication in the
    Info.plist), so the product type is corrected to a plain application below. */
 /* addTarget() wants to register the build dependency itself, but it does so only if the
-   PBXTargetDependency and PBXContainerItemProxy sections already exist — and a project with
+   PBXTargetDependency and PBXContainerItemProxy sections already exist - and a project with
    a single target has neither. Without them the call is a silent no-op, the watch app is
    embedded without ever being built first, and the failure is a build-order one that will
    not reproduce on a clean machine. So the sections are seeded, and the result asserted. */
@@ -64,7 +64,7 @@ const target = proj.addTarget(TARGET, "watch2_app", DIR, BUNDLE_ID);
 target.pbxNativeTarget.productType = '"com.apple.product-type.application"';
 
 if (!host.firstTarget.dependencies.some((d) => d.comment === "PBXTargetDependency"))
-  throw new Error("App does not depend on the watch target — it would be embedded unbuilt");
+  throw new Error("App does not depend on the watch target - it would be embedded unbuilt");
 
 proj.addBuildPhase(SOURCES, "PBXSourcesBuildPhase", "Sources", target.uuid);
 proj.addBuildPhase([], "PBXFrameworksBuildPhase", "Frameworks", target.uuid);
@@ -83,7 +83,7 @@ proj.getPBXGroupByKey(proj.getFirstProject().firstProject.mainGroup).children.pu
 /* The build settings the template cannot guess. Two are load-bearing beyond the obvious:
 
    CURRENT_PROJECT_VERSION / MARKETING_VERSION are written out literally rather than left to
-   inherit, because scripts/release-ios.mjs bumps them with a global regex over this file —
+   inherit, because scripts/release-ios.mjs bumps them with a global regex over this file -
    a watch app whose build number has drifted from its host app is rejected at upload, and
    inheriting would have left nothing here for the bump to find.
 

@@ -30,7 +30,7 @@ jobs:
     #     failing as a fake API mismatch ("CAPPluginCall has no member 'reject'"). macos-15
     #     (Xcode 16.4) compiles it fine.
     #   - Apple's, which is the higher one and applies at UPLOAD, after a perfectly good
-    #     archive: "All iOS and iPadOS apps must be built with the iOS 26 SDK or later" — a
+    #     archive: "All iOS and iPadOS apps must be built with the iOS 26 SDK or later" - a
     #     409 from App Store Connect, ten minutes in. macos-15's iOS 18.5 SDK is refused.
     # So track Apple's current SDK floor here, not merely what compiles.
     runs-on: macos-26
@@ -40,7 +40,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # Node 22, not 20: @capacitor/cli 8 declares "engines": { "node": ">=22" } and refuses to
-      # start below it — "The Capacitor CLI requires NodeJS >=22.0.0", which killed the sync step
+      # start below it - "The Capacitor CLI requires NodeJS >=22.0.0", which killed the sync step
       # on the first run this workflow ever had. Keep this at or above whatever Capacitor asks for.
       - uses: actions/setup-node@v4
         with:
@@ -57,7 +57,7 @@ jobs:
           xcodebuild -showsdks | grep -i iphoneos || true
           swift --version
 
-      # Capacitor 8 resolves its iOS dependencies with SwiftPM, not CocoaPods — there is no
+      # Capacitor 8 resolves its iOS dependencies with SwiftPM, not CocoaPods - there is no
       # .xcworkspace, and the archive step below builds the .xcodeproj directly. The App
       # scheme is shared (checked in under xcshareddata) so a machine that has never opened
       # Xcode can still find it.
@@ -70,7 +70,7 @@ jobs:
         run: npm run check
 
       # Rebuilds ios/App/App/public from TherapyTracker-web. Without it the archive would
-      # carry whatever the last local sync left behind — the exact staleness this pipeline
+      # carry whatever the last local sync left behind - the exact staleness this pipeline
       # exists to prevent.
       - name: Sync the web app into the iOS project
         run: npm run sync
@@ -84,18 +84,18 @@ jobs:
           PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
         run: |
           if [ -z "$KEY_ID" ] || [ -z "$PRIVATE_KEY" ]; then
-            echo "::error::App Store Connect secrets are missing — see docs/releasing.md."
+            echo "::error::App Store Connect secrets are missing - see docs/releasing.md."
             exit 1
           fi
           mkdir -p ~/private_keys
           echo "$PRIVATE_KEY" > ~/private_keys/AuthKey_$KEY_ID.p8
 
       # -allowProvisioningUpdates alone lets Xcode MINT a fresh signing certificate whenever
-      # the runner's (always-empty) keychain doesn't already have one — and a fresh disposable
+      # the runner's (always-empty) keychain doesn't already have one - and a fresh disposable
       # runner never does. Apple caps active certificates per account, so every run silently
       # spent one until the account hit that ceiling and archiving failed outright ("Choose a
       # certificate to revoke"). Importing the same certificate every run means Xcode reuses
-      # it instead of creating a new one — profiles aren't capped the same way, so
+      # it instead of creating a new one - profiles aren't capped the same way, so
       # -allowProvisioningUpdates below is still what creates/refreshes those.
       - name: Import the iOS signing certificate
         env:
@@ -103,7 +103,7 @@ jobs:
           CERTIFICATE_PASSWORD: ${{ secrets.IOS_SIGNING_CERTIFICATE_PASSWORD }}
         run: |
           if [ -z "$CERTIFICATE_P12" ] || [ -z "$CERTIFICATE_PASSWORD" ]; then
-            echo "::error::iOS signing certificate secrets are missing — see docs/releasing.md."
+            echo "::error::iOS signing certificate secrets are missing - see docs/releasing.md."
             exit 1
           fi
           KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
@@ -124,7 +124,7 @@ jobs:
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
 
       # A tag carries its own build number; a manual run takes the input, and falls back to
-      # the run number, which is monotonic — so a hand-started build can never collide with
+      # the run number, which is monotonic - so a hand-started build can never collide with
       # one Apple has already accepted.
       - name: Decide the build number
         id: build

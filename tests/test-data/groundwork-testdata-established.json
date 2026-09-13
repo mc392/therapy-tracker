@@ -22720,7 +22720,7 @@
    },
    {
     "_id": "ex-01322",
-    "desc": "CPD — trauma course",
+    "desc": "CPD - trauma course",
     "amount": 420,
     "date": "2025-12-05",
     "recurrence": "once",
@@ -22738,7 +22738,7 @@
   "otherIncome": [
    {
     "_id": "oi-01324",
-    "desc": "Workshop — anxiety",
+    "desc": "Workshop - anxiety",
     "amount": 350,
     "date": "2026-02-05",
     "recurrence": "once",

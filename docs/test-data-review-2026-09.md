@@ -10,20 +10,20 @@ Reproduce the whole thing with:
 npm i --no-save playwright
 npm run testdata        # regenerate the eight practices (deterministic)
 npm run test:review     # run Trends + Tax over all eight and assert the invariants
-npm run test:tax        # tests/tax-tests.js, headless — 130/130
+npm run test:tax        # tests/tax-tests.js, headless - 130/130
 ```
 
 ## What was tested, and against what
 
 `tests/tax-tests.js` checks the tax engine against the HMRC rule on small, purpose-built states.
 This is the other half: **whole practices**, big enough for the invariants that only appear at
-size — the four MTD quarters adding up to the year, `profitBreakdown` agreeing with `tyNet`, a
+size - the four MTD quarters adding up to the year, `profitBreakdown` agreeing with `tyNet`, a
 list matching its own definition. Nothing here compares the app to a number the app produced
 earlier; every expectation is derived from the stated rule.
 
 | Practice | Size | Basis | Chosen because |
 |---|---|---|---|
-| day-one | 1 session | cash | the floor — a crash or a nonsense figure here is the worst first impression there is |
+| day-one | 1 session | cash | the floor - a crash or a nonsense figure here is the worst first impression there is |
 | newcomer | 42 sessions, 4 clients, 3 months | cash | the readiness gates, and the tax disclaimer not yet acknowledged |
 | online-only | 257 sessions, 17 months | cash | simple reveal mode, Money and Tax switched off |
 | part-time | 272 sessions, ~£4.6k profit | accruals | under the personal allowance; Class 2 paid voluntarily; use of home |
@@ -50,24 +50,24 @@ findings rather than fixed, and say why.
 ### How this lands against `main`
 
 The review ran against `9855a09`. While it was in progress, **PR #14 ("Trends: fix four wrong
-figures") independently found and fixed two of the same three defects** — the `catOf` misuse and
-the two costs missing from the cost ratio — from user feedback rather than from the corpus. That is
+figures") independently found and fixed two of the same three defects** - the `catOf` misuse and
+the two costs missing from the cost ratio - from user feedback rather than from the corpus. That is
 a good sign for both: two routes to the same bugs, agreeing on the same causes and the same fixes.
 
 What that leaves, after merging `main` in:
 
-- **Findings 1 and 2** (`catOf`) — fixed on `main`, and its version goes further (a
+- **Findings 1 and 2** (`catOf`) - fixed on `main`, and its version goes further (a
   drifting/Review-status ladder, an episode floor that counts work still in progress). The merge
   takes `main`'s code wholesale. What this branch adds is the **guard**: the harness now derives
   the expected drifting set and episode count from the stated rules, so neither can quietly come
   back. Both checks fail on the pre-#14 code, which is how they were verified.
-- **Finding 3** — `main` added the two missing costs; it kept the **use-of-home double count**,
+- **Finding 3** - `main` added the two missing costs; it kept the **use-of-home double count**,
   which the corpus found separately and which the merge fixes on top. `main`'s shared helpers
   (`anaSessionRoomCost`, `anaSupervisionCost`) are used rather than this branch's local copies.
 - **Findings 4 to 9** are untouched by `main` and stand as written.
 
 Post-merge figures, for the record: the cost ratio reads 41% (established), 37% (winding-down),
-57% (chaotic), 18% (Scotland) — each within a point or two of that practice's own SA103 breakdown,
+57% (chaotic), 18% (Scotland) - each within a point or two of that practice's own SA103 breakdown,
 which is the agreement that was missing before.
 
 ---
@@ -78,7 +78,7 @@ which is the agreement that was missing before.
 
 **What it looked like.** Practice › Trends › Clients lists clients who have gone quiet so you can
 decide whether to reach out. On the four-year practice it listed **15 clients, 14 of them
-discharged years ago** — the top three had last been seen 1,040, 459 and 405 days earlier. On the
+discharged years ago** - the top three had last been seen 1,040, 459 and 405 days earlier. On the
 winding-down practice it listed **28**, i.e. every client who had ever finished. The card is a list
 to act on, so a list you cannot act on is worse than no card.
 
@@ -92,13 +92,13 @@ to act on, so a list you cannot act on is worse than no card.
 | online-only | 5 | 0 |
 | newcomer | 1 | 0 |
 
-**Why.** `anaDrifting()` opened with `if(catOf(c.status)==="Finished")return;` — but `catOf` is
+**Why.** `anaDrifting()` opened with `if(catOf(c.status)==="Finished")return;` - but `catOf` is
 `catOf(kind,key)`, the **SA103 expense-category lookup** further down the file, which returns its
 "other business costs" fallback object for anything it does not recognise. `catOf(c.status)` was
 therefore an object, never the string `"Finished"`, so the test never fired once. The function that
 maps a client status to its category is `clientCategory()`.
 
-**Fixed** at all three call sites (`anaDrifting`, and twice in `anaEpisodes`) — independently
+**Fixed** at all three call sites (`anaDrifting`, and twice in `anaEpisodes`) - independently
 and more thoroughly on `main` in PR #14, whose version this branch merges and then guards.
 
 ### 2. Episode length ignored anyone discharged recently
@@ -106,7 +106,7 @@ and more thoroughly on `main` in PR #14, whose version this branch merges and th
 Same root cause, different symptom. `anaEpisodes()` counts only finished pieces of work, defined as
 "the status says finished **or** they have been gone for three of their own intervals". With the
 first half of that test dead, a client discharged last week was not counted until three intervals
-had passed — so the median episode length, and the "still ongoing" count beside it, were both drawn
+had passed - so the median episode length, and the "still ongoing" count beside it, were both drawn
 from a stale picture of the practice. On the established practice the count goes from 15 to 16 once
 a client discharged six days ago is included.
 
@@ -123,7 +123,7 @@ practice's own tax figures:
 | chaotic-payments | **3%** | £7,692 on £13,456 → 57% | **59%** |
 | scotland-high | 20% | £11,442 on £65,320 → 18% | 19% |
 
-The "left before tax" figure moved with it — on the established practice from £26,122 to £16,640, a
+The "left before tax" figure moved with it - on the established practice from £26,122 to £16,640, a
 £9,482 overstatement of what the therapist has to live on.
 
 **Why.** Two separate mistakes:
@@ -133,7 +133,7 @@ The "left before tax" figure moved with it — on the established practice from 
   was counted twice. This is also why the itemised "where it goes" bars never added up to the
   headline figure.
 - More importantly, `ledgerBetween()` is only the finance ledger. **A room hired by the session
-  hangs off the session** (`derive().roomRate`) and **supervision hangs off its own logs** — `tyNet`
+  hangs off the session** (`derive().roomRate`) and **supervision hangs off its own logs** - `tyNet`
   subtracts both separately, and neither was here. On the established practice that is £8,822 of
   room fees and £780 of supervision missing from a £2,046 total. Note what that does to the
   Scottish practice, which rents its room **monthly**: monthly rent *does* go through
@@ -146,28 +146,28 @@ a therapist whose only business cost is supervision (very common in the first ye
 "add at least one business cost"; the newcomer practice now shows a real 15%.
 
 PR #14 fixed the two missing costs from the same reasoning while this was in progress. It did not
-catch the use-of-home double count — that one only shows as a discrepancy between the headline and
-the itemised categories, which is what the corpus checks — so the merged version is `main`'s shared
+catch the use-of-home double count - that one only shows as a discrepancy between the headline and
+the itemised categories, which is what the corpus checks - so the merged version is `main`'s shared
 helpers with `led.useOfHome` taken back out of the total.
 
 ### 4. Tax › Now could say "that is yours to spend" about the next bill
 
 On the Scottish practice, Tax › Now showed:
 
-> On track to owe for 2026-27 — **£7,434**
-> Keep in your pot — **£6,483** … You have £14,500 put by — £8,017 more than you need.
+> On track to owe for 2026-27 - **£7,434**
+> Keep in your pot - **£6,483** … You have £14,500 put by - £8,017 more than you need.
 > **That is yours to spend.**
 
-while a payment of **£7,227 falls due on 31 January 2027**. Pot & payments — the detail screen this
-one summarises — already says that, in a line built from `pot.byNext`. The summary dropped it, so
+while a payment of **£7,227 falls due on 31 January 2027**. Pot & payments - the detail screen this
+one summarises - already says that, in a line built from `pot.byNext`. The summary dropped it, so
 the two screens told different stories, which is exactly what the comment above the code forbids.
 The verdict now carries the same "by *date* you need *amount*" sentence, reads "more than you need
 **today**", and turns amber-and-explicit when the balance covers the tax earned so far but not the
-next bill. **No figure changed** — this is the summary saying what the detail screen already knew.
+next bill. **No figure changed** - this is the summary saying what the detail screen already knew.
 
 ---
 
-## Found, not fixed — these are decisions, not slips
+## Found, not fixed - these are decisions, not slips
 
 ### 5. The pot asks for a sixth of the year's tax five months into the year
 
@@ -179,10 +179,10 @@ On the Scottish practice on 5 September, 42% of the tax year elapsed:
 | the app's own pro-rata figure (`taxForYear().proRata`) | ≈ £3,116 |
 | what the pot asks you to have put by (`earned`) | **£1,176** |
 
-`taxPot().earned` is `ukTax(tyNet(ty,true))` — tax on profit **to date**, but with the **whole
+`taxPot().earned` is `ukTax(tyNet(ty,true))` - tax on profit **to date**, but with the **whole
 annual personal allowance** and the full band structure applied to it. Five months in, the
 allowance has swallowed most of the profit, so the floor is far below the share of the year's bill
-actually attributable to the elapsed part of it — and on four of the eight practices it is exactly
+actually attributable to the elapsed part of it - and on four of the eight practices it is exactly
 £0 while a real liability is projected.
 
 This is deliberate and test-locked: *"Pot: 'earned' is tax on income actually taken, not a share of
@@ -194,7 +194,7 @@ identical shape and did not get the identical treatment.
 
 Two candidate changes, in increasing order of how much they move:
 
-- Make the floor `max(earned, proRata)` — never asks for less than today's honest floor, never
+- Make the floor `max(earned, proRata)` - never asks for less than today's honest floor, never
   leaves someone with £0 in September and a January bill.
 - Or keep `earned` but apportion the personal allowance across the elapsed year, which stays
   strictly "tax on money already earned" and simply stops handing March's allowance to July.
@@ -205,7 +205,7 @@ above is the part that was unambiguously wrong and is already fixed.
 ### 6. The Net column mixes income to date with costs to year end
 
 For the tax year **in progress**, `tyNet(y,false)` counts every session logged (which can only run
-to today, plus anything in the diary) but expands every recurring cost to **5 April** — rent,
+to today, plus anything in the diary) but expands every recurring cost to **5 April** - rent,
 insurance, memberships, the lot. So the Net column on Tax › Estimate reads *lower* than the profit
 actually made so far:
 
@@ -216,7 +216,7 @@ actually made so far:
 | online-only | £2,959 | £3,237 | −£278 |
 | winding-down | £2,973 | £3,138 | −£165 |
 
-Nothing downstream is wrong — the tax figures use `netTD` and the projection, not this — but the
+Nothing downstream is wrong - the tax figures use `netTD` and the projection, not this - but the
 one number on the row is asymmetric, and on a practice with a £480/month room it is out by a fifth.
 Options: print `netTD` for a year still running (and label it "so far"), or clamp
 `ledgerBetween`'s occurrences to today when `toDate` is not set. Worth a decision rather than a
@@ -228,7 +228,7 @@ standing costs and no income, so Q3 and Q4 of a live year read as losses. They a
 
 ### 7. A pension contribution never survives a restore
 
-`pensionPcm()` reads `localStorage.tt_pension`. It is not in `S`, so it is **not in a backup** —
+`pensionPcm()` reads `localStorage.tt_pension`. It is not in `S`, so it is **not in a backup** -
 and it is a tax input, not a device preference: on the Scottish practice, £400/month extends the
 basic-rate band and takes 2025-26's estimate from £15,263 to £13,883. Restore that backup onto a
 new phone and every year's tax estimate silently rises by up to £1,400 with nothing on screen to
@@ -237,18 +237,18 @@ say why.
 The documented device-only settings (`tt_lock`, `tt_lock_grace`, `tt_notify`, `tt_plus`) are all
 things that *should* stay on one device. This is not one of them. Moving it to
 `settings.pensionPcm` needs a schema bump and a migration that keeps the localStorage key in step
-for older builds — the pattern `setYearValue()` already uses for legacy scalars — so it is a
+for older builds - the pattern `setYearValue()` already uses for legacy scalars - so it is a
 change to plan, not to slip into a review. `tt_default_rate` has the same shape but costs nothing
 if lost.
 
 ### 8. "Self Assessment season" appears for a year with no records
 
 On 15 January the `file-<ty>` prompt fires for **every** practice, including `day-one` (one session,
-logged in September 2026) and `newcomer` (first session June 2026) — both told their **2025-26**
+logged in September 2026) and `newcomer` (first session June 2026) - both told their **2025-26**
 return is due, for a year in which the app holds nothing at all. The window only tests that the
 year has ended and that no figure has been entered. Gating it on the practice having any record in
-that year would cost one condition. Low severity — it is a nudge, and someone registered as
-self-employed does have to file — but it is the app being confidently wrong about a year it knows
+that year would cost one condition. Low severity - it is a nudge, and someone registered as
+self-employed does have to file - but it is the app being confidently wrong about a year it knows
 nothing about.
 
 ### 9. Everything else the sweep found was right
@@ -277,7 +277,7 @@ Worth recording, because these are the invariants a future change could quietly 
   `tyNet` and `profitBreakdown` agrees with it. This is the check that once caught per-session room
   fees missing from the SA103 boxes.
 - **Cash vs accruals.** Switching each practice to the other basis and re-running keeps both
-  reconciliations. The chaotic practice — 419 sessions, a third of them never paid — is the one that
+  reconciliations. The chaotic practice - 419 sessions, a third of them never paid - is the one that
   makes this mean something.
 - **Cancellation charging.** A late cancellation stamped at 0% correctly earns nothing and still
   incurs its room fee (`chaotic-payments`, 2023-24: income £0, costs £127). Charges at 50%, 75% and

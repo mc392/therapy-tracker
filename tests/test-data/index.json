@@ -35,7 +35,7 @@
     {
       "name": "part-time",
       "file": "groundwork-testdata-part-time.json",
-      "note": "Part-time, ~£8k profit — under the personal allowance, Class 2 voluntary, accruals basis, use of home at the £18 band.",
+      "note": "Part-time, ~£8k profit - under the personal allowance, Class 2 voluntary, accruals basis, use of home at the £18 band.",
       "clients": 6,
       "sessions": 272,
       "first": "2024-07-05",
@@ -83,7 +83,7 @@
     {
       "name": "winding-down",
       "file": "groundwork-testdata-winding-down.json",
-      "note": "Five and a half years, 30 clients, 28 of them finished — a practice winding down to two clients.",
+      "note": "Five and a half years, 30 clients, 28 of them finished - a practice winding down to two clients.",
       "clients": 30,
       "sessions": 1425,
       "first": "2021-03-05",

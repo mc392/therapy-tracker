@@ -8,15 +8,15 @@
  *
  *     1. An entitlement written before tiers existed reads as the SMALLER tier, and everybody who
  *        already pays loses the tax engine on the morning they update. There is no migration to
- *        get wrong — the default is the migration — so the only thing that can protect it is a
+ *        get wrong - the default is the migration - so the only thing that can protect it is a
  *        test that asserts the default.
  *     2. A feature quietly changes rung. A one-word edit to FEATURE_TIER sells the tax engine at
  *        the cheaper price, or puts Business analytics behind the dearer one, and nothing else in
  *        the repo would notice.
  *
  * EXPECTATIONS COME FROM THE DOCUMENTED SPLIT, NEVER FROM THE FUNCTION
- *   The matrix below is written out from docs/monetisation.md §3 — Plus is everything except the
- *   tax bundle, Pro is everything — and compared against what plusLocked() actually does. A test
+ *   The matrix below is written out from docs/monetisation.md §3 - Plus is everything except the
+ *   tax bundle, Pro is everything - and compared against what plusLocked() actually does. A test
  *   that read FEATURE_TIER and then asserted plusLocked agreed with it would assert nothing.
  */
 import { createServer } from "node:http";
@@ -73,7 +73,7 @@ const results = await page.evaluate(async () => {
   const soon = new Date(Date.now() + 200 * 864e5).toISOString();
 
   /* ---- 1. the matrix, written out from the documented split ---- */
-  const TAX_BUNDLE = ["tax", "finances", "mtd"];      // Pro only — UK machinery, sold as one
+  const TAX_BUNDLE = ["tax", "finances", "mtd"];      // Pro only - UK machinery, sold as one
   const INSIGHTS   = ["trends", "accreditation", "notesSync"];  // Plus and above
   const CASES = [
     ["nothing held", null,                             { tax: true,  insights: true }],

@@ -1,7 +1,7 @@
 /* Installs the delivered brand artwork into the Xcode asset catalog.
 
    Sources live in TherapyTracker-web/icon-ideas/groundwork/ and are deliberately NOT used
-   by the web app — 2.4MB of PNG cannot be precached for offline and cannot follow the
+   by the web app - 2.4MB of PNG cannot be precached for offline and cannot follow the
    theme, which is why the PWA draws an inline-SVG launch screen instead. Same mark, two
    renderings; see CLAUDE.md § Launch screen.
 
@@ -18,7 +18,7 @@ const WATCH_CAT = resolve("ios/App/GroundWorkWatch/Assets.xcassets");
 await copyFile(`${SRC}/icon-1024.png`, `${CAT}/AppIcon.appiconset/AppIcon-512@2x.png`);
 
 /* --- Watch app icon: the same master again. watchOS takes a single 1024 too, and an app
-       icon is not optional there — a watch app without one is rejected at upload rather
+       icon is not optional there - a watch app without one is rejected at upload rather
        than merely looking unfinished. --- */
 await copyFile(`${SRC}/icon-1024.png`, `${WATCH_CAT}/AppIcon.appiconset/AppIcon.png`);
 

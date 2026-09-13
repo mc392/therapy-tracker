@@ -1,4 +1,4 @@
-<!-- Source for subscription-plus-1024.png — the App Store Connect image for **GroundWork Plus**,
+<!-- Source for subscription-plus-1024.png - the App Store Connect image for **GroundWork Plus**,
      the MIDDLE tier: Business analytics, accreditation hours and GroundWork Notes sync, without
      the tax engine. GroundWork Pro is the top tier and has its own file beside this one.
      docs/monetisation.md §3 has exactly what is on each rung.
@@ -7,10 +7,10 @@
        node scripts/render-subscription-image.mjs subscription-plus-1024
 
      THE THREE BARS ARE A TIER LADDER, read the same way in both files: bar 1 is free, bar 2 is
-     Plus, bar 3 is Pro. The metal sits on bar 2 alone here — bar 3 is back to the plain fade
+     Plus, bar 3 is Pro. The metal sits on bar 2 alone here - bar 3 is back to the plain fade
      bars 1 and 2 share in the Pro image, because gold marks the TOP tier and putting it on bar 3
      here would claim a rung this subscription does not sell. Do not brighten bar 3 to "look
-     premium too" — that is what subscription-pro-1024.html is for.
+     premium too" - that is what subscription-pro-1024.html is for.
 
      CHROME, NOT VIOLET (Sep 2026). Bar 2 was violet while the middle tier was unnamed and
      unbuilt; the tier is real now and its accent is chrome, which is also what the app paints
@@ -35,16 +35,16 @@
   .glow{position:absolute;inset:0;
     background:radial-gradient(52% 46% at 68% 22%,rgba(255,255,255,.16),rgba(255,255,255,0) 70%)}
   svg{position:absolute;left:50%;top:52%;transform:translate(-50%,-50%);width:770px;height:719px}
-  /* The icon's own fade, sampled from it: #94A29A, #C2CCC6, #FBFDFB against this gradient —
+  /* The icon's own fade, sampled from it: #94A29A, #C2CCC6, #FBFDFB against this gradient -
      bars 1 and 3 here, the two rungs this subscription is NOT selling. */
   .b1{fill:#FBFDFB;opacity:.55}
   .b3{fill:#FBFDFB;opacity:.78}
   /* Chrome on the middle rung. The stroke straddles the path, so bar 2 ends up a little wider
-     than bars 1 and 3 — the same trick the Pro image uses to draw the eye to the rung being
+     than bars 1 and 3 - the same trick the Pro image uses to draw the eye to the rung being
      sold. */
   .b2{fill:#FBFDFB;stroke:url(#chrome);stroke-width:2.6}
   .leaf{fill:#FBFDFB}
-  /* Thin, and short enough to stay well inside the leaf — at 3.4 it read as a slash across a
+  /* Thin, and short enough to stay well inside the leaf - at 3.4 it read as a slash across a
      lens rather than a vein, and it touched the edges. */
   .vein{fill:none;stroke:#5F7C6E;stroke-width:2.2;stroke-linecap:round}
 </style>
@@ -53,7 +53,7 @@
   <svg viewBox="0 0 120 112" role="img" aria-label="GroundWork Plus">
     <defs>
       <!-- Same light-to-deep ramp construction as the Pro image's gold, chrome instead of warm
-           gold — a rim catching the light, not a flat outline. The dark stop at 72% is what
+           gold - a rim catching the light, not a flat outline. The dark stop at 72% is what
            makes it read as metal against sage rather than as a pale outline. -->
       <linearGradient id="chrome" x1="0" y1="0" x2="0.35" y2="1">
         <stop offset="0%"   stop-color="#FFFFFF"/>

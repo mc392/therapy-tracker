@@ -1,6 +1,6 @@
 /* Registers the app-local Swift plugin with the Capacitor bridge.
 
-   Capacitor 8 does NOT discover plugins by scanning the ObjC runtime — CapacitorBridge
+   Capacitor 8 does NOT discover plugins by scanning the ObjC runtime - CapacitorBridge
    .registerPlugins() reads `packageClassList` out of the *generated* ios/App/App/
    capacitor.config.json and calls NSClassFromString on each entry. The CLI builds that
    list from npm dependencies only, so a plugin living in the app target is compiled,

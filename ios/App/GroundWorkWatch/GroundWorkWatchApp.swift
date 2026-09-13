@@ -17,7 +17,7 @@ struct GroundWorkWatchApp: App {
 /// Exists for one reason: to make the cue arrive when the app is the thing on screen.
 ///
 /// watchOS does not present a local notification for the app that is currently frontmost
-/// unless it is asked to — so without this, the therapist *looking at the timer* is the one
+/// unless it is asked to - so without this, the therapist *looking at the timer* is the one
 /// person who gets no tap at the ten-minute mark, which is precisely backwards.
 ///
 /// `.sound` is deliberately left out of the presentation options and the haptic played

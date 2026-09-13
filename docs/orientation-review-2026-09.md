@@ -1,15 +1,15 @@
-# Code, copy and orientation review — September 2026
+# Code, copy and orientation review - September 2026
 
 Three questions were asked of the app on 11 Sep 2026, in this order:
 
-1. **Code** — what refactoring, efficiency or organisation is recommended, with nothing changing
+1. **Code** - what refactoring, efficiency or organisation is recommended, with nothing changing
    in behaviour unless the change is an objective improvement?
-2. **Copy** — is the text on the face of the app straightforward, clear, not too dense and not
+2. **Copy** - is the text on the face of the app straightforward, clear, not too dense and not
    technical, with any detail that is needed consistently behind an info icon?
-3. **Orientation** — the app is feature-dense and heavily configurable: how can a user be guided,
+3. **Orientation** - the app is feature-dense and heavily configurable: how can a user be guided,
    signposted and steered to what to do or review, after the initial setup has faded?
 
-This document records what was found, what was done, and — for the third question — what is
+This document records what was found, what was done, and - for the third question - what is
 recommended but deliberately **not** built here, ranked so the next round can pick from it.
 
 ---
@@ -30,7 +30,7 @@ one the wrapper reaches for (`scripts/check-drift.mjs` asserts those).
 | What | Why it was dead |
 |---|---|
 | `lockedTier()`, `floatPill()`, `freqLabel()`, `coachOn()` | Defined, never called. `floatPill` was the reward pill from an earlier gamification pass; its `.floatpill` CSS and `floatup` keyframes went with it. |
-| `FIN_CATS` | "Kept for the few places that still want a plain label" — there were none. |
+| `FIN_CATS` | "Kept for the few places that still want a plain label" - there were none. |
 | The streak-card CSS (`.streakcard`, `.flame`, `.streak*`, `flick`, `bump`), `.countup.tick`, `.pbar`, `.ovkey`, `.irow .pdate2` | The components were retired when Home was revised; the CSS stayed. |
 | An empty `/* quick-log command bar */` banner | The feature was removed in Sep 2026; the banner survived. |
 | `infoDef("backup-restore-detail")` | Registered, never linked; its content is a subset of `backups-explained`. |
@@ -57,7 +57,7 @@ reader can search for a banner rather than scroll.
 
 ### One objective fix
 
-The session form printed the room's raw due code — `Room: £15 (EOM)` — a storage value that the
+The session form printed the room's raw due code - `Room: £15 (EOM)` - a storage value that the
 rooms list had already stopped showing because "it meant nothing to anybody". The line now prints
 the amount; where the fee stands, and when it is due, is the sentence underneath it.
 
@@ -73,7 +73,7 @@ the amount; where the fee stands, and when it is due, is the sentence underneath
   the whole view, and splitting it for its own sake risked the one thing the repo warns about
   most (a control whose save handler no longer finds it). Left for a round that is changing
   Settings anyway.
-- **Palettes.** All the code is still present behind `PALETTES_ENABLED=false`, on purpose — see
+- **Palettes.** All the code is still present behind `PALETTES_ENABLED=false`, on purpose - see
   CLAUDE.md § Setup wizard § Palettes. Not dead; dormant.
 - **Multi-tab overwrite.** Documented as deferred in CLAUDE.md § Known limitations. Not touched.
 
@@ -109,7 +109,7 @@ itself:
 | Practice › Supervision › Peer | A whole card explaining what peer hours count toward | One line and a *Why ›* link → new topic `peer-counts` |
 | Practice › Supervision › CPD | A whole card, "What goes here" | One line and a *What counts ›* link → existing topic `cpd-window` |
 | Peer supervision form | Three sentences of the same explanation | One line, same link |
-| Sessions › Incomplete | "Room fees aren't here any more — …" | "Room fees are settled separately, under Money › Room fees ›" |
+| Sessions › Incomplete | "Room fees aren't here any more - …" | "Room fees are settled separately, under Money › Room fees ›" |
 | Money › Overview footer | Two sentences naming three bases | One |
 | Money › Room rent | A footnote duplicating the *Find out more* link beside it | Footnote removed |
 | Tax › Estimate table | A five-part footnote defining Tax, Net and the asterisk | Basis, "tap a figure for the working", the asterisk, and *What each column means ›* → new topic `tax-table` |
@@ -136,7 +136,7 @@ itself:
 
 ### Two things the pass established
 
-- **The info-sheet pattern was already the app's strongest habit** — 63 topics, a dot on nearly
+- **The info-sheet pattern was already the app's strongest habit** - 63 topics, a dot on nearly
   every card heading. What the pass found were the leftovers: cards written before the pattern
   existed (the peer and CPD explainers), and screens that had gained a link without gaining a
   `wireInfo()` call. The new `npm run test:guidance` makes both a failing test.
@@ -153,14 +153,14 @@ itself:
 The app has more onboarding than most: a setup wizard, an eight-stop tour, first-visit tips per
 screen, a gradual reveal that offers features as the practice grows, seasonal tax prompts, a
 "needs attention" feed, and a searchable Settings. What it lacked was the thing all of those
-assume — a **place to go when you are lost**, and an answer to **"what am I supposed to be doing
+assume - a **place to go when you are lost**, and an answer to **"what am I supposed to be doing
 in here?"** once the first week is over. Tips fire once and never again; the tour is day-one
 material; Settings search only finds settings.
 
 ### Built in this round
 
 **Where everything is** (`appMapSheet()`): one sheet listing every tab, every segment and every
-Settings group with a line each, then **what to do and how often** — weekly (log, tick off
+Settings group with a line each, then **what to do and how often** - weekly (log, tick off
 payments, mark write-ups, back up), monthly (settle room fees and rent, log supervision), every
 few months (read Business analytics, glance at Tax › Now), yearly (Tax › Now raises the seasonal
 jobs; review retention). Every row is a link. It is built from the same feature switches the tab
@@ -170,49 +170,49 @@ the empty Home screen, and named at the end of the tour and in What's new.
 **What's new** was rewritten for this cycle (it still described the August reorganisation) and
 cut from ten steps to five, the first of which points at the map.
 
-### Recommended — and built the same day
+### Recommended - and built the same day
 
 The six recommendations below were written first as recommendations, then built in a second
 round the same day when the owner asked for all of them, with the first one aimed squarely at
 someone arriving with previous records. What each is, and where it lives:
 
-1. **Getting started** — a card at the top of Home (`HOME_CARDS` key `start`) for a practice
+1. **Getting started** - a card at the top of Home (`HOME_CARDS` key `start`) for a practice
    under 25 sessions, until dismissed. Seven jobs, every one **derived from the data** rather than
    ticked by hand: bring in your existing records · add your first client · log a session · say
    where you see clients · set your cancellation policy · say how you like to be paid · export
    your first backup. Undone rows lead; done rows sink with a tick. Two answers cannot be read
    from data and are the only stored ones: *I'm starting fresh* and *I only work from home*.
    **The first row is the point.** It opens *Your existing records*, which asks which kind the
-   reader has — a spreadsheet (which **adds**), a GroundWork backup (which **replaces**), or
-   nothing yet — and hands them straight to the importer or the restore. The importer and the
+   reader has - a spreadsheet (which **adds**), a GroundWork backup (which **replaces**), or
+   nothing yet - and hands them straight to the importer or the restore. The importer and the
    restore stamp the answer themselves, so the row ticks without being told.
 
-2. **Still on defaults** — a card at the top of Settings › Your practice listing the business
+2. **Still on defaults** - a card at the top of Settings › Your practice listing the business
    decisions the app is making by default: a cancellation policy nobody has touched (it charges
    the full fee whatever the notice), a blank *how to pay*, an unconfirmed tax region, a working
    week on defaults. Each row links to the card; the card disappears with the last row. This is
    the Getting started card for an established practice, which never sees the Home one.
 
-3. **Two more attention rows on Home** — a client past the retention date the reader chose, and
+3. **Two more attention rows on Home** - a client past the retention date the reader chose, and
    CPD that has stopped (nothing in 90 days, once there is history to judge by). Both read
    functions that already existed.
 
-4. **Search & help, one button** — a magnifier in the header on every screen (kept on desktop,
+4. **Search & help, one button** - a magnifier in the header on every screen (kept on desktop,
    where the gear is hidden). Before anything is typed it holds the help this screen has: its own
    first-visit tips replayed, Getting started while it shows, the app map, the tour and What's
    new. Typed into, it searches clients, sessions, rooms, analytics cards, screens, Settings cards
    and the explanations behind the info icons. Every hit is a link. Recommendations 4 and 5 were
    built as one control rather than two buttons, because the header at phone width has room for
-   one more and the two questions — "where is X" and "what is this screen" — are asked by the
+   one more and the two questions - "where is X" and "what is this screen" - are asked by the
    same person at the same moment.
 
-5. **Search** — see 4.
+5. **Search** - see 4.
 
-6. **What's new per release** — the process note stands; What's new was extended for this cycle
+6. **What's new per release** - the process note stands; What's new was extended for this cycle
    rather than bumped, because version 4 had not yet shipped.
 
 Alongside these, **setup asks *Do you have previous records?*** with the same three answers, and
-the welcome screen offers *Restore a backup instead* — restoring finishes setup, because the
+the welcome screen offers *Restore a backup instead* - restoring finishes setup, because the
 backup carries the practice's own settings. Someone moving phones never sees the other ten steps.
 
 ### The importer, made easier to arrive through

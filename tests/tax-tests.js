@@ -1,5 +1,5 @@
 /* ============================================================================
-   GroundWork — tax engine test suite
+   GroundWork - tax engine test suite
    ============================================================================
 
    HOW TO RUN
@@ -9,7 +9,7 @@
      3. Paste this whole file into the browser console and press Enter.
         It prints a table and returns a summary object.
 
-   Not served with the app on purpose — this file lives outside TherapyTracker-web/
+   Not served with the app on purpose - this file lives outside TherapyTracker-web/
    so it never deploys to GitHub Pages.
 
    WHY THE EXPECTED VALUES ARE SPELLED OUT LONGHAND
@@ -17,11 +17,11 @@
      That is the whole point. Two real bugs were found this way, and one of them
      (payment dates a year early) initially PASSED a test that had been written by
      copying what the app produced. If a test ever needs updating because the app
-     changed, re-derive the number from the rule — do not paste in what the code
+     changed, re-derive the number from the rule - do not paste in what the code
      now returns.
 
    DATE-DEPENDENT BY DESIGN
-     TY is 2026-27 and several tests rely on it being the year IN PROGRESS —
+     TY is 2026-27 and several tests rely on it being the year IN PROGRESS -
      the projection, the pot's "earned so far", and the 60-day grace window on
      a missed payment date. Once the real date passes 5 Apr 2027 those need
      re-anchoring to whatever the current year is.
@@ -39,7 +39,7 @@
      Payments on account  due once the liability passes 1,000; two instalments of
                           50%; Class 2 and student loan are never included.
                           A claim to reduce them (SA303) defers tax to January
-                          pound for pound — it never reduces the tax itself
+                          pound for pound - it never reduces the tax itself
      Assessments          a liability entered from a filed return replaces the
                           estimate everywhere; instalments HMRC actually set
                           beat the calculated ones, and a claim beats both
@@ -49,7 +49,7 @@
 
    The suite never calls commit(), and restores the live state when it finishes.
 
-   CANCELLATION CHARGING (schema v5, Aug 2026) — covered in section 9 (T9, Aug 2026)
+   CANCELLATION CHARGING (schema v5, Aug 2026) - covered in section 9 (T9, Aug 2026)
      derive() returns rate = fullRate x cancelPct/100, where cancelPct is STAMPED on the
      session (s.cancelCharge) rather than read from the policy. Section 9 exercises that
      multiplication directly, the policy-resolution helper it is stamped from, and the
@@ -59,7 +59,7 @@
 (function () {
   "use strict";
   if (typeof S === "undefined" || S === null) {
-    console.error("Load the app first — S is not initialised.");
+    console.error("Load the app first - S is not initialised.");
     return;
   }
 
@@ -560,8 +560,8 @@
      The rule (see mtdRows): every quarter emits every box in MTD_EXP_BOXES, in box order,
      zeros included, so a mapping worked out once keeps working. Expectation below is the box
      list written out longhand from that rule, not read back off the function. The single Wifi
-     cost falls in Q2 alone, so on the pre-fix code — which emitted only boxes that had a
-     figure — Q1, Q3 and Q4 differ from Q2 and this fails. */
+     cost falls in Q2 alone, so on the pre-fix code - which emitted only boxes that had a
+     figure - Q1, Q3 and Q4 differ from Q2 and this fails. */
   run("MTD: every quarter emits the same expense rows in the same order", function () {
     mkState({ expenses: [{ _id: "e", desc: "Wifi", amount: 30, date: "2026-08-10", recurrence: "once", cat: "phone" }] });
     var sig = mtdRows(TY).map(function (p) {
@@ -774,7 +774,7 @@
       (r.exp !== undefined ? ("  exp=" + num(r.exp) + " act=" + num(r.act)) : "") +
       (r.note ? "  [" + r.note + "]" : ""));
   });
-  console.log("\n" + passed + "/" + results.length + " passed" + (failed.length ? " — " + failed.length + " FAILED" : ""));
+  console.log("\n" + passed + "/" + results.length + " passed" + (failed.length ? " - " + failed.length + " FAILED" : ""));
   return { passed: passed, total: results.length,
     failures: failed.map(function (r) { return r.name + ": exp=" + num(r.exp) + " act=" + num(r.act); }) };
 })();
