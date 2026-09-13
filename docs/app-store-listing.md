@@ -97,8 +97,8 @@ you would rather, but then expect the question at review.
 > • Receipts and statements for clients as PDFs, printed or shared straight from the app
 > • Supervision and CPD hours tracked against the 1:6 ratio, with accreditation totals (Plus)
 > • A UK tax estimate that updates as you work, with your business costs counted in (Plus)
-> • Quarterly figures for Making Tax Digital (Plus)
-> • Retention and attendance trends across your practice (Plus)
+> • Quarterly figures for Making Tax Digital (Pro + that tax year)
+> • Retention and attendance trends across your practice (Pro)
 > • Automatic on-device backups kept in your iPhone's own backup, plus encrypted backups you can export yourself
 >
 > GroundWork records attendance and money. It is not a clinical record and holds no session
@@ -106,14 +106,17 @@ you would rather, but then expect the question at review.
 > not advice, and the app cannot file for you.
 >
 > Logging sessions, clients, rooms, supervision, receipts, what your rooms cost you and every
-> backup and export are free and always will be. GroundWork Plus adds business analytics,
-> accreditation hours and notes sync. GroundWork Pro adds everything in Plus and the year-end
-> work: tax, business costs and the MTD quarters.
+> backup and export are free and always will be. GroundWork Pro adds business analytics, your
+> business costs, accreditation hours and notes sync.
 >
-> GroundWork Plus and GroundWork Pro are auto-renewing annual subscriptions.
-> Payment is charged to your Apple ID at confirmation of purchase.
-> It renews automatically unless cancelled at least 24 hours before the end
-> of the current period. Manage or cancel in your Apple ID account settings.
+> Working out your tax is not part of Pro. Each UK tax year is a separate one-off purchase on
+> top of Pro, because the bands, thresholds and rules are fixed to a single year and to where
+> you pay tax. Buying one year includes every earlier year, and it does not expire.
+>
+> GroundWork Pro is an auto-renewing monthly subscription. Payment is charged to your Apple ID
+> at confirmation of purchase. It renews automatically unless cancelled at least 24 hours
+> before the end of the current period. Manage or cancel in your Apple ID account settings.
+> Tax years are one-off purchases and do not renew.
 >
 > Terms of Use: https://mc392.github.io/therapy-tracker/terms.html
 > Privacy Policy: https://mc392.github.io/therapy-tracker/privacy.html
@@ -145,16 +148,20 @@ It is already folded into the Description draft above, so there is nothing separ
 Leave **License Agreement** on Apple's Standard EULA; a custom one is entered as text, not a
 URL, and the link in the Description is what the guideline asks for.
 
-## Subscription images - one per subscription
+## Subscription and purchase images - one per product
 
-Each subscription in App Store Connect has its own image, and there are two:
+Each subscription and non-consumable in App Store Connect has its own image:
 
-| Subscription | Image | Regenerate |
+| Product | Image | Regenerate |
 |---|---|---|
-| GroundWork Plus | `icon-ideas/groundwork/subscription-plus-1024.png` | `node scripts/render-subscription-image.mjs subscription-plus-1024` |
-| GroundWork Pro | `icon-ideas/groundwork/subscription-pro-1024.png` | `node scripts/render-subscription-image.mjs subscription-pro-1024` |
+| GroundWork Pro (monthly) | `icon-ideas/groundwork/subscription-pro-1024.png` | `node scripts/render-subscription-image.mjs subscription-pro-1024` |
+| UK tax year | **not drawn yet** | reuse the Pro (gold) artwork until one exists; the tax years wear the same gold |
 
-Both are 1024×1024, opaque, no rounded corners (Apple masks its own). Used for offer-code
+`subscription-plus-1024.{html,png}` is the **withdrawn chrome tier** and is now obsolete - the tier
+does not exist and nothing in the app renders chrome any more. Delete it when these are next
+regenerated.
+
+They are 1024×1024, opaque, no rounded corners (Apple masks its own). Used for offer-code
 redemption, win-back offers, and the product page if App Store Promotion is enabled. The `.html`
 beside each is the source, and both reuse the same SVG geometry as the app's launch screen so the
 mark cannot drift from the one shipping in `index.html`. Colours are sampled from `icon-1024.png`

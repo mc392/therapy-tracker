@@ -8,8 +8,15 @@ side of Phase 1 is finished and pushed.*
 > tax year**, which is what calculates tax. The two-tier ladder this checklist was written against
 > (Plus in chrome, Pro in gold, both annual) is withdrawn, and the App Store Connect steps below
 > change with it - two subscriptions in one group become monthly + the legacy annual, and a
-> non-consumable is needed for each tax year. The code has NOT been changed yet; the ordered plan
-> is `docs/monetisation.md` §12.
+> non-consumable is needed for each tax year. **The code side is built and tested** - see
+> `docs/monetisation.md` §12 for what shipped. What is left is all in Apple's console, and the
+> product list below is what changes:
+>
+> - `…groundwork.pro.monthly` - **GroundWork Pro**, monthly, in the same subscription group as the
+>   legacy annual `…groundwork.plus.annual` (which stays purchasable and must never be re-pointed).
+> - `…groundwork.taxyear.2026` - **UK tax year 2026-27**, a **non-consumable**, not a subscription.
+>   One per year, created two or three years ahead so it is never on the critical path in January.
+> - `…groundwork.insights.annual` - never created, and no longer needed. Nothing to withdraw.
 >
 > Everything here about TestFlight, sandbox behaviour, screenshots and submission mechanics is
 > unaffected and still correct.
