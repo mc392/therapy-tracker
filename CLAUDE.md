@@ -118,8 +118,8 @@ folder**.
 - The offer to pick a folder is made **once** (`tt_folder_asked`), 5s after launch, to somebody
   with 3+ sessions - deliberately not a setup-wizard step.
 - **`npm run test:folder`** (`scripts/check-records-folder.mjs`) drives all of it in a real browser
-  with a fake Capacitor, 29 assertions including the conflict → restore → resume path and all
-  three marker cases. Needs
+  with a fake Capacitor, 36 assertions including the conflict → restore → resume path, all
+  three marker cases, and (Sep 2026) the calendar-file routing that shares its fake phone. Needs
   `npm i --no-save playwright`. **The Swift has never been compiled** - same caveat as the watch
   app; `npm run check` asserts the two halves still name the same methods.
 
@@ -752,10 +752,32 @@ to Apple Calendar or Outlook. Nothing was added to `GroundWorkNativePlugin.swift
 - `renderCal()` gained this screen's **first info dot**, so it gained a `wireInfo(body)` call with
   it. The guidance test walks `APP_MAP` segments and the calendar is a view toggle rather than a
   segment, so that dot is asserted in `check-behaviour.mjs` instead.
-- **Two tests, deliberately split.** `npm run test:calendar` proves the file is well formed (68
-  assertions, pure node, functions lifted out of `index.html` by their markers). The
-  `check-behaviour.mjs` section proves the *controls* exist, are wired and produce it - a perfect
-  builder nothing calls ships nothing.
+- **On iOS the file opens the system's own event screen, NOT the share sheet** (Sep 2026). The
+  `download()` wrapper branches on the file - `isCalendarFile()`, the `.ics` extension or a
+  `text/calendar` type - and sends it to the plugin's `openCalendarFile`, which presents
+  `UIDocumentInteractionController.presentPreview`: the screen Safari shows, headed *2 Events*
+  with **Add All**. The share sheet offered Save to Files, AirDrop and WhatsApp, none of which is
+  Calendar, so the iPhone app was worse than the web build at the one export whose whole purpose
+  is landing in a calendar. No calendar permission is asked for or needed - the app hands iOS a
+  file and iOS asks the questions. **Every failure path still falls back to the share sheet** (an
+  older build with no such method, a reject, and `{shown:false}` meaning iOS had no preview): a
+  file the reader cannot reach at all is worse than one behind an awkward sheet. Detail in
+  `docs/ios-native.md` § Calendar files.
+- **"Add All" does not apply updates, and nothing in the file can make it.** Re-exporting a
+  session already in the calendar updates it only when the reader taps into that individual
+  event; the bulk button adds rather than reconciles. That is Apple's importer and it behaves
+  the same on the web build - the derived UID and rising `SEQUENCE` are already exactly what the
+  format asks for. The only guaranteed fix is **EventKit**, writing events directly and storing
+  an identifier per session, which is the two-way-sync feature (a calendar permission prompt, an
+  iOS-only surface, and a schema bump). Deliberately not done; don't "fix" it by fiddling with
+  `METHOD:` - turning the file into `REQUEST` makes every session an invitation with an
+  organiser, which is worse.
+- **Three tests, deliberately split.** `npm run test:calendar` proves the file is well formed (68
+  assertions, pure node, functions lifted out of `index.html` by their markers).
+  `check-behaviour.mjs` proves the *controls* exist, are wired and produce it - a perfect builder
+  nothing calls ships nothing. `npm run test:folder` proves the iOS routing against a fake
+  Capacitor: an `.ics` reaches the event screen, everything else still reaches the share sheet,
+  and all three fallbacks work. The Swift itself has never been compiled.
 
 ## Restore from backup (Settings › Data & backup - hardened Aug 2026)
 `importJSON()` is a whole-state replace, so it is gated by **smart friction, not uniform friction** - `restoreConfirm()` picks one of two tiers from `restorePlan()`. A restore onto a new phone stays one tap; stamping a stale file over weeks of newer entries earns the same ladder as erase.

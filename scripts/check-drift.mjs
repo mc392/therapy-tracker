@@ -86,6 +86,22 @@ if (existsSync("ios/App/App/GroundWorkRecordsFolder.swift")) {
   fail("ios/App/App/GroundWorkRecordsFolder.swift is missing - the records folder has no native half");
 }
 
+/* The calendar export: an .ics is handed to iOS's own event screen rather than the share sheet,
+   and this is the same silent-failure shape again. Drop the Swift method and the web layer's
+   guard quietly falls back to the share sheet - which still works, so nothing fails, and the
+   feature has simply reverted to the worse behaviour it was built to replace. */
+if (existsSync("ios/App/App/GroundWorkNativePlugin.swift")) {
+  const plugin = readFileSync("ios/App/App/GroundWorkNativePlugin.swift", "utf8");
+  if (!plugin.includes('CAPPluginMethod(name: "openCalendarFile"'))
+    fail("GroundWorkNativePlugin does not declare `openCalendarFile` - an .ics would silently go back to the share sheet on iOS, which is the dead end the method exists to replace");
+  if (!plugin.includes("@objc func openCalendarFile("))
+    fail("GroundWorkNativePlugin declares `openCalendarFile` but does not implement it");
+  if (!html.includes("GW.openCalendarFile("))
+    fail("index.html no longer calls `GW.openCalendarFile()` - the native calendar screen has a method nothing reaches");
+  if (!html.includes("function icsFile("))
+    fail("index.html no longer builds an .ics (`icsFile`) - the native calendar screen has nothing to present");
+}
+
 /* GroundWork Plus / Pro: the same silent-failure shape as the records folder above, and now
    across two products. A method the web layer calls that the plugin does not declare rejects at
    runtime, on a phone, and the paywall just says the subscription is unavailable. */
