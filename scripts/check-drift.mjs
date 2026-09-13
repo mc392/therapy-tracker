@@ -50,7 +50,11 @@ const SEAMS = [
      Rename one of these and the PWA carries on perfectly while purchases stop working on iOS. */
   ["function plusActive(",      "the entitlement gate every locked view asks"],
   ["function plusTier(",        "which tier this device holds - the whole two-tier gate resolves through it"],
-  ["const FEATURE_TIER=",       "the feature→tier split; the one place that decides what each subscription buys"],
+  ["const FEATURE_TIER=",       "the feature→tier split; the one place that decides what the subscription buys"],
+  ["function taxYearPaid(",     "the tax year gate - Pro plus that year, and the one place both are required together"],
+  ["function taxPackThrough(",  "the tax year watermark every masked figure is decided by"],
+  ["function taxPackGrant(",    "the only writer of the watermark, and the only thing stopping a purchase being lost"],
+  ["const TAX_PACK_KEY=",       "the tax year cache, deliberately separate from tt_plus so a lapse cannot wipe a non-consumable"],
   ["function plusRead(",        "the native StoreKit block reads the cache through this"],
   ["function plusWrite(",       "the native StoreKit block writes the cache through this"],
   ["function plusClear(",       "how a lapsed subscription clears the cache"],
@@ -85,7 +89,7 @@ if (existsSync("ios/App/App/GroundWorkRecordsFolder.swift")) {
 /* GroundWork Plus / Pro: the same silent-failure shape as the records folder above, and now
    across two products. A method the web layer calls that the plugin does not declare rejects at
    runtime, on a phone, and the paywall just says the subscription is unavailable. */
-const PLUS_CALLS = ["plusProducts", "plusStatus", "plusPurchase", "plusRestore",
+const PLUS_CALLS = ["plusProducts", "plusStatus", "plusPurchase", "taxPurchase", "plusRestore",
                     "plusRedeem", "plusManage"];
 if (existsSync("ios/App/App/GroundWorkNativePlugin.swift")) {
   const plugin = readFileSync("ios/App/App/GroundWorkNativePlugin.swift", "utf8");
@@ -102,8 +106,15 @@ if (existsSync("ios/App/App/GroundWorkNativePlugin.swift")) {
      take the tax engine off every existing subscriber, silently, on update. */
   const legacy = plugin.split("\n").find((l) => l.includes("groundwork.plus.annual"));
   if (!legacy) fail("the original subscription product id has gone from GroundWorkNativePlugin - an id can never be reused, and every existing subscriber holds that one");
-  else if (!/"pro"\s*:/.test(legacy))
-    fail("the original product id no longer maps to the `pro` tier - every existing subscriber bought everything, and pointing that id at the smaller tier takes the tax engine off them on update");
+  else if (!/"pro(\.legacy)?"\s*:/.test(legacy))
+    fail("the original product id no longer maps to the `pro` tier - every existing subscriber bought everything, and pointing that id at anything smaller takes features off them on update");
+  /* The tax years are sold as non-consumables and the id prefix is what the year is parsed out of
+     at both ends. A change to it orphans every purchase already made, silently: the store still
+     owns them, and the app stops recognising them. */
+  if (!plugin.includes('taxYearPrefix = "uk.co.charlottebloortherapy.groundwork.taxyear."'))
+    fail("the tax year product id prefix has changed - every tax year already bought would stop being recognised, and the purchases cannot be re-issued");
+  if (!html.includes('TAX_PACK_PREFIX="uk.co.charlottebloortherapy.groundwork.taxyear."'))
+    fail("index.html's tax year product id prefix no longer matches the Swift one - the two halves would disagree about what a purchase was for");
 }
 
 if (!html.includes("Native iOS shell (Capacitor)"))
@@ -120,15 +131,22 @@ if (!html.includes('window.Capacitor.isNativePlatform()'))
    for a reason that has nothing to do with tax. */
 const ENGINE_MUST_BE_PURE = [
   "function tyNet(", "function taxLiability(", "function mtdQuarters(",
-  "function mtdExport(", "function ledgerBetween("
+  "function mtdExport(", "function ledgerBetween(", "function taxForYear(",
+  "function taxPot(", "function taxSchedule(", "function taxTimeline("
 ];
 for (const fn of ENGINE_MUST_BE_PURE) {
   const at = html.indexOf(fn);
   if (at < 0) { fail(`index.html no longer contains \`${fn}\` - the drift check cannot see the engine`); continue; }
   // the function body, near enough: up to the next top-level `\nfunction `
   const end = html.indexOf("\nfunction ", at + fn.length);
-  if (html.slice(at, end < 0 ? html.length : end).includes("plusLocked("))
+  const body = html.slice(at, end < 0 ? html.length : end);
+  if (body.includes("plusLocked("))
     fail(`${fn} calls plusLocked() - the paywall belongs in the view layer, not the tax engine (tests/tax-tests.js calls this directly)`);
+  /* Same rule, second axis. A tax year is bought per year, and putting that test inside the engine
+     would mean tests/tax-tests.js started depending on what this device has paid for. The view
+     decides whether to CALL the engine; the engine never decides whether to answer. */
+  if (body.includes("taxYearPaid(") || body.includes("taxYearLocked("))
+    fail(`${fn} calls taxYearPaid()/taxYearLocked() - the tax year gate belongs in the view layer, not the engine`);
 }
 const DATA_PLANE = ["async function commit(", "async function exportJSON(", "function importJSON(",
   "async function importFromText("];
@@ -136,8 +154,10 @@ for (const fn of DATA_PLANE) {
   const at = html.indexOf(fn);
   if (at < 0) { fail(`index.html no longer contains \`${fn}\``); continue; }
   const end = html.indexOf("\nfunction ", at + fn.length);
-  if (html.slice(at, end < 0 ? html.length : end).includes("plusLocked("))
-    fail(`${fn} calls plusLocked() - a paywall must never sit between a therapist and her own records`);
+  const body = html.slice(at, end < 0 ? html.length : end);
+  for (const gate of ["plusLocked(", "taxYearPaid(", "taxYearLocked("])
+    if (body.includes(gate))
+      fail(`${fn} calls ${gate}) - a paywall must never sit between a therapist and her own records`);
 }
 
 /* ---- 4. Nothing has committed a second copy of the app ---- */

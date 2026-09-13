@@ -386,9 +386,11 @@ const results = await page.evaluate(async (env) => {
     ok("…hidden from a screen reader, which would otherwise read out what is being withheld",
       fig && fig.getAttribute("aria-hidden") === "true");
     ok("…while the tile itself says plainly what it is",
-      lt && /Plus/.test(lt.getAttribute("aria-label") || ""), lt && lt.getAttribute("aria-label"));
-    ok("…wearing the tier it is sold at, not the dearer one",
-      lt && lt.classList.contains("tier-plus") && !!lt.querySelector(".tiertag"), lt && lt.className);
+      lt && /Pro/.test(lt.getAttribute("aria-label") || ""), lt && lt.getAttribute("aria-label"));
+    /* Gold, because there is one subscription and everything paid wears its colour. This assertion
+       named the cheaper of two rungs until Sep 2026; the rung it named no longer exists. */
+    ok("…wearing the subscription's colour",
+      lt && lt.classList.contains("tier-pro") && !!lt.querySelector(".tiertag"), lt && lt.className);
     ok("…and reachable from the keyboard, being a div playing a button",
       lt && lt.getAttribute("role") === "button" && lt.getAttribute("tabindex") === "0");
     const foot = document.querySelector("#mProjMore");

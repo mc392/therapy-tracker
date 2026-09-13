@@ -41,6 +41,7 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "plusProducts", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "plusStatus", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "plusPurchase", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "taxPurchase", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "plusRestore", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "plusRedeem", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "plusManage", returnType: CAPPluginReturnPromise),
@@ -151,43 +152,90 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    // MARK: - GroundWork Plus / Pro (StoreKit 2)
+    // MARK: - GroundWork Pro + UK tax years (StoreKit 2)
 
-    /// The two auto-renewable subscriptions, keyed by the tier string the web layer speaks.
-    /// Both must exist in App Store Connect **in one subscription group**, so that buying `pro`
-    /// while holding `plus` is an upgrade Apple prorates rather than two live subscriptions.
+    /// The auto-renewable subscriptions, keyed by the tier string the web layer speaks. BOTH map
+    /// to `pro`, because there is only one thing to sell: the monthly product and the original
+    /// annual one are the same subscription bought on two rhythms, and they must live in **one
+    /// App Store Connect subscription group** so that moving between them is a change Apple
+    /// prorates rather than two live subscriptions.
     ///
-    /// THE `pro` ID SAYS "plus" AND THAT IS DELIBERATE. It is the original product - the tier
-    /// was called GroundWork Plus when it was the only one, and it has always entitled
-    /// everything. Re-pointing it at the smaller tier would silently take the tax engine off
-    /// every existing subscriber, and a product ID can never be reused for something else, so
-    /// the id keeps its name and sells Pro. Rename it in App Store Connect (display name), not
-    /// here. Nothing outside this table may map a tier to an id.
-    static let productIDs: [String: String] = [
-        "pro":  "uk.co.charlottebloortherapy.groundwork.plus.annual",
-        "plus": "uk.co.charlottebloortherapy.groundwork.insights.annual"
+    /// THE LEGACY ID SAYS "plus" AND THAT IS DELIBERATE. It is the original product - the tier was
+    /// called GroundWork Plus when it was the only one, and it has always entitled everything.
+    /// A product ID can never be reused for something else, and re-pointing this one at anything
+    /// smaller would silently take features off every existing subscriber, so it keeps its name
+    /// and sells Pro. Rename it in App Store Connect (display name), not here.
+    ///
+    /// `insights.annual` - the middle "GroundWork Plus" tier - was never created in App Store
+    /// Connect and the tier no longer exists, so it is simply gone. There is nothing to withdraw.
+    static let subscriptionIDs: [String: String] = [
+        "pro":         "uk.co.charlottebloortherapy.groundwork.pro.monthly",
+        "pro.legacy":  "uk.co.charlottebloortherapy.groundwork.plus.annual"
     ]
-    /// Ladder order, low to high. Used to pick the best of several live entitlements - during an
-    /// upgrade both can briefly be current, and reporting the lower one would lock a screen the
-    /// subscriber has just paid for.
-    static let tierRank: [String: Int] = ["plus": 1, "pro": 2]
+    /// Back-compat alias: `productIDs` is what the drift check and older callers name.
+    static let productIDs: [String: String] = subscriptionIDs
+    /// Every subscription id entitles the one rung, so the rank table is a formality kept for the
+    /// same reason the JS keeps plusHas(): a second rung must be a table change, never a rewrite.
+    static let tierRank: [String: Int] = ["pro": 2]
     static func tier(forProductID id: String) -> String? {
-        productIDs.first(where: { $0.value == id })?.key
+        subscriptionIDs.first(where: { $0.value == id }) != nil ? "pro" : nil
     }
 
-    /// Price and period as the *store* formats them, for the paywall, one entry per tier. Never
-    /// build these strings in JS: they are per-storefront, they change without a release, and
-    /// App Review checks the paywall against the real product.
+    /// UK TAX YEAR PACKAGES - non-consumables, one per tax year.
     ///
-    /// A tier the store cannot answer for is simply left out rather than failing the call - the
-    /// second product will not exist on the day this ships, and the first one must still sell.
+    /// Non-consumable rather than a subscription, and rather than consumable: a tax year is owned
+    /// for good (a return can be amended years later), it has to come back on a new phone through
+    /// Restore, and it must never expire. The id carries the START YEAR only - `...taxyear.2026`
+    /// is the 2026-27 tax year - which is short, unambiguous, and cannot be mistaken for a display
+    /// string. A new product is created in App Store Connect each April; create two or three ahead
+    /// so it is never on the critical path in the week somebody is trying to file.
+    ///
+    /// BUYING A YEAR INCLUDES EVERY EARLIER YEAR, so what is reported to the web layer is a single
+    /// watermark: the newest tax year owned. The web side only ever raises it.
+    static let taxYearPrefix = "uk.co.charlottebloortherapy.groundwork.taxyear."
+    /// The years offered for sale. Only ids that exist in App Store Connect belong here; one that
+    /// does not is simply absent from `plusProducts` and the sheet says so for that year alone.
+    static let taxYearsForSale: [String] = ["2026-27"]
+    static func taxProductID(forYear ty: String) -> String? {
+        guard ty.count == 7, let start = Int(ty.prefix(4)) else { return nil }
+        return taxYearPrefix + String(start)
+    }
+    static func taxYear(forProductID id: String) -> String? {
+        guard id.hasPrefix(taxYearPrefix) else { return nil }
+        let tail = String(id.dropFirst(taxYearPrefix.count))
+        guard tail.count == 4, let start = Int(tail) else { return nil }
+        return "\(start)-" + String(format: "%02d", (start + 1) % 100)
+    }
+    /// The UK tax year a date falls in: 6 April to 5 April. The web layer has its own copy of this
+    /// rule (taxYear()); this one exists only to turn a legacy subscriber's paid-through date into
+    /// a watermark, and the two must agree about where April sits.
+    static func taxYear(for date: Date) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Europe/London") ?? .current
+        let c = cal.dateComponents([.year, .month, .day], from: date)
+        let y = c.year ?? 2026, m = c.month ?? 1, d = c.day ?? 1
+        let start = (m < 4 || (m == 4 && d < 6)) ? y - 1 : y
+        return "\(start)-" + String(format: "%02d", (start + 1) % 100)
+    }
+
+    /// Price and period as the *store* formats them, for both paywalls: `pro` for the
+    /// subscription and `years` keyed by tax year. Never build these strings in JS - they are
+    /// per-storefront, they change without a release, and App Review checks the paywall against
+    /// the real product.
+    ///
+    /// A product the store cannot answer for is simply left out rather than failing the call. On
+    /// the day a new tax year is created everything else must keep selling, and in the week before
+    /// it exists the subscription must still sell; the sheet reports "Unavailable" for the one
+    /// that is missing and only that one.
     @objc func plusProducts(_ call: CAPPluginCall) {
         Task {
             var out: [String: Any] = ["found": false]
+            var years: [String: Any] = [:]
+            let wanted = Array(Set(Self.subscriptionIDs.values))
+                + Self.taxYearsForSale.compactMap { Self.taxProductID(forYear: $0) }
             do {
-                let products = try await Product.products(for: Array(Self.productIDs.values))
+                let products = try await Product.products(for: wanted)
                 for p in products {
-                    guard let tier = Self.tier(forProductID: p.id) else { continue }
                     var period = ""
                     if let sub = p.subscription {
                         let unit: String
@@ -199,12 +247,22 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
                         let n = sub.subscriptionPeriod.value
                         period = n == 1 ? unit : "\(n) \(unit)s"
                     }
-                    out[tier] = ["price": p.displayPrice, "period": period, "title": p.displayName]
+                    let entry: [String: Any] = ["price": p.displayPrice, "period": period, "title": p.displayName]
+                    if let ty = Self.taxYear(forProductID: p.id) {
+                        years[ty] = entry
+                    } else if Self.tier(forProductID: p.id) != nil {
+                        /* The monthly product is the one on sale. The legacy annual is still
+                           purchasable in App Store Connect for anyone already on it, but it is not
+                           what a new reader is offered, so it never overwrites the price shown. */
+                        if p.id == Self.subscriptionIDs["pro"] || out["pro"] == nil { out["pro"] = entry }
+                    }
                     out["found"] = true
                 }
+                out["years"] = years
                 call.resolve(out)
             } catch {
                 out["error"] = error.localizedDescription
+                out["years"] = years
                 call.resolve(out)
             }
         }
@@ -217,33 +275,63 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
         Task { call.resolve(await Self.currentStatus()) }
     }
 
-    /// The BEST live entitlement, not the first one found: an upgrade can leave both current for
-    /// a moment, and answering "plus" then would lock the screen the subscriber just bought.
+    /// ONE PASS, TWO ANSWERS. The subscription and the owned tax years come back together so the
+    /// web layer can refresh both from one call and never leave one stale against the other.
+    ///
+    /// The BEST live subscription, not the first one found: a change of plan can leave two current
+    /// for a moment. `taxThrough` is the NEWEST tax year owned, because buying a year includes
+    /// every earlier one - the web side stores that single watermark and only ever raises it.
+    ///
+    /// `legacyTaxThrough` is the migration, and it is derived here rather than written once so it
+    /// survives a restore onto a new phone. The original annual subscription entitled the whole tax
+    /// engine, so anyone holding it is granted tax years through the year their paid-through date
+    /// falls in. Without it, somebody who is paying today would open the app after updating and
+    /// find their figures masked.
     private static func currentStatus() async -> [String: Any] {
         var best: (tier: String, expiresAt: Date?)? = nil
+        var legacyExpiry: Date? = nil
+        var taxThrough: String? = nil
+        var taxIDs: [String] = []
         for await result in Transaction.currentEntitlements {
             guard case .verified(let t) = result else { continue }   // unverified: ignore, don't trust
-            guard let tier = tier(forProductID: t.productID) else { continue }
             if let revoked = t.revocationDate, revoked <= Date() { continue }
+            if let ty = taxYear(forProductID: t.productID) {
+                taxIDs.append(t.productID)
+                if taxThrough == nil || ty > taxThrough! { taxThrough = ty }
+                continue
+            }
+            guard let tier = tier(forProductID: t.productID) else { continue }
+            if t.productID == subscriptionIDs["pro.legacy"] {
+                /* No expiry on a perpetual grant means "for as long as it runs"; an undated legacy
+                   entitlement is treated as running to today, which still unlocks the year in
+                   progress. */
+                legacyExpiry = t.expirationDate ?? Date()
+            }
             let rank = tierRank[tier] ?? 0
             if let b = best, (tierRank[b.tier] ?? 0) >= rank { continue }
             best = (tier, t.expirationDate)
         }
-        guard let b = best else { return ["active": false, "source": "storekit"] }
-        var out: [String: Any] = ["active": true, "source": "storekit", "tier": b.tier]
+        var out: [String: Any] = ["source": "storekit"]
+        if let through = taxThrough { out["taxThrough"] = through }
+        if !taxIDs.isEmpty { out["taxIds"] = taxIDs }
+        if let exp = legacyExpiry { out["legacyTaxThrough"] = taxYear(for: exp) }
+        guard let b = best else { out["active"] = false; return out }
+        out["active"] = true
+        out["tier"] = b.tier
         if let exp = b.expiresAt {
             out["expiresAt"] = ISO8601DateFormatter().string(from: exp)
         }
         return out
     }
 
-    /// `tier` names the rung to buy. It defaults to the top one, which is what a build older
-    /// than the second product would have meant by asking at all.
+    /// `tier` names the rung to buy. There is one, and it defaults to it - which is also what a
+    /// build older than this one meant by asking at all. It always buys the MONTHLY product: the
+    /// legacy annual stays purchasable for anyone already on it, but nothing sells it any more.
     @objc func plusPurchase(_ call: CAPPluginCall) {
         Task {
             do {
                 let tier = call.getString("tier") ?? "pro"
-                guard let id = Self.productIDs[tier] else {
+                guard let id = Self.subscriptionIDs[tier] else {
                     call.reject("Unknown subscription tier"); return
                 }
                 let products = try await Product.products(for: [id])
@@ -270,8 +358,46 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
+    /// Buy one UK tax year. A non-consumable, so there is no period, no expiry and nothing to
+    /// downgrade - it either becomes owned or it does not, and `currentStatus()` reports the new
+    /// watermark in the same shape every other call uses.
+    ///
+    /// IT DOES NOT CHECK FOR A SUBSCRIPTION. The web layer requires Pro before this button is
+    /// enabled, and enforcing it a second time here would mean a purchase StoreKit had completed
+    /// that this app then refused to honour - which is money taken for nothing. Somebody who
+    /// reaches it without Pro owns the year and sees it the moment they subscribe.
+    @objc func taxPurchase(_ call: CAPPluginCall) {
+        Task {
+            do {
+                guard let ty = call.getString("year"), let id = Self.taxProductID(forYear: ty) else {
+                    call.reject("Unknown tax year"); return
+                }
+                let products = try await Product.products(for: [id])
+                guard let product = products.first else {
+                    call.reject("That tax year is not available"); return
+                }
+                let result = try await product.purchase()
+                switch result {
+                case .success(let verification):
+                    // Always finish, or StoreKit replays the transaction on every launch.
+                    if case .verified(let t) = verification { await t.finish() }
+                    call.resolve(await Self.currentStatus())
+                case .userCancelled:
+                    call.resolve(["cancelled": true, "active": false])
+                case .pending:
+                    call.resolve(["pending": true, "active": false])
+                @unknown default:
+                    call.resolve(["active": false])
+                }
+            } catch {
+                call.reject(error.localizedDescription)
+            }
+        }
+    }
+
     /// App Review rejects a non-consumable or subscription paywall with no way back to a
-    /// purchase already made, so this is not optional.
+    /// purchase already made, so this is not optional. It covers the tax years too: AppStore.sync()
+    /// re-reads every entitlement, and currentStatus() reports both.
     @objc func plusRestore(_ call: CAPPluginCall) {
         Task {
             do { try await AppStore.sync() } catch { /* cancelled or offline - still report below */ }

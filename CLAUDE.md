@@ -363,7 +363,7 @@ zero. The three answers are now one arrangement:
   bills every month back to the year 2000 and puts thousands of pounds of imaginary cost into
   every past tax year. It starts at the top of the current month, and the room screen is where a
   real start date is set.
-- **What a room costs is OUTSIDE the Plus gate and outside `feat("finances")`** - `roomRentCard()`
+- **What a room costs is OUTSIDE the Pro gate and outside `feat("finances")`** - `roomRentCard()`
   renders beside `roomFeesCard()`, before the lock, on Money › Costs & income. Being able to set a
   room up for free and then unable to see, tick off or chase what it owes was worse than not
   having the feature: the app knew money was owed to a landlord and would not say so. `Payments
@@ -590,7 +590,7 @@ npm run test:review          # Trends + Tax over all eight, invariants asserted,
 npm run test:tax             # tests/tax-tests.js in a headless browser instead of by hand
 npm run test:behaviour       # opens the sheets, clicks Save, asserts what landed in S
 npm run test:rent            # room rent: rhythms, date ranges, the ledger, and the ungated card
-npm run test:tiers           # the Plus/Pro gate matrix, and what an untiered entitlement means
+npm run test:tiers           # the Pro / tax-year gate matrix, the mask, and the migration defaults
 npm run test:pins            # pinning an analytic to Home: the registry, the cap, the picker,
                              #   and that Home's copy of a card is identical to Trends'
 npm run test:projection      # the year-end projection: the run rate against the tax engine's own,
@@ -980,87 +980,165 @@ No new gating layer - this only decides which existing `feat()` flags start off 
 - **`accreditation` and `peer` are excluded from the simple preset** - `stepCPD` asks about both directly, and an answered question beats a default. Peer is never offered by a milestone: whether someone attends peer supervision is a fact about their practice, not something a session count can infer. `startSetup` unticks `peer` for a fresh install only (normalize leaves it absent = on, so existing installs keep it).
 - `revealCheck()` runs from `commit()` **after** the write, never before - an accepted nudge commits again and must not interleave with the save that triggered it. One offer per save; the key goes into `shown` whether accepted or declined, so nothing is ever asked twice.
 
-## GroundWork Plus & Pro - the paywall (two tiers since Sep 2026)
+## GroundWork Pro & the UK tax year packages - the paywall (reworked Sep 2026)
 
-Two annual subscriptions, sold on iOS via StoreKit; **the web build is ungated** - Phase 1 keeps
-the PWA free as the shopfront, because a lock with no way to buy behind it is a broken feature.
-Full design and the decisions behind it in **`docs/monetisation.md`**.
+Two things are sold, and they are different shapes: **GroundWork Pro**, one **monthly**
+subscription, and a **one-off purchase per UK tax year**, which is what calculates tax. **The web
+build is ungated** - Phase 1 keeps the PWA free as the shopfront. Full design and the decisions
+behind it in **`docs/monetisation.md`**.
 
-- **GroundWork Plus** - everything except the tax bundle: `trends`, `accreditation`, `notesSync`.
-  Nothing in it depends on where the reader pays tax, which is what makes it sellable outside the
-  UK. Accent: **chrome** (`--tier2-*`), bar 2 of the ladder.
-- **GroundWork Pro** - everything, i.e. Plus plus `tax`, `finances`, `mtd`. Accent: **gold**
-  (`--tier3-*`), bar 3.
+**This replaced a two-tier ladder** (GroundWork Plus in chrome, GroundWork Pro in gold, both
+annual). Anything written before Sep 2026 that says "Plus" means Pro; anything that says the tax
+bundle is part of Pro is out of date. Chrome (`--tier2-*`) is retired and **gold is the one paid
+accent** - Business analytics, every lock card, the tab accent, the masks and the splash mark.
 
-**The names moved when the tier split.** "GroundWork Plus" was the only tier and it was the TOP
-one; it is now the middle one. Anything written before Sep 2026 that says "Plus" means Pro.
+- **GroundWork Pro** (`FEATURE_TIER`): `trends`, `finances`, `accreditation`, `notesSync`. Nothing
+  in it depends on where the reader pays tax, which is what makes it sellable outside the UK.
+- **A tax year package**: every computed tax figure for that year **and every earlier year**, plus
+  that year's MTD export. **It requires Pro.**
 
-- **`FEATURE_TIER` is the one place the split lives** - a feature names the LOWEST tier that
-  unlocks it, and a key absent from it is free. `PLUS_FEATURES` is derived from its keys, not
-  maintained. `plusTier()` says which rung a device holds, `plusHas(t)` is the only comparison,
-  and `plusLocked(k)` is those two together. Nothing else may hand-roll a rank check.
-- **AN ENTITLEMENT WITH NO `tier` ON IT IS PRO, AND THAT DEFAULT IS THE MIGRATION.** Every
-  subscription and licence issued before the split entitled everything; reading one as the new,
-  smaller Plus would take the Tax tab off a paying subscriber on the morning they updated.
-  `tierOf()` applies it, and so do the pre-paint script in `<head>` and the native StoreKit block.
-  There is no migration step and there must never be one - a default cannot half-run.
-- **The legacy StoreKit product id sells Pro.** `…groundwork.plus.annual` says "plus" and
-  entitles everything, because that is what it has always done and an id can never be reused.
-  Rename its display name in App Store Connect; never re-point it. `check-drift.mjs` fails if the
-  Swift mapping changes, and asserts the whole JS↔Swift subscription surface besides.
-- **Both products must sit in ONE App Store Connect subscription group**, or an upgrade from Plus
-  to Pro bills somebody twice and nothing in the app could detect it.
-- **`npm run test:tiers`** (`scripts/check-tiers.mjs`) is 34 assertions in a real browser: the
-  free/Plus/Pro matrix against the documented split, the no-tier default, expiry and its grace,
-  a tier nobody recognises failing open, the lock cards' colours and names, the sheet lighting
-  the rung that was asked for, and the launch-screen mark. The matrix is written out from
-  `docs/monetisation.md` §3, never read back from `FEATURE_TIER` - a test that read the table it
+### The three rules the code depends on
+
+- **The gate never touches the data plane.** Logging, receipts, and every import/export/backup path
+  stay free permanently - a paywall must never sit between a therapist and her own records (also UK
+  GDPR portability). `check-drift.mjs` asserts `commit()`, `exportJSON()`, `importJSON()` and
+  `importFromText()` call neither `plusLocked()` nor `taxYearPaid()`.
+- **Three axes, never collapsed.** `feat(k)` is a preference the user set; `plusLocked(k)` is a
+  billing state; `taxYearLocked(ty)` is a *different* billing state, per year. Overloading `feat`
+  would drop paid tabs out of `visibleTabs()` entirely, leaving nothing to sell from.
+- **The gate stays out of the engine.** `tyNet`, `taxForYear`, `taxLiability`, `taxPot`,
+  `taxSchedule`, `taxTimeline`, `mtdQuarters`, `mtdExport` and `ledgerBetween` are pure and ungated
+  - `tests/tax-tests.js` calls them directly. Gate the *button*, never the function.
+  `check-drift.mjs` asserts this for both gates; a tax test failing because of the paywall means it
+  has been put in the wrong layer.
+
+### The entitlement: two caches, two lifetimes
+
+- **`tt_plus` and `tt_taxpack` in localStorage, never in `S`** - same rule as `tt_lock`. `S` travels
+  in backups, so an entitlement in it would ride a `.json` onto another phone. **Two keys, not one
+  object:** a subscription lapses and `plusClear()` wipes its record, while a non-consumable is
+  owned for good; in one record a lapse would delete purchases Apple still considers owned.
+- **`tt_taxpack.through` is a single tax year and it is the whole model** - every year at or below it
+  is unlocked. `YYYY-YY` is fixed-width with an incrementing lead, so a plain string compare orders
+  them. **`taxPackGrant()` is the only writer and it takes the max**: a non-consumable cannot be
+  re-issued, so a write that lowered the watermark is money taken for something the reader then does
+  not have. That one rule makes an out-of-order restore, a partial StoreKit refresh and the legacy
+  grant all safe without any of them knowing the others exist.
+- **`taxYearPaid(ty)` is Pro AND the year, in that order**, and Pro being a prerequisite is
+  load-bearing: Costs & other income is in Pro, and a tax figure worked out with no costs taken off
+  it is wrong every time. `taxLockReason()` returns `"sub"` / `"year"` / `"both"` - three answers,
+  because "you need Pro as well" and "you need the year" send a reader to different places.
+- **An entitlement with no `tier`, or on the withdrawn `"plus"` rung, is Pro.** `tierOf()` applies
+  it. There is no migration step and there must never be one - a default cannot half-run.
+- **A live legacy annual subscriber is granted tax years through their renewal date.** The Swift
+  reports `legacyTaxThrough` and it is **derived on every status call**, not written once, so it
+  survives a new phone. Without it, somebody paying today finds their figures masked on update.
+- **The legacy StoreKit product id sells Pro.** `…groundwork.plus.annual` says "plus" and entitles
+  everything, because that is what it has always done and an id can never be reused. Never
+  re-point it; `check-drift.mjs` fails if the mapping changes. The monthly product
+  (`…groundwork.pro.monthly`) is the one on sale, in the **same subscription group**.
+- **Tax years are non-consumables**, id `…groundwork.taxyear.<start year>` (so `.2026` is 2026-27).
+  `check-drift.mjs` asserts the prefix matches between the Swift and the JS - a change to it orphans
+  every purchase already made, silently.
+- **`plusActive()` and `taxYearPaid()` are synchronous** (called from render paths) and every
+  failure path **fails open**. `PLUS_EXPIRY_GRACE_DAYS` (7) covers a renewal not yet verified. The
+  one place fail-open cannot apply is an unreadable `tt_taxpack` - no year is named, so there is
+  nothing to open to; the remedy is the **Restore purchases** button on every year sheet.
+- **`window.GWPlusNative` is the only seam to StoreKit.** `plusStatus` answers for both axes in one
+  round trip, so a refresh can never leave one cache stale against the other.
+
+### The tax mask - "not calculated", not "blurred"
+
+**The Tax tab opens for everybody and must never become a locked view again.** It used to render a
+card describing four screens nobody had seen, which is a poor advert for figures worked out from the
+reader's own records - and the tab holds their own settings besides. What is bought is the
+*calculation*, so the whole tab walks and only computed figures are masked.
+
+- **`taxMaskHTML` / `taxMaskCard` compute nothing.** `.blurfig` on Money › Overview computes a real
+  figure and blurs it, which is right there because that figure is the practice's own history. Here
+  the view **must not call the engine** for a locked year where the call exists only to produce the
+  masked figure - so "needs the tax year to calculate this" is literally true, nothing is left in
+  the DOM to read, and the most expensive render in the app costs nothing for a reader who cannot
+  see it. `npm run test:tiers` asserts no `£` figure and no `.blurfig` appears on a locked Tax tab,
+  which is the test that fails if somebody reimplements this as a blur.
+- **The mask covers tax the app computed, never money the practice recorded.** Masked:
+  `taxLiability`, `taxPot`, `taxSchedule`/`nextTaxPayment`/`taxTimeline` amounts,
+  `monthlyTakeHome`, and the app's own estimate beside what HMRC assessed. Never masked: billed,
+  received, overdue, session counts, **`tyNet` (the Net column - that is profit, not tax)**, the MTD
+  quarter figures, **due dates** (when money leaves the account is not a calculation, and a date the
+  reader cannot see could cost them a penalty), and anything the therapist typed in.
+- **Unlike `.blurfig` it is not `aria-hidden`** - there is no number being withheld, only a state,
+  and the state is announced. The label beside it stays honest and unmasked.
+- **One pill per row**: a breakdown line under a masked total says "not calculated" in words, or two
+  gold pills read as two things to buy.
+- **Tax › Now short-circuits before any engine call**, and seasonal moments are not raised for a
+  locked year - every one of them quotes an amount and `taxMoments()` reaches `taxPot()` to build
+  them, so a moment is the one place a masked figure would leak out in a sentence.
+- **Pot & payments masks per row by the tax year the money BELONGS to, never by the due date** - one
+  31 January is usually two years' money, which is the whole reason `taxTimeline()` assembles by due
+  date. Its buffer and balance stay editable, and entering what HMRC assessed is never locked.
+- **Tax › Per year is untouched.** Student loan, region and use of home are inputs, not
+  calculations. Entering your own circumstances is never behind a paywall.
+- **MTD quarter figures stay visible; the export file is what the year buys.** The figures are the
+  practice's own money added up and are on Money either way; what MTD needs is a *file* with a
+  digital link (`docs/tax-positioning-2026-09.md`). A judgement call, documented in
+  `docs/monetisation.md` §5.4 - change it deliberately, don't drift into it.
+
+### Pro is never sold on tax
+
+The one way this design could take money unfairly is somebody subscribing to Pro in January
+expecting a tax figure. So the exclusion is **stated**, not merely not-claimed, everywhere money is
+asked for: `TIER_BLURB.pro`, the `.taxsep` panel on `openPlusSheet()` (full width, above the fold,
+not small print), the Settings card's tax line - **present even when nothing has been bought**,
+because "No tax year bought yet" is what prevents the misunderstanding - `infoDef("tax-packages")`,
+and `openTaxPackSheet()`'s two numbered steps with Pro first. `npm run test:tiers` asserts the
+sentence is on the sheet and that no withdrawn tier is named on it.
+
+- **`npm run test:tiers`** (`scripts/check-tiers.mjs`) is 57 assertions in a real browser: the free/
+  Pro/tax-year matrix, the three lock reasons, the watermark refusing to go down, a lapse leaving
+  the years owned, the withdrawn tier reading as Pro, the Tax tab opening, the masks, the
+  mis-selling sentence and the two-step year sheet. The matrix is written out from
+  `docs/monetisation.md` §§2-3, never read back from `FEATURE_TIER` - a test that read the table it
   is checking would assert nothing.
 
-Three rules the code depends on. Breaking any of them is silent.
+Gated: `trends`, `finances`, `accreditation`, `notesSync` (**Pro**) - `FEATURE_TIER`. `tax` and
+`mtd` are **deliberately absent from that table**, and their absence is load-bearing: they are
+answered by `taxYearPaid()`, and `plusLocked()` has to say "not locked" for them so nothing can
+route a tax lock into the subscription sheet. **`palettes` was dropped in Sep 2026** when colour
+schemes were switched off entirely; `paletteLocked()` is now a constant `false`, kept rather than
+deleted because the picker and the wizard step still call it.
 
-- **The gate never touches the data plane.** Logging, receipts, and every import/export/backup
-  path stay free permanently - a paywall must never sit between a therapist and her own records
-  (also UK GDPR portability). `check-drift.mjs` asserts `commit()`, `exportJSON()` and
-  `importJSON()` never call `plusLocked()`.
-- **`plusLocked()` is not `feat()`.** `feat(k)` is a preference the user set; `plusLocked(k)` is a
-  billing state. Overloading `feat` would drop paid tabs out of `visibleTabs()` entirely, leaving
-  nothing to sell from, and tangle the two axes so subscribing would have to guess which flags to
-  restore. **A paid tab still appears and still opens** - its view renders `plusLockHTML()` instead
-  of its content.
-- **The gate stays out of the engine.** `tyNet`, `taxLiability`, `mtdQuarters`, `mtdExport` and
-  `ledgerBetween` are pure and ungated - `tests/tax-tests.js` calls them directly. Gate the
-  *button*, never the function. `check-drift.mjs` asserts this too; a tax test failing because of
-  the paywall means it has been put in the wrong layer.
+- **Trends is a sneak peek, not a wall.** `renderMetrics()` computes the retention funnel first and
+  only then branches on `plusLocked("trends")`: under the gate the funnel renders **in full on real
+  numbers**, and the other three sections are named underneath with **one real figure each from this
+  practice** (`.peekrow` / `.peekfig`). The lock is a `return` partway through the function, not a
+  mode. **Deliberately not extended to Tax** - a partial tax figure is a wrong tax figure, and the
+  mask is the opposite move: it shows nothing rather than something incomplete.
+- **What a room costs is never gated** (Sep 2026) - `roomRentCard()` renders beside `roomFeesCard()`
+  before the lock on Money › Costs & income.
+- **Every lock and mask paints from six local variables** (`--tg1`..`--tg4`, `--tgglow`, `--tgink`)
+  set by `.tier-pro`, rather than naming the ramp. That indirection is kept at one rung because it
+  is what made the two-tier build possible in one pass and a second paid colour would then be a
+  class rather than a sweep. The ring is a `::before` rather than a gradient border, because `.card`
+  is a translucent glass surface and a border-box gradient would have to repaint the fill and lose
+  the blur. `--tier3-ink` is the only member of the ramp redefined for dark, because it is the only
+  one used as **text** - check any change at 13px on a real screen, not in a swatch.
+- **The launch screen wears the subscription, not the purchases.** A pre-paint script in `<head>`
+  reads `tt_plus` and stamps `data-plus="pro"` on `<html>`, so a subscriber's splash never starts
+  plain and changes its mind; `applyPlusChrome()` keeps it honest after a purchase, a restore or a
+  lapse. Tax years are deliberately unmarked - the splash marks who you are, not what you have
+  bought, and a mark that changed every April would read as a fault.
+- **Gifts and comps go through Apple's offer codes on iOS** (`plusRedeem`), not home-grown keys.
+  Signed licences (`scripts/issue-licence.mjs`, ECDSA P-256) are for the web and anything Apple
+  cannot reach; **`--tax-through` grants tax years separately from the subscription**, deliberately,
+  because comping the tax engine is the thing with the April rates work behind it. `PLUS_PUBKEY` is
+  `null` until `--keygen` runs - **the private key must never enter this repo.**
+- **Testing locked states in a browser:** `localStorage.tt_plus_gate = "on"`. It switches both gates
+  on and can never unlock.
 
-Gated: `tax`, `finances`, `mtd` (**Pro**); `trends`, `accreditation`, `notesSync` (**Plus**) - `FEATURE_TIER`. **`palettes` was dropped in Sep 2026** when colour schemes were switched off entirely - see Setup wizard § Palettes.
-
-- **Trends is a sneak peek, not a wall** (Sep 2026). `renderMetrics()` computes the retention funnel first and only then branches on `plusLocked("trends")`: under the gate the funnel renders **in full on real numbers**, and the other three sections are named underneath with **one real figure each from this practice** (`.peekrow` / `.peekfig`). The old behaviour - `plusLockHTML()` describing four charts nobody had seen - was a poor advert for data that belongs to the reader. The lock is a `return` partway through the function, not a mode: everything below it is untouched. **Deliberately not extended to Tax** - a partial tax figure is a wrong tax figure, and `taxAcked()` exists to stop people acting on numbers they were not walked through.
-- **What a room costs is never gated** (Sep 2026). Room fees were already free; room *rent* was not, because its charges only existed inside the gated Payments due card. Both now render above the lock - see **Room rent**. `PLUS_SELL`'s "Costs & other income" line was reworded at the same time: the paywall must not sell something the reader already has.
-- **Every lock wears ITS OWN tier's edge.** One set of rules paints from six local variables (`--tg1`..`--tg4`, `--tgglow`, `--tgink`); the `tier-plus` / `tier-pro` class sets them, and it sets them on **any** element, so a Plus card inside a sheet led by Pro repaints itself instead of inheriting gold. The ring is a `::before` rather than a gradient border, because `.card` is a translucent glass surface and a border-box gradient would have to repaint the fill and lose the blur. `--tier2-ink` / `--tier3-ink` are the only members of either ramp redefined for dark, because they are the only ones used as **text**. Default is chrome: a card whose class somebody forgets promises the cheaper tier, not the dearer one.
-- **The chrome ramp is not a flat silver.** It runs white → light steel → **dark** steel → light, and it is the dark stop that carries it against sage. A flat cool silver was tried in an earlier pass and abandoned for reading as barely-there at 13px; check any change at that size on a real screen, not in a swatch.
-- **The locked funnel's footer is passed in, not spliced in.** It used to be added with `funnelCard.replace('</div></div>', …)`, which matched the end of the *first* funnel row - so "This one is yours to keep" appeared under "In therapy" and read as a caption for that one tier. `funnelCard(foot)` takes it as an argument.
-- **The launch screen wears the tier too, in the ladder's own terms.** A pre-paint script in `<head>` reads `tt_plus` and stamps `data-plus="plus"|"pro"` on `<html>`, so a subscriber's splash never starts plain and changes its mind; `applyPlusChrome()` keeps it honest after a purchase, an upgrade, a restore or a lapse. The mark lights **the bar that tier owns** - bar 2 chrome for Plus, bar 3 gold for Pro, from `<defs>` gradients in the splash SVG - exactly as that tier's App Store image does, plus a pill on the wordmark whose word is `::after` content so one node serves both. The pre-paint copy of the entitlement check is deliberately simplified: it decides a decoration, nothing is unlocked by it, and anything it cannot read leaves the mark off.
-- Palettes were dropped from the tier and from the app in Sep 2026; the reasoning is `docs/product-proposals-2026-09.md` §2.
 Free: everything else, including `receipts`, the spreadsheet import (it is the switching-cost
-remover - gate it and nobody ever reaches the paywall) and encrypted/automatic backups.
-
-- **`tt_plus` in localStorage, never in `S`** - same rule as `tt_lock`. `S` travels in backups, so
-  an entitlement in it would ride a `.json` onto another phone. `plusActive()` is **synchronous**
-  (called from render paths), and every failure path **fails open**: an unreadable date, a thrown
-  call or a stale check never locks anyone out. `PLUS_EXPIRY_GRACE_DAYS` (7) covers a renewal that
-  could not be verified yet.
-- **`window.GWPlusNative` is the only seam to StoreKit.** Shared code never calls Capacitor
-  directly. The native block only ever *refreshes* the cache; `applyPlus(r, allowClear)` takes
-  `allowClear:false` from `purchase()` so a cancelled purchase is not read as a lapse, and it only
-  clears a cache StoreKit owns - a granted licence is not StoreKit's to revoke.
-- **Gifts and comps go through Apple's offer codes on iOS** (`plusRedeem` → the code redemption
-  sheet), not home-grown keys. Signed licences (`scripts/issue-licence.mjs`, ECDSA P-256) are for
-  the web and anything Apple cannot reach. `PLUS_PUBKEY` is `null` until `--keygen` runs, and the
-  redemption UI is hidden while it is - **the private key must never enter this repo**. There is no
-  revocation; expiry is the only lever.
-- **Testing locked states in a browser:** `localStorage.tt_plus_gate = "on"`. It can only switch the
-  gate *on*, never unlock.
+remover - gate it and nobody ever reaches the paywall), encrypted/automatic backups, and the whole
+shape of the Tax tab.
 
 ## Gamification (S.game)
 - **Streak**: any `commit()` call marks the current ISO week as active via `gameTouch()`.
@@ -1099,7 +1177,7 @@ The tour used to be eight full-screen `.ov` cards describing controls the reader
 - **Every icon in a setup step is `gi()`, never an emoji character** (Sep 2026). The step heroes already were; the bodies still carried 🌱 🗂 🔒 📥 🔐 ⤓ ↩︎ ✕ ＋ ☀ ☾ and an inline ⚙ in "⚙ Settings › Features", which is exactly the mismatch the glyph table was built to end - the wizard is the first screen anyone sees and it was the last one still drawing in the platform's emoji font. `settings` (the header's own gear), `sprout`, `grid`, `sun`, `moon`, `plus`, `close`, `key` and `undo` were added to `GLYPH` for it. Two places still hold characters on purpose: the `celebrate()` overlay, which is emoji by design, and `startSetup`'s skip `confirm()`, which is a native dialog and cannot render markup. Settings' own **theme chips and sound button** were converted in the same pass - they are the same two controls the wizard draws, and leaving one pair on ☀/☾/🔊 would have been a visible split between the wizard and the screen it sends people to. Both segs carry `flex-wrap:wrap`: three chips with a glyph each are wider than a 320px phone and neither has a `.segwrap` scroller. A label set through `textContent` has to become `innerHTML` when it takes a glyph - that caught the passphrase button and the sound button.
 - **`.palopt`'s `.pn`/`.pd` are `display:block`.** As inline spans the name and description ran together into one paragraph - *"Start simpleSessions, clients, money owed…"* - which reads as a typo. Same shape as `.ftrow .fn`/`.fd`.
 - **`.palgrid.choices` is the long-form variant** used by `stepDepth`. The palette grid packs `minmax(150px,1fr)` columns because a swatch and two words fit one; a choice carrying three sentences does not, and two of them on a phone gave 40-character columns and a card twenty lines tall. It stacks one per row at every width, and top-aligns the icon in a tinted tile - a swatch centred against the whole height of a long card parks itself halfway down the text.
-- **Palettes: switched OFF (Sep 2026), code kept.** `PALETTES_ENABLED=false` is the whole switch. The `PALETTES` data, the `html[data-palette]` CSS blocks, `paletteOptionHTML()`, the Settings picker and the wizard step are all still here and still work - flip the flag to bring them back. `applyPalette()` **forces `"sage"`** while it is off (forcing, not skipping: an install that had picked Ocean must be repainted), and the pre-paint head script is hard-coded to sage so a stored choice cannot flash before JS runs. **`settings.palette` is deliberately never cleared**, so restoring the flag restores everyone's own choice. Removed from `PLUS_FEATURES` at the same time - gating something nobody can reach is worse than not selling it.
+- **Palettes: switched OFF (Sep 2026), code kept.** `PALETTES_ENABLED=false` is the whole switch. The `PALETTES` data, the `html[data-palette]` CSS blocks, `paletteOptionHTML()`, the Settings picker and the wizard step are all still here and still work - flip the flag to bring them back. `applyPalette()` **forces `"sage"`** while it is off (forcing, not skipping: an install that had picked Ocean must be repainted), and the pre-paint head script is hard-coded to sage so a stored choice cannot flash before JS runs. **`settings.palette` is deliberately never cleared**, so restoring the flag restores everyone's own choice. Removed from `FEATURE_TIER` at the same time - gating something nobody can reach is worse than not selling it; `paletteLocked()` is now a constant `false`.
 - **Branding**: `practiceName()` / `practiceTagline()` feed the header pill, `--appname` (desktop sidebar title), `document.title` and printed receipts. `applySettings()` re-applies everything after load, import or rollback.
 
 ## UI structure
@@ -1121,7 +1199,7 @@ view element, and `go(tab,opts)` calls it. Inside a view the segments are plain 
 | `VIEWS.sessions` | List (Upcoming / Unpaid / Incomplete / All) and Calendar; `renderUnpaid` and `renderIncomplete` are its bulk editors |
 | `VIEWS.practice` | Clients, Rooms, Supervision (`supervisionPanel()` - Log / Peer / CPD / Insights), Business analytics (`renderMetrics`) |
 | `VIEWS.money` | Overview, Costs & income (`roomFeesCard`, `roomRentCard`, `financeCards`), Table (`rawPanel()`) |
-| `VIEWS.tax` | Now (`drawNow`), Estimate, Pot & payments (`drawPayments`), Per year (`drawAllowances`), Making Tax Digital (`drawMTD`) |
+| `VIEWS.tax` | Now (`drawNow`), Estimate, Pot & payments (`drawPayments`), Per year (`drawAllowances`), Making Tax Digital (`drawMTD`). Opens for everybody; computed figures mask per tax year - see the paywall section |
 | `VIEWS.settings` | The six collapsible groups; `retentionCardHTML()`, `basisCardHTML()`, `taxRegionCardHTML()` are cards inside it |
 | `appMapSheet()` | "Where everything is" - every tab, segment and Settings group as a link |
 | `appJobsSheet()` | "What to do, and how often" - the weekly-to-yearly job list, its own sheet off Search & help |

@@ -1,10 +1,12 @@
 # Selling the tax package - and getting out of MTD's way
 
-> **Naming, Sep 2026:** the tax bundle this document is about now belongs to **GroundWork Pro**,
-> the top of two tiers. Every "Plus" below means Pro; the new GroundWork Plus is the rung beneath
-> it and contains no tax content at all, which is the point of it. See `docs/monetisation.md` §3.
+> **Naming, Sep 2026 (revised):** the tax content this document is about is no longer part of any
+> subscription. It is bought **one UK tax year at a time**, as a one-off purchase on top of
+> **GroundWork Pro**. Every "Plus" written below means the tax content, which now means a tax year
+> package; "GroundWork Plus" as a product does not exist. The pitch below is unchanged in
+> substance - what is bought has changed shape, not what it does. See `docs/monetisation.md` §3.
 
-*Sept 2026. How GroundWork Plus is pitched, in the app and outside it. This is the positioning
+*Sept 2026. How the tax content is pitched, in the app and outside it. This is the positioning
 decision record; `docs/monetisation.md` remains the record for **what** is in the tier and how
 the gate is built. Where the two touch, that document owns the mechanics and this one owns the
 words.*
@@ -36,10 +38,10 @@ what makes the rest of the pitch believable.
 The pitch is one sentence, and everything below is an elaboration of it:
 
 > **You are already typing every session into GroundWork. That is the digital record MTD asks
-> for. Plus turns it into the four quarterly figures and hands them over as a file - so the
+> for. A tax year turns it into the four quarterly figures and hands them over as a file - so the
 > only thing left to buy is something that presses Submit, and HMRC lists free ones.**
 
-The load-bearing word is **instead**. GroundWork Plus is not a companion purchase alongside
+The load-bearing word is **instead**. GroundWork is not a companion purchase alongside
 bookkeeping software; for a single-handed therapist with no stock, no payroll, no VAT and one
 kind of income, it is a cheaper substitute for one - with session-level detail a general
 bookkeeping package cannot see, because it does not know what a room costs by the hour or what
@@ -91,6 +93,7 @@ built entirely on never having overstated anything.
 | "File your MTD return from GroundWork" | "Hand the figures to your accountant, or to software that files." |
 | "Replaces your accountant" | "Gives your accountant the year already added up." |
 | "Free MTD filing" | "HMRC lists the recognised software, and some of it is free." - link, never a promise. |
+| "Buying the tax year makes your figures HMRC-approved / checked / filed" | "It works out that year's figures, kept current for that year's rules. They are still estimates, and the submission is still done elsewhere." |
 | Naming or recommending a bridging vendor in the app | Link to HMRC's own list. It stays current; we would not. |
 | "This satisfies the digital-link rule" | "Moving a file rather than re-typing figures is what keeps the chain digital." State the rule, not a verdict on their setup. |
 | "Imports straight into your bridging software" / naming the `hmrcField` column as a filing instruction | "Each row names its SA103 box and the matching field in HMRC's own developer documentation." The column exists to save the filer guessing which figure is which - it is a label, not a submission format, and **no GroundWork export has ever been tested against a real bridging tool**. Expect the consumer to map these columns onto their own. |
@@ -125,8 +128,8 @@ are already in the shape it wants.* That is a reassurance, not a feature.
 This is where the "instead of" pitch lands hardest, and where the arithmetic is worth showing:
 
 - Full bookkeeping software priced for a business that has invoices, banking and VAT.
-- Versus: GroundWork Plus, plus a recognised submission tool from HMRC's list - free at the
-  simple end, and low tens of pounds a year for spreadsheet bridging.
+- Versus: GroundWork Pro plus the tax year, plus a recognised submission tool from HMRC's list -
+  free at the simple end, and low tens of pounds a year for spreadsheet bridging.
 
 Do not put vendor names or prices in the app. They go stale, and naming one is an endorsement
 we are not qualified to give. Show the *shape* of the comparison and link to HMRC's list.

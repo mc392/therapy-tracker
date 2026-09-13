@@ -10,7 +10,7 @@
 <script>(function(){var d=document.documentElement;try{var t=localStorage.getItem('tt_theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';}d.setAttribute('data-theme',t);
 d.setAttribute('data-palette','sage'); /* colour schemes are off - see PALETTES_ENABLED. Was: localStorage.getItem('tt_palette')||'sage' */
 var n=localStorage.getItem('tt_practice');if(n)d.style.setProperty('--appname',JSON.stringify('⬡ '+n));
-/* Does this device hold a live GroundWork Plus entitlement? Read here, in the pre-paint
+/* Does this device hold a live GroundWork Pro entitlement? Read here, in the pre-paint
    script, because the launch screen is painted before any of the app's own code runs and a
    subscriber's splash must not start plain and change its mind a second later. Deliberately
    a simplified copy of plusActive() - it decides a decoration, nothing is unlocked by it,
@@ -18,10 +18,10 @@ var n=localStorage.getItem('tt_practice');if(n)d.style.setProperty('--appname',J
    step from then on. */
 try{var p=JSON.parse(localStorage.getItem('tt_plus')||'null');
   if(p&&p.active){var x=p.expiresAt?Date.parse(p.expiresAt):NaN;
-    /* The attribute carries WHICH tier, and an entitlement with no tier on it is Pro - the
-       same default the gate itself applies, and for the same reason (see the tier ladder). */
+    /* There is one rung, and anything the app does not recognise reads as it - the same default
+       tierOf() applies, so an entitlement stored by the two-tier build still lights the mark. */
     if(!p.expiresAt||isNaN(x)||Date.now()<=x+7*864e5)
-      d.setAttribute('data-plus',p.tier==='plus'?'plus':'pro');}}catch(e2){}
+      d.setAttribute('data-plus','pro');}}catch(e2){}
 }catch(e){d.setAttribute('data-theme','light');d.setAttribute('data-palette','sage');}})();</script>
 <style>
 /* ====== Design tokens ======
@@ -49,26 +49,24 @@ try{var p=JSON.parse(localStorage.getItem('tt_plus')||'null');
      shade darker than the icon's own top stop (#6A8B7C) on purpose - the 18px/700 header title
      falls just under the WCAG large-text threshold, and white on #6A8B7C is only 3.75:1. */
   --gs1:#5C7A6D; --gs2:#3C4F44;
-  /* ===== The two paid rungs of the tier ladder =====
-     Not palette tokens: these are the subscription ladder's own colours, the same two the App
-     Store images use (icon-ideas/groundwork/subscription-plus-1024.html and -pro-1024.html), so
-     a lock inside the app and the image on the redemption sheet are recognisably one product.
+  /* ===== GOLD - the one paid accent =====
+     Not palette tokens: this is the subscription's own colour, the same one the App Store image
+     uses (icon-ideas/groundwork/subscription-pro-1024.html), so a lock inside the app and the
+     image on the redemption sheet are recognisably one product.
 
-     tier2 = CHROME = GroundWork Plus, the middle rung. tier3 = GOLD = GroundWork Pro, the top.
-     A ramp of four rather than one flat colour in both cases: a single value is a coloured
-     outline, a light→deep→light ramp is a rim catching the light, which is what makes either
-     read as metal rather than as a border somebody picked.
+     There was a CHROME ramp beside this one (--tier2-*) while there were two tiers. It went with
+     them in Sep 2026: with one subscription there is nothing to distinguish, and a chrome edge on
+     Business analytics beside a gold one on a tax figure read as two products rather than one.
+     Gold is now worn by everything that costs money, including the tax year packages.
 
-     Chrome was tried once before as a flat cool silver and abandoned for reading as
-     barely-there. This ramp is not that: it runs white → light steel → DARK steel → light, and
-     it is the dark stop that does the work against sage. Anything that touches these values
-     has to be checked at 13px on a real screen, not in a swatch. */
-  --tier2-1:#FFFFFF; --tier2-2:#D6DFE4; --tier2-3:#71838C; --tier2-4:#EDF2F5; --tier2-glow:rgba(120,145,158,.55);
+     A ramp of four rather than one flat colour: a single value is a coloured outline, a
+     light→deep→light ramp is a rim catching the light, which is what makes it read as metal
+     rather than as a border somebody picked. */
   --tier3-1:#F7E3AE; --tier3-2:#E0BC6B; --tier3-3:#C99A43; --tier3-4:#E7CB8B; --tier3-glow:rgba(224,188,107,.6);
-  /* The ramps above are for edges and glows. The two `-ink` values are the ones that have to
-     stay READABLE as text on a card, so unlike the rest of the ladder they ARE redefined for
-     dark. Both clear 4.5:1 on their own theme's card. */
-  --tier2-ink:#4E606A; --tier3-ink:#8A6A1F;}
+  /* The ramp above is for edges and glows. `-ink` is the one value that has to stay READABLE as
+     text on a card, so unlike the rest of the ramp it IS redefined for dark. Both clear 4.5:1 on
+     their own theme's card. */
+  --tier3-ink:#8A6A1F;}
 html[data-theme="dark"]{
   color-scheme:dark;
   --bg:#0C1512; --card:#16211E; --soft:#1E2C28; --ink:#E9F2EE; --muted:#93A8A1; --line:#243430;
@@ -80,7 +78,7 @@ html[data-theme="dark"]{
   --shadow-lg:0 2px 8px rgba(0,0,0,.5),0 24px 56px -14px rgba(0,0,0,.75);
 
   --gs1:#5C7A6D; --gs2:#3C4F44;
-  --tier2-ink:#C7D5DC; --tier3-ink:#EBD196;}
+  --tier3-ink:#EBD196;}
 /* ====== Colour schemes ======
    Chosen in Setup / Settings, applied as data-palette on <html>. "sage" is the built-in default
    above, so it needs no block here. Each other scheme overrides the light values, then the
@@ -413,29 +411,25 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .projseg{margin:0 0 12px}
 .projpane[hidden]{display:none}
 .projnote{margin:10px 0 0}
-/* The one tab in a bar that costs extra - a violet glow marks it out from its plain siblings,
-   the same colour as the middle rung of the subscription-image tier ladder (see icon-ideas/
-   groundwork/subscription-business-1024.html) rather than one invented for this screen alone.
-   Was a cool silver ramp; against the sage plate and a white card it sat too close in lightness
-   to read at 13px, so it moved to violet - a genuine complementary contrast against sage that
-   can't wash out the way a neutral metal can, with a real drop-glow rather than a flat outline
-   so it still reads as "lit up" at icon scale. A gradient border needs a solid base to clip
-   against, hence the two-layer background - `padding-box` paints the button's own fill,
+/* The one tab in a bar that costs extra. Gold, like every other paid surface since the tier split
+   was undone - it was chrome while chrome meant "the cheaper subscription", and keeping it would
+   now imply a second product that does not exist. A gradient border needs a solid base to clip
+   against, hence the two-layer background: `padding-box` paints the button's own fill,
    `border-box` paints the ramp into the border itself. */
 .seg button.premium{position:relative;border:1.5px solid transparent;border-radius:9px;
   background:linear-gradient(var(--card),var(--card)) padding-box,
-    linear-gradient(135deg,var(--tier2-1),var(--tier2-2) 38%,var(--tier2-3) 72%,var(--tier2-4)) border-box;
-  box-shadow:0 0 7px var(--tier2-glow)}
+    linear-gradient(135deg,var(--tier3-1),var(--tier3-2) 38%,var(--tier3-3) 72%,var(--tier3-4)) border-box;
+  box-shadow:0 0 7px var(--tier3-glow)}
 .seg button.premium.on{color:var(--brand-dark);
-  box-shadow:0 1px 2px var(--ring),0 2px 10px -4px var(--ring),0 0 9px var(--tier2-glow)}
-/* The frame around Business analytics itself, not just its tab - a thin violet-glow rule above
-   the content, so the screen it opens onto still reads as the paid-for one once the reader has
-   already tapped in. Alternating light/dark stops rather than a plain two-colour fade, for the
-   shimmer a single glow reads as. */
+  box-shadow:0 1px 2px var(--ring),0 2px 10px -4px var(--ring),0 0 9px var(--tier3-glow)}
+/* The frame around Business analytics itself, not just its tab - a thin gold rule above the
+   content, so the screen it opens onto still reads as the paid-for one once the reader has already
+   tapped in. Alternating light/dark stops rather than a plain two-colour fade, for the shimmer a
+   single glow reads as. */
 #crbody.bizA{position:relative;padding-top:14px}
 #crbody.bizA::before{content:"";position:absolute;top:0;left:2px;right:2px;height:3px;border-radius:3px;
-  background:linear-gradient(90deg,var(--tier2-3),var(--tier2-1) 25%,var(--tier2-4) 50%,var(--tier2-1) 75%,var(--tier2-3));
-  box-shadow:0 0 8px var(--tier2-glow)}
+  background:linear-gradient(90deg,var(--tier3-3),var(--tier3-1) 25%,var(--tier3-4) 50%,var(--tier3-1) 75%,var(--tier3-3));
+  box-shadow:0 0 8px var(--tier3-glow)}
 /* ===== use-of-home year strip =====
    Full-bleed inside its card and sticky under the header (JS sets `top` from the header's real
    height), so the year being edited stays on screen while the cost fields scroll past. */
@@ -938,21 +932,19 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:0
 #splash .sp-tier{display:none;font-style:normal;font-size:.36em;font-weight:800;
   letter-spacing:.02em;vertical-align:.85em;margin-left:.28em;padding:.28em .58em;
   border-radius:999px}
+/* One subscription, so one mark: the top bar in gold and "Pro" on the wordmark. There was a
+   chrome variant on bar 2 for the middle tier until Sep 2026; it went with the tier. The
+   attribute still carries the tier NAME rather than being a bare boolean, because the pre-paint
+   script writes what the entitlement resolves to and a second rung would otherwise be invisible
+   here. Tax year packages are deliberately not marked: the splash marks who you are, not what
+   you have bought, and a mark that changed every April would read as a fault. */
 html[data-plus] #splash .sp-tier{display:inline-block}
-html[data-plus="plus"] #splash .sp-tier::after{content:"Plus"}
-html[data-plus="pro"]  #splash .sp-tier::after{content:"Pro"}
-/* Chrome needs dark text on it - white on light steel is the one way to make a metal look
-   cheap - where gold is deep enough to carry white. */
-html[data-plus="plus"] #splash .sp-tier{color:#2B3A42;
-  background:linear-gradient(135deg,#FFFFFF,#D6DFE4 45%,#8B9BA4);
-  box-shadow:0 0 14px rgba(120,145,158,.5)}
+html[data-plus="pro"] #splash .sp-tier::after{content:"Pro"}
 html[data-plus="pro"] #splash .sp-tier{color:#3B2C08;
   background:linear-gradient(135deg,#F7E3AE,#E0BC6B 45%,#C99A43);
   box-shadow:0 0 14px rgba(224,188,107,.55)}
-html[data-plus="plus"] #splash .sp-bars .b2,
-html[data-plus="pro"]  #splash .sp-bars .b3{stroke-width:2.6;paint-order:stroke}
-html[data-plus="plus"] #splash .sp-bars .b2{stroke:url(#spChrome);filter:drop-shadow(0 0 3px rgba(120,145,158,.65))}
-html[data-plus="pro"]  #splash .sp-bars .b3{stroke:url(#spGold);filter:drop-shadow(0 0 3px rgba(224,188,107,.7))}
+html[data-plus="pro"] #splash .sp-bars .b3{stroke-width:2.6;paint-order:stroke;
+  stroke:url(#spGold);filter:drop-shadow(0 0 3px rgba(224,188,107,.7))}
 @keyframes spRise{from{opacity:0;transform:translateY(calc(-3vh + 14px))}to{opacity:1;transform:translateY(-3vh)}}
 html[data-theme="dark"] #splash{background:linear-gradient(155deg,#496256 0%,#38493F 48%,#26332B 100%)}
 html[data-theme="dark"] #splash .sp-bars .b1{fill:#8FA396}
@@ -1134,23 +1126,21 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 .palopt.locked{opacity:.78}
 .paltag{display:inline-block;font-size:10px;font-weight:700;vertical-align:1px;padding:1px 6px;
   border-radius:999px;margin-left:5px;background:color-mix(in srgb,var(--brand) 16%,transparent);color:var(--brand-dark)}
-/* GroundWork Plus / Pro - the paywall sheet and the in-place lock that replaces a paid view.
+/* GroundWork Pro and the tax year packages - the paywall sheets, the in-place lock that replaces
+   a paid view, and the mask that stands in for a tax figure.
 
-   ONE SET OF RULES, TWO TIERS. Every surface here paints from four local variables (--tg1..--tg4,
-   --tgglow, --tgink) rather than naming a ramp, and the tier class sets them: `.t-plus` is
-   chrome, `.t-pro` is gold. A lock therefore wears the colour of the tier that would unlock
-   *that* screen - chrome on Business analytics, gold on Tax - which is the only way a reader can
-   tell from the card which of the two they are being asked for. Default is chrome, so a card
-   whose class somebody forgets falls back to the cheaper tier rather than promising gold. */
+   EVERY SURFACE HERE PAINTS FROM SIX LOCAL VARIABLES (--tg1..--tg4, --tgglow, --tgink) rather
+   than naming a ramp, and `.tier-pro` sets them. That indirection is worth keeping even now that
+   there is only one ramp to point at: it is what made the two-tier build possible in one pass, it
+   costs nothing, and a second paid colour (a regional tax pack, say) is then a class rather than a
+   sweep through every rule below. `.tier-plus` was the chrome half and is gone with chrome. */
 .plusgate{text-align:center;padding:4px 2px 2px;
-  --tg1:var(--tier2-1); --tg2:var(--tier2-2); --tg3:var(--tier2-3); --tg4:var(--tier2-4);
-  --tgglow:var(--tier2-glow); --tgink:var(--tier2-ink)}
-/* Set on ANY element, not only on a gate card: a Plus card sitting inside a sheet led by Pro
-   has to repaint itself, and it can only do that if the class carries the variables with it. */
+  --tg1:var(--tier3-1); --tg2:var(--tier3-2); --tg3:var(--tier3-3); --tg4:var(--tier3-4);
+  --tgglow:var(--tier3-glow); --tgink:var(--tier3-ink)}
+/* Set on ANY element, not only on a gate card - a paid surface inside a plain sheet has to be
+   able to repaint itself, and it can only do that if the class carries the variables with it. */
 .tier-pro{--tg1:var(--tier3-1); --tg2:var(--tier3-2); --tg3:var(--tier3-3);
   --tg4:var(--tier3-4); --tgglow:var(--tier3-glow); --tgink:var(--tier3-ink)}
-.tier-plus{--tg1:var(--tier2-1); --tg2:var(--tier2-2); --tg3:var(--tier2-3);
-  --tg4:var(--tier2-4); --tgglow:var(--tier2-glow); --tgink:var(--tier2-ink)}
 /* A lock card wears the same edge and glow as its tier's App Store image, so the paid tier
    looks like one thing wherever it is met - the tab, the screen it opens, the card that stands
    in for a screen not bought yet, and the picture on the redemption sheet. The ring is a
@@ -1172,10 +1162,9 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 .plusgate .plfeat div{font-size:12.5px;color:var(--muted);padding:6px 0;border-top:1px solid var(--line)}
 .plusgate .plfeat b{color:var(--ink);font-weight:700}
 .plusgate input{text-align:center}
-/* ===== The two offers on one sheet =====
-   Ladder order, cheapest first, each carrying its own edge - the sheet has to answer "which of
-   these two am I being asked for" before it answers anything else, and on a phone that is done
-   with colour and one chip, not with a comparison table nobody reads on a 390px screen. */
+/* ===== The offer card =====
+   One on the subscription sheet, one per step on the tax year sheet. It carries its own edge so a
+   priced thing always looks like a priced thing wherever it appears. */
 .tiercard{position:relative;overflow:hidden;text-align:left;border-radius:16px;padding:14px;
   margin-top:12px;border:1px solid color-mix(in srgb,var(--tg3) 34%,var(--hair));
   background:color-mix(in srgb,var(--card) 70%,transparent)}
@@ -1198,6 +1187,49 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
   border:1px solid color-mix(in srgb,var(--tg3) 34%,transparent)}
 .tcchip{font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:999px;letter-spacing:.02em;
   background:color-mix(in srgb,var(--tg3) 16%,transparent);color:var(--tgink)}
+/* ===== "Tax is bought by the year, separately" =====
+   The mis-selling guard, on the sheet where the money is asked for. Deliberately NOT styled as a
+   warning (nothing is wrong) and deliberately not small print either - a muted panel with its own
+   heading, at full width, so it cannot be skimmed past on the way to the Subscribe button. */
+.taxsep{text-align:left;margin-top:14px;padding:12px 13px;border-radius:14px;
+  background:color-mix(in srgb,var(--muted) 9%,transparent);border:1px solid var(--line)}
+.taxsep .tsh{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:800;color:var(--ink)}
+.taxsep .tsh .gi{width:16px;height:16px;flex:none}
+.taxsep p{font-size:12.5px;line-height:1.5;color:var(--muted);margin:7px 0 0}
+.taxsep .btn{margin-top:10px}
+/* ===== The tax year sheet's two steps =====
+   Pro is step 1 and the year is step 2, and they are drawn as steps rather than as two cards so
+   the order reads as a requirement rather than as a choice between them. */
+.tstep{display:flex;gap:11px;text-align:left;margin-top:14px}
+.tstep .tsn{flex:none;width:26px;height:26px;border-radius:999px;display:grid;place-items:center;
+  font-size:13px;font-weight:800;background:color-mix(in srgb,var(--tg3) 16%,transparent);color:var(--tgink)}
+.tstep .tsn .gi{width:15px;height:15px}
+.tstep.done .tsn{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good)}
+.tstep .tsb{flex:1;min-width:0}
+.tstep .tst{font-size:14px;font-weight:700;color:var(--ink);margin-bottom:5px}
+.tstep .tsd{font-size:12.5px;line-height:1.5;color:var(--muted);margin:7px 0 0}
+.tstep .btn{margin-top:10px}
+.tstep .plfeat{margin-top:8px}
+/* ===== The tax mask =====
+   What stands in for a figure that was never calculated. NOT a blur: .blurfig below computes a
+   real number and hides it, which is right for the projection tile because that figure is the
+   practice's own history. Here there is nothing behind the pill at all, so it is drawn as an
+   obviously-empty control rather than as a smudged number - a blur implies a value is sitting
+   there, and implying that about a tax figure nobody has paid for is the wrong promise twice. */
+.taxmask{display:inline-flex;align-items:center;gap:5px;vertical-align:middle;
+  font:inherit;font-size:12.5px;font-weight:800;letter-spacing:.01em;cursor:pointer;
+  padding:3px 9px;border-radius:999px;color:var(--tgink);
+  background:color-mix(in srgb,var(--tg3) 13%,transparent);
+  border:1px solid color-mix(in srgb,var(--tg3) 38%,transparent)}
+.taxmask .gi{width:13px;height:13px;flex:none}
+.taxmask:active{transform:scale(.97)}
+/* In a KPI or a .nv headline slot the pill sits where a big number would, so it needs the room
+   a big number had - otherwise the card collapses and the row jumps when a year is unlocked. */
+.taxmask.big{font-size:14px;padding:7px 13px;margin:2px 0}
+/* In a table cell it is competing with a column of numbers for a width nobody has to spare. */
+td .taxmask{font-size:11.5px;padding:2px 7px;gap:4px;white-space:nowrap}
+td .taxmask .gi{width:12px;height:12px}
+.nv .taxmask.big{margin-top:2px}
 /* The sneak peek: a locked card that still says something true about THIS practice. Left-aligned
    inside a centred gate, because these are rows of fact rather than sales copy. */
 .plusgate.peek{text-align:left}
@@ -1208,12 +1240,12 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
   font-variant-numeric:tabular-nums;line-height:1.35}
 .peekh{font-size:13.5px;font-weight:700;color:var(--ink);line-height:1.35}
 .peeks{font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.45}
-/* "This one is yours to keep" under the funnel the gate does NOT take away. In the colour of
-   the tier that owns Business analytics (chrome, Plus), so it reads as a promise from the tier
-   being offered rather than as a caption somebody forgot to style. */
+/* "This one is yours to keep" under the funnel the gate does NOT take away. In the paid colour,
+   so it reads as a promise from the thing being offered rather than as a caption somebody forgot
+   to style. */
 .plkeep{display:flex;align-items:center;justify-content:center;gap:6px;margin:14px 0 0;
-  font-size:12.5px;font-weight:800;letter-spacing:.01em;color:var(--tier2-ink);
-  text-shadow:0 0 12px var(--tier2-glow)}
+  font-size:12.5px;font-weight:800;letter-spacing:.01em;color:var(--tier3-ink);
+  text-shadow:0 0 12px var(--tier3-glow)}
 .plkeep .gi{width:15px;height:15px}
 /* ---- Trends ---- */
 .trendintro{display:flex;align-items:center;gap:6px;margin:-4px 0 12px}
@@ -1296,15 +1328,12 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 <div id="splash" aria-hidden="true">
   <div class="sp-in">
     <svg class="sp-mark" viewBox="0 0 120 112" role="img" aria-label="GroundWork">
-      <!-- The two subscription ramps, the same construction and the same stops as the App Store
-           images (icon-ideas/groundwork/subscription-plus-1024.html and -pro-1024.html): a
-           light→deep→light rim rather than a flat outline. Referenced from CSS by id, and drawn
-           on nothing at all unless the pre-paint script found a live entitlement. -->
+      <!-- The subscription ramp, the same construction and the same stops as the App Store image
+           (icon-ideas/groundwork/subscription-pro-1024.html): a light→deep→light rim rather than
+           a flat outline. Referenced from CSS by id, and drawn on nothing at all unless the
+           pre-paint script found a live entitlement. There was a chrome ramp here for the middle
+           tier until Sep 2026; it went with the tier. -->
       <defs>
-        <linearGradient id="spChrome" x1="0" y1="0" x2="0.35" y2="1">
-          <stop offset="0%" stop-color="#FFFFFF"/><stop offset="38%" stop-color="#D6DFE4"/>
-          <stop offset="72%" stop-color="#71838C"/><stop offset="100%" stop-color="#EDF2F5"/>
-        </linearGradient>
         <linearGradient id="spGold" x1="0" y1="0" x2="0.35" y2="1">
           <stop offset="0%" stop-color="#F7E3AE"/><stop offset="38%" stop-color="#E0BC6B"/>
           <stop offset="72%" stop-color="#C99A43"/><stop offset="100%" stop-color="#E7CB8B"/>
@@ -1978,7 +2007,7 @@ function paintThemeColor(){try{const m=document.getElementById("tcMeta");if(!m)r
    TO RESTORE: set PALETTES_ENABLED to true. That is the whole change - the picker reappears in
    Settings › App preferences, the wizard step comes back, and anyone who had picked a scheme
    before it was switched off gets it back, because `settings.palette` was never cleared. If it
-   should also become a paid feature again, add "palettes" back to PLUS_FEATURES. */
+   should also become a paid feature again, add "palettes" back to FEATURE_TIER. */
 const PALETTES_ENABLED=false;
 const PALETTES=[
   {k:"sage",  n:"Sage",   d:"Calm green (original)", c:["#5C7A6D","#9A8C9E","#EDF1EF"], p:["#5C7A6D","#46594F"], free:true},
@@ -2021,41 +2050,44 @@ function paletteSwatch(p){return '<span class="pswatch"><i style="background:'+p
       are pure and ungated, both because that is where correctness lives and because
       tests/tax-tests.js calls them directly. If a tax test ever fails because of the paywall,
       the paywall has been put in the wrong layer - move it back to the view. */
-/* ===== The tier ladder =====
-   TIERS is ordered, cheapest first, and the order is the whole model: a feature names the LOWEST
-   tier that unlocks it, an entitlement unlocks everything at or below its own rung, and a third
-   tier would mean adding a rung here rather than another boolean anywhere else.
+/* ===== One subscription, and tax bought by the tax year =====
+   TIERS is still a list and plusHas() is still a rank comparison even though there is exactly one
+   rung today. That is deliberate: a hand-rolled plusTier()==="pro" scattered through the file is
+   how the last tier split went wrong, and one rung costs nothing to keep general.
 
-   THE NAMING INVERTED, AND THAT IS WHY THE DEFAULT MATTERS. "GroundWork Plus" used to be the
-   only tier and it was the TOP one. It is now the MIDDLE one - everything except the tax engine
-   - and "GroundWork Pro" is the top. So every entitlement that predates this build belongs to
-   somebody who paid for everything, and `tierOf()` reads a missing `tier` as **pro**. Reading it
-   as the new, smaller Plus would take the Tax tab off a paying subscriber on the morning they
-   updated. There is no migration and there must never be one: the default IS the migration, it
-   costs nothing, and it cannot half-run. */
-const TIERS=["plus","pro"];                    /* free is the absence of a tier, not a rung */
-const TIER_NAME={plus:"GroundWork Plus",pro:"GroundWork Pro"};
-const TIER_SHORT={plus:"Plus",pro:"Pro"};
-/* What each rung is FOR, in one line, for the paywall and the Settings card. */
+   THE LADDER HAS BEEN BOTH WAYS ROUND, WHICH IS WHY THE DEFAULT MATTERS. "GroundWork Plus" was
+   once the only tier and the TOP one; for a few weeks in Sep 2026 it was the middle one, below
+   "GroundWork Pro". It is gone entirely now. tierOf() reads anything it does not recognise -
+   the string "plus" and a missing tier alike - as **pro**, so every entitlement ever issued still
+   grants everything the subscription grants. There is no migration and there must never be one:
+   the default IS the migration, it costs nothing, and it cannot half-run. */
+const TIERS=["pro"];                           /* free is the absence of a tier, not a rung */
+const TIER_NAME={pro:"GroundWork Pro"};
+const TIER_SHORT={pro:"Pro"};
+/* What the subscription is FOR, in one line, for the paywall and the Settings card.
+
+   IT MUST NOT PROMISE TAX, AND IT MUST SAY SO RATHER THAN GO QUIET ABOUT IT. Pro carries no tax
+   calculation at all: every figure the tax engine produces is bought per tax year (see the tax
+   packages below). A blurb that simply omits tax leaves the other reading open, and the reader
+   who fills that gap in themselves subscribes in January and finds nothing there. State the
+   exclusion; never merely decline to claim the inclusion. */
 const TIER_BLURB={
-  plus:"Your practice read back to you: twenty analytics, accreditation hours and Notes sync. "+
-       "Nothing in it depends on where you pay tax.",
-  pro:"Everything in Plus, and the year-end work: what you will owe, what to keep back for it, "+
-      "what the practice costs you, and the quarterly figures already added up."};
+  pro:"Your practice read back to you: twenty analytics, accreditation hours, what the practice "+
+      "costs you, and Notes sync. Tax calculations are not included - each UK tax year is its own "+
+      "one-off purchase, on top of Pro."};
 /* Which rung each gated feature sits on. ABSENT MEANS FREE, and free is the default for anything
    new - a feature becomes paid by being written into this table, never by omission.
 
-   tax / finances / mtd are the tax bundle and are Pro's alone. They are UK machinery - SA103
-   boxes, HMRC bands, MTD quarters - which is also why they are the part that cannot be sold to a
-   therapist in Dublin or Toronto, and therefore exactly the seam the tier below them exists on.
-   Costs & other income sits IN the bundle rather than beside it for the reason monetisation.md §3
-   has always given: an estimate that ignores what the practice costs you is one nobody should set
-   money aside against, and selling a knowingly overstated tax figure is not on.
+   `tax` and `mtd` ARE NOT HERE ANY MORE AND THEIR ABSENCE IS LOAD-BEARING. They are no longer
+   subscription features: they are gated by taxYearPaid(), a different axis with a different
+   question behind it, and plusLocked() has to answer "not locked" for them so that nothing can
+   route a tax lock into the subscription sheet and sell Pro on a promise it does not keep.
 
-   "palettes" was here until Sep 2026. Colour schemes are switched off entirely now
-   (see PALETTES_ENABLED), so gating them would gate something nobody can reach. */
-const FEATURE_TIER={tax:"pro",finances:"pro",mtd:"pro",
-                    trends:"plus",accreditation:"plus",notesSync:"plus"};
+   `finances` (Costs & other income) stays on the subscription, and now safely: a tax year cannot
+   be bought without Pro, so nobody can be shown a tax figure worked out from a profit they had no
+   way to enter their costs against. Selling those two apart was the one hole in this split, and
+   requiring Pro underneath a package is what closes it. */
+const FEATURE_TIER={finances:"pro",trends:"pro",accreditation:"pro",notesSync:"pro"};
 /* Derived, not maintained: "is this gated at all" still has one answer and one list. */
 const PLUS_FEATURES=Object.keys(FEATURE_TIER);
 function tierRank(t){const i=TIERS.indexOf(String(t||""));return i<0?0:i+1;}   /* 0 = free */
@@ -2114,9 +2146,105 @@ function plusSellable(){try{return !!(window.Capacitor&&window.Capacitor.isNativ
 function plusGateOn(){if(plusSellable())return true;
   try{return localStorage.getItem("tt_plus_gate")==="on";}catch(e){return false;}}
 /* Locked for THIS reader: a gated feature whose rung is above the one they hold. A feature
-   missing from FEATURE_TIER is free and is never locked, whatever the gate is doing. */
+   missing from FEATURE_TIER is free and is never locked, whatever the gate is doing - which is
+   how `tax` and `mtd` behave here now. They are answered by taxYearPaid() instead. */
 function plusLocked(k){const need=FEATURE_TIER[k];
   return !!need&&plusGateOn()&&!plusHas(need);}
+
+/* ===== UK tax year packages - the one-off purchases that calculate tax =====
+   A separate axis from the subscription, with a separate question behind it, a separate cache and
+   a separate lifetime. Pro is "does this device subscribe"; a package is "has this tax year been
+   paid for". Both are needed before a tax figure is worked out, and the ORDER of that sentence is
+   the product: Pro is the floor, a package is the year.
+
+   WHY BY THE YEAR AT ALL. A tax calculation is region-specific and year-specific - Scottish bands
+   against rUK, Class 2 and 4 rates, the student-loan plan thresholds, the personal allowance and
+   the MTD rules all move every April, and every one of them has to be right for the year being
+   calculated and wrong for none of the others. That is dateable, repeatable work on a named thing,
+   which is exactly what a one-off purchase against a named tax year is honest about and what a
+   subscription was always slightly vague about.
+
+   BUYING A YEAR INCLUDES EVERY EARLIER YEAR, so the whole entitlement is ONE STRING: the newest
+   tax year paid for. Everything at or below it is open. Tax years are "YYYY-YY" with a fixed
+   width and an incrementing lead, so a plain string comparison orders them correctly
+   ("2025-26" < "2026-27", and "2099-00" < "2100-01" when that eventually matters).
+
+   THE WATERMARK ONLY EVER GOES UP. Every writer takes the max of what is there and what it has
+   been handed. That one rule is what makes a restore arriving out of order, a StoreKit refresh
+   that only saw some entitlements, and the legacy grant below all safe without any of them having
+   to know the others exist. */
+const TAX_PACK_KEY="tt_taxpack";
+/* Device state, never S - the same rule as tt_plus and tt_lock. A purchase must not ride a backup
+   onto somebody else's phone. A SEPARATE KEY from tt_plus, and that is not tidiness: a
+   subscription lapses and plusClear() wipes its record, while a non-consumable is owned for good.
+   In one object, a lapse would delete purchases Apple still considers owned. */
+function taxPackRead(){try{const raw=localStorage.getItem(TAX_PACK_KEY);if(!raw)return null;
+  const o=JSON.parse(raw);return (o&&typeof o==="object")?o:null;}catch(e){return null;}}
+function taxPackWrite(o){try{localStorage.setItem(TAX_PACK_KEY,JSON.stringify(o));}catch(e){}}
+/* A tax year looks like "2026-27" and nothing else does. Anything that fails this is not trusted
+   to unlock a figure, which is the one place being strict is worth more than failing open. */
+function isTaxYearStr(v){return /^\d{4}-\d{2}$/.test(String(v||""));}
+/* The newest tax year this device has paid for, or null. Never throws - it is read from render
+   paths, like everything else in this block. */
+function taxPackThrough(){const o=taxPackRead();
+  return o&&isTaxYearStr(o.through)?o.through:null;}
+function taxPackAny(){return !!taxPackThrough();}
+/* Raise the watermark. Never lowers it, whoever calls and in whatever order. Returns what the
+   watermark is afterwards, which is what the callers want to report. */
+function taxPackGrant(ty,source,ids){
+  if(!isTaxYearStr(ty))return taxPackThrough();
+  const cur=taxPackThrough();
+  if(cur&&cur>=ty)return cur;
+  const had=taxPackRead()||{};
+  taxPackWrite({through:ty,source:source||had.source||"storekit",
+    ids:ids||had.ids||[],checkedAt:new Date().toISOString()});
+  return ty;
+}
+/* One gate switch for both axes, not two. There is no world in which the subscription is sellable
+   here and the packages are not - they are sold through the same StoreKit. */
+function taxGateOn(){return plusGateOn();}
+/* Has this device paid for THIS tax year? Pro AND the year, in that order.
+
+   PRO IS A PREREQUISITE AND THE COPY MUST NEVER SUGGEST OTHERWISE. Requiring it is what keeps
+   Costs & other income underneath every tax figure this app shows (see FEATURE_TIER), so an
+   estimate can never be worked out from a profit with no costs taken off it. The cost of that
+   choice is a mis-selling risk pointing the other way - somebody subscribing to Pro expecting tax
+   - which is answered in the copy, in TIER_BLURB, the paywall sheet, the Settings card and the
+   package sheet, all of which say the exclusion out loud rather than staying quiet about it.
+
+   Fails OPEN on the gate itself, like every other predicate here: off-native nothing is locked. */
+function taxYearPaid(ty){
+  if(!taxGateOn())return true;
+  if(!plusHas("pro"))return false;
+  const t=taxPackThrough();
+  return !!t&&String(ty)<=t;
+}
+function taxYearLocked(ty){return !taxYearPaid(ty);}
+/* Why a year is locked, so a mask can say the right sentence and open the right sheet. Three
+   answers, not two - "you need Pro as well" and "you need the year" are different jobs. */
+function taxLockReason(ty){
+  if(taxYearPaid(ty))return null;
+  if(!plusHas("pro"))return taxPackAny()?"sub":"both";
+  return "year";
+}
+/* The product id carries the START year only: short, unambiguous, and it can never be mistaken
+   for a display string. "...taxyear.2026" is the 2026-27 tax year. */
+const TAX_PACK_PREFIX="uk.co.charlottebloortherapy.groundwork.taxyear.";
+function taxYearOfProduct(id){
+  const m=/\.taxyear\.(\d{4})$/.exec(String(id||""));
+  return m?m[1]+"-"+String(+m[1]+1).slice(-2):null;
+}
+function taxProductOfYear(ty){
+  return isTaxYearStr(ty)?TAX_PACK_PREFIX+ty.slice(0,4):null;
+}
+/* The year on sale: the one in progress. Somebody who wants the year just ended buys this one and
+   gets it with it, which is more than they asked for and one price to think about. */
+function taxPackOnSale(){return curTaxYear();}
+function taxPackStatusLine(){
+  const t=taxPackThrough();
+  if(!t)return "No tax year bought yet.";
+  return "Tax years unlocked: "+esc(t)+" and every earlier year.";
+}
 /* Set by the native block when StoreKit is available. Shared code never touches Capacitor
    directly - it asks for this and degrades to the web path when it is absent. */
 function plusNative(){return window.GWPlusNative||null;}
@@ -2128,92 +2256,110 @@ function plusStatusLine(){
   return esc(tierName(t))+" \u00b7 "+kind+who+(s.expiresAt?" \u00b7 renews "+esc(fmtD(String(s.expiresAt).slice(0,10))):" \u00b7 no expiry")+".";
 }
 
-/* ---- what each rung is, in the order it is worth paying for ----
-   THE THIRD FIELD IS THE RUNG, and it is the only thing that decides which card a line appears
-   on. Within a rung, ordered by what actually makes someone reach for a card: for Pro that is
-   the January bill and not the charts \u2014 docs/monetisation.md is blunt that Trends is tier
-   filler, so it never leads. The MTD line is written to the "instead of, not as well as" reframe
-   in docs/tax-positioning-2026-09.md \u00a72: the point is that Pro plus a cheap submission tool
-   replaces a bookkeeping subscription, not that it sits alongside one. Plain text \u2014
-   openPlusSheet escapes these. */
+/* ---- what the subscription is, in the order it is worth paying for ----
+   THE THIRD FIELD IS THE RUNG. One rung today, and the field stays because tierSell() filters on
+   it and a second rung would otherwise mean touching every line.
+
+   THE TAX LINES ARE GONE FROM HERE ON PURPOSE. "What to set aside", "Your pot, and what leaves
+   it" and "Making Tax Digital" used to lead this list, and they are the whole reason the list is
+   now led by the analytics: the subscription does not calculate tax, and a sell line that names a
+   tax figure is a mis-sale however carefully the sentence around it is worded. What tax costs and
+   how it is bought is TAX_PACK_SELL below, and the paywall renders both so the reader can see the
+   join. Plain text - openPlusSheet escapes these. */
 const PLUS_SELL=[
-  ["What to set aside","A running figure worked from money you have actually been paid \u2014 including the January that is half again bigger than people expect, months before it lands.","pro"],
-  ["Costs & other income","Insurance, supervision, CPD, travel and the rest, taken off the profit your tax is worked out from. Bundled with tax because an estimate without them is one nobody should save against. What your rooms cost you is free either way.","pro"],
-  ["Your pot, and what leaves it","Payments on account, the balancing payment, every due date in order, and what HMRC actually assessed once you have filed.","pro"],
-  ["Making Tax Digital","Your four quarters added up and exported as a file for your accountant, or for software that files. You are already keeping the records, so the only thing left to buy is the submission \u2014 and HMRC lists free ones.","pro"],
-  ["Business analytics","Twenty readings of your own history: who stays, who drifts, what an hour is really worth and what missed sessions cost.","plus"],
-  ["Accreditation hours","Clinical and supervision hours and the 1:6 ratio, in the shape Form 3A asks for.","plus"],
-  ["GroundWork Notes sync","Sends each client\u2019s cadence to the notes app so it knows what still needs writing up.","plus"]
+  ["Business analytics","Twenty readings of your own history: who stays, who drifts, what an hour is really worth and what missed sessions cost.","pro"],
+  ["Costs & other income","Insurance, supervision, CPD, travel and the rest, entered once and taken off your profit. What your rooms cost you is free either way.","pro"],
+  ["Accreditation hours","Clinical and supervision hours and the 1:6 ratio, in the shape Form 3A asks for.","pro"],
+  ["GroundWork Notes sync","Sends each client’s cadence to the notes app so it knows what still needs writing up.","pro"]
 ];
 function tierSell(t){return PLUS_SELL.filter(f=>f[2]===t);}
-/* The annual promise, per rung, said in one sentence \u2014 the honest reason each is a
-   subscription rather than a one-off unlock.
+/* ---- and what a tax year package is ----
+   Kept apart from PLUS_SELL rather than appended to it, because the two are bought differently
+   and the difference is the thing a reader most needs to understand before paying for either. */
+const TAX_PACK_SELL=[
+  ["What you are on track to owe","Worked from money you have actually been paid, on your basis, with the January that is half again bigger than people expect visible months before it lands."],
+  ["Your pot, and what leaves it","What to keep back today, payments on account, the balancing payment, every due date in order, and what HMRC actually assessed once you have filed."],
+  ["Making Tax Digital","That year’s four quarters added up and exported as a file for your accountant, or for software that files."]
+];
+/* The promise behind each charge, in one sentence, and they are deliberately different shapes.
 
-   Pro's is the strong one and it is a fact: HMRC bands, thresholds, Class 2/4 rates and
-   student-loan plans move every April, and keeping ukTax() right is the recurring work being
-   paid for. PLUS HAS NO SUCH ENGINE BEHIND IT, so its line says what it is rather than promising
-   work that has not been agreed \u2014 no roadmap, no "more coming", nothing App Review or a
-   reader could hold up against what the app actually does today. */
+   PRO IS A SUBSCRIPTION WITH NO RATES WORK BEHIND IT, so its line says what it is rather than
+   promising maintenance that has not been agreed - no roadmap, no "more coming", nothing App
+   Review or a reader could hold up against what the app actually does today.
+
+   THE PACKAGE IS WHERE THE MAINTENANCE PROMISE LIVES, and there it is a fact rather than a
+   flourish: a tax year is region-specific and year-specific, so each one is its own piece of
+   work. It used to be the justification for the subscription, which was always a slightly
+   awkward fit; it now sits on the thing it actually describes. */
 const TIER_PROMISE={
-  plus:"Worked out from records you already keep \u2014 nothing to enter, and nothing in it depends on where you pay tax.",
-  pro:"Rates, bands and thresholds are kept current as they change each April."};
+  pro:"Worked out from records you already keep - nothing to enter, and nothing in it depends on where you pay tax."};
+const TAX_PACK_PROMISE=
+  "Bands, thresholds, Class 2 and 4, student-loan plans and your region all differ by year and are "+
+  "fixed for that year. You buy the year once and it stays right.";
 /* What was locked, in the words the reader just saw on the screen they came from. The tier is
-   never written into these \u2014 it is looked up from FEATURE_TIER, so a feature that moves rung
-   cannot leave a sentence behind naming the wrong one. */
-const PLUS_REASONS={tax:"Tax",finances:"Costs & other income",mtd:"The quarterly export",
+   never written into these - it is looked up from FEATURE_TIER, so a feature that moves rung
+   cannot leave a sentence behind naming the wrong one.
+
+   `tax` and `mtd` are NOT here: a locked tax figure opens the package sheet, never this one. */
+const PLUS_REASONS={finances:"Costs & other income",
   trends:"Business analytics",accreditation:"Accreditation hours",notesSync:"Notes sync"};
 function reasonHead(reason){
   const what=PLUS_REASONS[reason], t=featureTier(reason);
-  return (what&&t)?what+" is part of "+tierName(t):"GroundWork Plus and Pro";
+  return (what&&t)?what+" is part of "+tierName(t):"GroundWork Pro";
 }
-/* Filled from StoreKit when the sheet opens, one per rung. Never hardcode a price \u2014 the store
-   owns it, it is per-storefront, and App Review checks the paywall against the real product. */
+/* Filled from StoreKit when a sheet opens: the subscription under its rung, a tax year under its
+   own tax-year string. Never hardcode a price \u2014 the store owns it, it is per-storefront, and
+   App Review checks the paywall against the real product. */
 let _tierPrice={};
 
-/* ---- the one paywall, now with two rungs on it ----
-   ONE SHEET, NOT TWO. A reader who taps a locked Tax card and a reader who opens Settings are
-   asking the same question - what are these and which one do I want - and answering it in two
-   places would mean two places to keep true. The tier that unlocks whatever they tapped is lit
-   and its button is the primary one; the other is still shown, because a ladder with one rung
-   visible is not a ladder.
+/* ---- the subscription paywall ----
+   ONE SHEET FOR THE SUBSCRIPTION, ONE FOR A TAX YEAR, and the split is not an accident. They are
+   bought differently (recurring against one-off), they answer different questions, and the single
+   most dangerous outcome in this whole design is a reader coming away from a sheet believing Pro
+   calculates their tax. So this sheet sells Pro, and then says plainly - not in a footnote - that
+   tax is separate and what it costs is on the other sheet.
 
-   UPGRADES ARE STOREKIT'S JOB, not ours: both products must live in ONE subscription group in
-   App Store Connect, so buying Pro while holding Plus is an upgrade Apple prorates rather than
-   two subscriptions running at once. Nothing here has to know that happened - plusStatus()
-   reports whichever product is entitled next time it is asked. */
+   A reader who taps a locked analytics card and a reader who opens Settings are asking the same
+   question, which is why there is still only one of these. */
 function openPlusSheet(reason){
   const held=plusTier(), nat=plusNative(), lic=plusLicenceConfigured();
-  const need=featureTier(reason);            /* null when opened from Settings, not from a lock */
-  const lead=need||held||"pro";              /* whose colour the sheet's own mark wears */
-  const b=el('<div class="plusgate tier-'+lead+'"></div>');
+  const b=el('<div class="plusgate tier-pro"></div>');
+  const owned=plusHas("pro");
 
-  const tierCard=t=>{
-    const owned=plusHas(t), isNeed=(need===t);
-    const names=tierSell(t).map(f=>f[0]).join(" · ");
-    return '<div class="tiercard tier-'+t+(isNeed?' needed':'')+'">'+
-      '<div class="tcname"><b>'+esc(tierName(t))+'</b>'+
-        (isNeed&&PLUS_REASONS[reason]?'<span class="tcchip">Unlocks '+esc(PLUS_REASONS[reason])+'</span>':'')+
+  const proCard=()=>{
+    const names=tierSell("pro").map(f=>f[0]).join(" · ");
+    return '<div class="tiercard tier-pro'+(owned?'':' needed')+'">'+
+      '<div class="tcname"><b>'+esc(tierName("pro"))+'</b>'+
+        (reason&&PLUS_REASONS[reason]?'<span class="tcchip">Unlocks '+esc(PLUS_REASONS[reason])+'</span>':'')+
         (owned?'<span class="tcchip">Your subscription</span>'
-              :'<span class="tcprice" id="plPrice-'+t+'">'+(nat?"…":"")+'</span>')+'</div>'+
-      '<p class="tcinc">'+(t==="pro"?'<b>Everything in Plus</b>, and: ':'')+esc(names)+'</p>'+
-      '<p class="tcinc">'+esc(TIER_PROMISE[t]||"")+'</p>'+
-      (owned||!nat?'':'<button class="btn '+(isNeed?'':'sec ')+'full" data-buy="'+t+'">Subscribe to '+esc(tierShort(t))+'</button>')+
+              :'<span class="tcprice" id="plPrice-pro">'+(nat?"…":"")+'</span>')+'</div>'+
+      '<p class="tcinc">'+esc(names)+'</p>'+
+      '<p class="tcinc">'+esc(TIER_PROMISE.pro||"")+'</p>'+
+      (owned||!nat?'':'<button class="btn full" data-buy="pro">Subscribe to Pro</button>')+
       '</div>';
   };
-  /* Held already: say what they have and what it covers. The only offer left is the rung above,
-     and only while there is one. */
-  const haveList=held?TIERS.filter(t=>plusHas(t)).map(t=>tierSell(t)).flat():[];
+  /* The exclusion, on the sheet where the money is asked for, in the reader's own terms and above
+     the fold rather than in the small print. This block is the whole mis-selling guard: Pro is a
+     subscription that does not do the one job a therapist is most likely to be buying for. */
+  const taxNote=
+    '<div class="taxsep">'+
+      '<div class="tsh">'+gi("scales")+' Tax is bought by the year, separately</div>'+
+      '<p>Pro does <b>not</b> work out your tax. Each UK tax year is a one-off purchase on top of '+
+        'Pro, because the bands, thresholds and rules are fixed to a single year and to where you '+
+        'pay tax. Buying one year includes every earlier year.</p>'+
+      '<button class="btn ghost sm" id="plTaxMore">What a tax year costs ›</button>'+
+    '</div>';
 
   b.innerHTML=
-    '<div class="plmark">'+gi(lead==="pro"?"tax":"trends")+'</div>'+
+    '<div class="plmark">'+gi("trends")+'</div>'+
     '<h2>'+esc(held?tierName(held):reasonHead(reason))+'</h2>'+
-    '<p class="small muted">'+(held?plusStatusLine()
-      :"Everything you already use stays free - logging sessions, what your rooms cost you, "+
-       "receipts, and every backup and export. These two add the rest.")+'</p>'+
-    (held
-      ? '<div class="plfeat">'+haveList.map(f=>'<div><b>'+esc(f[0])+'</b> - '+esc(f[1])+'</div>').join("")+'</div>'+
-        (plusHas("pro")?'':'<p class="small muted mt">'+esc(TIER_BLURB.pro)+'</p>'+tierCard("pro"))
-      : TIERS.map(tierCard).join(""))+
+    '<p class="small muted">'+(held?plusStatusLine():esc(TIER_BLURB.pro))+'</p>'+
+    (held?'':'<p class="small muted">Everything you already use stays free - logging sessions, what '+
+      'your rooms cost you, receipts, and every backup and export.</p>')+
+    (owned
+      ? '<div class="plfeat">'+tierSell("pro").map(f=>'<div><b>'+esc(f[0])+'</b> - '+esc(f[1])+'</div>').join("")+'</div>'
+      : proCard())+
+    taxNote+
     (held?'<button class="btn sec full mt" id="plManage">Manage subscription</button>'
      :nat?'<button class="btn ghost full mt" id="plRestore">Restore purchases</button>'+
           '<button class="btn ghost full mt" id="plRedeem">Redeem a code</button>'
@@ -2221,63 +2367,35 @@ function openPlusSheet(reason){
       (lic?' If you have been given a licence key, enter it here.':'')+'</p>'+
       (lic?'<input id="plKey" placeholder="Licence key" autocomplete="off" spellcheck="false">'+
            '<button class="btn full mt" id="plKeyGo">Redeem</button>':''))+
-    '<p class="prev">Auto-renewing annual subscriptions. '+
+    '<p class="prev">Auto-renewing monthly subscription. Tax years are separate one-off purchases. '+
       '<a href="terms.html" target="_blank" rel="noopener">Terms</a> · '+
       '<a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>';
 
-  const q=s=>b.querySelector(s);
-  /* The store owns the price and the period; ask for it rather than shipping a number that
-     goes stale or is wrong in another storefront. */
-  /* A product that does not come back is a REAL state and has to be reported: it means that
-     subscription does not exist in App Store Connect yet, or the store cannot be reached. The
-     silent `return` this used to do left "Checking the price…" on screen for ever, and left
-     Subscribe live so it could only fail. Per rung, because one can be missing on its own -
-     which is exactly what happens on the day the second one is added. */
-  const priceUnavailable=t=>{
-    const el2=q("#plPrice-"+t); if(el2)el2.textContent="Unavailable";
-    const bb=b.querySelector('[data-buy="'+t+'"]'); if(bb)bb.disabled=true;
-  };
-  const showPrice=(t,p)=>{
-    if(!p||!p.price)return priceUnavailable(t);
-    _tierPrice[t]=p.price+(p.period?" / "+p.period:"");
-    const el2=q("#plPrice-"+t); if(el2)el2.textContent=_tierPrice[t];
-  };
-  if(nat&&!plusHas("pro")){
-    if(!nat.products)TIERS.forEach(priceUnavailable);
-    else nat.products().then(p=>{
-      p=p||{};
-      /* Tolerant of the single-product shape this seam used to have: a native build that only
-         knows one product is answering about the top rung. */
-      if(p.price&&!p.pro&&!p.plus)p={pro:p};
-      TIERS.forEach(t=>{ if(plusHas(t))return; showPrice(t,p[t]); });
-    }).catch(()=>TIERS.forEach(t=>{if(!plusHas(t))priceUnavailable(t);}));
+  const q=s2=>b.querySelector(s2);
+  /* The store owns the price and the period; ask for it rather than shipping a number that goes
+     stale or is wrong in another storefront. A product that does not come back is a REAL state and
+     has to be reported - it means the product does not exist in App Store Connect yet, or the
+     store cannot be reached - so the silent return this used to do, which left "…" on screen
+     for ever and Subscribe live so it could only fail, is not an option. */
+  if(nat&&!owned){
+    if(!nat.products)plusPriceUnavailable(b,"pro");
+    else nat.products().then(pr=>{
+      pr=pr||{};
+      if(pr.price&&!pr.pro)pr={pro:pr};       /* tolerant of the single-product shape */
+      plusShowPrice(b,"pro",pr.pro);
+    }).catch(()=>plusPriceUnavailable(b,"pro"));
   }
 
   const done=(msg)=>{
     closeSheet(); toast(msg||"Subscription active"); Sfx.complete();
     renderTabs(); go(curTab(),{keepScroll:true});
   };
-  /* One helper, but the failure message belongs to the BUTTON. This used to say "Nothing to
-     restore" whatever had been pressed, so a purchase that failed because the product does not
-     exist told the reader something both wrong and baffling. */
-  const run=async(btn,fn,okMsg,failMsg)=>{
-    if(!btn)return; const t=btn.textContent; btn.disabled=true; btn.textContent="…";
-    let r={}; try{r=(await fn())||{};}catch(e){r={};}
-    btn.disabled=false; btn.textContent=t;
-    if(r.ok)return done(okMsg);
-    /* Changing your mind is not an error and earns no toast at all. Ask to Buy and SCA are not
-       failures either - they simply have not finished, and saying "couldn’t complete that
-       purchase" to a teenager waiting on a parent's approval would be a lie. */
-    if(r.cancelled)return;
-    if(r.pending)return toast("Waiting for approval - nothing has been charged");
-    toast(failMsg); Sfx.error();
-  };
   b.querySelectorAll("[data-buy]").forEach(btn=>{
-    const t=btn.dataset.buy;
-    btn.onclick=()=>run(btn,()=>nat.purchase(t),
-      tierName(t)+" is active - thank you","Couldn’t complete that purchase");
+    btn.onclick=()=>plusRun(btn,()=>nat.purchase(btn.dataset.buy),done,
+      tierName("pro")+" is active - thank you","Couldn’t complete that purchase");
   });
-  if(q("#plRestore"))q("#plRestore").onclick=()=>run(q("#plRestore"),()=>nat.restore(),
+  if(q("#plTaxMore"))q("#plTaxMore").onclick=()=>openTaxPackSheet(taxPackOnSale());
+  if(q("#plRestore"))q("#plRestore").onclick=()=>plusRun(q("#plRestore"),()=>nat.restore(),done,
     null,"Nothing to restore");
   if(q("#plRedeem"))q("#plRedeem").onclick=()=>{if(nat.redeem)nat.redeem();};
   if(q("#plManage"))q("#plManage").onclick=()=>{if(nat&&nat.manage)nat.manage();else toast("Manage it where you bought it");};
@@ -2286,32 +2404,156 @@ function openPlusSheet(reason){
     const ok=await plusRedeemLicence(q("#plKey").value); btn.disabled=false;
     if(ok)done("Licence accepted"); else {toast("That licence key wasn’t valid");Sfx.error();}
   };
-  openSheet(held?tierName(held):"GroundWork Plus & Pro",b);
+  openSheet(held?tierName(held):"GroundWork Pro",b);
 }
+
+/* ---- price plumbing, shared by both sheets ----
+   Pulled out of openPlusSheet when the tax sheet arrived: two copies of "the store did not answer
+   for this product" eventually disagree about what to do when it happens. */
+function plusPriceUnavailable(host,key){
+  const el2=host.querySelector('#plPrice-'+CSS.escape(key)); if(el2)el2.textContent="Unavailable";
+  const bb=host.querySelector('[data-buy="'+key+'"],[data-buyty="'+key+'"]'); if(bb)bb.disabled=true;
+}
+function plusShowPrice(host,key,p){
+  if(!p||!p.price)return plusPriceUnavailable(host,key);
+  _tierPrice[key]=p.price+(p.period?" / "+p.period:"");
+  const el2=host.querySelector('#plPrice-'+CSS.escape(key)); if(el2)el2.textContent=_tierPrice[key];
+}
+/* One runner, but the failure message belongs to the BUTTON. This used to say "Nothing to restore"
+   whatever had been pressed, so a purchase that failed because the product does not exist told the
+   reader something both wrong and baffling. */
+async function plusRun(btn,fn,done,okMsg,failMsg){
+  if(!btn)return; const t=btn.textContent; btn.disabled=true; btn.textContent="…";
+  let r={}; try{r=(await fn())||{};}catch(e){r={};}
+  btn.disabled=false; btn.textContent=t;
+  if(r.ok)return done(okMsg);
+  /* Changing your mind is not an error and earns no toast at all. Ask to Buy and SCA are not
+     failures either - they simply have not finished, and saying "couldn’t complete that purchase"
+     to a teenager waiting on a parent's approval would be a lie. */
+  if(r.cancelled)return;
+  if(r.pending)return toast("Waiting for approval - nothing has been charged");
+  toast(failMsg); Sfx.error();
+}
+
+/* ---- the tax year sheet ----
+   TWO STEPS, SHOWN AS TWO STEPS. A tax year needs Pro underneath it, and a reader who is told that
+   only after tapping Buy has been mis-sold whatever they end up with. The subscription is step 1
+   and carries a tick when it is already held; the year is step 2. Both are always visible, so the
+   total cost of getting a tax figure is never split across two screens. */
+function openTaxPackSheet(ty){
+  ty=isTaxYearStr(ty)?ty:taxPackOnSale();
+  const nat=plusNative(), through=taxPackThrough(), hasPro=plusHas("pro");
+  const ownedYear=taxYearPaid(ty);
+  const b=el('<div class="plusgate tier-pro"></div>');
+
+  const step=(n,title,doneY,inner)=>'<div class="tstep'+(doneY?" done":"")+'">'+
+    '<div class="tsn">'+(doneY?gi("done"):n)+'</div><div class="tsb">'+
+    '<div class="tst">'+title+'</div>'+inner+'</div></div>';
+
+  b.innerHTML=
+    '<div class="plmark">'+gi("scales")+'</div>'+
+    '<h2>UK tax year '+esc(ty)+'</h2>'+
+    '<p class="small muted">A <b>one-off purchase</b>, not a subscription. It does not expire, and '+
+      'it includes <b>every earlier tax year</b> as well as '+esc(ty)+'.</p>'+
+    (through?'<p class="small muted">'+taxPackStatusLine()+'</p>':'')+
+    step(1,esc(tierName("pro"))+(hasPro?"":" (required first)"),hasPro,
+      hasPro?'<p class="tsd">'+esc(plusStatusLine())+'</p>'
+        :'<p class="tsd">Costs &amp; other income lives in Pro, and a tax figure worked out with no '+
+         'costs taken off it would be wrong every time. That is why the subscription sits underneath '+
+         'the year rather than beside it.</p>'+
+         '<button class="btn sec sm" id="tpPro">See what Pro is ›</button>')+
+    step(2,"The "+esc(ty)+" tax year",ownedYear,
+      ownedYear?'<p class="tsd">Unlocked. '+esc(ty)+' and every earlier year are calculated.</p>'
+        :'<div class="tcname"><span></span><span class="tcprice" id="plPrice-'+esc(ty)+'">'+(nat?"…":"")+'</span></div>'+
+         '<div class="plfeat">'+TAX_PACK_SELL.map(f=>'<div><b>'+esc(f[0])+'</b> - '+esc(f[1])+'</div>').join("")+'</div>'+
+         '<p class="tsd">'+esc(TAX_PACK_PROMISE)+'</p>'+
+         (nat?'<button class="btn full" data-buyty="'+esc(ty)+'"'+(hasPro?'':' disabled')+'>Buy '+esc(ty)+'</button>'
+             :'<p class="tsd">Tax years are sold in the iPhone app.</p>'))+
+    (nat?'<button class="btn ghost full mt" id="tpRestore">Already bought this? Restore purchases</button>':'')+
+    '<p class="prev">One-off purchase, per tax year. Estimates, not tax advice. '+
+      '<a href="terms.html" target="_blank" rel="noopener">Terms</a> · '+
+      '<a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>';
+
+  const q=s2=>b.querySelector(s2);
+  if(nat&&!ownedYear){
+    if(!nat.products)plusPriceUnavailable(b,ty);
+    else nat.products().then(pr=>{
+      plusShowPrice(b,ty,((pr||{}).years||{})[ty]);
+    }).catch(()=>plusPriceUnavailable(b,ty));
+  }
+  const done=(msg)=>{
+    closeSheet(); toast(msg||"Unlocked"); Sfx.complete();
+    renderTabs(); go(curTab(),{keepScroll:true});
+  };
+  if(q("#tpPro"))q("#tpPro").onclick=()=>openPlusSheet("settings");
+  const buy=b.querySelector("[data-buyty]");
+  if(buy)buy.onclick=()=>plusRun(buy,()=>nat.taxPurchase(buy.dataset.buyty),done,
+    ty+" is unlocked - thank you","Couldn’t complete that purchase");
+  if(q("#tpRestore"))q("#tpRestore").onclick=()=>plusRun(q("#tpRestore"),()=>nat.restore(),done,
+    null,"Nothing to restore");
+  openSheet("Tax year "+ty,b);
+}
+
 /* ---- the lock that replaces a paid view in place ----
    A card, not an empty screen: it says what the feature does and offers the one way in. */
 function plusLockHTML(reason,title,blurb){
-  /* The tier of THIS screen, not "the paid tier" - a reader looking at a locked Tax card and a
-     reader looking at a locked Business analytics card are being asked for different money, and
-     the card is the only place that difference can be seen before the sheet opens. Colour and
-     wording come from the same lookup, so they cannot disagree. */
-  const t=featureTier(reason)||"pro";
-  return '<div class="card plusgate tier-'+t+'">'+
-    '<div class="plmark">'+gi(t==="pro"?"tax":"trends")+'</div>'+
+  return '<div class="card plusgate tier-pro">'+
+    '<div class="plmark">'+gi("trends")+'</div>'+
     '<h2>'+esc(title)+'</h2>'+
     '<p class="small muted">'+esc(blurb)+'</p>'+
-    '<button class="btn full mt" data-plus="'+esc(reason)+'">About '+esc(tierName(t))+'</button>'+
+    '<button class="btn full mt" data-plus="'+esc(reason)+'">About '+esc(tierName("pro"))+'</button>'+
     '</div>';
 }
-/* The small chip that names a tier beside a control which is still on screen (the Notes sync
-   button, a feature row in setup). Same colours as the lock cards, from the same lookup. */
+/* The small chip that names the subscription beside a control which is still on screen (the Notes
+   sync button, a feature row in setup). Takes a tier for the sake of its call sites, which read
+   featureTier(k) and would otherwise all need changing back when a second rung returns. */
 function tierTagHTML(t){
-  return '<span class="tiertag tier-'+t+'">'+gi("lock")+' '+esc(tierShort(t))+'</span>';
+  return '<span class="tiertag tier-pro">'+gi("lock")+' '+esc(tierShort(t||"pro")||"Pro")+'</span>';
 }
-/* Wires every lock card inside `host`. Safe to call on hosts that contain none. */
+
+/* ===== The tax mask =====
+   What stands in for a figure the app has NOT worked out.
+
+   IT IS NOT A BLUR. Money › Overview blurs its projection tile: that figure is computed and
+   then hidden, which is right there, because it is the practice's own history and the blur is a
+   shopfront. Here nothing is computed at all. The view layer must not call the tax engine for a
+   locked year - so "needs the tax year to calculate this" is literally true, there is nothing left
+   in the page for anyone to read out of it, and the most expensive part of a render is skipped for
+   a reader who cannot see it anyway.
+
+   The label beside a mask stays honest and unmasked ("On track to owe for 2026-27"), exactly as
+   the locked projection tile does. And unlike .blurfig this is NOT aria-hidden: there is no number
+   being withheld from a screen reader, only a state, and the state is worth announcing. */
+function taxMaskLabel(ty){
+  const why=taxLockReason(ty);
+  return why==="sub"?"Locked. GroundWork Pro is needed as well as the "+ty+" tax year."
+    :why==="both"?"Locked. Needs GroundWork Pro and the "+ty+" tax year to calculate this."
+    :"Locked. Unlock the "+ty+" tax year to calculate this.";
+}
+/* The inline pill, for a figure inside a sentence, a table cell or a KPI slot. */
+function taxMaskHTML(ty,cls){
+  return '<button type="button" class="taxmask tier-pro'+(cls?" "+cls:"")+'" data-taxpack="'+esc(ty)+'"'+
+    ' aria-label="'+esc(taxMaskLabel(ty))+'" title="'+esc(taxMaskLabel(ty))+'">'+
+    gi("lock")+'<span>Locked</span></button>';
+}
+/* The full card, for a screen whose whole point is a figure. */
+function taxMaskCard(ty,title,blurb){
+  const why=taxLockReason(ty);
+  return '<div class="card plusgate tier-pro" id="taxLockCard">'+
+    '<div class="plmark">'+gi("scales")+'</div>'+
+    '<h2>'+esc(title)+'</h2>'+
+    '<p class="small muted">'+esc(blurb)+'</p>'+
+    '<button class="btn full mt" data-taxpack="'+esc(ty)+'">'+
+      (why==="year"?'Unlock '+esc(ty):'What this needs')+'</button>'+
+    '</div>';
+}
+/* Wires every lock card and every mask inside `host`. Safe to call on hosts that contain none. */
 function plusWireLocks(host){
   if(!host)return;
   host.querySelectorAll("[data-plus]").forEach(b=>b.onclick=()=>openPlusSheet(b.dataset.plus));
+  host.querySelectorAll("[data-taxpack]").forEach(b=>b.onclick=(e)=>{
+    e.stopPropagation();                     /* masks sit inside cards that navigate on click */
+    openTaxPackSheet(b.dataset.taxpack);});
 }
 
 /* ---- granted licences (comps, gifts, founding members) ----
@@ -2355,20 +2597,27 @@ async function plusVerifyLicence(key){
 async function plusRedeemLicence(key){
   const pay=await plusVerifyLicence(key);
   if(!pay)return false;
-  /* `t` is the rung the licence grants. Absent means the top one, the same default the rest of
+  /* `t` is the rung the licence grants. Absent means the only one, the same default the rest of
      the gate applies: every licence issued before tiers existed was for everything. */
   plusWrite({active:true,expiresAt:pay.exp||null,source:"licence",tier:tierOf({tier:pay.t}),
              kind:pay.k||"comp",name:pay.n||"",id:pay.id||"",checkedAt:new Date().toISOString()});
+  /* `tx` is the tax year the licence grants through, and it is a SEPARATE grant on purpose: a
+     comped subscription is not automatically comped tax, and issue-licence.mjs asks for the two
+     separately. Through taxPackGrant, so it can only ever raise the watermark. */
+  if(pay.tx)taxPackGrant(pay.tx,"licence");
   return true;
 }
 
-/* ---- colour schemes now sit on the general gate ----
-   Sage is the only free:true entry. paletteLocked() reads plusLocked("palettes") and nothing
-   else, so there is one switch for the whole tier rather than a second one for palettes. */
-function paletteLocked(p){return !!p&&!p.free&&plusLocked("palettes");}
+/* ---- colour schemes are not sold ----
+   They sat on the gate until Sep 2026 and the feature is now switched off in the app entirely
+   (see PALETTES_ENABLED), so gating them would gate something nobody can reach. paletteLocked() is
+   kept as a constant false rather than deleted: the Settings picker and the wizard step both still
+   call it, and they come back together if PALETTES_ENABLED is ever flipped. To sell them again,
+   put "palettes" back into FEATURE_TIER and make this plusLocked("palettes"). */
+function paletteLocked(p){return false;}
 function paletteOptionHTML(p,isOn){const locked=paletteLocked(p);
   return '<button type="button" class="palopt'+(isOn?" on":"")+(locked?" locked":"")+'" data-p="'+p.k+'">'+paletteSwatch(p)+
-    '<span><span class="pn">'+p.n+(locked?' <span class="paltag">\ud83d\udd12 Plus</span>':'')+'</span><span class="pd">'+p.d+'</span></span></button>';}
+    '<span><span class="pn">'+p.n+(locked?' <span class="paltag">\ud83d\udd12 Pro</span>':'')+'</span><span class="pd">'+p.d+'</span></span></button>';}
 
 /* ---- practice branding + feature switches ---- */
 function settings(){if(!S.settings)S.settings={};return S.settings;}
@@ -6030,7 +6279,7 @@ VIEWS.practice=function(){
         '<div><div class="peekh">'+head+'</div><div class="peeks">'+sub+'</div></div></div>';
       body.innerHTML=
         funnelCard('<p class="plkeep">'+gi("done")+' This one is yours to keep.</p>')+
-        '<div class="card plusgate peek tier-'+(featureTier("trends")||"plus")+'"><div class="plmark">'+gi("trends")+'</div>'+
+        '<div class="card plusgate peek tier-'+(featureTier("trends")||"pro")+'"><div class="plmark">'+gi("trends")+'</div>'+
           '<h2>Twenty more, from the same records</h2>'+
           '<p class="small muted">Nothing to set up and nothing to enter - all of it is worked out from sessions you have already logged. Here is what four of them currently say about your practice.</p>'+
           '<div class="mt">'+
@@ -7696,7 +7945,12 @@ function taxBreakdown(c){return '<table>'+
   (c.penGross?trow('Basic-rate band extended by pension',gbpR(c.penGross)):'')+
   trow('Total tax',gbpR(c.total),true)+
   trow('Effective rate',(c.effective*100).toFixed(1)+'%')+'</table>';}
-function taxDetailsSheet(y){const tx=taxForYear(y);const body=el('<div></div>');let html='';
+function taxDetailsSheet(y){
+  /* The working behind a figure is the figure. Nothing here is reachable from a masked row today,
+     but this sheet is opened from four places and a fifth will be added by somebody who has not
+     read this file - so it guards itself rather than trusting its callers. */
+  if(taxYearLocked(y))return openTaxPackSheet(y);
+  const tx=taxForYear(y);const body=el('<div></div>');let html='';
   const bnd=tyBounds(y), bd=profitBreakdown(bnd.start,bnd.end);
   const sched=taxSchedule(y);
   if(tx.status==="complete"){html='<div class="hint">Completed tax year.</div>'+taxBreakdown(tx.calc);}
@@ -7890,6 +8144,16 @@ infoDef("mtd-what","What Making Tax Digital asks for",
   '<div><b>A final declaration</b> - after the year ends, the return proper.</div></div>'+
   '<p class="small mt">It reaches you on turnover, not profit: over £50,000 from April 2026, over £30,000 from April 2027, over £20,000 from April 2028. Below that nothing changes for you yet.</p>'+
   '<p class="small muted">The quarters run 6 Apr–5 Jul, 6 Jul–5 Oct, 6 Oct–5 Jan and 6 Jan–5 Apr, and each update is due about a month after its quarter closes.</p>');
+/* The one sheet that explains the whole purchase model, linked from every mask and from both
+   paywall sheets. It has one job beyond explaining: to leave nobody believing the subscription
+   calculates tax. So it says that in the first line rather than working up to it. */
+infoDef("tax-packages","Why tax is bought by the year",
+  '<p class="small"><b>GroundWork Pro does not work out your tax.</b> Each UK tax year is a separate one-off purchase, and buying one includes every earlier year.</p>'+
+  '<p class="small">A tax calculation is not one thing that stays true. It is fixed to a single year and to where you pay tax: the bands and thresholds, the personal allowance, Class 2 and Class 4, the student-loan plan thresholds and the Scottish rates against the rest of the UK all change every April, and each year keeps its own set for good. Getting 2026-27 right is a different piece of work from getting 2025-26 right, and neither stops being needed once it is done - a return can be amended years later.</p>'+
+  '<div class="acc-work"><div><b>What a tax year buys.</b> What you are on track to owe, what to keep back for it, payments on account and the January balancing payment, what HMRC assessed once you have filed, and that year\u2019s Making Tax Digital export.</div>'+
+  '<div><b>What it does not change.</b> Everything you have entered, on every screen. Your student loan plan, your region, your use-of-home claim and what HMRC assessed are yours and stay editable whether or not a year is unlocked.</div>'+
+  '<div><b>Why Pro as well.</b> Costs &amp; other income lives in Pro, and tax worked out with no costs taken off it would be wrong every time - so the subscription sits underneath the year rather than beside it.</div></div>'+
+  '<p class="small muted">It is still an estimate, and buying a year does not change that. Nothing here is checked by HMRC or filed for you.</p>');
 infoDef("mtd-route","Getting a quarter filed",
   '<p class="small">Three parts, and this app does two of them.</p>'+
   '<div class="acc-work"><div><b>1. The records.</b> Logging sessions here <i>is</i> keeping a digital record - dated, priced, and already sorted into the tax-return box each cost belongs in.</div>'+
@@ -8188,7 +8452,7 @@ VIEWS.money=function(){
     const pj=trOn?anaProjection():null;
     const pjKey=pj?projActive(pj):null;
     const pjLocked=trOn&&plusLocked("trends");
-    const pjTier=featureTier("trends")||"plus";
+    const pjTier=featureTier("trends")||"pro";
     const projTile=!pjKey
       ? '<div class="kpi"><div class="v">'+gbp(fc.lastM)+'</div><div class="l">Last month, in full</div></div>'
       : pjLocked
@@ -8294,15 +8558,11 @@ function wireTaxDisclaimBar(host){
 
 VIEWS.tax=function(){
   const v=el('<div class="view active"></div>');
-  /* The lock comes before the disclaimer. There is no sense making someone acknowledge how the
-     estimates are worked out on a screen they cannot see yet. */
-  if(plusLocked("tax")){
-    v.innerHTML=plusLockHTML("tax","Tax",
-      "You are already logging the sessions. This turns them into what you will owe, what to keep "+
-      "back for it, and when it leaves \u2014 payments on account, the January balancing payment, "+
-      "and the quarterly figures for Making Tax Digital already added up.");
-    plusWireLocks(v); return v;
-  }
+  /* THE TAB IS NOT LOCKED AND MUST NOT BECOME LOCKED AGAIN. It used to render a card describing
+     four screens nobody had seen, which is a poor advert for figures worked out from the reader's
+     own records - and the tab holds their own settings too: their student loan plan, their region,
+     their use-of-home claim, what HMRC assessed. What is bought is the CALCULATION, per tax year,
+     so the whole tab walks and only the computed figures are masked (see taxMaskHTML). */
   /* Nothing is drawn until the disclaimer has been acknowledged. Existing installs never see
      setup again, so this is where they meet it; a fresh install has already agreed in stepTax
      and never lands here. Declining goes Home and asks again next time - see showTaxGate. */
@@ -8333,21 +8593,38 @@ VIEWS.tax=function(){
   const tyTable=years.map(y=>{const rs=der.filter(x=>x.d.taxYear===y);
     const billed=sum(rs,x=>x.d.rate),rec=sum(rs.filter(x=>x.d.clientPaid),x=>x.d.rate),
     over=sum(rs.filter(x=>x.d.overdue),x=>x.d.rate);
-    const tx=taxForYear(y);let taxCell;
-    if(tx.status==="future"){taxCell='<td class="num">–</td>';}
+    /* ONLY THE TAX COLUMN MASKS. Net, Billed, Received, Overdue and the session count are the
+       practice's own record - they are on the Money tab either way, and hiding them would be
+       charging somebody to see their own takings. The rows come from the sessions rather than from
+       the engine, so a locked year still has a row and still says everything true about it;
+       taxForYear() is simply not called for it. */
+    const yLocked=taxYearLocked(y);
+    const tx=yLocked?null:taxForYear(y);let taxCell;
+    if(yLocked){taxCell='<td class="num">'+taxMaskHTML(y)+'</td>';}
+    else if(tx.status==="future"){taxCell='<td class="num">–</td>';}
     else{const val=tx.status==="complete"?tx.display:tx.display[taxMode];
       taxCell='<td class="num"><span class="taxlink" data-y="'+y+'">'+gbp(Math.round(val))+(tx.status==="inprogress"?'*':'')+'</span></td>';}
     /* Tax first, then the profit it was worked out from, then the income behind that. This table
        is read to answer "what do I owe for that year" - the working belongs to the right of the
        answer, not four columns past it where a narrow screen has already scrolled it away. */
-    return '<tr><td><b>'+y+'</b></td>'+taxCell+'<td class="num"><span class="taxlink netlink" data-y="'+y+'">'+gbp(tx.netAll)+'</span></td><td class="num">'+gbp(billed)+'</td><td class="num">'+gbp(rec)+'</td><td class="num">'+(over?gbp(over):"–")+'</td><td class="num">'+rs.length+'</td></tr>';}).join("");
-  const th=monthlyTakeHome();
-  const thBasis = th.status==="inprogress"
+    return '<tr><td><b>'+y+'</b></td>'+taxCell+'<td class="num"><span class="taxlink netlink" data-y="'+y+'">'+gbp(tyNet(y))+'</span></td><td class="num">'+gbp(billed)+'</td><td class="num">'+gbp(rec)+'</td><td class="num">'+(over?gbp(over):"–")+'</td><td class="num">'+rs.length+'</td></tr>';}).join("");
+  /* Take-home is net OF TAX, so it is a tax figure and masks with the rest of them. The engine is
+     not called for a locked year: monthlyTakeHome() reaches taxForYear() itself. */
+  const thLocked=taxYearLocked(curTaxYear());
+  const th=thLocked?null:monthlyTakeHome();
+  const thBasis = thLocked ? "" : th.status==="inprogress"
     ? "Based on "+th.ty+"’s projected net of "+gbp(Math.round(th.annualNet))+" less "+gbp(Math.round(th.annualTax))+" tax."
     : th.status==="complete"
     ? "Based on "+th.ty+"’s net of "+gbp(Math.round(th.annualNet))+" less "+gbp(Math.round(th.annualTax))+" tax."
     : "No income recorded this tax year yet.";
-  const thCard='<div class="card" id="thCard"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">Monthly take-home</h2>'+
+  const thCard=thLocked
+    ? '<div class="card" id="thCard"><h2>Monthly take-home</h2>'+
+      '<div class="kpis mt" style="grid-template-columns:1fr 1fr">'+
+      '<div class="kpi"><div class="v">'+taxMaskHTML(curTaxYear(),"big")+'</div><div class="l">per month, after tax</div></div>'+
+      '<div class="kpi"><div class="v">'+taxMaskHTML(curTaxYear(),"big")+'</div><div class="l">per year, after tax</div></div></div>'+
+      '<p class="small muted mt">What is left once tax is taken off needs the tax worked out first. '+
+      infoLink("tax-packages","Why tax is bought by the year")+'</p></div>'
+    : '<div class="card" id="thCard"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">Monthly take-home</h2>'+
     '<div class="seg" id="thMode" style="display:inline-flex"><button data-th="net" class="'+(thMode==="net"?"on":"")+'">Net of tax</button><button data-th="pension" class="'+(thMode==="pension"?"on":"")+'">After pension</button></div></div>'+
     '<div class="kpis mt" style="grid-template-columns:1fr 1fr"><div class="kpi good"><div class="v" id="thMain"></div><div class="l" id="thMainL"></div></div>'+
     '<div class="kpi"><div class="v" id="thYr"></div><div class="l" id="thYrL"></div></div></div>'+
@@ -8363,7 +8640,8 @@ VIEWS.tax=function(){
      reading an estimate. What stays here is the one line saying which basis these figures are
      on \u2014 that has to travel with the numbers. */
   body.innerHTML=taxDisclaimBar()+thCard+c2Card+
-    '<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">By tax year</h2><div class="seg" id="taxmode" style="display:inline-flex"><button data-m="proj" class="'+(taxMode==="proj"?"on":"")+'">Projected</button><button data-m="todate" class="'+(taxMode==="todate"?"on":"")+'">To date</button></div></div><div class="rawscroll"><table><thead><tr><th>Year</th><th class="num">Tax</th><th class="num">Net</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Overdue</th><th class="num">Sess</th></tr></thead><tbody>'+tyTable+'</tbody></table></div><p class="small muted"><b>'+esc(basisLabel())+'.</b> Tap a Tax or Net figure for the working. <b>*</b> the year in progress is shown as '+(taxMode==="proj"?"a projection for the whole year":"tax on income so far")+'. '+infoLink("tax-table","What each column means")+' &nbsp;·&nbsp; <span class="taxlink" id="toBasis">Change how figures are counted ›</span></p></div>';
+    '<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">By tax year</h2><div class="seg" id="taxmode" style="display:inline-flex"><button data-m="proj" class="'+(taxMode==="proj"?"on":"")+'">Projected</button><button data-m="todate" class="'+(taxMode==="todate"?"on":"")+'">To date</button></div></div><div class="rawscroll"><table><thead><tr><th>Year</th><th class="num">Tax</th><th class="num">Net</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Overdue</th><th class="num">Sess</th></tr></thead><tbody>'+tyTable+'</tbody></table></div><p class="small muted"><b>'+esc(basisLabel())+'.</b> Tap a Tax or Net figure for the working. <b>*</b> the year in progress is shown as '+(taxMode==="proj"?"a projection for the whole year":"tax on income so far")+'. '+
+    (years.some(y=>taxYearLocked(y))?'A locked Tax figure has not been worked out - '+infoLink("tax-packages","tax is bought by the year")+'. ':'')+' '+infoLink("tax-table","What each column means")+' &nbsp;·&nbsp; <span class="taxlink" id="toBasis">Change how figures are counted ›</span></p></div>';
   wireTaxDisclaimBar(body);
   /* [data-y] only - .taxlink is also the style for the pension link, which is not a year. */
   body.querySelectorAll(".taxlink[data-y]").forEach(elx=>elx.onclick=()=>{
@@ -8392,9 +8670,14 @@ VIEWS.tax=function(){
     const penLink=set?(thMode==="pension"?"Edit pension ›":("Pension "+gbp(pen)+"/mo ›")):"Set a pension contribution ›";
     body.querySelector("#thNote").innerHTML=thBasis+penTxt+' <span class="taxlink" id="editPen">'+penLink+'</span>';
     const ep=body.querySelector("#editPen");if(ep)ep.onclick=()=>editPension(()=>go("tax",{keepScroll:true}));}
-  body.querySelector("#thMode").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{thMode=bt.dataset.th;
-    body.querySelector("#thMode").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));paintTH();});
-  paintTH();
+  /* The take-home card renders as a pair of masks when the year is locked, and has neither a mode
+     switch nor anything to paint. */
+  if(!thLocked){
+    body.querySelector("#thMode").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{thMode=bt.dataset.th;
+      body.querySelector("#thMode").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));paintTH();});
+    paintTH();
+  }
+  plusWireLocks(body);
   wireSegBar(v,"taxseg","tax",()=>go("tax",{keepScroll:true}));
   return v;
 };
@@ -8491,8 +8774,49 @@ function taxMoments(){
 }
 
 function drawNow(host){
-  const ty=curTaxYear(), L=taxLiability(ty), pot=taxPot(), nxt=nextTaxPayment();
+  const ty=curTaxYear();
   const money=x=>gbp(Math.round(x));
+  /* ---- the locked year ----
+     EVERY ENGINE CALL ON THIS SCREEN IS BELOW THIS BRANCH, and that is the point of putting it
+     first rather than masking each figure where it is drawn. Nothing is computed, so there is
+     nothing in the page to read out of, "needs the tax year to calculate this" is literally true,
+     and the most expensive render in the app costs nothing for a reader who cannot see it.
+
+     Seasonal moments go with them. They are not decoration - every one of them quotes an amount
+     (taxMoments reaches taxPot() and nextTaxPayment() to build them), so a moment on a locked year
+     would be the one place a masked figure leaked out in a sentence. The jobs behind them do not
+     disappear: Pot & payments still lists what HMRC said for any year that IS unlocked. */
+  if(taxYearLocked(ty)){
+    const why=taxLockReason(ty);
+    const slot=(id,head,sub)=>'<div class="card nowcard" id="'+id+'">'+
+      '<div class="row" style="justify-content:space-between;align-items:baseline;gap:8px">'+
+        '<h2 style="margin:0">'+head+'</h2></div>'+
+      '<div class="nv">'+taxMaskHTML(ty,"big")+'</div><div class="nl">'+sub+'</div></div>';
+    host.innerHTML=taxDisclaimBar()+
+      taxMaskCard(ty,"Your "+ty+" figures are not calculated yet",
+        why==="year"
+          ? "Everything on this tab is set up and ready. Unlocking the "+ty+" tax year works out what "+
+            "you are on track to owe, what to keep back for it, and when it leaves - and every earlier "+
+            "tax year with it."
+          : "Working out tax needs GroundWork Pro, which is where what the practice costs you is "+
+            "entered, and then the "+ty+" tax year itself. Nothing you have entered is affected.")+
+      '<div data-coach="now">'+
+        slot("nowOwe","On track to owe for "+esc(ty),"worked out from what you have been paid")+
+        slot("nowPot","Keep in your pot","what should be set aside today")+
+        slot("nowNext","Next payment","the next date money leaves your account")+
+      '</div>'+
+      '<p class="small muted center" style="margin:0 0 14px">'+
+        '<span class="taxlink" id="nowPay">What HMRC has asked for ›</span>&nbsp; · &nbsp;'+
+        'Counted on the '+esc(basisLabel().toLowerCase())+'</p>'+
+      '<p class="small muted center" style="margin:-8px 0 14px">'+
+        'Entering what HMRC assessed, your student loan plan, your region and your use-of-home claim '+
+        'are all still open on the other screens. '+infoLink("tax-packages","Why tax is bought by the year")+'</p>';
+    wireTaxDisclaimBar(host); wireInfo(host); plusWireLocks(host);
+    const np=host.querySelector("#nowPay");
+    if(np)np.onclick=()=>go("tax",{seg:"payments"});
+    return;
+  }
+  const L=taxLiability(ty), pot=taxPot(), nxt=nextTaxPayment();
   const moments=taxMoments();
   /* A moment is a job, not a statistic - so it gets a title, a sentence and one button, and a
      way to say "not this year" that survives a reload. */
@@ -9174,13 +9498,23 @@ function mtdExport(ty,fmt){
       than useless.
    ============================================================================ */
 function drawPayments(host){
-  const t=today(), pot=taxPot(), line=taxTimeline(), cfg=pot.cfg;
+  const t=today(), ty=curTaxYear();
+  /* The pot is entirely about the year in progress, so it locks as a unit and taxPot() is not
+     called at all. The TIMELINE is different: it is assembled by due date across every year, and
+     which rows exist at all is something only the engine knows - so it is built, and then each row
+     is masked on the tax year ITS MONEY BELONGS TO, never on the date it falls due. That
+     distinction is the whole reason this screen assembles by due date: one 31 January is usually
+     two years' money, and somebody who has bought last year but not this one has genuinely paid to
+     see one half of that date and not the other. */
+  const potLocked=taxYearLocked(ty);
+  const pot=potLocked?null:taxPot(), line=taxTimeline(), cfg=taxPotCfg();
   const money=x=>gbp(Math.round(x));
   const real=line.filter(r=>Math.round(r.total)!==0);
   const due=real.filter(r=>r.state==="owed"||r.state==="upcoming");
   const unknown=real.filter(r=>r.state==="unknown").reverse();
   const settled=real.filter(r=>r.state==="paid").reverse();
 
+  const rowLock=r=>{const ys=r.parts.map(p=>p.ty).filter(y=>taxYearLocked(y));return ys.length?ys.sort().pop():null;};
   const rowHTML=r=>{
     const days=Math.round((r.due-t)/86400000);
     const chip=r.state==="paid"?'<span class="chip y">paid</span>'
@@ -9189,16 +9523,26 @@ function drawPayments(host){
       :days<=60?'<span class="chip f">in '+days+' day'+(days===1?'':'s')+'</span>'
       :'<span class="chip na">in '+Math.round(days/30)+' months</span>';
     const neg=r.total<0;
+    /* A date is masked if ANY of the years it settles is locked - a part-figure against a total
+       that is not the total would be worse than saying nothing. The DATE is never masked: when
+       money leaves the account is not a calculation, and a due date the reader cannot see is the
+       one thing that would cost them a penalty. */
+    const lk=rowLock(r);
     return '<div class="list-item" data-due="'+esc(r.iso)+'"><div class="li-main">'+
       '<div class="li-title">'+fmtD(r.due)+' '+chip+'</div>'+
-      '<div class="li-sub">'+r.parts.map(p=>esc(taxPartLabel(p))+' · '+money(Math.abs(p.amount))).join('<br>')+'</div></div>'+
-      '<div class="li-right"><b style="color:var(--'+(neg?'good':'brand-dark')+')">'+(neg?'+':'')+money(Math.abs(r.total))+'</b></div></div>';
+      /* Plain words rather than a second pill in the breakdown line: the row already carries one
+         on its total, and two gold pills on one row read as two separate things to buy. */
+      '<div class="li-sub">'+r.parts.map(p=>esc(taxPartLabel(p))+' · '+
+        (taxYearLocked(p.ty)?'<i>not calculated</i>':money(Math.abs(p.amount)))).join('<br>')+'</div></div>'+
+      (lk?'<div class="li-right">'+taxMaskHTML(lk)+'</div>'
+        :'<div class="li-right"><b style="color:var(--'+(neg?'good':'brand-dark')+')">'+(neg?'+':'')+money(Math.abs(r.total))+'</b></div>')+
+      '</div>';
   };
 
   /* The estimate that sets your instalments is last year's, and last year is not this year.
      HMRC never adjusts them on its own -- either you claim to reduce them, or the difference
      turns up in January. Worth saying, but only when the gap is big enough to act on. */
-  const drift=poaDriftNote(curTaxYear());
+  const drift=potLocked?null:poaDriftNote(curTaxYear());
   const driftMsg=!drift?'':
     '<div class="vmsg '+(drift.over?'warn':'ok')+'" style="margin-top:12px">'+
     (drift.over
@@ -9212,7 +9556,29 @@ function drawPayments(host){
     '</div>';
 
   const bufOpts=[0,5,10,15,20,25];
-  const potCard='<div class="card" data-coach="pot"><h2>Your tax pot</h2>'+
+  /* The buffer and the balance stay editable even while the target is masked: both are the
+     therapist's own settings, one of them is a number she typed, and a setting she cannot reach is
+     a setting the app has taken off her over money. Only the worked-out figures mask. */
+  const potLockedCard='<div class="card" data-coach="pot"><h2>Your tax pot</h2>'+
+    '<p class="small muted">What to keep back so the bill is already covered when it lands - and, just as importantly, what is <i>not</i> tax money and is yours to spend.</p>'+
+    '<div class="kpis mt">'+
+      '<div class="kpi"><div class="v">'+taxMaskHTML(ty,"big")+'</div><div class="l">of everything you’re paid, set aside</div></div>'+
+      '<div class="kpi"><div class="v">'+taxMaskHTML(ty,"big")+'</div><div class="l">should be put by today</div></div>'+
+    '</div>'+
+    '<p class="small muted mt">Working out what to keep back means working out the tax first. '+
+      infoLink("tax-packages","Why tax is bought by the year")+'</p>'+
+    '<label style="margin-top:16px">Your buffer</label>'+
+    '<div class="seg" id="bufSeg" style="display:inline-flex;flex-wrap:wrap">'+
+      bufOpts.map(pc=>'<button data-b="'+pc+'" class="'+(cfg.bufferPct===pc?"on":"")+'">'+pc+'%</button>').join("")+'</div>'+
+    '<div class="row mt" style="gap:8px;align-items:center"><span class="small muted">or set your own</span>'+
+      '<input type="number" min="0" max="100" step="1" id="bufIn" value="'+esc(cfg.bufferPct)+'" style="max-width:110px;margin:0"></div>'+
+    '<label style="margin-top:16px">What’s actually in your tax account?</label>'+
+    '<div class="row" style="gap:8px;align-items:center">'+
+      '<input type="number" min="0" step="1" id="potBal" placeholder="Not recorded" value="'+(cfg.balance==null?"":esc(cfg.balance))+'" style="margin:0">'+
+      '<button class="btn sec sm" id="potBalSave">Save</button></div>'+
+    '<p class="prev">'+(cfg.balanceAt?'Last updated '+fmtD(cfg.balanceAt)+'. ':'')+'Optional - it only ever tells you where you stand. Nothing here moves any money.</p>'+
+    '</div>';
+  const potCard=potLocked?potLockedCard:'<div class="card" data-coach="pot"><h2>Your tax pot</h2>'+
     '<p class="small muted">What to keep back so the bill is already covered when it lands - and, just as importantly, what is <i>not</i> tax money and is yours to spend.</p>'+
     '<div class="kpis mt">'+
       '<div class="kpi good"><div class="v">'+Math.round(pot.rate*100)+'%</div><div class="l">of everything you’re paid, set aside</div></div>'+
@@ -9264,14 +9630,23 @@ function drawPayments(host){
 
   /* Years that have ended: the estimate against what HMRC actually assessed. */
   const done=taxPlanYears().filter(y=>tyBounds(y).end<t).reverse();
-  const actRow=y=>{const L=taxLiability(y), rec=taxYearRec(y)||{};
-    const gap=(L.src==="actual")?(L.total-L.estimate):0;
+  /* ENTERING WHAT HMRC ASSESSED IS NEVER LOCKED. It is the therapist's own figure off her own tax
+     calculation, and a paywall between somebody and a number they were sent by HMRC would be the
+     data plane in all but name. What masks is the app's own ESTIMATE beside it, and the comparison
+     between the two - both of which are the engine's work. */
+  const actRow=y=>{const yl=taxYearLocked(y);
+    const L=yl?null:taxLiability(y), rec=taxYearRec(y)||{}, act=numOrNull(rec.liability);
+    const gap=(!yl&&L.src==="actual")?(L.total-L.estimate):0;
     return '<div class="list-item" data-act="'+esc(y)+'"><div class="li-main">'+
-      '<div class="li-title">'+esc(y)+(rec.filed?' <span class="chip s">filed</span>':'')+(L.src==="actual"?' <span class="chip y">🗄 from HMRC</span>':'')+'</div>'+
-      '<div class="li-sub">'+(L.src==="actual"
+      '<div class="li-title">'+esc(y)+(rec.filed?' <span class="chip s">filed</span>':'')+
+        ((!yl&&L.src==="actual")||(yl&&act!=null)?' <span class="chip y">🗄 from HMRC</span>':'')+'</div>'+
+      '<div class="li-sub">'+(yl
+        ? (act!=null?'Assessed '+money(act)+' · the app’s own estimate '+taxMaskHTML(y)
+                    :'Nothing entered from HMRC yet · the app’s own estimate '+taxMaskHTML(y))
+        : L.src==="actual"
         ? 'Assessed '+money(L.total)+' · the app estimated '+money(L.estimate)+(Math.abs(gap)>=1?' ('+(gap>0?'+':'−')+money(Math.abs(gap))+')':' - spot on')
         : 'Estimated '+money(L.estimate)+' · nothing entered from HMRC yet')+'</div></div>'+
-      '<div class="li-right"><span class="small muted">'+(L.src==="actual"?'edit':'enter')+' ›</span></div></div>';};
+      '<div class="li-right"><span class="small muted">'+(act!=null?'edit':'enter')+' ›</span></div></div>';};
   const actCard='<div class="card"><h2>What HMRC actually said</h2>'+
     '<p class="small muted">Until a return is filed everything here is the app’s own estimate. Once you have your tax calculation, put the real figure in and every number above switches to it. '+infoLink("actuals","When to do this")+'</p>'+
     (done.length?'<div style="padding:0 2px">'+done.map(actRow).join("")+'</div>'
@@ -9282,8 +9657,11 @@ function drawPayments(host){
       '<p class="prev">Four short questions, straight off your tax calculation.</p>':'')+
     '</div>';
 
-  host.innerHTML=potCard+dueCard+actCard;
-  wireInfo(host);
+  host.innerHTML=(potLocked?taxMaskCard(ty,"Your "+ty+" figures are not calculated yet",
+      "Every date below is real and every setting on this screen still works. What needs the "+ty+
+      " tax year is the arithmetic: the pot, the instalments and what each date comes to.")
+    :'')+potCard+dueCard+actCard;
+  wireInfo(host); plusWireLocks(host);
   host.querySelectorAll("[data-due]").forEach(n=>n.onclick=()=>taxDueSheet(n.dataset.due));
   host.querySelectorAll("[data-act]").forEach(n=>n.onclick=()=>taxActualSheet(n.dataset.act));
   const pc=host.querySelector("#pyClaim");
@@ -9320,6 +9698,11 @@ function poaDriftNote(ty){
 /* One due date, everything behind it, and the one action that belongs to it: ticking it off. */
 function taxDueSheet(iso){
   const row=taxTimeline().find(r=>r.iso===iso); if(!row)return;
+  /* Every figure in this sheet is a breakdown of the amount, so a date settling a locked year has
+     nothing to show. Ticking it off is not offered either: recording a payment against an amount
+     the reader cannot see is a record nobody could check. */
+  const lockY=row.parts.map(p=>p.ty).filter(y=>taxYearLocked(y)).sort().pop();
+  if(lockY)return openTaxPackSheet(lockY);
   const body=el('<div></div>'), t=today();
   const money=x=>gbp(Math.round(x));
   const days=Math.round((row.due-t)/86400000);
@@ -9502,13 +9885,23 @@ function drawMTD(host){
     (boxRows?'<div class="rawscroll"><table><thead><tr><th>Box</th><th>What HMRC calls it</th><th class="num">'+ty+'</th></tr></thead><tbody>'+boxRows+'</tbody></table></div>'
             :'<p class="muted small">No costs recorded for '+ty+' yet.</p>')+
     '<p class="small muted mt">Whether MTD applies to you yet depends on your turnover. Under the threshold you carry on filing one return a year \u2014 these are still your year added up a quarter at a time. '+infoLink("mtd-what","The thresholds")+'</p></div>';
-  /* Redundant while the whole Tax tab is locked, and kept deliberately: the export is its own
-     line in the tier, and this is the guard that survives Tax ever being unlocked separately.
-     Note it gates the BUTTONS \u2014 mtdExport() itself stays pure, because tests call it. */
+  /* THE FIGURES ABOVE STAY VISIBLE AND THE FILE IS WHAT IS BOUGHT, and that line is deliberate.
+     A quarter's turnover and costs are the practice's own money added up - they are on the Money
+     tab either way - while what MTD actually needs is a FILE with a digital link through to the
+     submission: a figure a human reads off a screen and retypes breaks that link and is precisely
+     what the rules prohibit (docs/tax-positioning-2026-09.md). So the export follows the tax year,
+     and the quarter that file covers is the year that has to have been bought.
+     It gates the BUTTONS \u2014 mtdExport() itself stays pure, because tests call it directly. */
   const expBtn=(sel,fmt)=>{const b=host.querySelector(sel);
-    if(b)b.onclick=()=>{if(plusLocked("mtd"))return openPlusSheet("mtd");mtdExport(ty,fmt);};};
+    if(b)b.onclick=()=>{if(taxYearLocked(ty))return openTaxPackSheet(ty);mtdExport(ty,fmt);};};
   expBtn("#mtdExpCsv","csv"); expBtn("#mtdExpJson","json");
-  wireInfo(host);
+  if(taxYearLocked(ty)){
+    const row=host.querySelector("#mtdExpCsv");
+    if(row&&row.parentNode)row.parentNode.insertAdjacentHTML("afterend",
+      '<div class="small muted" style="margin-top:8px">'+taxMaskHTML(ty)+
+      ' Exporting '+esc(ty)+'\u2019s quarters needs that tax year. The figures above are your own and stay as they are.</div>');
+  }
+  wireInfo(host); plusWireLocks(host);
   host.querySelectorAll(".qrow").forEach(tr=>tr.onclick=()=>{
     const q=mtdQuarters(ty).find(x=>x.n===+tr.dataset.q);
     periodBreakdownSheet("Quarter "+q.n+" \u00b7 "+q.label,q.from,q.to,
@@ -9926,21 +10319,27 @@ function rawPanel(){
 /* Hidden entirely where nothing is gated and nothing is owned \u2014 on the Phase 1 web build that
    is everyone, and a subscription card for something you cannot buy here is just noise. */
 function plusSettingsCardHTML(){
-  if(!plusGateOn()&&!plusActive())return "";
-  const held=plusTier();
-  /* Both rungs, in ladder order, each in a line - this card is where somebody checks what they
-     are paying for and what the other one is, and a single blended sentence answered neither.
-     Colour schemes were in it until Sep 2026 and are now switched off entirely (see
-     PALETTES_ENABLED): a tier that lists something nobody can reach reads as padding. */
-  const line=t=>'<p class="small muted" style="margin:8px 0 0"><b class="tier-'+t+'" style="color:var(--tgink)">'+
-      esc(tierName(t))+'</b>'+(plusHas(t)?' '+gi("done"):'')+' - '+
-      (t==="pro"?'everything in Plus, and ':'')+esc(tierSell(t).map(f=>f[0]).join(" \u00b7 "))+'.</p>';
-  return '<div class="card"><h2>Subscription</h2>'+
-    '<p class="small muted">'+plusStatusLine()+'</p>'+
-    TIERS.map(line).join("")+
-    '<p class="small muted" style="margin:8px 0 0">Logging, what your rooms cost you, receipts and every backup and export stay free.</p>'+
-    '<button class="btn '+(held?"sec ":"")+'full mt" data-plus="settings">'+
-      (held?(plusHas("pro")?"View details":"View details or upgrade"):"See what these are")+'</button></div>';
+  if(!plusGateOn()&&!plusActive()&&!taxPackAny())return "";
+  const held=plusTier(), through=taxPackThrough(), onSale=taxPackOnSale();
+  /* TWO THINGS, TWO LINES, ALWAYS BOTH. This is where somebody checks what they are paying for,
+     and it is therefore the last place a reader could still be carrying the wrong idea about what
+     the subscription includes. So the tax line is present even when nothing has been bought -
+     "No tax year bought yet" is the answer that prevents the misunderstanding, and leaving the
+     line out until there is something to show is exactly how it would survive. */
+  return '<div class="card"><h2>What you are paying for</h2>'+
+    '<p class="small muted" style="margin:0 0 10px"><b class="tier-pro" style="color:var(--tgink)">'+
+      esc(tierName("pro"))+'</b>'+(held?' '+gi("done"):'')+' - '+
+      esc(tierSell("pro").map(f=>f[0]).join(" \u00b7 "))+'.<br>'+
+      '<span class="muted">'+plusStatusLine()+'</span></p>'+
+    '<p class="small muted" style="margin:0 0 10px"><b class="tier-pro" style="color:var(--tgink)">UK tax years</b>'+
+      (through?' '+gi("done"):'')+' - bought one year at a time, on top of Pro. Pro on its own does '+
+      'not work out your tax.<br><span class="muted">'+taxPackStatusLine()+'</span></p>'+
+    '<p class="small muted" style="margin:0 0 10px">Logging, what your rooms cost you, receipts and every backup and export stay free.</p>'+
+    '<div class="row" style="gap:8px;flex-wrap:wrap">'+
+      '<button class="btn '+(held?"sec ":"")+'sm" data-plus="settings" style="flex:1 1 140px">'+
+        (held?"Manage subscription":"See what Pro is")+'</button>'+
+      '<button class="btn '+(held?"":"sec ")+'sm" data-taxpack="'+esc(onSale)+'" style="flex:1 1 140px">'+
+        (through&&through>=onSale?"Tax years":"Tax year "+esc(onSale))+'</button></div></div>';
 }
 /* Wires the one shared "which section am I in" bar for Settings. Driven by scroll position
    rather than an IntersectionObserver on each group, because groups are independent <details>
@@ -10214,7 +10613,7 @@ VIEWS.settings=function(){
     await commit("Renamed practice to “"+n+"”");applyBranding();toast("Saved");Sfx.pop();};
   v.querySelectorAll("#setPalMain .palopt, #setPal .palopt").forEach(b=>b.onclick=async()=>{
     const k=b.dataset.p,p=PALETTES.find(x=>x.k===k);
-    if(paletteLocked(p)){openPlusSheet("palettes");return;}
+    if(paletteLocked(p)){openPlusSheet("palettes");return;}   /* never true while palettes are off */
     applyPalette(k);settings().palette=k;
     v.querySelectorAll("#setPalMain .palopt, #setPal .palopt").forEach(x=>x.classList.toggle("on",x.dataset.p===k));
     Sfx.tick();await commit("Colour scheme: "+k);});
@@ -12840,12 +13239,17 @@ function revealOffer(step){
      highest one is the honest answer if one ever does). */
   const stepTier=step.keys.filter(k=>plusLocked(k))
     .reduce((a,k)=>tierRank(featureTier(k))>tierRank(a)?featureTier(k):a,null);
+  /* Tax is not on the subscription, so the chip above cannot speak for it: this step reveals
+     `tax` AND `finances`, and saying only "part of Pro" would leave a reader who subscribes
+     expecting a figure. Same rule as everywhere else - state the exclusion, do not omit it. */
+  const stepTax=step.keys.some(k=>k==="tax"||k==="mtd")&&taxYearLocked(curTaxYear());
   const body=el('<div></div>');
   body.innerHTML='<div style="text-align:center;font-size:40px;line-height:1">'+step.emoji+'</div>'+
     '<h3 style="text-align:center;margin:8px 0 4px">'+esc(step.title)+'</h3>'+
     '<p class="small muted" style="text-align:center">'+step.sub+'</p>'+
     fs.map(f=>'<div class="vmsg ok mt">'+esc(f.n)+' - '+f.d+'</div>').join("")+
     (stepTier?'<div class="vmsg warn mt">Part of '+esc(tierName(stepTier))+'.</div>':'')+
+    (stepTax?'<div class="vmsg warn mt">Working out the tax itself is bought a tax year at a time, on top of '+esc(tierName("pro"))+'.</div>':'')+
     '<button class="btn full mt" id="rvYes">'+(fs.length>1?"Turn them on":"Turn it on")+'</button>'+
     '<button class="btn ghost full mt" id="rvNo">Not for me</button>'+
     '<p class="prev" style="text-align:center">Either way you can change your mind in <b>'+gi("settings")+' Settings › Features</b>.</p>';
@@ -14613,17 +15017,23 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
   const Splash = P("SplashScreen");
   if(Splash) requestAnimationFrame(()=>setTimeout(()=>{ Splash.hide().catch(()=>{}); },80));
 
-  /* ================= GroundWork Plus / Pro (StoreKit) =================
+  /* ================= GroundWork Pro + tax years (StoreKit) =================
      Shared code never touches Capacitor directly: it reads window.GWPlusNative and takes the
-     web path when that is absent. Everything here only ever REFRESHES the tt_plus cache, so
-     plusActive() stays synchronous, offline-tolerant, and safe to call from a render path.
-     See docs/monetisation.md §4.2.
+     web path when that is absent. Everything here only ever REFRESHES the caches, so
+     plusActive() and taxYearPaid() stay synchronous, offline-tolerant, and safe to call from a
+     render path. See docs/monetisation.md §4.
 
-     TWO PRODUCTS SINCE SEP 2026, in one App Store Connect subscription group so that buying the
-     upper rung while holding the lower is an upgrade Apple prorates rather than two live
-     subscriptions. The tier travels as a STRING from the plugin ("plus" | "pro"), never as a
-     product id: ids are opaque, one of them says "plus" and sells Pro for historical reasons,
-     and nothing in the web layer should ever have to know that. */
+     TWO KINDS OF THING, AND ONE STATUS CALL THAT ANSWERS FOR BOTH. The subscription (monthly, or
+     the legacy annual) and the non-consumable tax years come back from one plusStatus(), so a
+     single refresh can never leave one of them stale against the other. The tier travels as a
+     STRING and the tax entitlement as a TAX YEAR ("2026-27"), never as product ids: ids are
+     opaque, one of them says "plus" and sells Pro for historical reasons, and nothing in the web
+     layer should ever have to know that.
+
+     THE TAX WATERMARK IS RAISED, NEVER SET. taxPackGrant() takes the max, so a status call that
+     saw fewer entitlements than last time - a slow sync, a partial restore - cannot take a year
+     away from somebody who paid for it. There is deliberately no clear path for it at all: a
+     non-consumable is owned for good, and the only thing that could revoke one here is a bug. */
   const applyPlus = (r, allowClear) => {
     try{
       if(!r || typeof r.active === "undefined") return plusActive();
@@ -14643,21 +15053,45 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
       return plusActive();
     }catch(e){ return plusActive(); }
   };
+  /* The legacy annual subscription entitled the whole tax engine, so a subscriber who updates into
+     this build must not find their figures masked on the morning it lands. The plugin reports
+     `legacyTaxThrough` for exactly that: the tax year their current period runs to. It goes through
+     the same monotonic grant as a real purchase, so it can only ever add. Derived from StoreKit on
+     every status call rather than written once, which is what makes it survive a new phone. */
+  const applyTax = (r) => {
+    try{
+      if(!r) return taxPackThrough();
+      if(r.taxThrough) taxPackGrant(r.taxThrough, "storekit", r.taxIds||null);
+      if(r.legacyTaxThrough) taxPackGrant(r.legacyTaxThrough, "legacy");
+      return taxPackThrough();
+    }catch(e){ return taxPackThrough(); }
+  };
   if(GW && GW.plusStatus){
     window.GWPlusNative = {
-      /* {plus:{price,period,title}, pro:{…}} - one entry per rung the store could answer for.
-         A rung the store does not know about is simply absent, and the sheet says so for that
-         rung alone: on the day the second product is added, the first must keep working. */
+      /* {pro:{price,period,title}, years:{"2026-27":{…}}} - one entry per product the store could
+         answer for. A product the store does not know about is simply absent, and the sheet says
+         so for that one alone: on the day a new tax year is added everything else must keep
+         working, and in the week before it is created the subscription must still sell. */
       products: async () => { try{ const p = await GW.plusProducts(); return (p && p.found) ? p : null; }catch(e){ return null; } },
       /* {ok, cancelled, pending} rather than a bare boolean: the sheet has to tell a real
          failure apart from someone changing their mind, and from Ask to Buy still waiting. */
       purchase: async (tier) => {
         try{ const r = (await GW.plusPurchase({ tier: tier || "pro" })) || {};
+             applyTax(r);
              return { ok: applyPlus(r, false), cancelled: !!r.cancelled, pending: !!r.pending }; }
         catch(e){ return { ok: plusActive() }; }
       },
+      /* A tax year is a non-consumable, so there is no allowClear question to answer and no expiry
+         to carry - it either came back owned or it did not. */
+      taxPurchase: async (ty) => {
+        try{ const r = (await GW.taxPurchase({ year: ty })) || {};
+             applyTax(r);
+             return { ok: taxYearPaid(ty), cancelled: !!r.cancelled, pending: !!r.pending }; }
+        catch(e){ return { ok: false }; }
+      },
       restore:  async () => {
-        try{ return { ok: applyPlus(await GW.plusRestore(), true) }; }
+        try{ const r = await GW.plusRestore(); applyTax(r);
+             return { ok: applyPlus(r, true) || taxPackAny() }; }
         catch(e){ return { ok: plusActive() }; }
       },
       redeem:   () => { try{ GW.plusRedeem(); }catch(e){} },
@@ -14670,8 +15104,8 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
       }
     };
     const refreshPlus = async () => {
-      /* Offline is not a lapse: a thrown call leaves the cache exactly as it was. */
-      try{ applyPlus(await GW.plusStatus(), true); }catch(e){}
+      /* Offline is not a lapse: a thrown call leaves both caches exactly as they were. */
+      try{ const r = await GW.plusStatus(); applyTax(r); applyPlus(r, true); }catch(e){}
     };
     refreshPlus();
     /* A subscription can renew, lapse, or be restored on another device while this one slept. */
