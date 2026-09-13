@@ -215,6 +215,91 @@ async function inPage() {
       currentRows.every((r) => r.owed === 0) || currentRows[0].drift == null ||
       currentRows.every((r) => r.drift == null || currentRows[0].drift >= r.drift));
   }
+
+  /* ===== Calendar export: the buttons, and what comes out of them =====
+     scripts/check-calendar.mjs proves the .ics itself is well formed. This is the other half -
+     that the controls exist, are wired, and hand the file the real download() would have taken.
+     The two halves matter separately: a perfect .ics builder nothing calls ships nothing. */
+  {
+    const realDownload = window.download;
+    let grabbed = null;
+    window.download = (name, text, type) => { grabbed = { name, text, type }; };
+    const events = (t) => (t || "").split("\r\n").filter((l) => l === "BEGIN:VEVENT").length;
+
+    /* -- one session, from its own form -- */
+    const live = S.sessions.find((s) => s.date && !isCancelled(s));
+    if (!live) skip("calendar: single session", "this practice has no uncancelled dated session");
+    else {
+      grabbed = null;
+      sessionForm(live); await sleep(80);
+      const btn = document.querySelector("#sheetBody #f_ics");
+      ok("the session form offers Add to my calendar", !!btn);
+      if (btn) {
+        btn.click(); await sleep(60);
+        ok("it produces an .ics", !!grabbed && /\.ics$/.test(grabbed.name), grabbed && grabbed.name);
+        ok("served as text/calendar", !!grabbed && grabbed.type === "text/calendar", grabbed && grabbed.type);
+        ok("holding exactly one event", events(grabbed && grabbed.text) === 1, events(grabbed && grabbed.text));
+        /* The privacy rule, asserted against a real practice rather than a hand-made session. */
+        ok("carrying the client code and no name",
+          !!grabbed && grabbed.text.includes("SUMMARY:" + live.client) && !/DESCRIPTION/.test(grabbed.text));
+      }
+      closeSheet();
+    }
+
+    /* -- a cancelled session is not an appointment, so it is not offered at all -- */
+    const cx = S.sessions.find((s) => s.date && isCancelled(s));
+    if (!cx) skip("calendar: cancelled session", "this practice has no cancellations");
+    else {
+      sessionForm(cx); await sleep(80);
+      ok("a cancelled session is not offered to the calendar", !document.querySelector("#sheetBody #f_ics"));
+      closeSheet();
+    }
+
+    /* -- the two windows, from the calendar screen -- */
+    sessFilter.view = "cal";
+    go("sessions"); await sleep(120);
+    const card = document.querySelector("#calExport");
+    ok("the calendar screen carries the export card", !!card);
+    if (card) {
+      ok("both windows are offered", !!card.querySelector("#ics7") && !!card.querySelector("#icsM"));
+      /* An unwired info dot is a dead tap - this screen's first one, so it needed wireInfo(). */
+      const dot = card.querySelector("[data-info]");
+      ok("the card's explanation is registered", !!dot && !!INFO[dot.dataset.info], dot && dot.dataset.info);
+      ok("the card's explanation is wired", !!dot && typeof dot.onclick === "function");
+
+      /* Counts forward from today, so what comes out has to match what the rule says is in
+         that window - recomputed here, never read back from the function. */
+      const t = today();
+      const iso = (d) => isoD(d);
+      const win = (endDate) => S.sessions.filter((s) =>
+        s.date && !isCancelled(s) && s.date >= iso(t) && s.date <= iso(endDate)).length;
+
+      const w7 = addDays(t, 6);
+      grabbed = null;
+      card.querySelector("#ics7").onclick(); await sleep(60);
+      const want7 = win(w7);
+      if (!want7) ok("an empty 7-day window downloads nothing", grabbed === null);
+      else {
+        ok("the 7-day window downloads", !!grabbed && /\.ics$/.test(grabbed.name), grabbed && grabbed.name);
+        ok("the 7-day window holds every session in it and no more",
+          events(grabbed && grabbed.text) === want7, `${events(grabbed && grabbed.text)} vs ${want7}`);
+      }
+
+      const wM = addDays(new Date(t.getFullYear(), t.getMonth() + 1, t.getDate()), -1);
+      grabbed = null;
+      card.querySelector("#icsM").onclick(); await sleep(60);
+      const wantM = win(wM);
+      if (!wantM) ok("an empty month window downloads nothing", grabbed === null);
+      else {
+        ok("the month window downloads", !!grabbed && /\.ics$/.test(grabbed.name), grabbed && grabbed.name);
+        ok("the month window holds every session in it and no more",
+          events(grabbed && grabbed.text) === wantM, `${events(grabbed && grabbed.text)} vs ${wantM}`);
+        ok("the month window is at least as wide as the week", wantM >= want7, `${wantM} vs ${want7}`);
+      }
+    }
+    sessFilter.view = "list";
+    window.download = realDownload;
+  }
   return out;
 }
 

@@ -601,6 +601,9 @@ npm run test:guidance        # every info icon on every screen and form opens a 
                              #   attention rows, from the documented rule for each
 npm run test:import          # the spreadsheet importer against the shapes real sheets take: datetime
                              #   cells, time ranges, "Amount paid", "closed", workbooks, no heading row
+npm run test:calendar        # the .ics export against RFC 5545: escaping, 75-octet folding,
+                             #   floating times across midnight and a DST morning, the stable UID,
+                             #   the range filter. Pure node - no browser, no Playwright
 ```
 
 **`scripts/check-behaviour.mjs` is the only test that presses a button.** The tax suite checks the
@@ -706,6 +709,53 @@ nothing comes back - whether notes are done stays a tick in this app.
   iOS goes through the existing share sheet, because `download()` is already wrapped natively.
   Everything else downloads. Last sync is `tt_rostersync` in localStorage - device state, so it
   stays out of `S`.
+
+## Adding sessions to a real calendar (.ics, Sep 2026)
+Sessions › Calendar carries an **Add to your calendar** card, and the session form an **Add to my
+calendar** button. Both build an `.ics` file and hand it to `download()`. That choke point is the
+whole design: the native block already redirects `download()` into the iOS share sheet, so an
+iPhone gets Calendar / Files / AirDrop **with no Swift written**, and a browser hands the same file
+to Apple Calendar or Outlook. Nothing was added to `GroundWorkNativePlugin.swift`.
+
+- **It is a copy, not a live link, and the card says so.** Editing a session afterwards cannot
+  reach into a calendar the app has no connection to. Real two-way sync means EventKit, an
+  identifier stored on every session and an iOS-only feature; the reasoning for not doing that
+  yet is in the info topic and in this section's history, not in the code.
+- **The UID is derived from the session's `_id`, and `SEQUENCE` only ever rises.** That pair is
+  what makes a second export *update* the entry already in Apple or Google Calendar instead of
+  leaving a duplicate beside it. **Never make the UID random.** Nothing counts revisions in the
+  record, so `icsSeq()` uses minutes since 2020 as the counter - monotonic, and a very long way
+  inside the 32-bit integer the format allows.
+- **The event is deliberately thin: client code, time, length, room. Nothing else.** No name, no
+  fee, no session number, no admin note, and **no `DESCRIPTION` field at all**. Same discipline as
+  `syncSchedules()` and for a sharper reason - once imported it is on Apple's or Google's servers
+  and readable by anything granted calendar access, and "somebody is in therapy at 10am on
+  Tuesday" is special-category data under UK GDPR with no name attached. The room is carried
+  because it is a fact about the therapist's own day. If a title ever needs changing, it is
+  `icsTitle()` and nowhere else.
+- **Times are FLOATING** - no trailing `Z`, no `TZID`. A session stores a wall-clock time and no
+  timezone, so converting to UTC would bake in the timezone of whichever device ran the export,
+  which is not a fact in the data. `icsFloating()` does its arithmetic **in UTC** so that adding
+  `sessionMins()` can never be stretched by a daylight-saving jump: on a local `Date` in London a
+  50-minute session starting 00:30 on 29 Mar 2026 comes back as 110 minutes. There is a test.
+- **`icsFold()` counts OCTETS, not characters** (RFC 5545 caps a content line at 75). An accented
+  room name folded on character count produces a 129-byte line, and some parsers answer an
+  over-long line by dropping the whole event.
+- **Cancellations are excluded.** A charged late cancellation is real money, which is why the rest
+  of the app keeps it - but it is not an appointment, and the session form hides the button for one
+  rather than offering a diary entry nobody should turn up to.
+- **Both windows count forward from TODAY, never from the month being browsed**, and the card
+  prints the dates under the buttons. Somebody three months ahead looking at next spring has not
+  asked to put next spring in their diary.
+- **Ungated, and permanently so** - it is an export of the therapist's own records, which is the
+  same rule that keeps `commit`/`exportJSON`/`importJSON` out of `plusLocked()`.
+- `renderCal()` gained this screen's **first info dot**, so it gained a `wireInfo(body)` call with
+  it. The guidance test walks `APP_MAP` segments and the calendar is a view toggle rather than a
+  segment, so that dot is asserted in `check-behaviour.mjs` instead.
+- **Two tests, deliberately split.** `npm run test:calendar` proves the file is well formed (68
+  assertions, pure node, functions lifted out of `index.html` by their markers). The
+  `check-behaviour.mjs` section proves the *controls* exist, are wired and produce it - a perfect
+  builder nothing calls ships nothing.
 
 ## Restore from backup (Settings › Data & backup - hardened Aug 2026)
 `importJSON()` is a whole-state replace, so it is gated by **smart friction, not uniform friction** - `restoreConfirm()` picks one of two tiers from `restorePlan()`. A restore onto a new phone stays one tap; stamping a stale file over weeks of newer entries earns the same ladder as erase.

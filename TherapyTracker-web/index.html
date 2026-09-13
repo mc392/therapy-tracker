@@ -1365,8 +1365,9 @@ window.SEED = {"clients": [], "rooms": [{"location": "At home", "rate": 0, "due"
    Settings screen          VIEWS.settings, cancellation rules, the raw table panel
    Forms                    session, client (+ rate change), supervision, peer, CPD, room fees
    Invoices & receipts      documents, chasers, the clipboard, the receipt generator
-   Export / import          backups, the schedule file, encrypted backups, validation,
-                            the spreadsheet importer, restore hardening, data removal
+   Export / import          backups, the schedule file, calendar (.ics) export, encrypted
+                            backups, validation, the spreadsheet importer, restore hardening,
+                            data removal
    Setup & help             FEATURES, gradual reveal, the step-flow overlay, the setup wizard,
                             the tax disclaimer, What's new, on-page coaching, the app map,
                             the tour and the first-visit tips, records retention
@@ -3918,6 +3919,25 @@ VIEWS.sessions=function(){
     body.querySelector("#pm").onclick=()=>{calM--;if(calM<0){calM=11;calY--;}renderCal();};
     body.querySelector("#nm").onclick=()=>{calM++;if(calM>11){calM=0;calY++;}renderCal();};
     body.querySelectorAll(".cell[data-day]").forEach(c=>c.onclick=()=>daySheet(+c.dataset.day));
+    /* Both windows count forward from TODAY, never from the month being browsed - somebody three
+       months ahead looking at next spring has not asked to put next spring in their diary. The
+       dates are printed under the buttons so there is nothing to guess. */
+    if(S.sessions.length){
+      const w7=addDays(t,6);
+      const wM=addDays(new Date(t.getFullYear(),t.getMonth()+1,t.getDate()),-1);
+      const card=el('<div class="card mt" id="calExport"></div>');
+      card.innerHTML=cardHead("Add to your calendar","calendar-export")+
+        '<p class="small muted">Sends these sessions to the calendar app you already use. It is a copy, not a live link.</p>'+
+        '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sec" id="ics7">Next 7 days</button>'+
+        '<button class="btn sec" id="icsM">Next month</button></div>'+
+        '<p class="small muted mt" style="margin-bottom:0">From today, whichever month you are looking at \u00b7 7 days: '+
+        esc(fmtDM(t))+' - '+esc(fmtDM(w7))+' \u00b7 month: '+esc(fmtDM(t))+' - '+esc(fmtDM(wM))+'</p>';
+      card.querySelector("#ics7").onclick=()=>calAddRange(isoD(t),isoD(w7),"in the next 7 days");
+      card.querySelector("#icsM").onclick=()=>calAddRange(isoD(t),isoD(wM),"in the next month");
+      body.appendChild(card);
+    }
+    /* The card above carries this screen's first info dot - without this its tap does nothing. */
+    wireInfo(body);
   }
   function daySheet(day){
     const sameDay=s=>{const d=parseD(s.date);return d&&d.getFullYear()===calY&&d.getMonth()===calM&&d.getDate()===day;};
@@ -10618,6 +10638,7 @@ function sessionForm(s,o){
      </div>
      <div class="vbanner" id="vbanner"></div>
      <div class="row mt" style="gap:8px"><button class="btn full" id="save">Save session</button></div>
+     ${(isNew||isCancelled(m))?"":'<button class="btn sec full mt" id="f_ics">'+gi("calendar")+' Add to my calendar</button>'}
      ${isNew?"":'<button class="btn danger full mt" id="del">Delete session</button>'}`;
     const g=id=>body.querySelector(id);
     const sync=()=>{m.client=g("#f_client").value;m.date=g("#f_date").value;m.time=g("#f_time").value;m.mode=g("#f_mode").value;
@@ -10768,6 +10789,13 @@ function sessionForm(s,o){
       closeSheet();
       gameShow({batch:1,completed:justCompleted,milestone:milestone,milestoneClient:m.client,toast:justCompleted?"Session complete ✓":(exists?"Saved":"Session logged ✨")},{});
       go(cur);};
+    /* Reads the form back first, so the entry that reaches the calendar is the one on screen
+       rather than the last saved version. The sheet stays open, so nothing typed is at risk -
+       unlike the chaser link above, which replaces it. */
+    const icsB=g("#f_ics");
+    if(icsB)icsB.onclick=()=>{sync();
+      if(isCancelled(m)){toast("This session was cancelled");Sfx.error();return;}
+      calAddSession(m);};
     if(!isNew)g("#del").onclick=async()=>{if(!confirm("Delete this session?"))return;
       S.sessions=S.sessions.filter(x=>x._id!==m._id);await commit("Deleted session: "+m.client+" "+m.date);closeSheet();toast("Deleted");go(cur);};
   };
@@ -11533,6 +11561,123 @@ function incomeForecast(){
 /* ============ Export / import ============ */
 function download(name,text,type){const b=new Blob([text],{type:type||"application/json"});const u=URL.createObjectURL(b);
   const a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500)}
+/* ============ Calendar export (.ics) ============
+   The diary, handed to whatever calendar app the therapist actually uses. It goes through
+   download() deliberately: that is the one choke point every export already funnels through, so
+   the native block at the end of this file redirects it into the iOS share sheet for free, and
+   "Add to my calendar" on an iPhone becomes Calendar / Files / AirDrop with no Swift written.
+   A desktop browser hands the same file to Apple Calendar or Outlook.
+
+   IT IS A COPY, NOT A LINK, and the card on screen says so. Editing a session here afterwards
+   cannot reach into a calendar this app has no connection to. What it CAN do is supersede
+   itself: every event carries a UID built from the session's own _id and a SEQUENCE that only
+   ever rises, so exporting an edited session again UPDATES the entry already sitting in Apple
+   or Google Calendar instead of landing beside it as a duplicate. That is the entire reason the
+   UID is derived from the record rather than generated fresh - never make it random.
+
+   WHAT GOES INTO THE EVENT IS DELIBERATELY THIN. The title is the client CODE and nothing else,
+   the same discipline as the schedule file written for GroundWork Notes (see syncSchedules) and
+   for a sharper reason: the moment this is imported it is on Apple's or Google's servers and
+   readable by anything the therapist has granted calendar access to. "Somebody is in therapy at
+   10am on Tuesday" is special-category data under UK GDPR whether or not a name is attached to
+   it. So no fee, no session number, no admin note, and no DESCRIPTION field at all. The room is
+   carried because it is a fact about the therapist's own day, not about a client.
+
+   TIMES ARE FLOATING - no trailing Z, no TZID. That is the format's way of saying "10:00
+   wherever you are". A session stores a wall-clock time and no timezone, so converting to UTC
+   would bake in the timezone of whichever device happened to run the export, which is an
+   assumption that simply is not in the data. It also sidesteps BST entirely. */
+const ICS_UID_DOMAIN="groundwork.app";
+const _icsEnc=(typeof TextEncoder!=="undefined")?new TextEncoder():null;
+/* RFC 5545 escapes exactly these. A stray comma in a room name would otherwise split the field
+   into two values and the event would import with half a location. */
+function icsEsc(t){return String(t==null?"":t).replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\r?\n/g,"\\n");}
+/* Content lines are capped at 75 OCTETS, continued with CRLF + one space. Counting characters
+   rather than bytes would let an accented room name push a line past the limit, which some
+   parsers answer by dropping the whole event. Walks code points, so a surrogate pair is never
+   split down the middle. */
+function icsFold(line){
+  const out=[];let cur="",n=0;
+  for(const ch of String(line)){
+    const b=_icsEnc?_icsEnc.encode(ch).length:1;
+    if(n+b>75&&cur){out.push(cur);cur=" ";n=1;}
+    cur+=ch;n+=b;
+  }
+  out.push(cur);return out.join("\r\n");
+}
+function icsStampUTC(d){return (d||new Date()).toISOString().replace(/[-:]/g,"").replace(/\.\d+/,"");}
+/* Wall-clock arithmetic done in UTC on purpose: adding the session length can then never be
+   distorted by a daylight-saving jump, because the parts are read straight back out as the local
+   wall time they are meant to represent. */
+function icsFloating(dateISO,time,addMins){
+  const p=String(dateISO||"").split("-").map(Number);
+  if(p.length<3||!p[0]||!p[1]||!p[2])return null;
+  const t=String(time||"00:00").split(":").map(Number);
+  const d=new Date(Date.UTC(p[0],p[1]-1,p[2],t[0]||0,t[1]||0));
+  if(isNaN(d.getTime()))return null;
+  d.setUTCMinutes(d.getUTCMinutes()+(addMins||0));
+  const z=n=>String(n).padStart(2,"0");
+  return d.getUTCFullYear()+z(d.getUTCMonth()+1)+z(d.getUTCDate())+"T"+z(d.getUTCHours())+z(d.getUTCMinutes())+"00";
+}
+/* SEQUENCE has to RISE for a calendar to accept a re-export as an update, and nothing in the
+   record counts its own revisions - so the clock is the counter. Minutes since 2020 stays a very
+   long way inside the 32-bit integer the format allows. */
+function icsSeq(){return Math.max(0,Math.floor((Date.now()-Date.UTC(2020,0,1))/60000));}
+/* The client code, and nothing else - see the note at the top of this block. */
+function icsTitle(s){return String(s.client||"").trim()||"Session";}
+function icsEvent(s,stamp,seq){
+  const start=icsFloating(s.date,s.time,0);
+  if(!start)return "";
+  const L=["BEGIN:VEVENT",
+    "UID:"+icsEsc(s._id||uid())+"@"+ICS_UID_DOMAIN,
+    "DTSTAMP:"+stamp,
+    "SEQUENCE:"+seq,
+    "DTSTART:"+start,
+    "DTEND:"+icsFloating(s.date,s.time,sessionMins()),
+    "SUMMARY:"+icsEsc(icsTitle(s)),
+    "TRANSP:OPAQUE"];
+  if(s.location)L.push("LOCATION:"+icsEsc(s.location));
+  L.push("END:VEVENT");
+  return L.map(icsFold).join("\r\n");
+}
+function icsFile(list){
+  const stamp=icsStampUTC(),seq=icsSeq();
+  const ev=(list||[]).map(s=>icsEvent(s,stamp,seq)).filter(Boolean);
+  return ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//GroundWork//Practice diary//EN",
+    "CALSCALE:GREGORIAN","METHOD:PUBLISH"].map(icsFold).join("\r\n")+"\r\n"+
+    (ev.length?ev.join("\r\n")+"\r\n":"")+"END:VCALENDAR\r\n";
+}
+function icsFileName(part){
+  return "groundwork-"+String(part).replace(/[^A-Za-z0-9]+/g,"-").replace(/^-+|-+$/g,"").toLowerCase()+".ics";
+}
+/* Cancelled sessions are left out on purpose. A charged late cancellation is real money, which
+   is why the rest of the app keeps it - but it is not an appointment, and putting it in the
+   diary would have the therapist turning up for it. */
+function icsSessionsBetween(fromISO,toISO){
+  return S.sessions.filter(s=>s.date&&s.date>=fromISO&&s.date<=toISO&&!isCancelled(s))
+    .sort((a,b)=>(a.date+"T"+(a.time||"")).localeCompare(b.date+"T"+(b.time||"")));
+}
+function calAddSession(s){
+  if(!s||!s.date){toast("This session needs a date first");Sfx.error();return;}
+  download(icsFileName("session-"+(s.client||"")+"-"+s.date),icsFile([s]),"text/calendar");
+  toast("Calendar file downloaded");
+}
+function calAddRange(fromISO,toISO,label){
+  const list=icsSessionsBetween(fromISO,toISO);
+  if(!list.length){toast("No sessions "+label);Sfx.error();return;}
+  download(icsFileName("sessions-"+fromISO+"-to-"+toISO),icsFile(list),"text/calendar");
+  toast(list.length+" session"+(list.length===1?"":"s")+" downloaded for your calendar");
+}
+infoDef("calendar-export","Adding sessions to your calendar",
+  '<p class="small">This sends your sessions to whatever calendar you already use - the Calendar app on your phone, Google Calendar, Outlook. GroundWork makes a small <b>.ics</b> file, which is the standard every calendar understands, and hands it over. On an iPhone that opens the share sheet; on a computer it downloads and opens in your calendar.</p>'+
+  '<div class="grp-h">It is a copy, not a live link</div>'+
+  '<p class="small">Nothing syncs in the background and nothing connects the two apps. If you <b>move</b> a session in GroundWork afterwards, the entry already in your calendar does not move with it.</p>'+
+  '<p class="small">What you can do is send it again. Each entry is tagged with that session\u2019s own reference, so adding it a second time <b>updates</b> the one already in your calendar rather than leaving you with two. If you <b>delete</b> a session here, though, you will need to delete it in your calendar yourself.</p>'+
+  '<div class="grp-h">What it says, and what it does not</div>'+
+  '<p class="small">Each entry carries the <b>client code</b>, the time, the length of your usual session and the room. That is all. No name, no fee, no session number, no notes.</p>'+
+  '<p class="small">That is deliberate. Once an entry is in Google or Apple Calendar it sits on their servers and is visible to anything you have given calendar access to - and the fact that a particular person is in therapy at a particular time is sensitive on its own, even with no name attached. If your calendar is one other people can see, it is worth knowing that even a code is a regular weekly appointment somebody could ask about.</p>'+
+  '<div class="grp-h">Cancellations</div>'+
+  '<p class="small">Late cancellations and DNAs are left out. They still count for your money and your records, but they are not appointments to turn up to.</p>');
 /* Stated on the file itself, because a backup outlives the app that made it and whoever opens it
    next needs to know that a "notes" field here means "notes were done", not the notes. */
 const NOTES_SCOPE="The 'notes' field on a session is a yes/no marker that clinical notes were completed elsewhere. 'adminNote' is a free-text practical comment written by the practitioner. This file contains no clinical notes.";
