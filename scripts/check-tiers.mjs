@@ -221,8 +221,20 @@ const results = await page.evaluate(async () => {
   ok("…and never names a withdrawn tier", !/GroundWork Plus/.test(sheet.textContent));
   closeSheet(); await sleep(80);
 
-  /* ---- 10. the tax year sheet is two steps, in order ---- */
-  openTaxPackSheet("2026-27"); await sleep(250);
+  /* ---- 10. the tax year sheet is two steps, in order ----
+     A store has to be stubbed for this section: off-native plusNative() is null and the sheet
+     says "sold in the iPhone app" instead of rendering a Buy button at all, so the state that
+     actually matters - a purchase blocked on its prerequisite - would never be reached. This is
+     the ONLY mock here and it stubs the store, nothing else; every sheet drawn around it is the
+     shipping code. */
+  window.GWPlusNative = {
+    products: async () => ({ found: true, pro: { price: "£1.99", period: "month" },
+                             years: { "2026-27": { price: "£24.99", period: "" } } }),
+    purchase: async () => ({ ok: false, cancelled: true }),
+    taxPurchase: async () => ({ ok: false, cancelled: true }),
+    restore: async () => ({ ok: false }), redeem: () => {}, manage: () => {}
+  };
+  openTaxPackSheet("2026-27"); await sleep(400);
   const steps = [...document.querySelectorAll("#sheetBody .tstep")];
   ok("the tax year sheet shows both steps", steps.length === 2, steps.length);
   ok("…Pro first", /GroundWork Pro/.test(steps[0] ? steps[0].textContent : ""));
@@ -231,12 +243,29 @@ const results = await page.evaluate(async () => {
     /one-off/i.test(document.querySelector("#sheetBody").textContent));
   ok("…and that earlier years come with it",
     /every earlier tax year/i.test(document.querySelector("#sheetBody").textContent));
+  /* Pro is a prerequisite, so Buy cannot be live without it - and it has to LOOK dead as well as
+     be dead. A disabled .btn carried no styling at all until Sep 2026, so this checks the
+     rendered opacity rather than only the attribute, and that the reason is on screen beside it
+     rather than left for the reader to guess at. */
+  {
+    const buy = document.querySelector("#sheetBody [data-buyty]");
+    ok("without Pro the Buy button is disabled", !!(buy && buy.disabled));
+    ok("…and visibly so, not just in the DOM",
+      !!buy && parseFloat(getComputedStyle(buy).opacity) < 0.8,
+      buy && getComputedStyle(buy).opacity);
+    ok("…and the sheet says why rather than leaving a dead control",
+      /subscribe to groundwork pro first/i.test(document.querySelector("#sheetBody").textContent));
+  }
   closeSheet(); await sleep(80);
   hold(PRO, null);
-  openTaxPackSheet("2026-27"); await sleep(250);
+  openTaxPackSheet("2026-27"); await sleep(400);
   const steps2 = [...document.querySelectorAll("#sheetBody .tstep")];
   ok("holding Pro, step 1 is ticked and step 2 is not",
     steps2[0].classList.contains("done") && !steps2[1].classList.contains("done"));
+  {
+    const buy2 = document.querySelector("#sheetBody [data-buyty]");
+    ok("…and Buy is live now the prerequisite is met", !!(buy2 && !buy2.disabled));
+  }
   closeSheet(); await sleep(80);
 
   /* ---- 11. the launch screen ---- */

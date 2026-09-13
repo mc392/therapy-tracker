@@ -164,7 +164,9 @@ Auto-Renewable (a tax year does not renew; the *next* year is a different produc
       *"Works out your 2026-27 tax, and every earlier tax year: what you are on track to owe,
       what to keep back for it, payments on account, and that year's Making Tax Digital export.
       A one-off purchase - it does not expire. Requires GroundWork Pro."*
-- [ ] **Review screenshot** - the same paywall image is fine.
+- [ ] **Review screenshot** - this product has its **own**, because a reviewer looking at the
+      non-consumable needs to see where *it* is offered, not where the subscription is:
+      `TherapyTracker-web/icon-ideas/groundwork/taxyear-review-screenshot.png`
 - [ ] **Product image** - there is no tax-year artwork yet. Reuse the gold Pro image.
 
 **Then create next year too, now.** `…taxyear.2027` (UK tax year 2027-28). A product takes time to
@@ -189,13 +191,22 @@ anywhere at all.
 > *Missing Metadata* - so a TestFlight paywall can only ever say "unavailable right now", which is
 > the one image you must not give a reviewer.
 >
-> `node scripts/render-paywall-screenshot.mjs --price "£4.99"` breaks it with no Mac and no live
-> product: it loads the real `index.html`, forces the gate on, stubs **only** the store, opens the
-> shipping `openPlusSheet()` and captures it at 1320×2868 (iPhone 6.9"). Every pixel but the price
-> is the real app.
+> `node scripts/render-paywall-screenshot.mjs` breaks it with no Mac and no live product: it loads
+> the real `index.html`, forces the gate on, stubs **only** the store, opens the shipping
+> `openPlusSheet()` / `openTaxPackSheet()` and captures them at 1320×2868 (iPhone 6.9"). Every
+> pixel but the price is the real app.
 >
-> The price is a placeholder. Re-run with the real `--price` once step 2 is saved, and swap in a
-> genuine device screenshot before you submit for review.
+> ```bash
+> node scripts/render-paywall-screenshot.mjs \
+>   --price "£1.99" --period month --price-year "£24.99" --sheet both
+> ```
+>
+> **Two images, because there are two kinds of product**: `--sheet pro` writes
+> `paywall-review-screenshot.png`, `--sheet tax` writes `taxyear-review-screenshot.png`, and
+> `--sheet both` does both in one run. Add `--dark` for the dark-theme pair.
+>
+> The prices are placeholders. Re-run with the real figures once step 2 is saved, and swap in
+> genuine device screenshots before you submit for review.
 
 ### 2f. What "done" looks like
 

@@ -1,27 +1,33 @@
-/* Renders the GroundWork Plus / Pro paywall at App Store screenshot size, from the real app.
+/* Renders a GroundWork purchase sheet at App Store screenshot size, from the real app.
 
    WHY THIS EXISTS - the catch-22:
-   App Store Connect wants a review screenshot before a subscription can leave Missing
-   Metadata, and StoreKit cannot fetch a product that is still in Missing Metadata. So on a
-   TestFlight build the paywall can only ever say "Subscription unavailable right now", which
-   is the one thing you must not put in front of a reviewer.
+   App Store Connect wants a review screenshot before a product can leave Missing Metadata, and
+   StoreKit cannot fetch a product that is still in Missing Metadata. So on a TestFlight build
+   the sheet can only ever say "Unavailable", which is the one thing you must not put in front
+   of a reviewer.
 
    This breaks it without a Mac: it loads the actual index.html, forces the gate on, stubs the
-   StoreKit bridge with a price, opens the real openPlusSheet(), and screenshots it at iPhone
-   6.9" size. Nothing is mocked but the store - the layout, copy and buttons are the shipping
-   ones.
+   StoreKit bridge with a price, opens the real openPlusSheet() / openTaxPackSheet(), and
+   screenshots it at iPhone 6.9" size. Nothing is mocked but the store - the layout, copy and
+   buttons are the shipping ones.
 
-   THE PRICES ARE PLACEHOLDERS. Both subscriptions are on one sheet, so both need one: pass
-   --price (Pro) and --price-plus (Plus) to match what you set in App Store Connect, and replace
-   this image with a genuine device screenshot before submitting for review.
+   TWO SHEETS, BECAUSE THERE ARE TWO KINDS OF PRODUCT and each needs its own review screenshot:
+   the monthly subscription is offered on the Pro sheet, and a UK tax year - a non-consumable,
+   which lives in a different section of App Store Connect - is offered on its own. `--sheet`
+   picks which, and `--sheet both` writes both files in one run.
 
-   `--reason` picks which lock the sheet is opened from, because that decides which rung is lit:
-   a tax lock leads with Pro (the default, and the one App Review will be looking at), `trends`
-   leads with Plus.
+   THE PRICES ARE PLACEHOLDERS. Pass --price and --price-year to match what you set in App Store
+   Connect, and replace these with genuine device screenshots before submitting for review.
+
+   `--reason` picks which lock the subscription sheet is opened from, which only changes the
+   heading ("Business analytics is part of GroundWork Pro"). It must be a key the subscription
+   actually gates - trends, finances, accreditation, notesSync - or `settings` for the plain
+   heading. `tax` is NOT one: tax is bought by the year and never opens this sheet.
 
    Usage:
-     node scripts/render-paywall-screenshot.mjs [--price "£39.99"] [--price-plus "£19.99"]
-                                               [--period year] [--reason tax] [--dark]
+     node scripts/render-paywall-screenshot.mjs [--price "£1.99"] [--period month]
+                                               [--price-year "£24.99"] [--year 2026-27]
+                                               [--sheet pro|tax|both] [--reason trends] [--dark]
 */
 import { createRequire } from "node:module";
 import { createServer } from "node:http";
@@ -43,13 +49,30 @@ catch {
 const argv = process.argv.slice(2);
 const opt = (n, d) => { const i = argv.indexOf(`--${n}`);
   return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : d; };
-const PRICE = opt("price", "£39.99");
-const PRICE_PLUS = opt("price-plus", "£19.99");
-const PERIOD = opt("period", "year");
-const REASON = opt("reason", "tax");
+const PRICE = opt("price", "£1.99");
+const PERIOD = opt("period", "month");
+const PRICE_YEAR = opt("price-year", "£24.99");
+const YEAR = opt("year", null);                 // null = whatever tax year the app is in
+const SHEET = opt("sheet", "pro");              // pro | tax | both
+const REASON = opt("reason", "trends");
 const DARK = argv.includes("--dark");
 const ROOT = resolve("TherapyTracker-web");
-const OUT = resolve(`TherapyTracker-web/icon-ideas/groundwork/paywall-review-screenshot${DARK ? "-dark" : ""}.png`);
+const suffix = DARK ? "-dark" : "";
+const OUT = {
+  pro: resolve(`TherapyTracker-web/icon-ideas/groundwork/paywall-review-screenshot${suffix}.png`),
+  tax: resolve(`TherapyTracker-web/icon-ideas/groundwork/taxyear-review-screenshot${suffix}.png`)
+};
+if (!["pro", "tax", "both"].includes(SHEET)) {
+  console.error(`\n  --sheet must be pro, tax or both (got "${SHEET}").\n`); process.exit(1);
+}
+/* Fail loudly rather than render a sheet with the wrong heading: `tax` was a valid reason under
+   the two-tier build and is the one somebody is most likely to reach for out of habit. */
+if (["tax", "mtd"].includes(REASON)) {
+  console.error(`\n  --reason ${REASON} is not a subscription lock any more: tax is bought by the`);
+  console.error("  tax year, not by the subscription. Use --sheet tax for that product's sheet,");
+  console.error("  or --reason trends|finances|accreditation|notesSync|settings for this one.\n");
+  process.exit(1);
+}
 
 /* A dependency-free static server. file:// would be simpler but the app is origin-sensitive:
    IndexedDB and localStorage both behave differently there, and loadState() would not run. */
@@ -79,41 +102,66 @@ await page.waitForTimeout(2000);
 await page.evaluate((dark) => {
   try { flowClose(); settings().onboarded = true; } catch {}
   localStorage.setItem("tt_plus_gate", "on");          // gate ON only - it cannot unlock
+  localStorage.removeItem("tt_plus");                  // nothing held: both sheets show the offer
+  localStorage.removeItem("tt_taxpack");
   localStorage.setItem("tt_theme", dark ? "dark" : "light");
 }, DARK);
 await page.reload({ waitUntil: "networkidle" });
 await page.waitForTimeout(2000);
 await page.evaluate(() => { try { flowClose(); settings().onboarded = true; } catch {} });
 
-/* The only mock: a store that answers, one entry per rung. Everything the sheet then draws is
-   the shipping code. */
-await page.evaluate(({ price, pricePlus, period }) => {
+/* The tax year the app would actually put on sale, unless one was named. The sheet keys its
+   price element by this string, so the stub and the assertion have to agree with it. */
+const ty = YEAR || await page.evaluate(() => taxPackOnSale());
+
+/* The only mock: a store that answers. `years` is keyed by tax year, matching what the native
+   plusProducts() returns. Everything the sheets then draw is the shipping code. */
+await page.evaluate(({ price, priceYear, period, ty }) => {
   window.GWPlusNative = {
     products: async () => ({ found: true,
-      plus: { price: pricePlus, period, title: "GroundWork Plus" },
-      pro:  { price,            period, title: "GroundWork Pro" } }),
-    purchase: async () => ({ ok: false, cancelled: true }),
-    restore:  async () => ({ ok: false }),
+      pro:   { price, period, title: "GroundWork Pro" },
+      years: { [ty]: { price: priceYear, period: "", title: "UK tax year " + ty } } }),
+    purchase:    async () => ({ ok: false, cancelled: true }),
+    taxPurchase: async () => ({ ok: false, cancelled: true }),
+    restore:     async () => ({ ok: false }),
     redeem: () => {}, manage: () => {}
   };
-}, { price: PRICE, pricePlus: PRICE_PLUS, period: PERIOD });
-await page.evaluate((reason) => { go(reason === "trends" ? "practice" : "tax"); }, REASON);
-await page.waitForTimeout(400);
-await page.evaluate((reason) => openPlusSheet(reason), REASON);
-await page.waitForTimeout(900);                        // let the sheet settle and the price land
+}, { price: PRICE, priceYear: PRICE_YEAR, period: PERIOD, ty });
 
-/* Both rungs have to have taken a price: a sheet with one real figure and one "…" is exactly
-   what this script exists to stop reaching a reviewer. */
-const priced = (await page.textContent("#plPrice-pro")) + " / " + (await page.textContent("#plPrice-plus"));
-if ((priced.match(/\d/g) || []).length < 2) {
-  console.error(`\n  A tier never took a price (reads "${priced}").`);
-  console.error("  The stub did not reach openPlusSheet - check plusNative()/GWPlusNative.\n");
-  await browser.close(); server.close(); process.exit(1);
-}
-await page.screenshot({ path: OUT, omitBackground: false });
+const shoot = async (which) => {
+  await page.evaluate(() => { try { closeSheet(); } catch {} });
+  await page.waitForTimeout(250);
+  if (which === "pro") {
+    await page.evaluate(() => go("practice"));
+    await page.waitForTimeout(400);
+    await page.evaluate((reason) => openPlusSheet(reason), REASON);
+  } else {
+    await page.evaluate(() => go("tax"));
+    await page.waitForTimeout(400);
+    await page.evaluate((t) => openTaxPackSheet(t), ty);
+  }
+  await page.waitForTimeout(900);                      // let the sheet settle and the price land
+
+  /* The price has to have landed: a sheet reading "…" or "Unavailable" is exactly what this
+     script exists to stop reaching a reviewer. The element is keyed by tier for the
+     subscription and by tax year for the package, so the selector differs. */
+  const sel = which === "pro" ? "#plPrice-pro" : `[id="plPrice-${ty}"]`;
+  const read = (await page.textContent(sel).catch(() => null)) || "";
+  if (!/\d/.test(read)) {
+    console.error(`\n  The ${which} sheet never took a price (reads "${read.trim() || "nothing"}").`);
+    console.error("  The stub did not reach the sheet - check plusNative()/GWPlusNative.\n");
+    await browser.close(); server.close(); process.exit(1);
+  }
+  await page.screenshot({ path: OUT[which], omitBackground: false });
+  console.log(`  wrote ${OUT[which]}`);
+  console.log(`    1320x2868 (iPhone 6.9") · price reads "${read.trim()}"` +
+              (which === "pro" ? ` · opened from a ${REASON} lock` : ` · tax year ${ty}`));
+};
+
+if (SHEET === "pro" || SHEET === "both") await shoot("pro");
+if (SHEET === "tax" || SHEET === "both") await shoot("tax");
+
 await browser.close();
 server.close();
-console.log(`  wrote ${OUT}`);
-console.log(`  1320x2868 (iPhone 6.9") · opened from a ${REASON} lock · prices read "${priced.trim()}"`);
-console.log(`  The prices are PLACEHOLDERS - re-run with --price/--price-plus once App Store Connect is set,`);
-console.log(`  and replace this with a real device screenshot before submitting for review.`);
+console.log(`  The prices are PLACEHOLDERS - re-run with --price/--price-year once App Store`);
+console.log(`  Connect is set, and replace these with real device screenshots before review.`);
