@@ -519,8 +519,13 @@ Reversing it again is one line in `taxYearPaid()` - written that way on purpose 
 
 Open items:
 
-- **OPEN: prices.** Both. Anchor against what a therapist pays an accountant, not other apps. The
-  package has the natural anchor - it competes with an hour of an accountant's time.
+- ~~OPEN: prices.~~ **Decided Sept 2026: £1.99 / month for Pro, £7.99 for a UK tax year.** The
+  package carries the anchor - it competes with an hour of an accountant's time against the
+  £300-600 a therapist pays for self assessment - and the subscription is priced to be an easy yes
+  rather than a deliberation. Both together come to £31.87 in a first year, which is the figure a
+  reader works out for themselves and the one to sanity-check against. Raising a subscription price
+  later means handling existing subscribers explicitly, so £1.99 is a floor rather than an opening
+  bid. Neither figure is in the app - both are read from the store per storefront.
 - **OPEN: a trial**, and whether it spans January.
 - **OPEN:** whether the ended tax year goes on sale beside the current one during the filing window.
 - **OPEN:** the founding cohort - how many, free-forever or price-locked.

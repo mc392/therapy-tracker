@@ -698,6 +698,12 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
 .hanav{display:flex;gap:6px;flex:none}
 .hanav button{min-width:40px;padding:7px 9px;line-height:1}
 .hanav button:disabled{opacity:.35}
+/* A disabled .btn had no styling at all, so it looked exactly like a live one. Two places show
+   one: the tax year sheet's Buy while the subscription underneath it is not held, and either
+   paywall when the store could not answer for a product. Both are cases where the reader has to
+   be able to see at a glance that the button is not the next thing to press. */
+.btn:disabled,.btn[disabled]{opacity:.45;cursor:default;box-shadow:none;filter:saturate(.6)}
+.btn:disabled:active,.btn[disabled]:active{transform:none}
 optgroup{font-size:12px;color:var(--muted)} optgroup option{font-size:16px;color:var(--ink)}
 .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--brand);color:#fff;
   padding:11px 18px;border-radius:24px;font-size:14px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.3)}
@@ -2491,7 +2497,11 @@ function openTaxPackSheet(ty){
         :'<div class="tcname"><span></span><span class="tcprice" id="plPrice-'+esc(ty)+'">'+(nat?"…":"")+'</span></div>'+
          '<div class="plfeat">'+TAX_PACK_SELL.map(f=>'<div><b>'+esc(f[0])+'</b> - '+esc(f[1])+'</div>').join("")+'</div>'+
          '<p class="tsd">'+esc(TAX_PACK_PROMISE)+'</p>'+
-         (nat?'<button class="btn full" data-buyty="'+esc(ty)+'"'+(hasPro?'':' disabled')+'>Buy '+esc(ty)+'</button>'
+         /* Disabled without Pro, and SAID rather than only shown: a dead button with no
+            explanation is a reader deciding for themselves what is wrong with it, and the
+            likeliest guess - "this app is broken" - is the wrong one. */
+         (nat?'<button class="btn full" data-buyty="'+esc(ty)+'"'+(hasPro?'':' disabled')+'>Buy '+esc(ty)+'</button>'+
+              (hasPro?'':'<p class="tsd" style="text-align:center">Subscribe to '+esc(tierName("pro"))+' first, in step 1 above.</p>')
              :'<p class="tsd">Tax years are sold in the iPhone app.</p>'))+
     (nat?'<button class="btn ghost full mt" id="tpRestore">Already bought this? Restore purchases</button>':'')+
     '<p class="prev">One-off purchase, per tax year. Estimates, not tax advice. '+

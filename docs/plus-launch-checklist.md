@@ -37,10 +37,14 @@ Branch `claude/app-store-monetization-ujwihp` - built, tested in Chromium, pushe
 
 - The gate is live in code but **iOS only**. The web app is deliberately ungated, so nothing
   Charlotte or your tester sees today has changed at all.
-- Locked features: Tax, Costs & other income, MTD export, Trends, Accreditation, Notes sync,
-  the five non-Sage colour schemes.
-- Free forever: logging, receipts, the spreadsheet import, every export and backup.
-- Nothing is purchasable yet - the App Store Connect product does not exist. That is step 2.
+- **Behind GroundWork Pro** (the monthly subscription): Business analytics, Costs & other income,
+  Accreditation hours, Notes sync.
+- **Behind a tax year** (a one-off purchase, on top of Pro): every computed tax figure for that
+  year and every earlier one, plus that year's MTD export. The Tax tab itself **opens for
+  everybody** - only the worked-out figures are masked.
+- Free forever: logging, receipts, what your rooms cost you, the spreadsheet import, every export
+  and backup, and every setting on the Tax tab.
+- Nothing is purchasable yet - no App Store Connect product exists. That is step 2.
 
 **To see the locked states right now:** serve `TherapyTracker-web/` and run
 `localStorage.tt_plus_gate = "on"` in the console, then reload. That key can only switch the
@@ -62,76 +66,201 @@ remove before launch). Two things to know:
 
 ---
 
-## Step 1 - Decide the price ☑
+## Step 1 - The two prices ☑
 
-**£29.99 / year.** Decided Sept 2026.
+**GroundWork Pro: £1.99 / month. A UK tax year: £7.99.** Decided Sept 2026.
 
-The anchor was what a UK therapist pays an accountant for self-assessment, roughly £300–600 a
-year; £29.99 sits comfortably under a tenth of that, which is an easy yes rather than a
-deliberation. It is a notch below the £30–40 originally floated - worth knowing that raising
-it later means handling existing subscribers explicitly, so treat this as the floor rather
-than an opening bid.
+They are different kinds of decision, which is why they are not a ratio of each other.
 
-- [x] Price: **£29.99 / year**
-- [ ] **Trial - still open.** A 1-month free trial spanning January is worth more than a
-      discount, because that is when the tax features prove themselves. Set it as an
-      *Introductory Offer → Free → 1 month* in step 2 if you want it.
+**The subscription** is priced to be an easy yes rather than a deliberation - under £25 a year for
+what the practice tells you about itself. The old £29.99/year was set when the subscription
+included the tax engine; it no longer does, so that anchor went with it.
+
+**The tax year** has the real anchor: it competes with an hour of an accountant's time, against the
+£300-600 a UK therapist pays for self assessment, and it is bought in January by somebody who has
+just seen their bill. At £7.99 it is a rounding error against that, which is the point.
+
+- [x] Price: **GroundWork Pro** - £1.99 / month
+- [x] Price: **UK tax year** - £7.99, one-off
+- [ ] **Trial - still open.** A 1-month free trial on Pro spanning January is worth more than a
+      discount. Set it as an *Introductory Offer → Free → 1 month* in step 2 if you want one.
+      A non-consumable cannot have a trial, so this only applies to the subscription.
+
+**Somebody who buys both in their first year pays £31.87.** Worth knowing, because it is the figure
+a reader works out for themselves, and it is the one to sanity-check against rather than either
+price alone.
+
+Nothing in the app hardcodes either figure - both are read from the store at runtime, per
+storefront. You can change them later without a release, though raising a subscription price means
+handling existing subscribers explicitly, so treat £1.99 as a floor rather than an opening bid.
 
 ---
 
-## Step 2 - Create the subscription in App Store Connect ☐
+## Step 2 - Create the products in App Store Connect ☐
+
+**Three products, two kinds.** Do them in this order; the first is the one that lets a TestFlight
+build sell anything at all.
+
+### What exists so far (Sept 2026)
+
+Created in App Store Connect. **The numbers are Apple's own internal IDs, not anything the app
+uses** - nothing needs pasting into the code, and no rebuild is needed. They are recorded here
+because they are what App Store Connect URLs and its API address a product by, and because they
+are the fastest way to point at the right product in a support conversation.
+
+| Product | Product ID (what the app asks StoreKit for) | Apple ID |
+|---|---|---|
+| GroundWork Pro, monthly | `uk.co.charlottebloortherapy.groundwork.pro.monthly` | `6811661858` |
+| UK tax year 2026-27 | `uk.co.charlottebloortherapy.groundwork.taxyear.2026` | `6811663965` |
+
+Both **Product IDs match the code exactly** - checked against
+`GroundWorkNativePlugin.swift` (`subscriptionIDs`, `taxYearPrefix` + `taxYearsForSale`) and against
+`TAX_PACK_PREFIX` in `index.html`. That is the string that has to be right; the Apple ID plays no
+part in fetching a product.
+
+**The legacy annual has not been created, and should not be.** Nobody holds it, so it would be a
+product with no purpose. The app still *asks* StoreKit for it and that is harmless: StoreKit
+returns only the products it finds and silently omits the rest, and the paywall reads its price
+from the monthly one regardless. Leave the mapping in the Swift - it costs nothing and it is the
+thing that would matter if a subscriber ever did exist.
+
+---
+
+> **Before anything else: the Paid Applications agreement must be fully active.**
+> Business → *Agreements, Tax, and Banking* → accept it, then complete **bank details and tax
+> forms**. Until every part of that is done, **every product returns empty with no error of any
+> kind** - the paywall just says "unavailable" and nothing anywhere explains why. This is the most
+> common cause of "my products don't show up" and the least obvious, because nothing about it
+> looks related to the app.
+
+### 2a. The subscription group
 
 App Store Connect → **Apps** → GroundWork → **Subscriptions**
 
-- [ ] Create **ONE Subscription Group** named `GroundWork` and put **both** subscriptions in it.
-      This is not cosmetic: one group is what makes an upgrade from Plus to Pro a proration Apple
-      handles, rather than two live subscriptions billing the same person twice. Nothing in the
-      app could detect that if it happened.
-- [ ] Create the **top** subscription in it - this one already exists if you got this far before:
-  - **Reference name:** `GroundWork Pro Annual`
-  - **Product ID:** `uk.co.charlottebloortherapy.groundwork.plus.annual`
-        ← says "plus", sells **Pro**. It is the original product and every existing subscriber
-        holds it, so it keeps entitling everything. **Change the display name, never the ID** -
-        an ID cannot be reused, and re-pointing this one takes the tax engine off people who
-        already paid. `npm run check` fails if the code's mapping ever changes.
-  - **Duration:** 1 Year
-  - **Price:** **£29.99 / year**
-- [ ] Create the **middle** subscription in the same group:
-  - **Reference name:** `GroundWork Plus Annual`
-  - **Product ID:** `uk.co.charlottebloortherapy.groundwork.insights.annual`
-  - **Duration:** 1 Year
-  - **Price:** below Pro - the app never hardcodes either figure
-  - Until this product exists, the app shows "Unavailable" against the Plus card only and Pro
-    carries on selling. That is deliberate; you can ship before this step is done.
-- [ ] Add a **Localization** to each - display name and description. Required; review rejects
-      without it.
-- [ ] If offering a trial: **Introductory Offer** → Free → 1 month
-- [ ] Add the **subscription image** to each - 1024×1024, for offer-code redemption, win-back
-      offers and the product page if App Store Promotion is on. One per subscription:
-      Pro → `TherapyTracker-web/icon-ideas/groundwork/subscription-pro-1024.png` (gold, bar 3)
-      Plus → `TherapyTracker-web/icon-ideas/groundwork/subscription-plus-1024.png` (chrome, bar 2)
-      Regenerate with `node scripts/render-subscription-image.mjs <basename>`; the `.html` beside
-      each is the source. Opaque, square, no rounded corners - Apple masks its own.
-- [ ] Add the **review screenshot** - the *App Review Information* one, so a reviewer can see
-      where the purchase is offered. Customers never see it.
+- [ ] There must be exactly **ONE Subscription Group**, named `GroundWork`, holding **both**
+      subscriptions. This is not cosmetic: one group is what makes moving between monthly and the
+      legacy annual a change Apple prorates, rather than two live subscriptions billing the same
+      person twice. Nothing in the app could detect that if it happened.
+- [ ] Give the **group itself** a localised display name. The reference name is not enough, and a
+      group without one makes every product in it unfetchable.
+
+### 2b. GroundWork Pro, monthly - the one now on sale
+
+- [ ] New subscription in that group:
+  - **Reference name:** `GroundWork Pro Monthly`
+  - **Product ID:** `uk.co.charlottebloortherapy.groundwork.pro.monthly`
+  - **Duration:** 1 Month
+  - **Price:** **£1.99 / month**
+- [ ] **Localization** - display name and description. Required; review rejects without it.
+- [ ] **Subscription image**, 1024×1024:
+      `TherapyTracker-web/icon-ideas/groundwork/subscription-pro-1024.png` (gold).
+      Regenerate with `node scripts/render-subscription-image.mjs subscription-pro-1024`.
+      Opaque, square, no rounded corners - Apple masks its own.
+- [ ] **Review screenshot** (*App Review Information*) so a reviewer can see where the purchase is
+      offered. Customers never see it.
       `TherapyTracker-web/icon-ideas/groundwork/paywall-review-screenshot.png`
+- [ ] Optional: **Introductory Offer** → Free → 1 month.
 
-> **The catch-22, and how it breaks.** App Store Connect wants this screenshot before the
-> subscription can leave *Missing Metadata*, and StoreKit cannot fetch a product that is still
-> in *Missing Metadata* - so a TestFlight paywall can only ever say "Subscription unavailable
-> right now", which is the one image you must not give a reviewer.
->
-> `node scripts/render-paywall-screenshot.mjs --price "£39.99"` breaks it with no Mac and no
-> live product: it loads the real `index.html`, forces the gate on, stubs **only** the store,
-> opens the shipping `openPlusSheet()` and captures it at 1320×2868 (iPhone 6.9"). Every pixel
-> but the price is the real app.
->
-> The price is a placeholder. Re-run with the real `--price` once step 2 is saved, and swap in
-> a genuine device screenshot before you submit for review.
+**The copy on this product must not promise tax.** Pro does not calculate tax and the app says so
+on every screen that asks for money; a store description that implies otherwise is the one thing
+that would make the in-app copy look like a retraction. The wording is drafted in
+`docs/app-store-listing.md`.
 
-> ⚠️ The product ID must match **exactly**. It is hardcoded at
-> `ios/App/App/GroundWorkNativePlugin.swift:47`. A mismatch shows an empty price on the paywall
-> and gives no error anywhere. If you want a different ID, change the Swift constant too.
+### 2c. The legacy annual - leave it alone
+
+- [ ] `uk.co.charlottebloortherapy.groundwork.plus.annual` - if it already exists, **change
+      nothing about its ID and do not delete it.** It stays purchasable so nobody's renewal
+      breaks, and the app maps it to Pro. Rename its *display name* to `GroundWork Pro (annual)`
+      if you like; never re-point the ID.
+- [ ] If it does **not** exist yet, skip it. It only matters for people already subscribed, and
+      there are none.
+
+`npm run check` fails the build if the code's mapping for this ID ever changes.
+
+### 2d. The tax years - non-consumables, not subscriptions
+
+App Store Connect → **Apps** → GroundWork → **In-App Purchases**
+
+**This is a different section of the console from Subscriptions.** Pick type
+**Non-Consumable** - not Consumable (it would be usable once and then gone) and not
+Auto-Renewable (a tax year does not renew; the *next* year is a different product).
+
+- [ ] Create the year in progress:
+  - **Reference name:** `UK tax year 2026-27`
+  - **Product ID:** `uk.co.charlottebloortherapy.groundwork.taxyear.2026`
+        ← **the START year only**, and the format is not negotiable: the app parses the year back
+        out of the ID at both ends, and `npm run check` asserts the Swift and the JavaScript agree
+        about the prefix. `.2026` means the 2026-27 tax year.
+  - **Price:** **£7.99**
+- [ ] **Localization** - display name and description. Suggested:
+      *"Works out your 2026-27 tax, and every earlier tax year: what you are on track to owe,
+      what to keep back for it, payments on account, and that year's Making Tax Digital export.
+      A one-off purchase - it does not expire. Requires GroundWork Pro."*
+- [ ] **Review screenshot** - this product has its **own**, because a reviewer looking at the
+      non-consumable needs to see where *it* is offered, not where the subscription is:
+      `TherapyTracker-web/icon-ideas/groundwork/taxyear-review-screenshot.png`
+- [ ] **Product image** - there is no tax-year artwork yet. Reuse the gold Pro image.
+
+**Then create next year too, now.** `…taxyear.2027` (UK tax year 2027-28). A product takes time to
+propagate and can sit in review; having it ready months early means April is never a scramble. Add
+it to `taxYearsForSale` in `ios/App/App/GroundWorkNativePlugin.swift:198` when you want the app to
+offer it - the app only ever puts the *current* tax year on sale, so a product that exists but is
+not yet current costs nothing.
+
+### 2e. The ID checklist
+
+These must match **exactly**. A mismatch shows an empty price on the paywall and produces no error
+anywhere at all.
+
+| What | Product ID | Type | Where it is in code |
+|---|---|---|---|
+| GroundWork Pro, monthly | `uk.co.charlottebloortherapy.groundwork.pro.monthly` | Auto-renewable, 1 month | `GroundWorkNativePlugin.swift:172` |
+| GroundWork Pro, legacy annual | `uk.co.charlottebloortherapy.groundwork.plus.annual` | Auto-renewable, 1 year | `GroundWorkNativePlugin.swift:173` |
+| UK tax year 2026-27 | `uk.co.charlottebloortherapy.groundwork.taxyear.2026` | **Non-consumable** | built from the prefix at `:195`, offered per `:198` |
+
+> **The catch-22, and how it breaks.** App Store Connect wants a review screenshot before a
+> product can leave *Missing Metadata*, and StoreKit cannot fetch a product that is still in
+> *Missing Metadata* - so a TestFlight paywall can only ever say "unavailable right now", which is
+> the one image you must not give a reviewer.
+>
+> `node scripts/render-paywall-screenshot.mjs` breaks it with no Mac and no live product: it loads
+> the real `index.html`, forces the gate on, stubs **only** the store, opens the shipping
+> `openPlusSheet()` / `openTaxPackSheet()` and captures them at 1320×2868 (iPhone 6.9"). Every
+> pixel but the price is the real app.
+>
+> ```bash
+> node scripts/render-paywall-screenshot.mjs \
+>   --price "£1.99" --period month --price-year "£7.99" --sheet both
+> ```
+>
+> **Two images, because there are two kinds of product**: `--sheet pro` writes
+> `paywall-review-screenshot.png`, `--sheet tax` writes `taxyear-review-screenshot.png`, and
+> `--sheet both` does both in one run. Add `--dark` for the dark-theme pair.
+>
+> The prices are placeholders. Re-run with the real figures once step 2 is saved, and swap in
+> genuine device screenshots before you submit for review.
+
+### 2f. What "done" looks like
+
+- [ ] Every product reaches at least **Ready to Submit**. One in *Missing Metadata* is not
+      fetchable.
+- [ ] Each has a **price in the territory your own Apple ID is in**. A price set in only some
+      territories gives nothing in the others, silently.
+- [ ] Wait. Propagation is minutes usually, sometimes hours. Nothing to do but re-check.
+
+**No rebuild is needed at any point here.** Products are fetched at runtime, so the build already
+on your phone starts working the moment App Store Connect is right.
+
+### 2g. How to tell it worked, from the app
+
+Open the app on TestFlight and go to **Settings → App preferences → What you are paying for**:
+
+- Tap **See what Pro is**. A real price beside "GroundWork Pro" means 2b is live. "Unavailable"
+  means it is not.
+- Tap **Tax year 2026-27**. A real price against step 2 of that sheet means 2d is live.
+
+The two are independent, deliberately: the subscription can sell while a tax year is still
+propagating, and the sheet reports each one separately rather than failing as a pair.
 
 ---
 
@@ -174,7 +303,8 @@ needs to be *Ready to Submit*, and the paid agreement has to be active. Work the
 3. **The subscription is complete** - reference name, product ID, duration, localisation,
    review screenshot, and a **price for the territory your Apple ID is in**. A price set in
    only some territories gives nothing in the others.
-4. **Product ID matches exactly** - `GroundWorkNativePlugin.swift:47` against App Store Connect.
+4. **Product IDs match exactly** - `GroundWorkNativePlugin.swift:171-198` against App Store
+   Connect. See the table in step 2e.
 5. **Propagation.** Minutes usually, sometimes hours. Nothing to do but re-check.
 
 Not required, despite how it feels: submitting the subscription, approval, submitting an app
@@ -284,21 +414,28 @@ This catches what the simulator cannot.
 is no payment-route argument at review, and the subscription lands in the recipient's Apple ID
 subscriptions where they expect to manage it.
 
-- [ ] App Store Connect → the subscription you are gifting → **Offer Codes** → create a batch
-      (each tier has its own codes - a Plus code does not unlock Tax)
-- [ ] In the app: Settings → Subscription → View details → **Redeem a code**
+- [ ] App Store Connect → the **subscription** → **Offer Codes** → create a batch.
+- [ ] In the app: Settings → App preferences → What you are paying for → **See what Pro is** →
+      **Redeem a code**
+
+**Offer codes only cover the subscription.** A non-consumable cannot have one, so a comped tax
+year is either a **promo code** (App Store Connect issues up to 100 per product per version,
+under the app version's *Promo Codes*) or a licence key. Comping Pro does **not** comp tax - the
+two are separate on purpose, because the tax year is the part with the April rates work behind it.
 
 Licence keys are for the web (Phase 2) and anything Apple cannot reach. If you want one now:
 
 ```bash
 node scripts/issue-licence.mjs --keygen
 node scripts/issue-licence.mjs --kind founding --name "Charlotte Bloor" --forever
-node scripts/issue-licence.mjs --kind gift --name "A N Other" --tier plus --months 12
+node scripts/issue-licence.mjs --kind comp --name "Charlotte Bloor" --forever --tax-through 2027-28
+node scripts/issue-licence.mjs --kind gift --name "A N Other" --months 12
 ```
 
-`--tier` picks the rung: `pro` (everything) is the default, `plus` grants everything except the
-tax engine. A licence with no tier in it is read as `pro`, which is what every licence issued
-before Sep 2026 meant.
+Every licence grants **GroundWork Pro**. `--tax-through` is what additionally grants tax years -
+that year and every earlier one - and leaving it off grants the subscription alone, with tax
+figures still masked. There is no `--tier` any more: there is one subscription, and a licence
+carrying the withdrawn `plus` rung is read as Pro.
 
 - The keygen writes the private key to `~/.groundwork/licence-key.json`. **Back it up.** It is
   not in the repo and cannot be recovered - losing it means re-keying, which invalidates every
@@ -343,7 +480,9 @@ screenshot list drafted.
 
 | Symptom | Almost certainly |
 |---|---|
-| Paywall says "Subscription unavailable right now" | The product does not exist yet, is still in *Missing Metadata*, hasn't propagated, or the ID does not match `GroundWorkNativePlugin.swift:47` |
+| Paywall says "Unavailable" against Pro | The subscription does not exist yet, is still in *Missing Metadata*, hasn't propagated, or the ID does not match `GroundWorkNativePlugin.swift:172` |
+| "Unavailable" against a tax year, but Pro prices fine | The non-consumable is missing or wrong. It lives under **In-App Purchases**, not Subscriptions, and its ID carries the START year only (`…taxyear.2026` = 2026-27) |
+| Tax figures still masked after buying a year | Pro is a prerequisite - check the subscription is live too. The tax year sheet shows both steps and ticks each one it has |
 | Upload rejected instantly | Duplicate build number - type an explicit one on a manual run, or use `npm run release` |
 | TestFlight missing a fix you pushed | You pushed to GitHub but did not cut a build |
 | Licence field never appears | `PLUS_PUBKEY` is still `null` - that is deliberate until `--keygen` runs |
