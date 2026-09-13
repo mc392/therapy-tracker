@@ -598,6 +598,23 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
 .prev{font-size:11px;color:var(--muted);margin-top:3px}
 .acc-work{margin-top:10px;padding:11px 13px;border:1px solid var(--line);border-radius:12px;background:var(--soft);font-size:12.5px;line-height:1.75;color:var(--ink)}
 .acc-work div{margin:1px 0} .acc-work b{font-weight:700}
+/* Report creator (Practice > Reports). The preview draws the SAME block shape the printed
+   document does, so what is on screen is what comes out of the printer. `.rsline` is the
+   signature rule: a real line to sign on, not a box that only looks like one. */
+.repnote{margin:8px 0 0;line-height:1.6}
+.repdecl{margin-top:6px}
+.repsig{margin:14px 0 4px;padding:12px 13px;border:1px solid var(--line);border-radius:12px;background:var(--soft)}
+.repsig .rsl{font-weight:700;font-size:13px}
+.repsig .rsd{font-size:12px;color:var(--muted);margin-bottom:10px}
+.repsig .rsline{border-bottom:1px solid var(--muted);margin:18px 0 0;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding-bottom:2px}
+.repmeta{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0}
+.repmeta span{font-size:11.5px;background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:3px 9px;color:var(--muted)}
+.tplrow{display:flex;gap:11px;align-items:flex-start;width:100%;text-align:left;padding:12px 13px;border:1px solid var(--line);
+  border-radius:12px;background:var(--card);margin-bottom:8px;cursor:pointer;color:inherit;font:inherit}
+.tplrow:hover{border-color:var(--brand)}
+.tplrow .tn{font-weight:700;font-size:14px;display:block}
+.tplrow .tb{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--brand);display:block;margin-top:1px}
+.tplrow .td{font-size:12.5px;color:var(--muted);display:block;margin-top:4px;line-height:1.55}
 /* The three steps of getting a quarter filed (Tax > Making Tax Digital). Two are already done
    by the time the reader is looking at them and one is not ours to do, so the marker carries
    that distinction: a tick in brand green against the outstanding step's outline. */
@@ -1555,7 +1572,7 @@ const MAX_SNAP=120;
 /* Data schema version, stamped on state and on every backup. Bump when a change would be
    misread by an older build, and add the matching step to migrate(). Data with no stamp is v1
    (everything written before versioning existed). */
-const SCHEMA_VERSION=9;
+const SCHEMA_VERSION=10;
 function stateSchemaVersion(st){const v=st&&st.meta&&+st.meta.schemaVersion;return v>0?v:1;}
 
 function clone(o){return JSON.parse(JSON.stringify(o))}
@@ -1663,6 +1680,17 @@ function normalize(st){
   sg.reveal=sg.reveal||{};
   if(sg.reveal.mode==null)sg.reveal.mode="all";   /* only stepDepth ever sets "simple" */
   if(!Array.isArray(sg.reveal.shown))sg.reveal.shown=[];
+  /* v9: saved reports (Practice > Reports). In settings rather than localStorage because a
+     report someone built is theirs — it travels in a backup and survives a new phone, the same
+     reasoning as coach.seen and taxMoments. A saved spec stores the RANGE KEY, never resolved
+     dates: "last 12 months" saved in March has to still mean twelve months when it is run in
+     June, or every saved report quietly becomes a snapshot of the day it was written. */
+  sg.reports=sg.reports||{};
+  if(!Array.isArray(sg.reports.saved))sg.reports.saved=[];
+  if(sg.reports.defaultId==null)sg.reports.defaultId="";
+  sg.reports.saved.forEach(r=>{if(r&&!r._id)r._id=uid();
+    if(r&&!Array.isArray(r.sections))r.sections=[];
+    if(r&&!r.opts)r.opts={};});
   st.game=st.game||{}; st.game.activeWeeks=st.game.activeWeeks||[]; st.game.records=st.game.records||{};
   const rr=st.game.records; rr.longestStreak=rr.longestStreak||0; rr.mostClearedAtOnce=rr.mostClearedAtOnce||0;
   /* Seed the concurrent-clients best from where the practice stands today. Starting at 0 would
@@ -1776,6 +1804,13 @@ function normalize(st){
      Data stamped newer than this build is left completely untouched - never downgrade it in
      place. Import refuses it outright (see validateImport); this path only guards the unlikely
      case of a newer build having written to this device's own database.
+
+     v9 → v10 adds settings.reports - the reports a therapist has built and saved for a course,
+     a placement or a professional body, and which one is their default. A v10 backup can hold
+     "CPCAB client log, everything so far, these nine sections, counted as one clinical hour
+     each"; a v9 build has no such field, so restoring it there would drop every saved report
+     and then save that loss back. Only the definitions are stored - the figures are always
+     rebuilt from the sessions - so an older build loses the saved report, never the data.
 
      v8 → v9 gives a room-rent step its own rhythm and its own end date: "£150 every week
      from 1 June until 31 August" rather than "£150, monthly, forever". Both fields are absent
@@ -2147,9 +2182,9 @@ const TIER_SHORT={pro:"Pro"};
    who fills that gap in themselves subscribes in January and finds nothing there. State the
    exclusion; never merely decline to claim the inclusion. */
 const TIER_BLURB={
-  pro:"Your practice read back to you: twenty analytics, accreditation hours, what the practice "+
-      "costs you, and Notes sync. Tax calculations are not included - each UK tax year is its own "+
-      "one-off purchase, on top of Pro."};
+  pro:"Your practice read back to you: twenty analytics, accreditation hours, reports for your "+
+      "course or professional body, what the practice costs you, and Notes sync. Tax calculations "+
+      "are not included - each UK tax year is its own one-off purchase, on top of Pro."};
 /* Which rung each gated feature sits on. ABSENT MEANS FREE, and free is the default for anything
    new - a feature becomes paid by being written into this table, never by omission.
 
@@ -2162,7 +2197,7 @@ const TIER_BLURB={
    be bought without Pro, so nobody can be shown a tax figure worked out from a profit they had no
    way to enter their costs against. Selling those two apart was the one hole in this split, and
    requiring Pro underneath a package is what closes it. */
-const FEATURE_TIER={finances:"pro",trends:"pro",accreditation:"pro",notesSync:"pro"};
+const FEATURE_TIER={finances:"pro",trends:"pro",accreditation:"pro",notesSync:"pro",reports:"pro"};
 /* Derived, not maintained: "is this gated at all" still has one answer and one list. */
 const PLUS_FEATURES=Object.keys(FEATURE_TIER);
 function tierRank(t){const i=TIERS.indexOf(String(t||""));return i<0?0:i+1;}   /* 0 = free */
@@ -3532,7 +3567,7 @@ let pracTab="clients", moneySeg="overview", taxSeg="now";
 const TREND_SEGS=[["clients","Clients"],["money","Money"],["time","Time"],["you","You"]];
 let trendSeg="clients";
 function setSeg(tab,seg){
-  if(tab==="practice"&&["clients","trends","rooms","supervision"].indexOf(seg)>=0)pracTab=seg;
+  if(tab==="practice"&&["clients","trends","rooms","supervision","reports"].indexOf(seg)>=0)pracTab=seg;
   else if(tab==="money"&&["overview","costs","table"].indexOf(seg)>=0)moneySeg=seg;
   else if(tab==="tax"&&["now","estimate","payments","allowances","mtd"].indexOf(seg)>=0)taxSeg=seg;
 }
@@ -4166,6 +4201,652 @@ function mountAccreditation(host){if(!host||!feat("accreditation"))return;
       await commit("Updated accreditation hours");});
   });
   calc();
+}
+
+/* ============================================================
+   Report creator (Sep 2026) — Practice › Reports
+
+   Every training provider, awarding body and register wants broadly the same handful of
+   facts — client hours, how many were missed, the in-person/remote split, supervision and
+   its ratio, CPD — and every one of them wants them over a different period, counted a
+   slightly different way, on their own form. The app already holds all of it. What it had
+   no way to do was put a chosen subset of it, over a chosen span, on one page.
+
+   Three rules, the same ones the tax engine and the `ana*` trends follow:
+
+   - **The engine is pure and ungated.** `reportBuild()` reads `S` and `today()`, returns a
+     plain object and writes nothing; `plusLocked("reports")` decides what the VIEW renders.
+     Callable from a console, testable without an entitlement.
+   - **One shape, two renderers.** Every section builder returns the same `{kpis, work,
+     table, note}` block, and the on-screen preview, the printed document and the CSV all
+     draw from that one shape. Two renderers built from two literals eventually disagree,
+     and the place it would surface is somebody's submitted form — the same reason
+     `mtdRows()` and `backupPayload()` exist.
+   - **It never claims more than it knows.** A template is a starting point shaped from a
+     body's published requirements, never an approved form, and every report states the
+     assumptions behind its own figures (see `reportHours`). "Supports compliance against
+     the rules your provider approves" — never "guarantees" and never "approved by".
+
+   Deliberately NOT here: signatures, hashes, locked periods, DOCX. The declaration block
+   prints signature LINES for a human to sign; nothing is attested in the data.
+   See docs/institutional-partnerships-2026-09.md for where those sit. */
+
+/* How a span is chosen. Ranges are resolved at build time, never stored resolved — "last 12
+   months" on a report saved in March must mean March-to-March when it is run again in June,
+   or a saved report silently becomes a snapshot of the day it was written. */
+const REPORT_RANGES=[
+  ["all",   "Everything so far"],
+  ["ty",    "This tax year"],
+  ["pty",   "Last tax year"],
+  ["m12",   "Last 12 months"],
+  ["m24",   "Last 2 years"],
+  ["y5",    "Last 5 years"],
+  ["cy",    "This calendar year"],
+  ["custom","Between two dates"]
+];
+function reportFirstDate(){
+  let m=null;
+  const see=d=>{const x=d?parseD(d):null;if(x&&(!m||x<m))m=x;};
+  (S.sessions||[]).forEach(s=>see(s.date));
+  (S.supervision||[]).forEach(s=>see(s.date));
+  (S.peerSupervision||[]).forEach(s=>see(s.date));
+  (S.cpd||[]).forEach(s=>see(s.date));
+  return m||today();
+}
+function reportRange(spec){
+  const t=today(), y=t.getFullYear();
+  const r=spec&&spec.range||"all";
+  const mk=(from,to,label)=>({from:from,to:to,label:label});
+  if(r==="custom"){
+    const f=spec.from?parseD(spec.from):reportFirstDate();
+    const to=spec.to?parseD(spec.to):t;
+    return mk(f,to,fmtD(f)+" to "+fmtD(to));
+  }
+  if(r==="ty"||r==="pty"){
+    /* The tax year is April 6 to April 5 — taxYear() owns that boundary, so derive the span
+       from it rather than writing "April 6" down a second time. */
+    const ty=taxYear(isoD(t)), want=(r==="ty")?ty:String(+String(ty).slice(0,4)-1)+"-"+String(+String(ty).slice(0,4)).slice(2);
+    const startY=+String(want).slice(0,4);
+    const from=new Date(startY,3,6), to=new Date(startY+1,3,5);
+    return mk(from,to,"Tax year "+want+" ("+fmtDshort(from)+" to "+fmtDshort(to)+")");
+  }
+  if(r==="cy")return mk(new Date(y,0,1),new Date(y,11,31),String(y));
+  const months={m12:12,m24:24,y5:60}[r];
+  if(months){
+    const from=new Date(t.getFullYear(),t.getMonth()-months,t.getDate());
+    return mk(from,t,(months===60?"Five years":months===24?"Two years":"Twelve months")+" to "+fmtD(t));
+  }
+  const f=reportFirstDate();
+  return mk(f,t,"Everything so far ("+fmtD(f)+" to "+fmtD(t)+")");
+}
+
+/* ---- the working set every section reads from ---- */
+function reportCtx(spec){
+  const rg=reportRange(spec), t=today();
+  /* Nothing in the future is ever evidence. A session booked for next week is not a session
+     delivered, however firmly it is in the diary. */
+  const end=rg.to>t?t:rg.to;
+  const inRange=d=>{const x=d?parseD(d):null;return !!x&&x>=rg.from&&x<=end;};
+  const sess=(S.sessions||[]).filter(s=>inRange(s.date)).map(s=>({s:s,d:derive(s)}))
+    .sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
+  return {
+    spec:spec, range:rg, end:end, inRange:inRange,
+    sessions:sess,
+    attended:sess.filter(x=>!isCancelled(x.s)),
+    missed:sess.filter(x=>isCancelled(x.s)),
+    supervision:(S.supervision||[]).filter(s=>inRange(s.date)).sort((a,b)=>parseD(a.date)-parseD(b.date)),
+    peer:(S.peerSupervision||[]).filter(p=>inRange(p.date)).sort((a,b)=>parseD(a.date)-parseD(b.date)),
+    cpd:(S.cpd||[]).filter(c=>inRange(c.date)).sort((a,b)=>parseD(a.date)-parseD(b.date))
+  };
+}
+function r1(n){return Math.round(n*10)/10;}
+function hrsLabel(n){return r1(n)+" hr"+(r1(n)===1?"":"s");}
+/* Every date in a report carries its YEAR. `fmtDshort` is the app's in-context format
+   ("Mon, 05 Dec") and is right on a screen showing this month — on a report spanning four
+   years it is ambiguous to the point of being useless, and the reader is a tutor who was
+   not there. `fmtD` is the same shape with the year on it. */
+function fmtRD(d){return fmtD(d);}
+
+/* How an attended session becomes an hour.
+
+   **A 50-minute session IS one clinical hour.** That is the convention across UK counselling
+   training and accreditation — the "therapeutic hour" is 50 minutes with the remaining ten for
+   notes — so counting a standard session as 0.83 hours of elapsed time understates a trainee's
+   hours by a sixth against the figure their course is actually asking for. `clinical` is
+   therefore the DEFAULT, and `actual` is there for the minority of forms that genuinely want
+   elapsed clock time.
+
+   Other session lengths are the real problem, and GroundWork cannot fully solve it yet: it
+   stores a session, not a duration, so `sessionMins()` — one practice-wide setting — is all
+   there is. Three things follow, and all three are deliberate:
+
+   - `prorata` exists for a practice whose sessions are not the standard length. A 90-minute
+     session is 1.8 clinical hours, a 25-minute one is 0.5, measured against the 50-minute hour.
+   - When the practice length is NOT a standard hour (under 45 or over 60 minutes) and the
+     report is still counting one hour each, `mismatch` is set and the block prints a warning.
+     Silently reporting a practice of 90-minute sessions as one hour each understates it badly,
+     and the therapist is the only person who can know which their course wants.
+   - Every mode prints its own arithmetic, so a tutor can check the total rather than trust it.
+
+   Per-session duration is docs/tasks/T10-training-record.md; when it lands, these three modes
+   keep their meanings and only the source of `mins` changes. */
+const CLINICAL_HOUR_MINS=50;          /* the therapeutic hour — 50 minutes, not 60 */
+const REPORT_HOUR_MODES=[
+  ["clinical","One clinical hour per session"],
+  ["prorata", "Pro rata against the 50-minute hour"],
+  ["actual",  "Actual elapsed time"]
+];
+function reportHourMode(spec){
+  const m=(spec&&spec.opts||{}).hourMode;
+  return REPORT_HOUR_MODES.some(x=>x[0]===m)?m:"clinical";   /* an unknown stored mode falls back */
+}
+function reportHours(ctx){
+  const n=ctx.attended.length, mins=sessionMins(), mode=reportHourMode(ctx.spec);
+  const plural=n===1?"":"s";
+  let hours, basis;
+  if(mode==="actual"){
+    hours=n*mins/60;
+    basis=n+" attended session"+plural+" × "+mins+" minutes of elapsed time = "+hrsLabel(hours);
+  }else if(mode==="prorata"){
+    const per=mins/CLINICAL_HOUR_MINS;
+    hours=n*per;
+    basis=n+" attended session"+plural+" × "+mins+" minutes ÷ the "+CLINICAL_HOUR_MINS+
+      "-minute clinical hour = "+r1(per)+" clinical hours each = "+hrsLabel(hours);
+  }else{
+    hours=n;
+    basis=n+" attended session"+plural+" counted as one clinical hour each — the "+
+      CLINICAL_HOUR_MINS+"-minute therapeutic hour, which is what your sessions are set to"+
+      (mins===CLINICAL_HOUR_MINS?"":" (yours are "+mins+" minutes)")+".";
+  }
+  /* A practice whose sessions are not a standard hour, still counting one hour each. The
+     therapist is the only person who can know which their course wants, so say it, don't fix it. */
+  const standard=mins>=45&&mins<=60;
+  const mismatch=(mode==="clinical"&&!standard)
+    ? ("Your sessions are "+mins+" minutes, which is not the standard 50-to-60-minute hour, and "+
+       "this report is counting each of them as one clinical hour. Pro rata they would be "+
+       hrsLabel(n*mins/CLINICAL_HOUR_MINS)+". Check which your course asks for.")
+    : "";
+  return {
+    sessions:n, mins:mins, mode:mode, hours:hours, basis:basis, mismatch:mismatch,
+    caveat:"GroundWork records a session, not its length, so every session is counted at the "+
+      "practice session length ("+mins+" minutes). A session that actually ran longer or shorter "+
+      "is not reflected here."
+  };
+}
+
+/* ---- the blocks ----
+   Each returns the ONE shape every renderer draws: a heading, optional KPI tiles, optional
+   "here is the arithmetic" lines, an optional table, and an optional note. A builder that
+   has nothing to say returns null and the block is left out rather than printed empty. */
+const REPORT_SECTIONS={
+  hours:{n:"Client hours",d:"Attended sessions turned into hours, with the distinct clients behind them.",
+    build:ctx=>{
+      const h=reportHours(ctx);
+      if(!ctx.sessions.length)return null;
+      const codes={};ctx.attended.forEach(x=>{const c=(x.s.client||"").trim();if(c)codes[c]=(codes[c]||0)+1;});
+      const nClients=Object.keys(codes).length;
+      const first=ctx.attended[0], last=ctx.attended[ctx.attended.length-1];
+      return {title:"Client hours",
+        kpis:[{v:r1(h.hours),l:"Client hours"},{v:h.sessions,l:"Sessions attended"},
+              {v:nClients,l:"Distinct clients"},{v:ctx.missed.length,l:"Missed (not counted)"}],
+        work:[h.basis,
+          h.mismatch?("<b>"+esc(h.mismatch)+"</b>"):"",
+          "Missed sessions are excluded: "+ctx.missed.length+" cancellation"+(ctx.missed.length===1?"":"s")+
+            " or non-attendance in this period "+(ctx.missed.length?"were":"was")+" left out of every hours figure above.",
+          first?("First attended session "+fmtD(first.s.date)+", most recent "+fmtD(last.s.date)+"."):""].filter(Boolean),
+        note:h.caveat};
+    }},
+  modes:{n:"In-person / remote split",d:"The percentage split by delivery mode — the figure courses cap.",
+    build:ctx=>{
+      if(!ctx.attended.length)return null;
+      const by={};ctx.attended.forEach(x=>{const m=(x.s.mode||"Unrecorded").trim()||"Unrecorded";by[m]=(by[m]||0)+1;});
+      const tot=ctx.attended.length;
+      const rows=Object.keys(by).sort((a,b)=>by[b]-by[a])
+        .map(m=>[m,String(by[m]),(Math.round(by[m]/tot*1000)/10)+"%"]);
+      const inP=by["In-person"]||0;
+      return {title:"Delivery mode",
+        kpis:[{v:(Math.round(inP/tot*1000)/10)+"%",l:"In person"},{v:(Math.round((tot-inP)/tot*1000)/10)+"%",l:"Not in person"}],
+        table:{head:["Mode","Sessions","Share"],rows:rows,align:["","num","num"]},
+        work:["Percentages are of "+tot+" attended session"+(tot===1?"":"s")+"; missed sessions are excluded."],
+        note:"Where a course sets a maximum for remote work, check this share against it. GroundWork records two modes, in-person and online; a telephone session logged as online is counted as online here."};
+    }},
+  clients:{n:"Per client",d:"One row per client code — sessions, hours, first and last date.",
+    build:ctx=>{
+      if(!ctx.attended.length)return null;
+      /* One session's worth of hours, whichever mode is in force — derived from the block
+         total so a per-client row can never disagree with the headline above it. */
+      const h=reportHours(ctx), per=h.sessions?(h.hours/h.sessions):0;
+      const by={};
+      ctx.attended.forEach(x=>{const c=(x.s.client||"—").trim()||"—";
+        const e=by[c]||(by[c]={n:0,first:null,last:null,modes:{}});
+        e.n++;const d=parseD(x.s.date);
+        if(!e.first||d<e.first)e.first=d; if(!e.last||d>e.last)e.last=d;
+        const m=(x.s.mode||"").trim();if(m)e.modes[m]=(e.modes[m]||0)+1;});
+      const rows=Object.keys(by).sort((a,b)=>by[b].n-by[a].n||a.localeCompare(b))
+        .map(c=>[c,String(by[c].n),String(r1(by[c].n*per)),fmtRD(by[c].first),fmtRD(by[c].last)]);
+      return {title:"Client work by client",
+        table:{head:["Client","Sessions","Hours","First","Last"],rows:rows,align:["","num","num","",""]},
+        note:"Clients appear by their confidential code only. No names, no fees and nothing clinical is included."};
+    }},
+  sessionlog:{n:"Session-by-session log",d:"Every session in the period, one row each. The shape a client log asks for.",
+    build:ctx=>{
+      if(!ctx.sessions.length)return null;
+      const rows=ctx.sessions.map(x=>[fmtRD(x.s.date),(x.s.client||"—"),
+        (x.s.num===""||x.s.num==null)?"—":("#"+x.s.num),
+        isCancelled(x.s)?"—":(x.s.mode||"—"),
+        isCancelled(x.s)?(x.d.cancelKind==="dna"?"Did not attend":"Cancelled"):"Attended",
+        notesDone(x.s)?"Yes":"No"]);
+      return {title:"Session log",
+        table:{head:["Date","Client","Session","Mode","Status","Written up"],rows:rows,align:["","","num","","",""]},
+        work:[ctx.sessions.length+" session"+(ctx.sessions.length===1?"":"s")+" in the period; "+
+          ctx.attended.length+" attended, "+ctx.missed.length+" missed."],
+        note:"“Written up” records that notes were completed elsewhere. The notes themselves are not held in GroundWork and are not reproduced here."};
+    }},
+  missed:{n:"Missed sessions",d:"Cancellations and non-attendance, counted separately.",
+    build:ctx=>{
+      if(!ctx.sessions.length)return null;
+      const dna=ctx.missed.filter(x=>x.d.cancelKind==="dna").length;
+      const canc=ctx.missed.length-dna;
+      const pct=ctx.sessions.length?Math.round(ctx.missed.length/ctx.sessions.length*1000)/10:0;
+      return {title:"Missed sessions",
+        kpis:[{v:canc,l:"Cancelled"},{v:dna,l:"Did not attend"},{v:pct+"%",l:"Of all booked"}],
+        work:["None of these count toward client hours anywhere in this report."]};
+    }},
+  supervision:{n:"Clinical supervision",d:"Sessions, hours, supervisors and how often they happened.",
+    build:ctx=>{
+      if(!ctx.supervision.length)return null;
+      /* Each logged entry is one hour. GroundWork does not record a supervision duration, so
+         this is a count, not a sum — and like the client hours above it has to say so. */
+      const n=ctx.supervision.length;
+      const sups=Array.from(new Set(ctx.supervision.map(s=>(s.supervisor||"").trim()).filter(Boolean)));
+      const span=Math.max(1,Math.round((ctx.end-ctx.range.from)/86400000));
+      const perMonth=n/(span/30.44);
+      const gaps=[];
+      for(let i=1;i<ctx.supervision.length;i++)
+        gaps.push(Math.round((parseD(ctx.supervision[i].date)-parseD(ctx.supervision[i-1].date))/86400000));
+      const longest=gaps.length?Math.max.apply(null,gaps):null;
+      const rows=ctx.supervision.map(s=>[fmtRD(s.date),(s.supervisor||"—"),"1.0",
+        String(+s.count||1),(s.clients||[]).join(", ")||"—"]);
+      return {title:"Clinical supervision",
+        kpis:[{v:n,l:"Sessions"},{v:r1(n),l:"Hours"},{v:r1(perMonth),l:"Per month"},
+              {v:longest==null?"—":longest,l:"Longest gap (days)"}],
+        table:{head:["Date","Supervisor","Hours","Client hrs reviewed","Clients discussed"],rows:rows,align:["","","num","num",""]},
+        work:[sups.length?("Supervisor"+(sups.length===1?"":"s")+": "+sups.join(", ")+"."):"",
+          "Averaged over "+span+" days."].filter(Boolean),
+        note:"Each logged supervision session is counted as one hour — GroundWork does not record a supervision duration. Where yours run longer, say so on the form."};
+    }},
+  ratio:{n:"Supervision ratio",d:"Client hours against supervision hours, with the arithmetic shown.",
+    build:ctx=>{
+      const h=reportHours(ctx), sup=ctx.supervision.length;
+      if(!h.sessions&&!sup)return null;
+      const ratio=sup>0?h.hours/sup:null;
+      return {title:"Client hours to supervision",
+        kpis:[{v:r1(h.hours),l:"Client hours"},{v:r1(sup),l:"Supervision hours"},
+              {v:ratio==null?"—":r1(ratio),l:"Hours per supervision hour"}],
+        work:["Ratio = "+r1(h.hours)+" client hours ÷ "+r1(sup)+" supervision hours = "+
+            (ratio==null?"—":r1(ratio))+".",
+          "Peer supervision is deliberately excluded from this figure — where a body counts only formal clinical supervision toward its ratio, including peer hours would overstate it."],
+        note:"The requirement itself is set by your training provider or professional body. GroundWork reports the ratio; it does not decide what yours should be."};
+    }},
+  peer:{n:"Peer supervision",d:"Hours logged, kept out of the ratio above.",
+    build:ctx=>{
+      if(!ctx.peer.length)return null;
+      const hrs=ctx.peer.reduce((a,p)=>a+(+p.hours||0),0);
+      const rows=ctx.peer.map(p=>[fmtRD(p.date),(p.with||"—"),String(r1(+p.hours||0))]);
+      return {title:"Peer supervision",
+        kpis:[{v:r1(hrs),l:"Hours"},{v:ctx.peer.length,l:"Sessions"}],
+        table:{head:["Date","With","Hours"],rows:rows,align:["","","num"]},
+        note:"Counted toward total hours, and deliberately not toward the clinical supervision ratio."};
+    }},
+  cpd:{n:"CPD",d:"Hours by kind over the period, and what is and is not counted.",
+    build:ctx=>{
+      const own=ctx.cpd.reduce((a,c)=>a+(+c.hours||0),0);
+      const supH=ctx.supervision.length, peerH=ctx.peer.reduce((a,p)=>a+(+p.hours||0),0);
+      if(!own&&!supH&&!peerH)return null;
+      /* The therapist's own answer to "does supervision count?" decides the total, exactly as
+         it does on the CPD card — two screens giving two totals for the same year is worse
+         than either answer. */
+      const cSup=cpdCountsSup(), cPeer=cpdCountsPeer();
+      const total=own+(cSup?supH:0)+(cPeer?peerH:0);
+      const byKind={};
+      ctx.cpd.forEach(c=>{const k=CPD_KINDS[c.kind]?c.kind:"other";byKind[k]=(byKind[k]||0)+(+c.hours||0);});
+      const rows=Object.keys(byKind).sort((a,b)=>byKind[b]-byKind[a])
+        .map(k=>[cpdKind(k).n,String(r1(byKind[k]))]);
+      if(cSup&&supH)rows.push(["Clinical supervision",String(r1(supH))]);
+      if(cPeer&&peerH)rows.push(["Peer supervision",String(r1(peerH))]);
+      return {title:"Continuing professional development",
+        kpis:[{v:r1(total),l:"CPD hours"},{v:r1(own),l:"Excluding supervision"},{v:ctx.cpd.length,l:"Activities"}],
+        table:{head:["Kind","Hours"],rows:rows,align:["","num"]},
+        work:["Supervision "+(cSup?"is":"is not")+" counted toward this total"+
+            (feat("peer")?(", peer supervision "+(cPeer?"is":"is not")):"")+" — set on the CPD screen, because accrediting bodies genuinely differ.",
+          (cSup&&supH)?("Without supervision the figure would be "+hrsLabel(own+(cPeer?peerH:0))+"."):""].filter(Boolean),
+        note:"Hours only. What a course cost is a business cost and is recorded under Money, deliberately not here."};
+    }},
+  cpdlog:{n:"CPD activity log",d:"Every CPD entry listed, with provider and notes.",
+    build:ctx=>{
+      if(!ctx.cpd.length)return null;
+      const rows=ctx.cpd.map(c=>[fmtRD(c.date),cpdKind(CPD_KINDS[c.kind]?c.kind:"other").n,
+        (c.title||"—"),(c.provider||"—"),String(r1(+c.hours||0)),(c.notes||"")]);
+      return {title:"CPD activities",
+        table:{head:["Date","Kind","Title","Provider","Hours","Notes"],rows:rows,align:["","","","","num",""]},
+        note:"Where your body asks for a reflective account of each activity, write it on the form — GroundWork records the hours and what they were, not a reflection."};
+    }},
+  declaration:{n:"Signature block",d:"Blank declaration and signature lines to print and sign.",
+    build:ctx=>({title:"Declaration",
+      decl:[["Trainee / practitioner","I confirm that the record above is a true account of the work I have carried out."],
+            ["Supervisor","I confirm that I have supervised this practitioner over the period stated."],
+            ["Course tutor / verifier","Received and checked."]],
+      note:"These are printed lines for a person to sign by hand. GroundWork does not hold an electronic signature and does not lock this record against later editing — a figure here can change if the underlying sessions do."})}
+};
+/* The order blocks are built and printed in, independent of the order they were switched on. */
+const REPORT_ORDER=["hours","modes","missed","clients","sessionlog","supervision","ratio","peer","cpd","cpdlog","declaration"];
+
+/* ---- templates ----
+   Starting points, shaped from each body's PUBLISHED requirements as at Sept 2026. They are
+   not approved forms and must never be described as such: a provider sets its own definitions
+   on top of any baseline, and the wording below says so on every one of them. `source` is
+   printed on the report itself so whoever receives it knows what it was built from. */
+const REPORT_TEMPLATES=[
+  {k:"bacp-trainee", n:"Trainee placement record", body:"BACP-aligned training",
+   sub:"Supervised client hours excluding missed sessions, the supervision ratio and the mode split — the four things a placement review asks for.",
+   source:"Shaped from BACP's published trainee expectations: supervised client hours, supervision at least fortnightly and roughly 1 hour per 8 client hours.",
+   range:"all", sections:["hours","modes","missed","supervision","ratio","declaration"], opts:{hourMode:"clinical"}},
+  {k:"bacp-3a", n:"Accreditation hours & ratio", body:"BACP accreditation (Form 3A)",
+   sub:"Clinical hours, supervision hours and the 1:6 ratio, with peer hours shown separately.",
+   source:"Shaped from the hour and ratio figures BACP's accreditation route asks for. The same arithmetic as Supervision › Insights.",
+   range:"all", sections:["hours","supervision","ratio","peer","declaration"], opts:{hourMode:"clinical"}},
+  {k:"bacp-cpd", n:"Annual CPD record", body:"BACP membership",
+   sub:"A year of CPD hours by kind, with supervision counted or not as you have set it.",
+   source:"Shaped from BACP's expectation of around 30 hours of CPD a year, evidenced on request.",
+   range:"m12", sections:["cpd","cpdlog","supervision","declaration"], opts:{}},
+  {k:"cpcab-l4", n:"Client log & practice hours", body:"CPCAB Level 4 and similar diplomas",
+   sub:"The session-by-session log, distinct client count and in-person share — plus supervision.",
+   source:"Shaped from CPCAB's published Level 4 requirements: contracted one-to-one hours with a minimum number of clients, missed sessions excluded, and a cap on work that is not in person.",
+   range:"all", sections:["hours","clients","modes","sessionlog","missed","supervision","declaration"], opts:{hourMode:"clinical"}},
+  {k:"ukcp-cpd", n:"Five-year CPD record", body:"UKCP",
+   sub:"A rolling five years of CPD with the annual shape visible underneath.",
+   source:"Shaped from UKCP's baseline of 250 hours over five years with a minimum in any one year. Individual colleges can and do ask for more.",
+   range:"y5", sections:["cpd","cpdlog","supervision","peer","declaration"], opts:{}},
+  {k:"hcpc-cpd", n:"Two-year CPD profile", body:"HCPC registrants",
+   sub:"The two years an audit profile covers, listed activity by activity.",
+   source:"Shaped from HCPC's audit period. HCPC sets no fixed number of hours — it asks for a current record, a mixture of learning, and how it benefited service users. The reflection is yours to write.",
+   range:"m24", sections:["cpd","cpdlog","declaration"], opts:{}},
+  {k:"renewal", n:"Renewal evidence pack", body:"NCPS and similar registers",
+   sub:"A year of practice, CPD and supervision in one page for a renewal or audit request.",
+   source:"Shaped from the evidence registers commonly ask for at renewal: current supervision, CPD and continuing practice.",
+   range:"m12", sections:["hours","supervision","cpd","declaration"], opts:{}},
+  {k:"supervisor", n:"Pack for your supervisor", body:"any supervisor's report",
+   sub:"What your supervisor needs in front of them to write their own report on you.",
+   source:"Not a body's form — the figures a supervisor is usually asked to confirm.",
+   range:"m12", sections:["hours","clients","modes","supervision","ratio","declaration"], opts:{}},
+  {k:"blank", n:"Start from scratch", body:"",
+   sub:"Pick the sections and the period yourself.",
+   source:"", range:"m12", sections:["hours","supervision"], opts:{}}
+];
+function reportTemplate(k){return REPORT_TEMPLATES.find(t=>t.k===k)||REPORT_TEMPLATES[REPORT_TEMPLATES.length-1];}
+function reportSpecFrom(tpl){
+  return {_id:uid(),name:tpl.n,template:tpl.k,range:tpl.range,from:"",to:"",
+    sections:tpl.sections.slice(),opts:Object.assign({hourMode:"clinical"},tpl.opts||{}),notes:""};
+}
+
+/* Saved reports live in settings, not localStorage: a report someone built is theirs, it
+   travels in a backup and it should survive a new phone. */
+function reportStore(){const sg=settings();sg.reports=sg.reports||{};
+  if(!Array.isArray(sg.reports.saved))sg.reports.saved=[];return sg.reports;}
+function reportDefault(){
+  const st=reportStore();
+  const d=st.saved.find(x=>x._id===st.defaultId);
+  return d||null;
+}
+
+/* The build. Pure: reads S and today(), writes nothing, never gated. */
+function reportBuild(spec){
+  const ctx=reportCtx(spec);
+  const tpl=reportTemplate(spec.template);
+  const order=REPORT_ORDER.filter(k=>(spec.sections||[]).indexOf(k)>=0);
+  const blocks=[];
+  order.forEach(k=>{
+    const def=REPORT_SECTIONS[k]; if(!def)return;          /* a key this build no longer has */
+    let b=null; try{b=def.build(ctx);}catch(e){b=null;}
+    if(b)blocks.push(Object.assign({key:k},b));
+  });
+  /* A section that was asked for and had nothing to report is worth naming: a blank space on a
+     form reads as an oversight, where "no CPD logged in this period" is an answer. */
+  const empty=order.filter(k=>!blocks.some(b=>b.key===k)).map(k=>REPORT_SECTIONS[k]?REPORT_SECTIONS[k].n:k);
+  return {spec:spec,template:tpl,range:ctx.range,blocks:blocks,empty:empty,
+    counts:{sessions:ctx.sessions.length,attended:ctx.attended.length,supervision:ctx.supervision.length,cpd:ctx.cpd.length},
+    generated:today()};
+}
+
+/* ---- rendering: one shape, two renderers ---- */
+/* The PREVIEW truncates a long table; the printed DOCUMENT never does. A client log is every
+   session by definition — an established practice's is over a thousand rows, and that is the
+   correct document and an unusable screen. Found by printing one and looking at it: the page
+   came out 35,000 pixels tall. The preview says how many it is not showing, so nobody submits
+   a report believing it stops where the screen did. */
+const REPORT_PREVIEW_ROWS=25;
+function reportBlockHTML(b,doc){
+  const cls=doc?"":"card";
+  let h='<div class="'+cls+' repblock">'+(doc?'<h2>'+esc(b.title)+'</h2>':cardHead(b.title));
+  if(b.kpis&&b.kpis.length)
+    h+='<div class="kpis">'+b.kpis.map(k=>'<div class="kpi"><div class="v">'+esc(String(k.v))+'</div><div class="l">'+esc(k.l)+'</div></div>').join("")+'</div>';
+  if(b.work&&b.work.length)
+    h+='<div class="acc-work">'+b.work.map(w=>'<div>'+w+'</div>').join("")+'</div>';
+  if(b.table){
+    const all=b.table.rows, show=doc?all:all.slice(0,REPORT_PREVIEW_ROWS);
+    h+='<div class="rawscroll"><table><thead><tr>'+b.table.head.map((c,i)=>
+        '<th'+((b.table.align||[])[i]==="num"?' class="num"':'')+'>'+esc(c)+'</th>').join("")+'</tr></thead><tbody>'+
+      show.map(r=>'<tr>'+r.map((c,i)=>
+        '<td'+((b.table.align||[])[i]==="num"?' class="num"':'')+'>'+esc(c)+'</td>').join("")+'</tr>').join("")+
+      '</tbody></table></div>'+
+      (show.length<all.length?'<p class="small muted repnote">Showing the first '+show.length+
+        ' of '+all.length+' rows. The printed document and the spreadsheet carry all '+all.length+'.</p>':'');
+  }
+  if(b.decl)
+    h+='<div class="repdecl">'+b.decl.map(d=>'<div class="repsig"><div class="rsl">'+esc(d[0])+'</div>'+
+      '<div class="rsd">'+esc(d[1])+'</div><div class="rsline">Signed</div><div class="rsline">Name</div><div class="rsline">Date</div></div>').join("")+'</div>';
+  if(b.note)h+='<p class="small muted repnote">'+esc(b.note)+'</p>';
+  return h+'</div>';
+}
+function reportPreviewHTML(built){
+  return built.blocks.map(b=>reportBlockHTML(b,false)).join("")+
+    (built.empty.length?'<div class="card"><p class="small muted" style="margin:0"><b>Nothing to report for:</b> '+
+      esc(built.empty.join(", "))+'. These sections are switched on but had no entries in this period — they are left off the document rather than printed blank.</p></div>':"");
+}
+/* The printable document. Same blocks, laid out for paper, in the light palette — the on-screen
+   dark theme would be unreadable printed. Deliberately the same shape as receiptHTML(): a
+   masthead, the content, and a footer that says exactly what the document is and is not. */
+function reportDocHTML(built){
+  const pal=PALETTES.find(p=>p.k===curPalette())||PALETTES[0], PB=pal.p[0], PD=pal.p[1];
+  const t=built.generated, sp=built.spec, tpl=built.template;
+  const body=built.blocks.map(b=>reportBlockHTML(b,true)).join("");
+  const html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+esc(sp.name||"Practice report")+'</title><style>'+
+    'body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1E2A26;margin:40px;font-size:13px}'+
+    'h1{font-size:22px;color:'+PD+';margin:0}h2{font-size:15px;color:'+PD+';margin:22px 0 6px;border-bottom:1px solid #E6ECEA;padding-bottom:4px}'+
+    '.sub{color:#6E7E78;font-size:12px}'+
+    '.head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid '+PB+';padding-bottom:14px;margin-bottom:6px}'+
+    '.meta{margin:10px 0 0;padding:10px 12px;background:#FAFCFB;border:1px solid #E6ECEA;border-radius:8px;font-size:12px}'+
+    '.meta div{margin:2px 0}'+
+    'table{width:100%;border-collapse:collapse;margin-top:8px}th,td{text-align:left;padding:6px 6px;border-bottom:1px solid #E6ECEA;font-size:12px}'+
+    'th{font-size:10px;text-transform:uppercase;color:#6E7E78}td.num,th.num{text-align:right}'+
+    '.kpis{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}'+
+    '.kpi{border:1px solid #E6ECEA;border-radius:8px;padding:8px 12px;min-width:104px}'+
+    '.kpi .v{font-size:19px;font-weight:700;color:'+PD+'}.kpi .l{font-size:10px;text-transform:uppercase;color:#6E7E78}'+
+    '.acc-work{margin:8px 0;font-size:12px;color:#3A4A44}.acc-work div{margin:2px 0}'+
+    '.repnote{font-size:11px;color:#6E7E78;margin:6px 0 0}'+
+    '.repdecl{margin-top:10px}.repsig{margin:14px 0 18px;page-break-inside:avoid}'+
+    '.rsl{font-weight:700;font-size:12px}.rsd{font-size:11px;color:#6E7E78;margin-bottom:14px}'+
+    '.rsline{border-bottom:1px solid #9AA8A3;margin:16px 0 0;font-size:10px;color:#6E7E78;padding-bottom:2px}'+
+    '.foot{margin-top:30px;color:#6E7E78;font-size:10px;border-top:1px solid #E6ECEA;padding-top:10px}'+
+    '@media print{body{margin:14mm}h2{page-break-after:avoid}}</style></head><body>'+
+    '<div class="head"><div><h1>'+esc(practiceName())+'</h1>'+(practiceTagline()?'<div class="sub">'+esc(practiceTagline())+'</div>':'')+'</div>'+
+      '<div style="text-align:right"><div style="font-weight:700">'+esc(sp.name||"Practice report")+'</div>'+
+      '<div class="sub">Generated '+fmtD(t)+'</div></div></div>'+
+    '<div class="meta"><div><b>Period covered:</b> '+esc(built.range.label)+'</div>'+
+      (tpl&&tpl.body?'<div><b>Prepared for:</b> '+esc(tpl.body)+'</div>':'')+
+      (sp.notes?'<div><b>Note:</b> '+esc(sp.notes)+'</div>':'')+
+      (tpl&&tpl.source?'<div class="sub" style="margin-top:6px">'+esc(tpl.source)+'</div>':'')+
+      '</div>'+
+    body+
+    (built.empty.length?'<h2>Nothing to report</h2><p class="repnote">No entries in this period for: '+esc(built.empty.join(", "))+'.</p>':'')+
+    '<div class="foot"><b>What this document is.</b> A record of administrative facts held in GroundWork by '+esc(practiceName())+
+      ', covering '+esc(built.range.label)+'. Clients are identified by confidential code only. It contains no clinical notes, no client names and no fee or income information.'+
+      '<br><b>What it is not.</b> It is not an approved form of any professional body or training provider, and it does not certify that any requirement has been met. It supports a submission against the rules your provider or registrar sets; those rules, and whether this satisfies them, remain theirs to decide.'+
+      '<br>Figures are derived from records the practitioner entered and can change if those records are later edited. Generated '+fmtD(t)+'.</div>'+
+    '</body></html>';
+  return {html:html,name:(sp.name||"report")};
+}
+/* The same rows as a spreadsheet, for a tutor who would rather check it in Excel. Long/tidy —
+   one row per figure with a section column — for the same reason the MTD CSV is: reading a
+   number out of a wide sheet means knowing which column it landed in. */
+function reportCSV(built){
+  const rows=[["section","item","value","detail"].join(",")];
+  const put=(sec,item,val,detail)=>rows.push([sec,item,val,detail||""].map(csvCell).join(","));
+  put("report","name",built.spec.name||"","");
+  put("report","period",built.range.label,"");
+  put("report","generated",isoD(built.generated),"");
+  built.blocks.forEach(b=>{
+    (b.kpis||[]).forEach(k=>put(b.title,k.l,k.v,""));
+    (b.work||[]).forEach(w=>put(b.title,"working","",String(w).replace(/<[^>]+>/g,"")));
+    if(b.table)b.table.rows.forEach(r=>put(b.title,b.table.head[0]+" "+r[0],r[1]==null?"":r[1],r.slice(2).join(" | ")));
+  });
+  return rows.join("\n");
+}
+
+/* ---- the view ----
+   `_reportDraft` is module-level for the same reason `pracTab` and `trendSeg` are: saving a
+   report re-renders Practice, and a draft held in the closure would be gone underneath the
+   reader. Nothing is written to S until Save is pressed — the same staging shape as the
+   guided flows, so closing or navigating away discards rather than half-saving. */
+let _reportDraft=null;
+/* The two info topics this screen needs are registered with all the others, AFTER `const INFO`
+   — calling infoDef() from here would be a temporal dead zone and would throw at load. */
+
+function reportRangeControls(sp){
+  return '<label>Period covered</label><select id="rpRange">'+opts2(REPORT_RANGES,sp.range||"all")+'</select>'+
+    (sp.range==="custom"
+      ? '<div class="field2" style="margin-top:8px"><div><label>From</label><input type="date" id="rpFrom" value="'+esc(sp.from||"")+'"></div>'+
+        '<div><label>To</label><input type="date" id="rpTo" value="'+esc(sp.to||"")+'"></div></div>'
+      : "");
+}
+function renderReports(host){
+  if(!host)return;
+  host.innerHTML="";
+  if(plusLocked("reports")){
+    /* A partial report is a wrong report, so there is no sneak peek here the way Trends has
+       one — but naming the templates costs nothing and is the whole reason to look. */
+    host.innerHTML=plusLockHTML("reports","Reports for your course or professional body",
+      "Build a report from what you have already logged — client hours, the mode split, supervision, the ratio, CPD — over any period, and print it or save it as a PDF.")+
+      '<div class="card"><h2>What is in it</h2><p class="small muted" style="margin:0 0 8px">Nine starting points, each shaped from a body’s published requirements:</p>'+
+      REPORT_TEMPLATES.filter(t=>t.k!=="blank").map(t=>
+        '<div class="ftrow"><span class="fmain"><span class="fn">'+esc(t.n)+'</span><span class="fd">'+esc(t.body)+' — '+esc(t.sub)+'</span></span></div>').join("")+
+      '<p class="small muted" style="margin-top:10px">Or build your own from scratch and save it as your default.</p></div>';
+    plusWireLocks(host); return;
+  }
+  if(!_reportDraft)return reportDrawList(host);
+  reportDrawEdit(host);
+}
+function reportDrawList(host){
+  const st=reportStore(), saved=st.saved;
+  host.innerHTML=
+    '<div class="card">'+cardHead("Reports","reports-what")+
+      '<p class="small muted" style="margin:0">Put what you have logged onto one page for a course, a placement, a supervisor or a professional body. Pick a period, pick what goes in, print it or save it as a PDF. '+infoLink("reports-what","What this is")+'</p></div>'+
+    (saved.length?'<div class="card"><h2>Your reports</h2>'+saved.map(sp=>
+      '<div class="list-item" data-rid="'+esc(sp._id)+'"><div class="li-main">'+
+        '<div class="li-title">'+esc(sp.name||"Untitled report")+(sp._id===st.defaultId?' <span class="small" style="color:var(--brand)">· default</span>':'')+'</div>'+
+        '<div class="li-sub">'+esc(reportRange(sp).label)+' · '+(sp.sections||[]).length+' section'+((sp.sections||[]).length===1?'':'s')+'</div>'+
+      '</div><div class="li-right">›</div></div>').join("")+'</div>':"")+
+    '<div class="card"><h2>Start from a template</h2>'+
+      '<p class="small muted" style="margin:0 0 10px">Each one is a starting point shaped from what that body publishes — not a form it issues. Change anything you like before you print.</p>'+
+      REPORT_TEMPLATES.map(t=>'<button class="tplrow" data-tpl="'+esc(t.k)+'">'+
+        '<span class="fic">'+gi(t.k==="blank"?"plus":"page")+'</span><span style="flex:1;min-width:0">'+
+        '<span class="tn">'+esc(t.n)+'</span>'+(t.body?'<span class="tb">'+esc(t.body)+'</span>':'')+
+        '<span class="td">'+esc(t.sub)+'</span></span></button>').join("")+'</div>';
+  wireInfo(host);
+  host.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=()=>{
+    _reportDraft=reportSpecFrom(reportTemplate(b.dataset.tpl));Sfx.pop();renderReports(host);});
+  host.querySelectorAll("[data-rid]").forEach(li=>li.onclick=()=>{
+    const sp=reportStore().saved.find(x=>x._id===li.dataset.rid);
+    if(sp){_reportDraft=clone(sp);renderReports(host);}});
+}
+function reportDrawEdit(host){
+  const sp=_reportDraft, tpl=reportTemplate(sp.template);
+  const st=reportStore(), existing=st.saved.some(x=>x._id===sp._id);
+  const built=reportBuild(sp);
+  host.innerHTML=
+    '<div class="toolbar"><button class="btn sm sec" id="rpBack">‹ All reports</button></div>'+
+    '<div class="card"><h2>Set it up</h2>'+
+      '<label>Name</label><input id="rpName" maxlength="60" value="'+esc(sp.name||"")+'">'+
+      (tpl.source?'<p class="small muted" style="margin:6px 0 0">'+esc(tpl.source)+'</p>':'')+
+      '<div style="margin-top:12px">'+reportRangeControls(sp)+'</div>'+
+      '<label style="margin-top:12px">How a session is counted '+infoDot("reports-hours","How client hours are counted")+'</label>'+
+      '<select id="rpHour">'+opts2(REPORT_HOUR_MODES.map(m=>[m[0],
+        m[0]==="clinical"?(m[1]+" — the "+CLINICAL_HOUR_MINS+"-minute hour")
+        :m[0]==="prorata"?(m[1]+" ("+sessionMins()+" min = "+r1(sessionMins()/CLINICAL_HOUR_MINS)+" hrs)")
+        :(m[1]+" ("+sessionMins()+" min = "+r1(sessionMins()/60)+" hrs)")]),reportHourMode(sp))+'</select>'+
+      (sessionMins()>=45&&sessionMins()<=60?''
+        :'<p class="small muted" style="margin:6px 0 0">Your sessions are set to <b>'+sessionMins()+
+         ' minutes</b>, which is not the standard 50-to-60-minute hour. Check which basis your course asks for.</p>')+
+      '<label style="margin-top:12px">Note for the form <span class="muted small">(optional — printed at the top)</span></label>'+
+      '<input id="rpNote" maxlength="120" value="'+esc(sp.notes||"")+'" placeholder="e.g. Placement at …, cohort 2026">'+
+    '</div>'+
+    '<div class="card"><h2>What goes in</h2><div id="rpSecs">'+
+      REPORT_ORDER.map(k=>ovToggleRow("rs_"+k,gi("list"),REPORT_SECTIONS[k].n,REPORT_SECTIONS[k].d,
+        (sp.sections||[]).indexOf(k)>=0)).join("")+'</div></div>'+
+    '<div class="card"><h2>Preview</h2><div class="repmeta"><span>'+esc(built.range.label)+'</span>'+
+      '<span>'+built.counts.attended+' attended</span><span>'+built.counts.supervision+' supervision</span>'+
+      '<span>'+built.counts.cpd+' CPD</span></div>'+
+      '<div class="row mt" style="flex-wrap:wrap;gap:8px">'+
+        '<button class="btn sm" id="rpPrint">'+gi("page")+' Print / PDF</button>'+
+        '<button class="btn sm sec" id="rpCSV">'+gi("export")+' Spreadsheet</button>'+
+        '<button class="btn sm sec" id="rpSave">'+(existing?"Save changes":"Save this report")+'</button>'+
+        (existing?'<button class="btn sm sec" id="rpDef">'+(st.defaultId===sp._id?"Default ✓":"Make default")+'</button>':'')+
+        (existing?'<button class="btn sm danger" id="rpDel">Delete</button>':'')+
+      '</div></div>'+
+    '<div id="rpPrev">'+reportPreviewHTML(built)+'</div>';
+  wireInfo(host);
+  const g=s=>host.querySelector(s);
+  /* Every control writes into the draft and redraws, so the preview underneath is always the
+     document that would print. Redrawing the whole panel is cheap next to the alternative —
+     a preview that has quietly stopped matching the switches above it. */
+  const redraw=()=>renderReports(host);
+  g("#rpBack").onclick=()=>{_reportDraft=null;renderReports(host);};
+  g("#rpName").oninput=e=>{sp.name=e.target.value;};
+  g("#rpNote").oninput=e=>{sp.notes=e.target.value;};
+  g("#rpRange").onchange=e=>{sp.range=e.target.value;redraw();};
+  if(g("#rpFrom"))g("#rpFrom").onchange=e=>{sp.from=e.target.value;redraw();};
+  if(g("#rpTo"))g("#rpTo").onchange=e=>{sp.to=e.target.value;redraw();};
+  g("#rpHour").onchange=e=>{sp.opts=sp.opts||{};sp.opts.hourMode=e.target.value;redraw();};
+  REPORT_ORDER.forEach(k=>{
+    const sw=host.querySelector('[data-sw="rs_'+k+'"]');if(!sw)return;
+    sw.onclick=()=>{const i=(sp.sections||[]).indexOf(k);
+      if(i>=0)sp.sections.splice(i,1);else sp.sections.push(k);
+      Sfx.tick();redraw();};
+  });
+  g("#rpPrint").onclick=()=>{const doc=reportDocHTML(reportBuild(sp));
+    printDoc(doc.html,(doc.name||"report").replace(/[^A-Za-z0-9 _-]/g,"").trim()||"report");};
+  g("#rpCSV").onclick=()=>{download("groundwork-report-"+isoD(today())+".csv",reportCSV(reportBuild(sp)),"text/csv");
+    toast("Spreadsheet downloaded");};
+  g("#rpSave").onclick=async()=>{
+    sp.name=(g("#rpName").value||"").trim()||tpl.n;
+    sp.notes=(g("#rpNote").value||"").trim();
+    if(!(sp.sections||[]).length){toast("Switch on at least one section");Sfx.error();return;}
+    const store=reportStore();
+    const at=store.saved.findIndex(x=>x._id===sp._id);
+    if(at>=0)store.saved[at]=clone(sp);else store.saved.push(clone(sp));
+    await commit((at>=0?"Edited":"Saved")+" report: "+sp.name);
+    toast("Saved");renderReports(host);};
+  if(g("#rpDef"))g("#rpDef").onclick=async()=>{
+    const store=reportStore();
+    store.defaultId=(store.defaultId===sp._id)?"":sp._id;
+    await commit(store.defaultId?("Default report: "+sp.name):"Cleared the default report");
+    toast(store.defaultId?"Set as your default":"No longer your default");renderReports(host);};
+  if(g("#rpDel"))g("#rpDel").onclick=async()=>{
+    const store=reportStore();
+    store.saved=store.saved.filter(x=>x._id!==sp._id);
+    if(store.defaultId===sp._id)store.defaultId="";
+    await commit("Deleted report: "+(sp.name||"untitled"));
+    _reportDraft=null;toast("Deleted");renderReports(host);};
 }
 
 /* ============ Session validation (shared by the form + the data-health sweep) ============ */
@@ -6402,8 +7083,13 @@ VIEWS.practice=function(){
   segs.push(["rooms","Rooms"]);
   if(feat("supervision"))segs.push(["supervision","Supervision"]);
   if(feat("trends"))segs.push(["trends","Business analytics","premium"]);
+  /* Reports sits AFTER Business analytics deliberately: the first three segments are places you
+     go to do something and the last two are places you go to produce something, so the reading
+     and the reporting stay together at the end rather than splitting the doing screens. */
+  if(feat("reports"))segs.push(["reports","Reports","premium"]);
   if(pracTab==="supervision"&&!feat("supervision"))pracTab="clients";
   if(pracTab==="trends"&&!feat("trends"))pracTab="clients";
+  if(pracTab==="reports"&&!feat("reports"))pracTab="clients";
   v.innerHTML=segBar("crtab",segs,pracTab)+'<div id="crbody"></div>';
   const body=v.querySelector("#crbody");
   function renderClients(){
@@ -6615,11 +7301,13 @@ VIEWS.practice=function(){
   /* Supervision keeps its own inner Log / Peer / Insights bar - mounted whole rather than
      rebuilt, so peer supervision, CPD and accreditation all come across unchanged. */
   function renderSupervision(){body.innerHTML="";body.appendChild(supervisionPanel());}
-  /* `.bizA` is the premium accent frame around Business analytics only - set here, alongside
-     everywhere else the segment changes, rather than inside renderMetrics itself, so it never
-     lingers on `body` after a switch to Clients or Rooms. */
-  const route=()=>{body.classList.toggle("bizA",pracTab==="trends");
+  /* `.bizA` is the premium accent frame, on the two segments this practice pays extra for —
+     Business analytics and Reports. Set here, alongside everywhere else the segment changes,
+     rather than inside renderMetrics/renderReports themselves, so it never lingers on `body`
+     after a switch to Clients or Rooms. */
+  const route=()=>{body.classList.toggle("bizA",pracTab==="trends"||pracTab==="reports");
     return pracTab==="rooms"?renderRooms():pracTab==="trends"?renderMetrics()
+    :pracTab==="reports"?renderReports(body)
     :pracTab==="supervision"?renderSupervision():renderClients();};
   wireSegBar(v,"crtab","practice",route);
   route();return v;
@@ -8221,6 +8909,19 @@ function cardHead(title,infoKey,right){
 function wireInfo(host){(host||document).querySelectorAll("[data-info]").forEach(n=>n.onclick=ev=>{
   ev.stopPropagation();const i=INFO[n.dataset.info];if(!i)return;
   const b=el('<div></div>');b.innerHTML=i.html;wireInfo(b);openSheet(i.title,b);});}
+infoDef("reports-what","What a report is, and what it isn’t",
+  '<p class="small">A report gathers facts GroundWork already holds — attended sessions, missed ones, the mode split, supervision, CPD — over a period you choose, and lays them out on one page you can print, save as a PDF, or hand over as a spreadsheet.</p>'+
+  '<p class="small"><b>It is not an approved form.</b> None of the templates is issued or endorsed by the body it names; each is shaped from that body’s published requirements, and the printed page says so. Your provider or registrar decides what it will accept and what its own rules mean — check every figure against the form in front of you before you submit it.</p>'+
+  '<p class="small"><b>Nothing clinical is in it.</b> Clients appear by their confidential code. No names, no fees, no income and no notes are included in any section, on any template.</p>'+
+  '<p class="small"><b>It is a report, not a signed record.</b> The signature block prints lines for a person to sign by hand. GroundWork does not lock a report against later editing, so a figure on it can change if you edit the sessions behind it.</p>');
+infoDef("reports-hours","How client hours are counted",
+  '<p class="small"><b>A 50-minute session is one clinical hour.</b> That is the convention across UK counselling training and accreditation — the therapeutic hour is 50 minutes, with the rest of the hour for notes — so that is how reports count by default. Counting a standard session as 0.83 hours of elapsed time would understate your hours by a sixth against the figure your course is actually asking for.</p>'+
+  '<p class="small"><b>Missed sessions never count.</b> A cancellation or a non-attendance is left out of every hours figure, whether or not you charged for it — what it earned is a separate question, answered under Money.</p>'+
+  '<p class="small">There are three ways to count, and your course decides which:</p>'+
+  '<p class="small"><b>One clinical hour per session</b> — the default, and right for sessions of about 50 to 60 minutes.<br>'+
+  '<b>Pro rata against the 50-minute hour</b> — for sessions that are not a standard length. A 90-minute session is 1.8 clinical hours; a 25-minute one is 0.5.<br>'+
+  '<b>Actual elapsed time</b> — clock time, for the minority of forms that ask for it. A 50-minute session is 0.83 hours.</p>'+
+  '<p class="small">GroundWork records that a session happened, not how long it ran — session length is one practice-wide setting (Settings › App preferences). If yours is not a standard hour and you are still counting one hour each, the report says so on the page rather than quietly reporting a figure that may be wrong in either direction.</p>');
 infoDef("poa","Payments on account",
   '<p class="small">Once a year\u2019s tax bill passes \u00a3'+POA_THRESHOLD+', HMRC stops waiting for the next one. It asks you to pay <b>half of it again in advance</b> on 31 January, and the other half on 31 July, as instalments towards the year you are currently in.</p>'+
   '<p class="small">So your first big January is roughly <b>one and a half times</b> the tax on that year: the year\u2019s own bill, plus the first instalment towards the next one. The January after that is usually smaller, because two instalments have already gone in.</p>'+
@@ -12157,6 +12858,20 @@ function receiptHTML(c,rows,label,paidOnly){
     '</body></html>';
   return {html:html,num:num};
 }
+/* Print any complete HTML document. `printReceipt` predates this and keeps its own body,
+   deliberately: the native shell re-declares `printReceipt(c,rows,label,paidOnly)` and passes
+   exactly those four arguments through, so routing it through here would put a second
+   wrapper in a path that is already wrapped. Anything NEW that prints uses this one — it is
+   wrapped natively in its own right, so a report becomes a real PDF on an iPhone. */
+function printDoc(html,filename){
+  const fr=document.createElement("iframe");
+  fr.style.cssText="position:absolute;width:0;height:0;border:0;visibility:hidden";
+  document.body.appendChild(fr);
+  fr.contentDocument.open();fr.contentDocument.write(html);fr.contentDocument.close();
+  setTimeout(()=>{try{fr.contentWindow.focus();fr.contentWindow.print();}catch(e){toast("Print failed — try again");}
+    setTimeout(()=>fr.remove(),4000);},250);
+  toast("Opening print dialog…");
+}
 function printReceipt(c,rows,label,paidOnly){
   const built=receiptHTML(c,rows,label,paidOnly), html=built.html;
   const fr=document.createElement("iframe");
@@ -13359,6 +14074,7 @@ const FEATURES=[
   {k:"accreditation",ic:gi("accreditation"), n:"Accreditation hours",    d:"Clinical vs supervision hours and the 1:6 ratio, for BACP Form 3A. Lives inside Supervision › Insights.",dep:"supervision"},
   {k:"peer",         ic:gi("peer"), n:"Peer supervision",       d:"A separate log for peer supervision hours - added to your total accreditation hours, kept out of the 1:6 ratio.",dep:"supervision"},
   {k:"trends",       ic:gi("trends"), n:"Business analytics",      d:"Retention funnel, attendance against expected frequency, missed sessions and how long clients stay. Lives inside Practice."},
+  {k:"reports",      ic:gi("page"), n:"Reports",                d:"Build a report of hours, supervision and CPD over any period — for a course, a placement or a professional body. Lives inside Practice, after Business analytics."},
   {k:"finances",     ic:gi("finances"), n:"Costs & other income",   d:"Business costs (insurance, wifi, monthly room rent) and income that isn’t a client session. Both feed your net income and tax figures.",dep:"money"},
   {k:"money",        ic:gi("money"), n:"Money",                  d:"Revenue charts, what is outstanding, and the month-by-month picture of what came in."},
   {k:"tax",          ic:gi("tax"), n:"Tax",                    d:"What to set aside, when it falls due, monthly take-home, and the quarterly figures for Making Tax Digital."},
@@ -13394,6 +14110,9 @@ const REVEAL_STEPS=[
   {keys:["trends"],   when:st=>st.sessions.length>=20,
    emoji:gi("trends"), title:"Enough history to see a pattern",
    sub:"Twenty sessions is about where <b>Practice › Business analytics</b> starts telling you something true: who stays, who drifts, how attendance holds up against the frequency you agreed, and what missed sessions are costing."},
+  {keys:["reports"],  when:st=>st.sessions.length>=20&&((st.supervision||[]).length>0||(st.cpd||[]).length>0),
+   emoji:gi("page"), title:"Something to report",
+   sub:"You have enough logged that <b>Practice › Reports</b> can put it on a page — client hours with the missed ones taken out, the in-person share, your supervision and the ratio, CPD over whatever period is asked for. Templates for the usual training and membership requirements, or build your own and save it as your default."},
   {keys:["raw"],      when:st=>st.sessions.length>=40&&(st.settings.features||{}).money!==false,
    emoji:gi("tabs"), title:"Every session in one table",
    sub:"Enough history to be worth browsing as a spreadsheet - sortable columns, a column picker and a filtered CSV export."}
@@ -14667,7 +15386,7 @@ const TIPS=[
   {k:"practice",tab:"practice",
    steps:()=>[
     {emoji:gi("peer"),h:"Your people and places",sel:"#crtab",
-     body:"<b>Clients</b> and their profiles, <b>Business analytics</b> for how things are going, <b>Rooms</b> and what each costs you, <b>Supervision</b> and your CPD hours."},
+     body:"<b>Clients</b> and their profiles, <b>Rooms</b> and what each costs you, <b>Supervision</b> and your CPD hours, <b>Business analytics</b> for how things are going \u2014 and <b>Reports</b> to put any of it on a page for a course or a professional body."},
     {emoji:gi("fees"),h:"Put fee changes on a date",
      body:"Use <b>Change rate</b> rather than editing the number. Old sessions keep the fee you actually charged - and that’s what your tax figures are built on. Rooms work the same way."}]},
   {k:"money",tab:"money",ft:"money",
@@ -16002,6 +16721,17 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
     catch(e){ return _printReceipt(c, rows, label, paidOnly); }
     toast("Preparing PDF…");
     GW.sharePDF({ html:built.html, filename:built.num+".pdf" }).catch(()=>toast("Could not create the PDF"));
+  };
+
+  /* Practice > Reports prints through printDoc(), not printReceipt() — same reason, same
+     mechanism. Without this a trainee on an iPhone taps "Print / PDF" and nothing at all
+     happens: window.print() is a no-op in WKWebView and the iframe fails silently. */
+  const _printDoc = window.printDoc;
+  window.printDoc = function(html, filename){
+    if(!GW) return _printDoc(html, filename);
+    toast("Preparing PDF…");
+    GW.sharePDF({ html:html, filename:(filename||"report")+".pdf" })
+      .catch(()=>toast("Could not create the PDF"));
   };
 
   /* ================= Reminders =================

@@ -82,7 +82,7 @@ const results = await page.evaluate(async () => {
   const PRO = { active: true, tier: "pro", expiresAt: soon };
 
   /* ---- 1. the subscription matrix, written out from the documented split ---- */
-  const SUBSCRIPTION = ["trends", "accreditation", "notesSync", "finances"];
+  const SUBSCRIPTION = ["trends", "accreditation", "notesSync", "finances", "reports"];
   const NOT_SUBSCRIPTION = ["tax", "mtd"];   // bought by the tax year, never by plusLocked
   hold(null);
   ok("nothing held: everything in the subscription is locked",

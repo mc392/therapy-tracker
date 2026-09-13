@@ -26,8 +26,8 @@ const html = readFileSync("TherapyTracker-web/index.html", "utf8");
 const SEAMS = [
   ["function download(",        "the single export choke point the native share sheet wraps"],
   ["function printReceipt(",    "wrapped so receipts become PDFs on iOS"],
-  ["function receiptHTML(",     "must keep returning {html,num} - the native PDF path names both"],
-  ["function attentionItems(",  "the source of the reminder text"],
+  ["function printDoc(",        "the generic print path - wrapped so a Practice > Reports report becomes a PDF on iOS"],
+  ["function receiptHTML(",     "must keep returning {html,num} - the native PDF path names both"],  ["function attentionItems(",  "the source of the reminder text"],
   ["VIEWS.settings=",           "wrapped to append the 'This iPhone' settings group"],
   ["function ovToggleRow(",     "reused so the native toggles match the app's own"],
   ["_setGrpOpen",               "the appended settings group folds with the rest using this"],

@@ -271,6 +271,7 @@ S = {
   },
   settings: {           // practice branding + feature switches (added Aug 2026)
     practiceName, practiceTagline,
+    reports: {},        // {saved:[spec], defaultId} — Practice › Reports (v9)
     palette,            // key into PALETTES: sage|ocean|plum|clay|indigo|slate
     features: {},       // key → false to disable; absent/true = on
     retention: {},      // {notesYears:6, financeYears:6, endedStatuses:[]} - review flags only
@@ -309,10 +310,10 @@ Key functions:
 - **`tyNet()` and `tyIncome()` are memoised** (`tyMemo`, cleared in `go()`, `commit()` and `normalize()`). Each walks every session and runs `ledgerBetween` twice; the Payments screen asks for several years at once and each year's schedule reaches into the year either side, so uncached the call count grows quadratically with history. Anything that mutates `S` outside those three entry points must call `tyMemoClear()`.
 
 ### Schema versioning
-`SCHEMA_VERSION` (currently `9`) is stamped on `S.meta.schemaVersion` and on every backup envelope. Unstamped data is treated as v1.
+`SCHEMA_VERSION` (currently `10`) is stamped on `S.meta.schemaVersion` and on every backup envelope. Unstamped data is treated as v1.
+- **v10 (Sep 2026)** added `settings.reports` - the reports a therapist has built and saved, and which one is their default. A v10 backup can hold "CPCAB client log, everything so far, these nine sections, counted as one clinical hour each"; a v9 build has no such field, so it would drop every saved report and save that loss back. **Only the definitions are stored** - the figures are always rebuilt from the sessions, so an older build loses the saved report, never the data behind it.
 - **v9 (Sep 2026)** gave a room-rent step its own **rhythm** (`freq`) and its own **end date** (`endDate`) - "£150 every week from 1 June until 31 August" rather than "£150, monthly, for ever". Both are optional and their absence means what it always meant, so nothing migrates in place. The bump is for the other direction and it matters twice: a v8 build reading a weekly rent charges it 12 times a year instead of 52, and goes on charging a rent that ended two years ago - then saves both wrong figures back. See **Room rent** below.
-- **v8 (Sep 2026)** added `S.cpd` - CPD that is not supervision - and `settings.cpdCountSupervision` / `cpdCountPeer`. A v8 backup can hold twenty hours of workshops plus "supervision doesn't count for me"; a v7 build has neither field, so it would drop every one of those hours, put supervision back into the total, and save both losses back.
-- **v7 (Sep 2026)** split the old free-text "Notes done?" box into a boolean tick and a separate `adminNote`. A v7 backup can hold "invoice goes to her employer" in `adminNote`; a v6 build has no such field and would drop every one of those comments, then save the loss back. See **Notes vs admin comments** below.
+- **v8 (Sep 2026)** added `S.cpd` - CPD that is not supervision - and `settings.cpdCountSupervision` / `cpdCountPeer`. A v8 backup can hold twenty hours of workshops plus "supervision doesn't count for me"; a v7 build has neither field, so it would drop every one of those hours, put supervision back into the total, and save both losses back.- **v7 (Sep 2026)** split the old free-text "Notes done?" box into a boolean tick and a separate `adminNote`. A v7 backup can hold "invoice goes to her employer" in `adminNote`; a v6 build has no such field and would drop every one of those comments, then save the loss back. See **Notes vs admin comments** below.
 - **v6 (Aug 2026)** dated the whole-practice tax settings to a tax year (`studentLoanYears`, `taxRegionYears`) and added the record of what HMRC actually assessed (`taxYears`), what has been paid (`taxPaid`) and the pot's own settings (`taxPot`). A v6 backup can say "Plan 2 until 2025-26, none after" and "HMRC assessed 2025-26 at £4,310"; a v5 build has neither field, so it would apply one loan plan to every year and show its own estimate in place of the real assessment.
 - **v5 (Aug 2026)** stamped a cancellation charge percentage on every missed session and added `settings.cancelRules` + `settings.reveal`. A v5 backup can hold a session charged at 50%; a v4 build has no such field and would bill it in full.
 - **v4 (Aug 2026)** gave every cost and income row a category *key* mapping to an SA103 box, migrated from the old free-text label (which is kept). Added `settings.taxBasis`, `useOfHome`, `taxRegion`, `studentLoan`, `class2Voluntary`.
@@ -506,10 +507,9 @@ Six collapsible `<details class="sgrp">` groups (**business / app** / data / rec
 
 ## Tabs (restructured Aug 2026)
 **Home · Sessions · Practice · Money · Tax.** `TAB_ALIAS` maps the old names (`clients`, `supervision`, `income`, `raw`) onto the new tab **and a segment**, so old deep links land somewhere meaningful; `go(tab,{seg})` sets it. A plain tab tap stays on whatever segment the reader last used.
-- **Practice** - Clients / Rooms / Supervision / **Trends, last** (Sep 2026: the first three are places you go to *do* something, Trends is where you go to read, and reading sat between two of the doing screens). `supervisionPanel()` and `rawPanel()` are panels, not views: they are mounted whole so their inner sub-tabs keep working. Supervision's own sub-tabs are Log / Peer / **CPD** / Insights.
+- **Practice** - Clients / Rooms / Supervision / Business analytics / **Reports, last** (Sep 2026: the first three are places you go to *do* something, the last two are where you go to read and to produce something, so they stay together at the end rather than splitting the doing screens). The last two carry the `premium` segment class and put `.bizA` on the panel - they are the parts of Practice this practice pays extra for. `supervisionPanel()` and `rawPanel()` are panels, not views: they are mounted whole so their inner sub-tabs keep working. Supervision's own sub-tabs are Log / Peer / **CPD** / Insights.
 - **Money** - Overview / Costs & income / Table.
-- **Tax** - Now / Estimate / Pot & payments / Per year / Making Tax Digital (renamed from "Quarterly (MTD)", Sep 2026). **Now** is the default (`taxSeg`) and the only screen most of the year: the standing disclaimer, any live seasonal moments, then three numbers - on track to owe (`taxLiability`), keep in your pot (`taxPot`), next payment (`nextTaxPayment`) - each tapping through to the screen that owns its detail. It **summarises, never replaces**: the pot *summary* card moved off Estimate onto it, so **Estimate** now carries the take-home, the basis and the by-year table, while everything about paying - the buffer, the balance, every due date, and what HMRC actually assessed - still lives on **Pot & payments**, so no figure appears twice with two different explanations behind it. **Per year** is "things set per tax year" (renamed from "Allowances" in T6 - student loan and region aren't allowances): one year strip at the top governs every card below it (`taxYearStripStatus`), then student loan, then use of home. Region is *not* here - it moved to Settings.
-- The old `income` feature flag became `money` + `tax`; `normalize()` carries `income:false` across to both rather than switching a hidden tab back on.
+- **Tax** - Now / Estimate / Pot & payments / Per year / Making Tax Digital (renamed from "Quarterly (MTD)", Sep 2026). **Now** is the default (`taxSeg`) and the only screen most of the year: the standing disclaimer, any live seasonal moments, then three numbers - on track to owe (`taxLiability`), keep in your pot (`taxPot`), next payment (`nextTaxPayment`) - each tapping through to the screen that owns its detail. It **summarises, never replaces**: the pot *summary* card moved off Estimate onto it, so **Estimate** now carries the take-home, the basis and the by-year table, while everything about paying - the buffer, the balance, every due date, and what HMRC actually assessed - still lives on **Pot & payments**, so no figure appears twice with two different explanations behind it. **Per year** is "things set per tax year" (renamed from "Allowances" in T6 - student loan and region aren't allowances): one year strip at the top governs every card below it (`taxYearStripStatus`), then student loan, then use of home. Region is *not* here - it moved to Settings.- The old `income` feature flag became `money` + `tax`; `normalize()` carries `income:false` across to both rather than switching a hidden tab back on.
 
 ### Swiping between sub-tabs (Sep 2026)
 A horizontal swipe across the screen moves one chip along that screen's segment bar. The strip already scrolls sideways on a phone, so the chip you want is often off the edge and two taps away; this is the same move without the aiming. Four rules, and each of them is load-bearing:
@@ -604,6 +604,7 @@ npm run testdata             # regenerate the eight (deterministic - same bytes 
 npm run test:review          # Trends + Tax over all eight, invariants asserted, exits non-zero
 npm run test:tax             # tests/tax-tests.js in a headless browser instead of by hand
 npm run test:behaviour       # opens the sheets, clicks Save, asserts what landed in S
+npm run test:reports         # the report engine, the gate and the screen, over all eight
 npm run test:rent            # room rent: rhythms, date ranges, the ledger, and the ungated card
 npm run test:tiers           # the Pro / tax-year gate matrix, the mask, and the migration defaults
 npm run test:pins            # pinning an analytic to Home: the registry, the cap, the picker,
@@ -622,8 +623,7 @@ npm run test:calendar        # the .ics export against RFC 5545: escaping, 75-oc
 npm run test:swipe           # swiping between sub-tabs, as real touch events through the browser's
                              #   own input pipeline: every bar end to end, the walls at both ends,
                              #   and everything that owns a sideways drag instead. Builds its own
-                             #   practice rather than reading a fixture - it tests a gesture
-```
+                             #   practice rather than reading a fixture - it tests a gesture```
 
 **`scripts/check-behaviour.mjs` is the only test that presses a button.** The tax suite checks the
 engine, `review-test-data` checks the engines against whole practices, and neither would have
@@ -1003,6 +1003,83 @@ entry can be pinned to Home.
 - **`client.source`** is free text, not an enum - every practice names its sources differently. The *input* is a `<select>` of `sourceSuggestions()` plus "Something else…" (`SRC_OTHER` / `srcPickValue` / `wireSourcePicker`), **not a `<datalist>`**: that control is the one browsers cannot agree on - Chrome opens it on a double-click, iOS Safari not until a matching letter is typed, and nothing hints a list exists - and the suggestions are the whole point, since "Word of mouth" / "word of mouth" / "WoM" become three rows in the analytic. `anonymiseClients()` clears it.
 - **`anaSources()` shows an `Unknown` row** (`ANA_SOURCE_UNKNOWN`, always sorted last, flagged `unknown`) rather than dropping clients with nothing filled in. It is still kept apart from any real source - never asked is a different fact from found us themselves - but the table has to add up to the whole practice, or a reader draws the wrong conclusion from the half of it they can see. One named source is enough to be ready; a table that is nothing but Unknown stays a prompt.
 
+## Reports for courses and professional bodies (Sep 2026)
+
+**Practice › Reports**, after Business analytics. A therapist picks a period and a set of
+sections and gets one page — client hours, the in-person share, supervision and the ratio, CPD
+— to print, save as a PDF, or hand over as a spreadsheet. Gated on `feat("reports")` and in
+`PLUS_FEATURES`. Strategy and where this is going: `docs/institutional-partnerships-2026-09.md`.
+
+- **The engine is pure and ungated**, the same contract as `ana*` and the tax engine.
+  `reportBuild(spec)` reads `S` and `today()`, returns a plain object and writes nothing;
+  `plusLocked("reports")` decides what the **view** renders. `npm run test:reports` asserts
+  that a locked build still computes and that a locked screen prints no figure.
+- **One shape, two renderers.** Every `REPORT_SECTIONS[k].build(ctx)` returns the same
+  `{title, kpis, work, table, note, decl}` block, and `reportBlockHTML(b, doc)` draws it for
+  the screen *and* for paper. Same rule as `mtdRows()` and `backupPayload()`, for the same
+  reason: two renderers built from two literals eventually disagree, and the place that would
+  surface is a form somebody has already submitted.
+- **The preview truncates a long table; the document never does.** `REPORT_PREVIEW_ROWS` (25)
+  caps the on-screen copy and the preview says how many rows it is not showing. A client log is
+  every session by definition — the established fixture prints 1,145 rows and came out 35,000
+  pixels tall, which is the correct document and an unusable screen. There is a test asserting
+  the document is not capped, because a truncated submitted log would be silent.
+- **Every date in a report carries its year** (`fmtRD`, not `fmtDshort`). "Mon, 05 Dec" is the
+  right in-context format on a screen showing this month and useless on a four-year report read
+  by a tutor who was not there.
+- **A 50-minute session IS one clinical hour, and `clinical` is therefore the DEFAULT.**
+  `CLINICAL_HOUR_MINS` is 50, not 60 — the therapeutic hour is 50 minutes with the rest for
+  notes, and that is the convention across UK counselling training and accreditation. Counting
+  a standard session as elapsed time (0.83 hrs) understates a trainee's hours **by a sixth**
+  against the figure their course is actually asking for. The report shipped defaulting to
+  elapsed time; that was wrong and was corrected the same day.
+- **Three modes, in `REPORT_HOUR_MODES`, and the course decides which.** `clinical` (one hour
+  per session), `prorata` (`mins / CLINICAL_HOUR_MINS` — a 90-minute session is 1.8 hours, a
+  25-minute one 0.5) and `actual` (elapsed clock time). `reportHourMode(spec)` is the one place
+  the mode is read and **falls back to `clinical` for a mode it does not recognise**, so a spec
+  restored from another build never produces `NaN` hours.
+- **A non-standard session length counting one hour each is warned about on the page**, not
+  silently reported. `reportHours().mismatch` fires when `sessionMins()` is outside 45–60 and
+  the mode is `clinical`, and names the pro-rata figure. Counting 90-minute sessions as one
+  hour each understates by nearly half, and only the therapist knows which basis her course
+  wants — so say it, never quietly pick.
+- **`reportHours()` is the honest bit and must stay that way.** GroundWork stores a session,
+  not a duration, so every figure comes from `sessionMins()` — one practice-wide setting, never
+  a sum of recorded lengths — and every report prints its own arithmetic and the caveat beside
+  it. Per-client rows derive their per-session figure from `h.hours / h.sessions`, so a row can
+  never disagree with the headline above it whatever mode is in force. Per-session duration is
+  `docs/tasks/T10-training-record.md`; when it lands the three modes keep their meanings and
+  only the source of `mins` changes.
+- **Missed sessions never count toward hours**, whether or not they were charged — what a late
+  cancellation earned is a separate question, answered under Money. A future booking is not a
+  delivered hour either; `reportCtx` clamps the range end to `today()`. Both are tested by
+  probe: the harness adds a DNA and a future session and asserts the figure does not move.
+- **A saved spec stores the RANGE KEY, never resolved dates.** "Last 12 months" saved in March
+  has to still mean twelve months when it is run in June, or every saved report quietly becomes
+  a snapshot of the day it was written.
+- **`REPORT_TEMPLATES` are starting points, never approved forms**, and nothing may describe
+  them otherwise. Each carries a `source` line naming what it was shaped from, printed on the
+  document. The footer states what the document is and is not, and there is a test asserting it
+  never says "approved by", "guarantees" or "certifies". Same guard-rail discipline as
+  `docs/tax-positioning-2026-09.md` §2.
+- **Nothing clinical, no names, no money.** Clients appear by code only. The harness scans the
+  printed document for every client name, every `adminNote` and any currency figure, on all
+  eight practices — the claim in the footer has to be true, not merely intended.
+- **The signature block prints lines, it does not attest anything.** Nothing is hashed and a
+  report is not locked against later editing; the info topic says so. Signatures, locked
+  periods and a verifier are Stage 3 in the partnerships plan, deliberately not here.
+- **Printing goes through `printDoc(html, filename)`, not `printReceipt`.** `printReceipt`
+  keeps its own body because the native shell already re-declares it with exactly four
+  arguments; `printDoc` is wrapped natively in its own right, so a report becomes a real PDF on
+  an iPhone rather than silently doing nothing (`window.print()` is a no-op in WKWebView).
+  `check-drift.mjs` asserts the name.
+- `_reportDraft` is module-level for the same reason `pracTab` is: saving re-renders Practice,
+  and a draft in a closure would vanish underneath the reader. Nothing is written to `S` until
+  Save — the staging shape the guided flows use.
+- The two `infoDef` topics are registered **with all the others, after `const INFO`**. Calling
+  `infoDef()` from the report block would be a temporal dead zone and would throw at load — the
+  same trap as `ATT_OK_PCT`.
+
 ## Cancellations & DNAs (added Aug 2026)
 Two kinds of missed session, and the charge is **stamped on the session**, never derived live from the policy.
 - `settings.cancelRules = {window:[{hoursBefore,chargePct}], dnaChargePct}`. `cancelPolicy()` sorts windows **longest notice first** and `cancelPolicyPct(kind,hrs)` returns the first one the notice clears. Notice that clears no rule - and notice that was never recorded (`hrs==null`) - charges the **full fee**. That direction is deliberate: a draft that is too high gets corrected on the spot, one that is too low is a fee quietly written off. A therapist wanting a lower floor adds a rule at 0 hours.
@@ -1017,8 +1094,7 @@ No new gating layer - this only decides which existing `feat()` flags start off 
 - `settings.reveal = {mode:"simple"|"all", shown:[]}`. `normalize()` defaults `mode` to **"all"**; only `stepDepth` ever sets `"simple"`, and it is only offered when `!rerun && no sessions && no clients`. Hiding tabs from someone already using them is the one outcome this must never produce.
 - `REVEAL_CORE` is what stays on: **`supervision`, `money`, `attention`** - who am I seeing next, and who owes me money. `attention` is core because overdue payments are worth knowing about from week one; `gamify` and `receipts` were moved out of it because rings, medals and a statement button answer neither question on day one. `REVEAL_STEPS` is the ordered list of what gets offered back and what earns it. A step's `keys` may hold **more than one flag**: `tax` and `finances` are revealed together at 10 sessions, because an estimate that ignores what the practice costs you is one nobody should set money aside against. `shown` is keyed on `keys[0]`.
 - Schedule (ordered by threshold): **5** sessions *and at least one paid* → Receipts & statements · **10** → Tax + Costs & other income · **15** → Streaks & celebrations · **20** → Trends · **40** → Table view.
-- Home gates two extras on its own, in **every** mode: the revenue sparkline needs 10 sessions (24 weeks of £0 is not a trend) and the longstanding-clients card needs a client at 6+ sessions. Neither is a `feat()` flag, so neither is ever offered - they simply appear.
-- `trends` is a feature flag (a segment inside Practice, not a tab). Absent = on, so existing installs and "show everything" keep it; only the simple preset switches it off.
+- Home gates two extras on its own, in **every** mode: the revenue sparkline needs 10 sessions (24 weeks of £0 is not a trend) and the longstanding-clients card needs a client at 6+ sessions. Neither is a `feat()` flag, so neither is ever offered - they simply appear.- `trends` is a feature flag (a segment inside Practice, not a tab). Absent = on, so existing installs and "show everything" keep it; only the simple preset switches it off.
 - **`accreditation` and `peer` are excluded from the simple preset** - `stepCPD` asks about both directly, and an answered question beats a default. Peer is never offered by a milestone: whether someone attends peer supervision is a fact about their practice, not something a session count can infer. `startSetup` unticks `peer` for a fresh install only (normalize leaves it absent = on, so existing installs keep it).
 - `revealCheck()` runs from `commit()` **after** the write, never before - an accepted nudge commits again and must not interleave with the save that triggered it. One offer per save; the key goes into `shown` whether accepted or declined, so nothing is ever asked twice.
 
@@ -1177,7 +1253,6 @@ deleted because the picker and the wizard step still call it.
   `null` until `--keygen` runs - **the private key must never enter this repo.**
 - **Testing locked states in a browser:** `localStorage.tt_plus_gate = "on"`. It switches both gates
   on and can never unlock.
-
 Free: everything else, including `receipts`, the spreadsheet import (it is the switching-cost
 remover - gate it and nobody ever reaches the paywall), encrypted/automatic backups, and the whole
 shape of the Tax tab.
