@@ -404,6 +404,30 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .seg.fade-l::before,.seg.fade-r::after{opacity:.8}
 .seg button{border:0;background:transparent;padding:8px 13px;border-radius:9px;font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap;cursor:pointer}
 .seg button.on{background:var(--card);color:var(--brand-dark);box-shadow:0 1px 2px var(--ring),0 2px 8px -4px var(--ring)}
+/* ===== Swiping between sub-tabs - the movement the gesture draws =====
+   A swipe moves one chip along the bar and the content below slides in from the side the finger
+   came from, so the change reads as a move rather than a flicker. The BAR does not slide with it:
+   it is the fixed thing being moved along, and a strip that travelled with its own content would
+   read as the whole tab changing. At either end there is nothing to move to and the bar nudges
+   instead - a swipe that silently does nothing reads as a swipe that did not register, which is
+   how somebody concludes the gesture is broken.
+   THE 14px IS A CEILING, NOT A TASTE: `main` carries 16px of side padding, so a shift inside that
+   never reaches the padding edge and so never gives the document a horizontal scroll axis. A wider
+   slide would, for the length of the animation - the same wobble under the thumb that
+   `.sheet-inner` avoids by refusing the `overflow` shorthand. Raising it means giving `main` an
+   `overflow-x:clip` (never `hidden`, which would make it the scroll container and strand every
+   sticky bar inside it). Both classes are decoration, added after swipeSeg() has already done the
+   work, and are removed as soon as they have played. */
+@keyframes segInR{from{opacity:.35;transform:translateX(14px)}to{opacity:1;transform:none}}
+@keyframes segInL{from{opacity:.35;transform:translateX(-14px)}to{opacity:1;transform:none}}
+@keyframes segBumpR{40%{transform:translateX(-8px)}100%{transform:none}}
+@keyframes segBumpL{40%{transform:translateX(8px)}100%{transform:none}}
+.segslide-r{animation:segInR .22s ease-out}
+.segslide-l{animation:segInL .22s ease-out}
+.segbump-r{animation:segBumpR .2s ease-out}
+.segbump-l{animation:segBumpL .2s ease-out}
+@media (prefers-reduced-motion:reduce){
+  .segslide-r,.segslide-l,.segbump-r,.segbump-l{animation:none}}
 /* ===== Year-end projection: the basis picker, and the three panes it swaps between =====
    ALL THREE PANES ARE RENDERED and the toggle only changes which one is shown. Redrawing the
    card on every tap would move the page under the reader's thumb - and the same card is drawn
@@ -3511,6 +3535,114 @@ function wireSegBar(v,id,tab,route){
     segScroll(bar);
     route();});
 }
+
+/* ===== Swiping between sub-tabs =====
+   A swipe across the screen moves one chip along that screen's segment bar. The strip already
+   scrolls sideways on a phone, so the chip you want is often off the edge and two taps away;
+   the swipe is the same move without the aiming.
+
+   ONE BAR PER SCREEN, AND IT IS THE SCREEN'S OWN. `SWIPE_BARS` names the strip that divides the
+   tab into the sections APP_MAP lists for it, and nothing else on the page answers the gesture.
+   That is what makes it predictable where bars are nested: on Practice > Supervision a swipe
+   moves to Rooms or to Business analytics, never between Log / Peer / CPD / Insights, and on
+   Business analytics it leaves Trends rather than changing section. A gesture whose meaning
+   depends on how deep into a screen the finger landed is a gesture nobody trusts.
+
+   A SWIPE NEVER LEAVES THE TAB. The ends of the bar are walls: swiping past Business analytics
+   does not land on Money. Moving between tabs is what the tab bar is for, and a gesture that can
+   carry somebody out of the screen they were reading - with the bar they were using gone and a
+   different one in its place - is how a reader loses their place entirely.
+
+   THE MOVE IS A CLICK ON THE NEIGHBOURING CHIP, deliberately, rather than setSeg() plus a render.
+   Every bar wires its own button differently (some redraw a body, Tax re-runs go()), and a second
+   path into the same change is a second path to keep in step with them. Clicking is the tap route,
+   so a swipe can never reach a state a tap could not.
+
+   Sessions' Calendar is the one screen with no answer: its strip lists the four worklists and the
+   calendar is a view of "All" rather than a fifth section (see APP_MAP), so there is nothing to
+   move along and the swipe does nothing. */
+const SWIPE_BARS={sessions:"seg",practice:"crtab",money:"moneyseg",tax:"taxseg"};
+const SWIPE_MIN=55;        /* px across before it is a swipe at all rather than a wandering tap */
+const SWIPE_RATIO=1.5;     /* how much more sideways than up-and-down it has to be */
+const SWIPE_MAX_MS=800;    /* slower than this is a scroll that drifted, not a flick */
+const SWIPE_SLIDE_MS=280;  /* both animations, plus a little - see the CSS */
+/* The bar the gesture drives, or null when this screen has none. Looked up by id on every gesture
+   rather than held: a segment change rebuilds the body it sits in, and Tax rebuilds the whole view,
+   so a remembered node is detached the first time anybody uses it. */
+function swipeBar(){
+  const id=SWIPE_BARS[cur]; if(!id)return null;
+  const bar=document.getElementById(id);
+  return (bar&&main().contains(bar))?bar:null;
+}
+/* A gesture that starts on something with a sideways life of its own belongs to that thing. The
+   chart scrollers (.svgwrap, .rawscroll, .hmgrid), the segment strip itself and swipe-to-mark-paid
+   (.swrow) all read a horizontal drag, and a form control reads it as placing a cursor or moving a
+   slider. Anything that CAN scroll sideways owns the gesture outright, whether or not it happens to
+   have room left to travel in this direction - "your finger is on the chart" is a rule a reader can
+   hold, "your finger is on the chart and the chart has run out" is not. */
+function swipeBlocked(node){
+  for(let n=node;n&&n!==document.body;n=n.parentElement){
+    if(n.nodeType!==1)continue;
+    const t=(n.tagName||"").toLowerCase();
+    if(t==="input"||t==="textarea"||t==="select")return true;
+    if(n.classList&&(n.classList.contains("swrow")||n.classList.contains("segwrap")))return true;
+    if(n.scrollWidth-n.clientWidth>4){
+      const ox=getComputedStyle(n).overflowX;
+      if(ox==="auto"||ox==="scroll")return true;
+    }
+  }
+  return false;
+}
+/* Both animations are played on the body BELOW the bar - `bar.nextElementSibling`, which is
+   #crbody / #moneybody / #taxbody / #slist - and re-found after the route has run, because the one
+   that re-renders the whole view has thrown the old node away by then. */
+function segSlide(id,dir,cls){
+  const bar=document.getElementById(id); if(!bar)return;
+  const node=cls==="segbump"?bar:bar.nextElementSibling; if(!node)return;
+  const a=cls+(dir>0?"-r":"-l"), b=cls+(dir>0?"-l":"-r");
+  node.classList.remove(a,b);
+  void node.offsetWidth;    /* restart it - two swipes the same way would otherwise play once */
+  node.classList.add(a);
+  setTimeout(()=>node.classList.remove(a),SWIPE_SLIDE_MS);
+}
+/* dir is +1 for the next chip along (a finger moving right to left, as reading forward). */
+function swipeSeg(dir){
+  const bar=swipeBar(); if(!bar)return false;
+  const id=bar.id, btns=[].slice.call(bar.querySelectorAll("button"));
+  const i=btns.findIndex(b=>b.classList.contains("on"));
+  if(i<0)return false;
+  const j=i+dir;
+  if(j<0||j>=btns.length){segSlide(id,dir,"segbump");return false;}
+  btns[j].click();
+  segSlide(id,dir,"segslide");
+  return true;
+}
+/* Touch only. A mouse drag across a page is a text selection and a trackpad's horizontal scroll is
+   how a wide chart is read, so neither may move the reader off the screen they are on. Every
+   listener is passive and nothing is ever preventDefault()ed: the gesture reads the page's own
+   scrolling, it does not take it over. */
+(function(){
+  const m=main(); if(!m)return;
+  let sx=0,sy=0,t0=0,live=false;
+  m.addEventListener("touchstart",e=>{
+    live=false;
+    if(e.touches.length!==1)return;                       /* a pinch is not a swipe */
+    if(_flow||_coach)return;                              /* setup, a guided flow, the tour */
+    const sh=$("#sheet"); if(sh&&sh.classList.contains("open"))return;
+    if(swipeBlocked(e.target)||!swipeBar())return;
+    sx=e.touches[0].clientX;sy=e.touches[0].clientY;t0=Date.now();live=true;
+  },{passive:true});
+  m.addEventListener("touchmove",e=>{if(live&&e.touches.length!==1)live=false;},{passive:true});
+  m.addEventListener("touchcancel",()=>{live=false;},{passive:true});
+  m.addEventListener("touchend",e=>{
+    if(!live)return; live=false;
+    const t=e.changedTouches&&e.changedTouches[0]; if(!t)return;
+    if(Date.now()-t0>SWIPE_MAX_MS)return;
+    const dx=t.clientX-sx, dy=t.clientY-sy;
+    if(Math.abs(dx)<SWIPE_MIN||Math.abs(dx)<Math.abs(dy)*SWIPE_RATIO)return;
+    try{swipeSeg(dx<0?1:-1);}catch(err){console.error("Swipe failed",err);}
+  },{passive:true});
+})();
 
 /* ===== analytics helpers (inline SVG charts) ===== */
 function monthKey(s){const d=parseD(s);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")}
