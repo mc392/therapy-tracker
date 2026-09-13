@@ -15178,9 +15178,22 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
      download() is the single choke point every export already funnels through, so
      wrapping it covers the .json backup, the encrypted backup and all four CSVs at once.
      An <a download> click does nothing useful in a WKWebView - this replaces a dead end
-     with Files, iCloud Drive, Mail and AirDrop. */
+     with Files, iCloud Drive, Mail and AirDrop.
+
+     A CALENDAR FILE IS THE ONE EXPORT THAT DOES NOT WANT THIS (Sep 2026). Every other file
+     here is a document to put somewhere; an .ics is a list of events to accept, and iOS has a
+     screen for exactly that - the one Safari shows, headed "2 Events" with an Add All button.
+     Handing it to the share sheet instead offers Save to Files, AirDrop and WhatsApp, none of
+     which is Calendar, and leaves somebody who picked Save to Files holding a file in a folder
+     with no obvious way in. So .ics goes to openCalendarFile and everything else carries on
+     exactly as before. Detected on the FILE, not the call site, so the session button and both
+     calendar windows are covered by the one branch. */
   const _download = window.download;
-  window.download = function(name, text, type){
+  const isCalendarFile = (name, type) =>
+    /\.ics$/i.test(String(name || "")) ||
+    String(type || "").toLowerCase().indexOf("text/calendar") === 0;
+
+  function shareDownload(name, text, type){
     const FS = P("Filesystem"), SH = P("Share");
     if(!FS || !SH) return _download(name, text, type);
     (async () => {
@@ -15193,6 +15206,25 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
         if(m.indexOf("cancel")<0 && m.indexOf("abort")<0) toast("Could not share "+name);
       }
     })();
+  }
+
+  window.download = function(name, text, type){
+    /* Falls back to the share sheet on every failure path, and there are three real ones: an
+       older build of the app whose plugin has no openCalendarFile (the method is simply absent
+       from the proxy, so the guard catches it), a reject, and `shown:false` - which is iOS
+       saying it had no preview to offer. A file the reader cannot reach at all is worse than
+       one behind an awkward sheet, so none of these may end in nothing happening. */
+    if(GW && GW.openCalendarFile && isCalendarFile(name, type)){
+      (async () => {
+        try{
+          const r = await GW.openCalendarFile({ text:String(text), filename:name });
+          if(r && r.shown) return;
+        }catch(e){}
+        shareDownload(name, text, type);
+      })();
+      return;
+    }
+    shareDownload(name, text, type);
   };
 
   /* ================= Where your records are kept =================

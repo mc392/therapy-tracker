@@ -167,11 +167,22 @@ function fakePhone() {
     }
   };
 
+  /* The calendar screen and the share sheet, both recording what they were handed so a test
+     can ask which one an export actually reached. `window.__ics.mode` drives the failure paths:
+     "ok" presents, "none" is iOS reporting it had no preview, "throw" is a reject, and
+     "missing" removes the method altogether - an older build of the app. */
+  window.__ics = { mode: "ok", opened: [], shared: [] };
+  GroundWorkNative.openCalendarFile = async ({ text, filename }) => {
+    if (window.__ics.mode === "throw") throw new Error("no view controller");
+    window.__ics.opened.push({ filename, text });
+    return { shown: window.__ics.mode === "ok" };
+  };
+
   window.Capacitor = {
     isNativePlatform: () => true,
     Plugins: {
       GroundWorkNative, Filesystem,
-      Share: { share: async () => ({}) },
+      Share: { share: async (a) => { window.__ics.shared.push(a && a.title); return {}; } },
       SplashScreen: { hide: async () => {} },
       LocalNotifications: {
         checkPermissions: async () => ({ display: "denied" }),
@@ -471,6 +482,46 @@ async function main() {
   check(offered, "offer.once", "somebody with records and no folder is offered one, once");
   const askedFlag = await page.evaluate(() => localStorage.getItem("tt_folder_asked"));
   check(askedFlag === "1", "offer.remembered", "and is not asked again whatever the answer", askedFlag);
+
+  /* ---- 11. A calendar file goes to the event screen, not the share sheet ----
+     The share sheet offers Save to Files, AirDrop and WhatsApp, none of which is Calendar, and
+     somebody who picks Save to Files is left holding a file with no way in. Every failure path
+     below must still end at the share sheet, though: a file the reader cannot reach at all is
+     worse than one behind an awkward sheet. */
+  const runExport = (name, type, mode) => page.evaluate(([n2, t2, m2]) => {
+    window.__ics.mode = m2;
+    window.__ics.opened = []; window.__ics.shared = [];
+    download(n2, "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", t2);
+    return new Promise((r) => setTimeout(() => r({
+      opened: window.__ics.opened.slice(), shared: window.__ics.shared.slice() }), 260));
+  }, [name, type, mode]);
+
+  let r = await runExport("groundwork-sessions-2026-09-13-to-2026-09-19.ics", "text/calendar", "ok");
+  check(r.opened.length === 1 && r.shared.length === 0, "ics.toEventScreen",
+    "an .ics opens iOS's own event screen and never reaches the share sheet", r);
+  check(r.opened[0] && /\.ics$/.test(r.opened[0].filename) && /BEGIN:VCALENDAR/.test(r.opened[0].text),
+    "ics.handsOverFile", "and is handed the real file, by name", r.opened[0] && r.opened[0].filename);
+
+  r = await runExport("groundwork-backup.json", "application/json", "ok");
+  check(r.opened.length === 0 && r.shared.length === 1, "ics.othersUnchanged",
+    "every other export still goes to the share sheet exactly as before", r);
+
+  r = await runExport("groundwork-sessions-2026-09-13.csv", "text/csv", "ok");
+  check(r.opened.length === 0 && r.shared.length === 1, "ics.csvUnchanged",
+    "a CSV is a document to file away and is untouched by this", r);
+
+  r = await runExport("x.ics", "text/calendar", "none");
+  check(r.opened.length === 1 && r.shared.length === 1, "ics.fallbackNoPreview",
+    "iOS reporting no preview falls back to the share sheet rather than doing nothing", r);
+
+  r = await runExport("x.ics", "text/calendar", "throw");
+  check(r.opened.length === 0 && r.shared.length === 1, "ics.fallbackThrow",
+    "a rejected call falls back to the share sheet", r);
+
+  await page.evaluate(() => { delete Capacitor.Plugins.GroundWorkNative.openCalendarFile; });
+  r = await runExport("x.ics", "text/calendar", "ok");
+  check(r.opened.length === 0 && r.shared.length === 1, "ics.fallbackOldBuild",
+    "a build whose plugin has no openCalendarFile falls back to the share sheet", r);
 
   check(consoleErrors.length === 0, "page.clean", "no uncaught error anywhere in the run", consoleErrors.slice(0, 4));
   check(dialogs.length === 0, "page.noAlerts", "nothing had to fall back to a native alert()", dialogs.slice(0, 4));

@@ -73,6 +73,7 @@ the copied bundle (5.8MB that has no business in an app binary).
 | **Face ID / Touch ID lock** | nothing - the PWA has no lock at all | custom Swift plugin |
 | **Daily reminders** | the Attention feed, which cannot speak while the app is shut | `@capacitor/local-notifications` |
 | **Share sheet for exports** | `<a download>`, which does nothing in a WKWebView | `@capacitor/filesystem` + `@capacitor/share` |
+| **The "Add All" event screen** | the share sheet, which offers everything except Calendar | custom Swift plugin |
 | **Receipts as real PDFs** | `window.print()`, a no-op in a WKWebView | custom Swift plugin |
 | **The records folder** | the File System Access API, which iOS does not have | custom Swift plugin |
 | **Automatic backups** | the same, for anyone with no folder chosen | `@capacitor/filesystem` |
@@ -86,6 +87,48 @@ Device settings (`tt_lock`, `tt_lock_grace`, `tt_notify`, the records-folder boo
 localStorage, not in `S`. `S` travels in backups, and restoring a backup onto a different phone
 must not silently switch that phone's lock off, tell it that a copy it has never written was
 saved five minutes ago, or point it at a folder it has no permission to open.
+
+## Calendar files open the event screen, not the share sheet (Sep 2026)
+
+`download()` is wrapped once for every export, and an `.ics` is the single file that does not
+want what that wrapping gives. Everything else here is a document to put somewhere. A calendar
+file is a **list of events to accept**, and iOS already has the screen for it - the one Safari
+shows when you tap a downloaded `.ics`, headed *2 Events* with an **Add All** button.
+
+Handing it to `UIActivityViewController` instead offered Save to Files, AirDrop, Messages and
+WhatsApp, none of which is Calendar. The reader who picked Save to Files was then holding a file
+in a folder with no obvious way in - and the web build, going through Safari, had the good screen
+all along. The iPhone app was the worse of the two for the one export whose entire purpose is
+landing in a calendar.
+
+- **`openCalendarFile`** writes the text to `temporaryDirectory` and presents
+  `UIDocumentInteractionController.presentPreview`, which is the Quick Look route Safari itself
+  takes. No calendar permission is asked for and none is needed: the app never reads or writes
+  the user's calendar, it hands iOS a file and iOS asks the questions.
+- **The branch is on the FILE, not the call site** (`isCalendarFile` tests the `.ics` extension
+  or a `text/calendar` type), so the session button and both calendar windows are covered once
+  and any future `.ics` is covered for free.
+- **Every failure path still ends at the share sheet.** There are three real ones and all three
+  are tested: an older build of the app whose plugin has no `openCalendarFile` at all, a reject,
+  and `{shown:false}` - iOS saying it had no preview to offer. A file the reader cannot reach at
+  all is worse than one behind an awkward sheet, so none of them may end in nothing happening.
+- **`sanitise()` grew an `ext` argument** for this. It forced `.pdf` onto every name, because the
+  receipt path was its only caller for a year. The extension is load-bearing here - it is what
+  tells Quick Look to hand the file to Calendar rather than showing it as text.
+- **`check-drift.mjs` asserts both halves**, the same shape as the records folder and StoreKit:
+  drop the Swift method and the web layer's guard quietly falls back to the share sheet, so
+  nothing fails, nothing errors, and the feature has simply reverted to the behaviour it was
+  built to replace. `npm run test:folder` drives the routing against a fake Capacitor - the
+  Swift itself has never been compiled, same caveat as everything else here.
+
+**What this does NOT fix: "Add All" does not apply UPDATES.** Re-exporting a session that is
+already in the calendar updates it only when the reader taps into that individual event in the
+preview; the bulk Add All button adds rather than reconciles. That is Apple's importer, it is
+identical on the web build, and no change to the file controls it - the UID and rising `SEQUENCE`
+are already what the format asks for. The only way to guarantee an update is to stop handing over
+a file and write the events directly with **EventKit**, keyed on an identifier stored per session
+- which is the two-way-sync feature, with a calendar permission prompt and an iOS-only surface.
+Not done, deliberately; see the note in CLAUDE.md.
 
 ## The records folder
 

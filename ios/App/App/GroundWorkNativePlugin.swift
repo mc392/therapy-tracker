@@ -22,6 +22,11 @@ import WebKit
 ///    hidden-iframe receipt flow in `printReceipt()` silently does nothing on iOS.
 ///    Rendering the same markup to a real PDF and handing it to `UIActivityViewController`
 ///    gives back printing (via AirPrint) *and* adds Files, Mail and Messages.
+///  * **Calendar files** - an `.ics` is not a document to file away, it is a list of events to
+///    accept, and iOS has a screen for exactly that: the one Safari shows, with "2 Events" and
+///    an **Add All** button. The share sheet buries it behind "Save to Files" and leaves the
+///    reader to find the file again in the Files app - a dead end for the one export whose
+///    whole purpose is landing in Calendar. `openCalendarFile` presents that screen instead.
 ///  * **The records folder** - a folder the user picks, normally in iCloud Drive, that every
 ///    save is written into. A browser cannot keep a durable grant to a folder on iOS at all;
 ///    a security-scoped bookmark can, which is what turns "remember to export a backup" into
@@ -38,6 +43,7 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "biometricAvailable", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "authenticate", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "sharePDF", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openCalendarFile", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "plusProducts", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "plusStatus", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "plusPurchase", returnType: CAPPluginReturnPromise),
@@ -598,14 +604,91 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
 
     /// Client initials and practice names reach this from user input, so anything that
     /// could climb out of the temp directory or break the filesystem is stripped.
-    private func sanitise(_ name: String) -> String {
+    /// `ext` carries the dot. It defaults to `.pdf` because the receipt path was the only
+    /// caller for a year; the extension is load-bearing for the calendar path, where it is what
+    /// tells Quick Look to hand the file to Calendar rather than showing it as text.
+    private func sanitise(_ name: String, ext: String = ".pdf") -> String {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: " -_."))
         var cleaned = String(name.unicodeScalars.filter { allowed.contains($0) })
         cleaned = cleaned.replacingOccurrences(of: "..", with: "")
             .trimmingCharacters(in: .whitespaces)
         if cleaned.isEmpty { cleaned = "GroundWork" }
-        if !cleaned.lowercased().hasSuffix(".pdf") { cleaned += ".pdf" }
+        if !cleaned.lowercased().hasSuffix(ext.lowercased()) { cleaned += ext }
         return cleaned
+    }
+
+    // MARK: - .ics → the system's own "Add All" event screen
+
+    /// Both held for the life of one presentation. A `UIDocumentInteractionController` that goes
+    /// out of scope takes its preview down with it, and a delegate that does the same leaves the
+    /// JS promise hanging - the same reason `pdfWebView` is a property above.
+    private var icsPreview: UIDocumentInteractionController?
+    private var icsDelegate: ICSPreviewDelegate?
+
+    /// Presents the file the way Safari does, rather than as something to save.
+    ///
+    /// Resolves `{shown: true}` once the reader dismisses the preview, and `{shown: false}` when
+    /// iOS had no preview to offer - the web layer treats the second as "fall back to the share
+    /// sheet", so a device that cannot preview an `.ics` still has a way to get at the file.
+    @objc func openCalendarFile(_ call: CAPPluginCall) {
+        guard let text = call.getString("text"), !text.isEmpty else {
+            call.reject("text is required")
+            return
+        }
+        let name = sanitise(call.getString("filename") ?? "GroundWork.ics", ext: ".ics")
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, let vc = self.bridge?.viewController else {
+                call.reject("No view controller to present from")
+                return
+            }
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+            do {
+                try text.write(to: url, atomically: true, encoding: .utf8)
+            } catch {
+                call.reject("Could not write the calendar file: \(error.localizedDescription)")
+                return
+            }
+
+            let dic = UIDocumentInteractionController(url: url)
+            let delegate = ICSPreviewDelegate(presenter: vc) { [weak self] in
+                self?.icsPreview = nil
+                self?.icsDelegate = nil
+                call.resolve(["shown": true])
+            }
+            dic.delegate = delegate
+            self.icsPreview = dic
+            self.icsDelegate = delegate
+
+            if !dic.presentPreview(animated: true) {
+                self.icsPreview = nil
+                self.icsDelegate = nil
+                call.resolve(["shown": false])
+            }
+        }
+    }
+}
+
+/// Supplies the view controller Quick Look presents the events from, and reports the dismissal
+/// back so the JS promise settles instead of hanging. Separate from the plugin for the same
+/// reason as `PDFRenderDelegate` - the plugin only borrows this role for one presentation.
+private final class ICSPreviewDelegate: NSObject, UIDocumentInteractionControllerDelegate {
+    private let presenter: UIViewController
+    private let onDismiss: () -> Void
+    private var fired = false
+
+    init(presenter: UIViewController, onDismiss: @escaping () -> Void) {
+        self.presenter = presenter
+        self.onDismiss = onDismiss
+    }
+
+    func documentInteractionControllerViewControllerForPreview(
+        _ controller: UIDocumentInteractionController) -> UIViewController { presenter }
+
+    func documentInteractionControllerDidEndPreview(_ controller: UIDocumentInteractionController) {
+        guard !fired else { return }
+        fired = true
+        onDismiss()
     }
 }
 
