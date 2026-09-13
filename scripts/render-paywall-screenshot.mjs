@@ -16,8 +16,10 @@
    which lives in a different section of App Store Connect - is offered on its own. `--sheet`
    picks which, and `--sheet both` writes both files in one run.
 
-   THE PRICES ARE PLACEHOLDERS. Pass --price and --price-year to match what you set in App Store
-   Connect, and replace these with genuine device screenshots before submitting for review.
+   THE DEFAULT PRICES ARE THE DECIDED ONES (£1.99/month, £7.99 a tax year - see
+   docs/plus-launch-checklist.md step 1), but they are still TYPED IN here rather than read from
+   the store. Pass --price / --price-year if either changes, and replace these images with genuine
+   device screenshots once the products are live and before submitting for review.
 
    `--reason` picks which lock the subscription sheet is opened from, which only changes the
    heading ("Business analytics is part of GroundWork Pro"). It must be a key the subscription
@@ -26,7 +28,7 @@
 
    Usage:
      node scripts/render-paywall-screenshot.mjs [--price "£1.99"] [--period month]
-                                               [--price-year "£24.99"] [--year 2026-27]
+                                               [--price-year "£7.99"] [--year 2026-27]
                                                [--sheet pro|tax|both] [--reason trends] [--dark]
 */
 import { createRequire } from "node:module";
@@ -51,7 +53,7 @@ const opt = (n, d) => { const i = argv.indexOf(`--${n}`);
   return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : d; };
 const PRICE = opt("price", "£1.99");
 const PERIOD = opt("period", "month");
-const PRICE_YEAR = opt("price-year", "£24.99");
+const PRICE_YEAR = opt("price-year", "£7.99");
 const YEAR = opt("year", null);                 // null = whatever tax year the app is in
 const SHEET = opt("sheet", "pro");              // pro | tax | both
 const REASON = opt("reason", "trends");

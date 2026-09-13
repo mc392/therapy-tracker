@@ -66,26 +66,33 @@ remove before launch). Two things to know:
 
 ---
 
-## Step 1 - Decide the two prices ☐
+## Step 1 - The two prices ☑
 
-There are **two things to price now**, and they are different kinds of decision.
+**GroundWork Pro: £1.99 / month. A UK tax year: £7.99.** Decided Sept 2026.
 
-**The subscription (GroundWork Pro, monthly).** The old £29.99/year was priced when the
-subscription included the tax engine. It no longer does, so that anchor is gone and the figure
-has to be reconsidered rather than divided by twelve.
+They are different kinds of decision, which is why they are not a ratio of each other.
 
-**The tax year (a one-off, per year).** This one has the natural anchor: it competes with an hour
-of an accountant's time, and it is bought in January by somebody who has just seen what their bill
-is. A UK therapist pays an accountant roughly £300-600 a year for self assessment.
+**The subscription** is priced to be an easy yes rather than a deliberation - under £25 a year for
+what the practice tells you about itself. The old £29.99/year was set when the subscription
+included the tax engine; it no longer does, so that anchor went with it.
 
-- [ ] Price: **GroundWork Pro, per month** - ______
-- [ ] Price: **UK tax year, one-off** - ______
+**The tax year** has the real anchor: it competes with an hour of an accountant's time, against the
+£300-600 a UK therapist pays for self assessment, and it is bought in January by somebody who has
+just seen their bill. At £7.99 it is a rounding error against that, which is the point.
+
+- [x] Price: **GroundWork Pro** - £1.99 / month
+- [x] Price: **UK tax year** - £7.99, one-off
 - [ ] **Trial - still open.** A 1-month free trial on Pro spanning January is worth more than a
       discount. Set it as an *Introductory Offer → Free → 1 month* in step 2 if you want one.
       A non-consumable cannot have a trial, so this only applies to the subscription.
 
+**Somebody who buys both in their first year pays £31.87.** Worth knowing, because it is the figure
+a reader works out for themselves, and it is the one to sanity-check against rather than either
+price alone.
+
 Nothing in the app hardcodes either figure - both are read from the store at runtime, per
-storefront. You can change them later without a release.
+storefront. You can change them later without a release, though raising a subscription price means
+handling existing subscribers explicitly, so treat £1.99 as a floor rather than an opening bid.
 
 ---
 
@@ -118,7 +125,7 @@ App Store Connect → **Apps** → GroundWork → **Subscriptions**
   - **Reference name:** `GroundWork Pro Monthly`
   - **Product ID:** `uk.co.charlottebloortherapy.groundwork.pro.monthly`
   - **Duration:** 1 Month
-  - **Price:** your step 1 figure
+  - **Price:** **£1.99 / month**
 - [ ] **Localization** - display name and description. Required; review rejects without it.
 - [ ] **Subscription image**, 1024×1024:
       `TherapyTracker-web/icon-ideas/groundwork/subscription-pro-1024.png` (gold).
@@ -159,7 +166,7 @@ Auto-Renewable (a tax year does not renew; the *next* year is a different produc
         ← **the START year only**, and the format is not negotiable: the app parses the year back
         out of the ID at both ends, and `npm run check` asserts the Swift and the JavaScript agree
         about the prefix. `.2026` means the 2026-27 tax year.
-  - **Price:** your step 1 figure
+  - **Price:** **£7.99**
 - [ ] **Localization** - display name and description. Suggested:
       *"Works out your 2026-27 tax, and every earlier tax year: what you are on track to owe,
       what to keep back for it, payments on account, and that year's Making Tax Digital export.
@@ -198,7 +205,7 @@ anywhere at all.
 >
 > ```bash
 > node scripts/render-paywall-screenshot.mjs \
->   --price "£1.99" --period month --price-year "£24.99" --sheet both
+>   --price "£1.99" --period month --price-year "£7.99" --sheet both
 > ```
 >
 > **Two images, because there are two kinds of product**: `--sheet pro` writes
