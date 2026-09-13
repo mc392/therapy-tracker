@@ -4,7 +4,7 @@
    our own source files. This is idempotent, so it is safe to re-run after a regeneration
    and safe to leave wired into `npm run sync`.
 
-   A file missing from here fails loudly at build time — but only once someone builds, which
+   A file missing from here fails loudly at build time - but only once someone builds, which
    is why `npm run check:drift` asserts the same list. */
 import xcode from "xcode";
 import { writeFileSync } from "node:fs";

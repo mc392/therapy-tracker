@@ -1,4 +1,4 @@
-# Releasing GroundWork — the two tracks, and how to keep them level
+# Releasing GroundWork - the two tracks, and how to keep them level
 
 **The thing to internalise: pushing to GitHub updates the website, not the iPhone app.**
 
@@ -25,7 +25,7 @@ assume TestFlight has it. It does not, and it will not until you cut a build.
 
 Work, commit, push. The website updates itself. Do nothing else.
 
-TestFlight goes stale in the meantime, and that is fine — testers are testing a *release
+TestFlight goes stale in the meantime, and that is fine - testers are testing a *release
 candidate*, not your working tree.
 
 ## Cutting an iOS build (when testers should see the changes)
@@ -41,7 +41,7 @@ matters:
 
 1. refuses to run on a dirty working tree (a build you cannot identify later is worse
    than no build);
-2. runs `npm run check` — syntax, native-shell drift, schedule parity;
+2. runs `npm run check` - syntax, native-shell drift, schedule parity;
 3. bumps `CURRENT_PROJECT_VERSION` (the build number). **Apple rejects a duplicate build
    number outright**, and it is the single most common upload failure;
 4. optionally sets `MARKETING_VERSION` with `--version 1.1`;
@@ -72,7 +72,7 @@ means two builds racing for one build number, and Apple rejects the loser with a
 that reads like a signing fault.
 
 If you go that way here, delete `.github/workflows/testflight.yml` and keep `npm run
-release` — the build-number bump and the sync are still exactly what Xcode Cloud needs to
+release` - the build-number bump and the sync are still exactly what Xcode Cloud needs to
 find in the commit it builds. Note it would need a `ci_scripts/ci_post_clone.sh` that runs
 `npm ci && npm run sync`, for the same reason Notes needs one: the bundled web app is
 gitignored, so a fresh clone has nothing to build.
@@ -95,7 +95,7 @@ gitignored, so a fresh clone has nothing to build.
    repo; if it is lost, revoke the key and make another.
 
 Off that page you need three values. Add them in GitHub → the repository's **Settings** →
-**Secrets and variables** → **Actions** → **New repository secret** — the *Secrets* tab,
+**Secrets and variables** → **Actions** → **New repository secret** - the *Secrets* tab,
 not *Variables*, and repository secrets, not environment ones, because the job declares no
 environment and would not see those:
 
@@ -105,7 +105,7 @@ environment and would not see those:
 | `APP_STORE_CONNECT_ISSUER_ID` | the Issuer ID shown above the key list (same for every key) |
 | `APP_STORE_CONNECT_PRIVATE_KEY` | the entire contents of the `.p8`, including the BEGIN/END lines |
 
-For the third, `cat ~/Downloads/AuthKey_*.p8 | pbcopy` is the least error-prone route —
+For the third, `cat ~/Downloads/AuthKey_*.p8 | pbcopy` is the least error-prone route -
 the `-----BEGIN`/`-----END` lines are part of the key, and it takes no quotes around it.
 
 Missing secrets fail in the first seconds rather than wasting a runner: the workflow checks
@@ -115,7 +115,7 @@ that one and the run sails past and dies at the archive instead.
 ## One-time setup for the signing certificate
 
 Every runner starts with an empty keychain, so without this, `-allowProvisioningUpdates`
-quietly **mints a brand-new certificate on every single run** instead of reusing one — and
+quietly **mints a brand-new certificate on every single run** instead of reusing one - and
 Apple caps how many can exist at once. Enough runs and archiving fails outright with
 `Choose a certificate to revoke. Your account has reached the maximum number of
 certificates.` Importing the same certificate every run avoids that entirely.
@@ -129,19 +129,19 @@ This part needs a Mac with Xcode, once:
    Desktop).
 3. Go to **developer.apple.com/account** → **Certificates, Identifiers & Profiles** →
    **Certificates** → **+**.
-4. Choose **Apple Development** (this is what the archive step actually asks for — the
+4. Choose **Apple Development** (this is what the archive step actually asks for - the
    error names "iOS App Development" profiles specifically), then Continue.
 5. Upload the `.certSigningRequest` file from step 2, then Continue, then **Download** the
    resulting `.cer` file.
-6. Double-click the downloaded `.cer` file — it adds the certificate to Keychain Access,
+6. Double-click the downloaded `.cer` file - it adds the certificate to Keychain Access,
    paired with the private key your request in step 2 created (that pairing only exists on
    this Mac, which is why steps 2–3 must happen in that order and on the same machine).
 7. In Keychain Access, find the new certificate under the **login** keychain →
    **My Certificates**. Click the disclosure triangle next to it to confirm a private key
-   sits underneath it — no key, and the export in the next step will fail silently useless.
+   sits underneath it - no key, and the export in the next step will fail silently useless.
 8. Right-click the certificate (not just the key) → **Export "Apple Development: …"…**.
    Save it as `ios_signing.p12` somewhere temporary, and set an export password when
-   prompted — anything memorable, you'll need it once more in step 10.
+   prompted - anything memorable, you'll need it once more in step 10.
 9. Convert the file to text so it can go into a GitHub secret:
    ```bash
    base64 -i ~/Desktop/ios_signing.p12 | pbcopy
@@ -154,11 +154,11 @@ This part needs a Mac with Xcode, once:
     |---|---|
     | `IOS_SIGNING_CERTIFICATE_P12` | paste the clipboard from step 9 |
     | `IOS_SIGNING_CERTIFICATE_PASSWORD` | the export password you set in step 8 |
-11. Delete `ios_signing.p12` from your Desktop (or wherever you saved it) — the secret in
+11. Delete `ios_signing.p12` from your Desktop (or wherever you saved it) - the secret in
     GitHub is now the only copy that needs to exist, and the private key stays here.
 
 The certificate is valid for a year. When it expires, `-allowProvisioningUpdates` will
-start failing to sign again — repeat steps 1–11 with a fresh certificate; there's no
+start failing to sign again - repeat steps 1–11 with a fresh certificate; there's no
 renewal flow, since a `.p12` export can't be renewed in place.
 
 ## What the runner has to match
@@ -166,7 +166,7 @@ renewal flow, since a `.p12` export can't be renewed in place.
 Two versions in `testflight.yml` are not decoration, and both were found the hard way on
 the first runs this pipeline ever had:
 
-- **`node-version` must satisfy the Capacitor CLI's `engines`** — 22 or above for Capacitor
+- **`node-version` must satisfy the Capacitor CLI's `engines`** - 22 or above for Capacitor
   8. Below it, `npm ci` merely warns and the sync step dies with `[fatal] The Capacitor CLI
   requires NodeJS >=22.0.0`. That step is the one that rebuilds the bundled copy of the web
   app, so a build that skips it is precisely the stale bundle this pipeline exists to
@@ -174,13 +174,13 @@ the first runs this pipeline ever had:
 - **`runs-on` must carry an Xcode that clears two separate floors.**
 
   *Capacitor's*, or it will not compile: `macos-14` gives Xcode 15.4, which cannot build
-  Capacitor 8's Swift runtime. That failure does not say so — it reads as an API mismatch
+  Capacitor 8's Swift runtime. That failure does not say so - it reads as an API mismatch
   (`CAPPluginCall has no member 'reject'`, `PluginConfig has no member 'getString'`,
   `incorrect argument label (have 'fromHex:', expected 'argb:')`) and sends you hunting for
   a plugin version that is not actually wrong. The tell is `ion-ios-filesystem` failing in
   the same run: it touches none of that API, so only the toolchain explains both.
 
-  *Apple's*, or it will not upload — and this one is higher, moves on Apple's schedule
+  *Apple's*, or it will not upload - and this one is higher, moves on Apple's schedule
   rather than ours, and is only enforced at the very last step, after ten minutes of
   perfectly good archiving:
 
@@ -190,7 +190,7 @@ the first runs this pipeline ever had:
   > distribution.
 
   That is what retired `macos-15` here. **When a build that has always worked suddenly
-  fails at the upload step with a 409, this is the first thing to check** — Apple raises
+  fails at the upload step with a 409, this is the first thing to check** - Apple raises
   the floor roughly annually, and nothing in this repo changes when they do. The job
   selects the newest Xcode on the image and prints it, along with the iOS SDKs available,
   before doing anything else.
@@ -202,7 +202,7 @@ the first runs this pipeline ever had:
 - **The watch app's bundle identifier**, on the first archive that includes it.
   `uk.co.charlottebloortherapy.groundwork.watchkitapp` has to exist in the developer
   account. CI archives with `-allowProvisioningUpdates` and an App Store Connect key, which
-  is normally enough to create it on the spot — but the first build carrying the watch app
+  is normally enough to create it on the spot - but the first build carrying the watch app
   is the moment to find out it is not, so watch that run rather than assuming it. It was
   not: the export step reported `No profiles for
   'uk.co.charlottebloortherapy.groundwork.watchkitapp' were found`. That run's key was only
@@ -215,14 +215,14 @@ the first runs this pipeline ever had:
   at upload.
 - **Export compliance.** First upload asks whether the app uses encryption. GroundWork
   encrypts backups with WebCrypto, which is standard cryptography, so the honest answer
-  is the exemption for standard encryption — answer it in App Store Connect once and it
+  is the exemption for standard encryption - answer it in App Store Connect once and it
   is remembered for later builds.
 - **Screenshots**, from demo data, never from real records.
-- **Submitting for review** — deliberately not automated. A build reaching TestFlight
+- **Submitting for review** - deliberately not automated. A build reaching TestFlight
   should never be able to reach the public without you deciding it should.
 
 ## Keeping the two apps' versions apart
 
 GroundWork and GroundWork Notes are separate apps with separate records, separate version
 numbers and separate tags (`ios-v*` here, `notes-v*` there). They share a brand, not a
-release train — do not try to keep the numbers in step.
+release train - do not try to keep the numbers in step.

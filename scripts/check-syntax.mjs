@@ -1,5 +1,5 @@
 /* Parses every inline <script> in index.html. The app is one 600KB file with no build
-   step, so a syntax error ships straight to the phone and the browser — this is the
+   step, so a syntax error ships straight to the phone and the browser - this is the
    cheapest guard there is. Parse only: nothing is executed. */
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
@@ -8,7 +8,7 @@ const html = readFileSync("TherapyTracker-web/index.html", "utf8");
 const blocks = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)];
 
 if (!blocks.length) {
-  console.error("No inline scripts found — did index.html move?");
+  console.error("No inline scripts found - did index.html move?");
   process.exit(1);
 }
 

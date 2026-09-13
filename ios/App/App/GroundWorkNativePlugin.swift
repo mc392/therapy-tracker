@@ -11,18 +11,18 @@ import WebKit
 /// Two jobs, both of which replace a web fallback that is either weaker or outright
 /// broken inside a WKWebView:
 ///
-///  * **Face ID / Touch ID** — the PWA has no app lock at all. Client records are
+///  * **Face ID / Touch ID** - the PWA has no app lock at all. Client records are
 ///    special-category data under UK GDPR, and the device passcode is the only thing
 ///    standing in front of them today.
-///  * **GroundWork Plus (StoreKit 2)** — the auto-renewing subscription, plus restore and
+///  * **GroundWork Plus (StoreKit 2)** - the auto-renewing subscription, plus restore and
 ///    Apple's own offer-code redemption sheet, which is how comps and gifts are granted on
 ///    iOS (see `docs/monetisation.md` §6.2). The web layer caches the result in `tt_plus`
 ///    and never asks StoreKit on a render path.
-///  * **HTML → PDF → share sheet** — `window.print()` is a no-op in WKWebView, so the
+///  * **HTML → PDF → share sheet** - `window.print()` is a no-op in WKWebView, so the
 ///    hidden-iframe receipt flow in `printReceipt()` silently does nothing on iOS.
 ///    Rendering the same markup to a real PDF and handing it to `UIActivityViewController`
 ///    gives back printing (via AirPrint) *and* adds Files, Mail and Messages.
-///  * **The records folder** — a folder the user picks, normally in iCloud Drive, that every
+///  * **The records folder** - a folder the user picks, normally in iCloud Drive, that every
 ///    save is written into. A browser cannot keep a durable grant to a folder on iOS at all;
 ///    a security-scoped bookmark can, which is what turns "remember to export a backup" into
 ///    "the records are already in your own Files". The mechanics live in
@@ -59,7 +59,7 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
     /// downloaded and waited on, and a spinner that has frozen is worse than a slow one.
     private static let fileQueue = DispatchQueue(label: "uk.co.charlottebloortherapy.groundwork.records", qos: .utility)
 
-    /// Held for the life of one presentation — see `RecordsFolderPicker`.
+    /// Held for the life of one presentation - see `RecordsFolderPicker`.
     private var folderPicker: RecordsFolderPicker?
 
     /// Where the app keeps its own copies inside the chosen folder. Passed in from the web layer
@@ -75,7 +75,7 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     /// Presents the folder picker. Resolves `{cancelled:true}` rather than rejecting when the
-    /// sheet is dismissed — changing your mind is a normal outcome, not a failure.
+    /// sheet is dismissed - changing your mind is a normal outcome, not a failure.
     @objc func folderPick(_ call: CAPPluginCall) {
         let (live, alt) = paths(call)
         DispatchQueue.main.async { [weak self] in
@@ -157,7 +157,7 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
     /// Both must exist in App Store Connect **in one subscription group**, so that buying `pro`
     /// while holding `plus` is an upgrade Apple prorates rather than two live subscriptions.
     ///
-    /// THE `pro` ID SAYS "plus" AND THAT IS DELIBERATE. It is the original product — the tier
+    /// THE `pro` ID SAYS "plus" AND THAT IS DELIBERATE. It is the original product - the tier
     /// was called GroundWork Plus when it was the only one, and it has always entitled
     /// everything. Re-pointing it at the smaller tier would silently take the tax engine off
     /// every existing subscriber, and a product ID can never be reused for something else, so
@@ -167,7 +167,7 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
         "pro":  "uk.co.charlottebloortherapy.groundwork.plus.annual",
         "plus": "uk.co.charlottebloortherapy.groundwork.insights.annual"
     ]
-    /// Ladder order, low to high. Used to pick the best of several live entitlements — during an
+    /// Ladder order, low to high. Used to pick the best of several live entitlements - during an
     /// upgrade both can briefly be current, and reporting the lower one would lock a screen the
     /// subscriber has just paid for.
     static let tierRank: [String: Int] = ["plus": 1, "pro": 2]
@@ -179,7 +179,7 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
     /// build these strings in JS: they are per-storefront, they change without a release, and
     /// App Review checks the paywall against the real product.
     ///
-    /// A tier the store cannot answer for is simply left out rather than failing the call — the
+    /// A tier the store cannot answer for is simply left out rather than failing the call - the
     /// second product will not exist on the day this ships, and the first one must still sell.
     @objc func plusProducts(_ call: CAPPluginCall) {
         Task {
@@ -211,7 +211,7 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     /// What StoreKit currently believes, and WHICH TIER. `expiresAt` is the paid-through date,
-    /// which is what the web layer caches — it keeps working offline until that date passes, so
+    /// which is what the web layer caches - it keeps working offline until that date passes, so
     /// a flight or a bad signal never locks someone out of their own tax figures.
     @objc func plusStatus(_ call: CAPPluginCall) {
         Task { call.resolve(await Self.currentStatus()) }
@@ -274,13 +274,13 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
     /// purchase already made, so this is not optional.
     @objc func plusRestore(_ call: CAPPluginCall) {
         Task {
-            do { try await AppStore.sync() } catch { /* cancelled or offline — still report below */ }
+            do { try await AppStore.sync() } catch { /* cancelled or offline - still report below */ }
             call.resolve(await Self.currentStatus())
         }
     }
 
     /// Apple's own offer-code sheet. This is how a gift, a comp or a founding-member grant is
-    /// delivered on iOS — Apple's mechanism rather than a home-grown key, so there is no
+    /// delivered on iOS - Apple's mechanism rather than a home-grown key, so there is no
     /// payment-route argument to have at review and the subscription lands in the recipient's
     /// own Apple ID subscriptions where they expect to manage it.
     @objc func plusRedeem(_ call: CAPPluginCall) {
@@ -295,7 +295,7 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     /// Apple's native subscription-management sheet, scoped to whichever App Store
-    /// environment this build is running under — sandbox for TestFlight and Xcode builds,
+    /// environment this build is running under - sandbox for TestFlight and Xcode builds,
     /// production once live. The `itms-apps://apps.apple.com/account/subscriptions` link the
     /// web layer used before only ever opens the production list, where a TestFlight
     /// subscription can never appear.
@@ -354,7 +354,7 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
                     call.resolve(["success": true])
                 } else {
                     // A cancel is a normal outcome (the user backgrounded the app, or chose
-                    // to stay locked), so it resolves rather than rejecting — the web layer
+                    // to stay locked), so it resolves rather than rejecting - the web layer
                     // simply keeps the lock screen up instead of showing an error.
                     let code = (err as? LAError)?.code
                     let why: String
@@ -392,8 +392,8 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
 
             // Lay the receipt out in a real web view first.
             //
-            // The obvious route — UIMarkupTextPrintFormatter straight into a
-            // UIPrintPageRenderer — deadlocks the main thread on modern iOS: the formatter
+            // The obvious route - UIMarkupTextPrintFormatter straight into a
+            // UIPrintPageRenderer - deadlocks the main thread on modern iOS: the formatter
             // has to render the HTML, that render wants the main run loop, and the app
             // freezes with no error and no callback. Rendering in a WKWebView and taking
             // `viewPrintFormatter()` only once `didFinish` has fired means the layout is
@@ -439,7 +439,7 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
         vc.present(av, animated: true)
     }
 
-    /// A4 at 72dpi with a half-inch margin — the same page the web print stylesheet targets,
+    /// A4 at 72dpi with a half-inch margin - the same page the web print stylesheet targets,
     /// so a receipt shared from the phone matches one printed from a desktop browser.
     private static let pageWidth: CGFloat = 595.2
     private static let pageHeight: CGFloat = 841.8

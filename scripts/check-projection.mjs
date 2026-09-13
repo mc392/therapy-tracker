@@ -1,4 +1,4 @@
-/* Where this year lands — the year-end projection, in a real browser.
+/* Where this year lands - the year-end projection, in a real browser.
  *
  *   npm run test:projection
  *
@@ -19,7 +19,7 @@
  *        picture argues with the figure above it.
  *
  * EXPECTATIONS COME FROM THE RULE, NOT FROM THE FUNCTION
- *   Every expected figure here is re-derived — the seasonal share by walking the tax year A DAY
+ *   Every expected figure here is re-derived - the seasonal share by walking the tax year A DAY
  *   AT A TIME against anaSeasonality()'s own indices, where the code walks it a month at a time;
  *   the run rate from tyIncome/tyNet and the tax year's own bounds; the trailing window by
  *   summing sessions on the basis in force. A test that read the answer back out of
@@ -57,7 +57,7 @@ const CHROME = process.env.CHROMIUM_PATH ||
 
 const fx = (n) => join(root, "tests", "test-data", `groundwork-testdata-${n}.json`);
 for (const n of ["established", "day-one", "online-only"])
-  if (!existsSync(fx(n))) { console.error(`Missing ${fx(n)} — run \`npm run testdata\` first.`); process.exit(2); }
+  if (!existsSync(fx(n))) { console.error(`Missing ${fx(n)} - run \`npm run testdata\` first.`); process.exit(2); }
 const states = {
   established: JSON.parse(readFileSync(fx("established"), "utf8")),
   dayOne: JSON.parse(readFileSync(fx("day-one"), "utf8")),
@@ -155,7 +155,7 @@ const results = await page.evaluate(async (env) => {
       m.to + " vs " + to);
     ok("…which is the month in progress excluded", m.to < new Date(t.getFullYear(), t.getMonth(), 1));
     /* Re-derived: revenue over that window is every session's fee counted on the basis in force,
-       plus other income from the ledger. Nothing is scaled — this one is a fact. */
+       plus other income from the ledger. Nothing is scaled - this one is a fact. */
     const cash = taxBasis() === "cash";
     let fees = 0, room = 0;
     S.sessions.forEach((s) => {
@@ -179,7 +179,7 @@ const results = await page.evaluate(async (env) => {
   {
     const p = anaProjection(), b = tyBounds(p.ty), t = today();
     const cash = taxBasis() === "cash";
-    /* A tax year starts and ends in April, so it is thirteen slices read left to right — the
+    /* A tax year starts and ends in April, so it is thirteen slices read left to right - the
        closing one is the five days of the following April and carries its own year. */
     ok("the year is charted in the order it happens, April to April", p.modes.annual.rows.length === 13,
       p.modes.annual.rows.length);
@@ -202,12 +202,12 @@ const results = await page.evaluate(async (env) => {
       ok(`the ${k} bars total the fees scaled by that basis`, near(total, Math.round(fees / m.share), 30),
         total + " vs " + Math.round(fees / m.share));
     }
-    /* The two bases must SPLIT the remainder differently — that difference is the whole card. */
+    /* The two bases must SPLIT the remainder differently - that difference is the whole card. */
     const aEst = p.modes.annual.rows.map((r) => r.est), sEst = p.modes.seasonal.rows.map((r) => r.est);
     ok("…and the two bases spread what is left over the year differently",
       aEst.some((v, i) => Math.abs(v - sEst[i]) > 1), aEst.join(",") + " | " + sEst.join(","));
     /* Nothing is estimated for a month that has already finished, and every month still to come
-       carries something — a projection with a gap in the middle of it is not a projection. */
+       carries something - a projection with a gap in the middle of it is not a projection. */
     const done = Math.max(0, Math.floor(p.frac * 12) - 1);
     ok("no month that has already been is given an estimate",
       p.modes.annual.rows.slice(0, done).every((r) => r.est === 0),
@@ -230,7 +230,7 @@ const results = await page.evaluate(async (env) => {
     ok("day one: the bases that cannot answer say what they are waiting for",
       notReady.length > 0 && notReady.every((k) => typeof p.modes[k].need === "string" && p.modes[k].need.length > 20),
       notReady.join(","));
-    ok("…seasonality is one of them — two years is two years", !p.modes.seasonal.ready, p.modes.seasonal.need);
+    ok("…seasonality is one of them - two years is two years", !p.modes.seasonal.ready, p.modes.seasonal.need);
     ok("…and no unready basis carries a figure",
       notReady.every((k) => p.modes[k].income === undefined && p.modes[k].net === undefined));
     const html = acProjection(anaCtx(), "projection").html;
@@ -404,7 +404,7 @@ const results = await page.evaluate(async (env) => {
     settings().features.trends = false; tyMemoClear();
     go("money", { seg: "overview" }); await sleep(250);
     ok("switched off, Money offers no projection tile at all", !document.querySelector("#mProj"));
-    ok("…and no upgrade tease either — there is nothing to sell", !document.querySelector("#mProjMore"));
+    ok("…and no upgrade tease either - there is nothing to sell", !document.querySelector("#mProjMore"));
     ok("…but the glance card still shows four figures",
       document.querySelectorAll(".card .kpis .kpi").length >= 4,
       document.querySelectorAll(".card .kpis .kpi").length);

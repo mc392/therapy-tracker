@@ -1,10 +1,10 @@
-# GroundWork Plus & Pro — launch checklist
+# GroundWork Plus & Pro - launch checklist
 
-*Pick this up cold. Everything here is done by you, in Apple's console or on a Mac — the code
+*Pick this up cold. Everything here is done by you, in Apple's console or on a Mac - the code
 side of Phase 1 is finished and pushed.*
 
 > **Two subscriptions since Sep 2026.** **GroundWork Pro** is the top tier (everything, gold) and
-> is the ORIGINAL product — the same product ID, renamed. **GroundWork Plus** is a new, cheaper
+> is the ORIGINAL product - the same product ID, renamed. **GroundWork Plus** is a new, cheaper
 > tier below it (everything except tax, chrome). Anywhere below that says "the subscription" in
 > the singular, it means Pro unless it says otherwise.
 
@@ -15,20 +15,20 @@ Store copy and the privacy-label answer: **`docs/app-store-listing.md`**.
 
 ## Where things stand
 
-Branch `claude/app-store-monetization-ujwihp` — built, tested in Chromium, pushed.
+Branch `claude/app-store-monetization-ujwihp` - built, tested in Chromium, pushed.
 
 - The gate is live in code but **iOS only**. The web app is deliberately ungated, so nothing
   Charlotte or your tester sees today has changed at all.
 - Locked features: Tax, Costs & other income, MTD export, Trends, Accreditation, Notes sync,
   the five non-Sage colour schemes.
 - Free forever: logging, receipts, the spreadsheet import, every export and backup.
-- Nothing is purchasable yet — the App Store Connect product does not exist. That is step 2.
+- Nothing is purchasable yet - the App Store Connect product does not exist. That is step 2.
 
 **To see the locked states right now:** serve `TherapyTracker-web/` and run
 `localStorage.tt_plus_gate = "on"` in the console, then reload. That key can only switch the
 gate *on*; it cannot unlock anything.
 
-**To unlock a TestFlight build, do step 2 — there is no shortcut and none is needed.**
+**To unlock a TestFlight build, do step 2 - there is no shortcut and none is needed.**
 TestFlight routes StoreKit to the **sandbox**, so once the subscription exists in App Store
 Connect, tapping Subscribe on a TestFlight build costs nothing and grants a real entitlement
 through the real code path. No sandbox tester account is needed for TestFlight, and no
@@ -44,24 +44,24 @@ remove before launch). Two things to know:
 
 ---
 
-## Step 1 — Decide the price ☑
+## Step 1 - Decide the price ☑
 
 **£29.99 / year.** Decided Sept 2026.
 
 The anchor was what a UK therapist pays an accountant for self-assessment, roughly £300–600 a
 year; £29.99 sits comfortably under a tenth of that, which is an easy yes rather than a
-deliberation. It is a notch below the £30–40 originally floated — worth knowing that raising
+deliberation. It is a notch below the £30–40 originally floated - worth knowing that raising
 it later means handling existing subscribers explicitly, so treat this as the floor rather
 than an opening bid.
 
 - [x] Price: **£29.99 / year**
-- [ ] **Trial — still open.** A 1-month free trial spanning January is worth more than a
+- [ ] **Trial - still open.** A 1-month free trial spanning January is worth more than a
       discount, because that is when the tax features prove themselves. Set it as an
       *Introductory Offer → Free → 1 month* in step 2 if you want it.
 
 ---
 
-## Step 2 — Create the subscription in App Store Connect ☐
+## Step 2 - Create the subscription in App Store Connect ☐
 
 App Store Connect → **Apps** → GroundWork → **Subscriptions**
 
@@ -69,11 +69,11 @@ App Store Connect → **Apps** → GroundWork → **Subscriptions**
       This is not cosmetic: one group is what makes an upgrade from Plus to Pro a proration Apple
       handles, rather than two live subscriptions billing the same person twice. Nothing in the
       app could detect that if it happened.
-- [ ] Create the **top** subscription in it — this one already exists if you got this far before:
+- [ ] Create the **top** subscription in it - this one already exists if you got this far before:
   - **Reference name:** `GroundWork Pro Annual`
   - **Product ID:** `uk.co.charlottebloortherapy.groundwork.plus.annual`
         ← says "plus", sells **Pro**. It is the original product and every existing subscriber
-        holds it, so it keeps entitling everything. **Change the display name, never the ID** —
+        holds it, so it keeps entitling everything. **Change the display name, never the ID** -
         an ID cannot be reused, and re-pointing this one takes the tax engine off people who
         already paid. `npm run check` fails if the code's mapping ever changes.
   - **Duration:** 1 Year
@@ -82,25 +82,25 @@ App Store Connect → **Apps** → GroundWork → **Subscriptions**
   - **Reference name:** `GroundWork Plus Annual`
   - **Product ID:** `uk.co.charlottebloortherapy.groundwork.insights.annual`
   - **Duration:** 1 Year
-  - **Price:** below Pro — the app never hardcodes either figure
+  - **Price:** below Pro - the app never hardcodes either figure
   - Until this product exists, the app shows "Unavailable" against the Plus card only and Pro
     carries on selling. That is deliberate; you can ship before this step is done.
-- [ ] Add a **Localization** to each — display name and description. Required; review rejects
+- [ ] Add a **Localization** to each - display name and description. Required; review rejects
       without it.
 - [ ] If offering a trial: **Introductory Offer** → Free → 1 month
-- [ ] Add the **subscription image** to each — 1024×1024, for offer-code redemption, win-back
+- [ ] Add the **subscription image** to each - 1024×1024, for offer-code redemption, win-back
       offers and the product page if App Store Promotion is on. One per subscription:
       Pro → `TherapyTracker-web/icon-ideas/groundwork/subscription-pro-1024.png` (gold, bar 3)
       Plus → `TherapyTracker-web/icon-ideas/groundwork/subscription-plus-1024.png` (chrome, bar 2)
       Regenerate with `node scripts/render-subscription-image.mjs <basename>`; the `.html` beside
-      each is the source. Opaque, square, no rounded corners — Apple masks its own.
-- [ ] Add the **review screenshot** — the *App Review Information* one, so a reviewer can see
+      each is the source. Opaque, square, no rounded corners - Apple masks its own.
+- [ ] Add the **review screenshot** - the *App Review Information* one, so a reviewer can see
       where the purchase is offered. Customers never see it.
       `TherapyTracker-web/icon-ideas/groundwork/paywall-review-screenshot.png`
 
 > **The catch-22, and how it breaks.** App Store Connect wants this screenshot before the
 > subscription can leave *Missing Metadata*, and StoreKit cannot fetch a product that is still
-> in *Missing Metadata* — so a TestFlight paywall can only ever say "Subscription unavailable
+> in *Missing Metadata* - so a TestFlight paywall can only ever say "Subscription unavailable
 > right now", which is the one image you must not give a reviewer.
 >
 > `node scripts/render-paywall-screenshot.mjs --price "£39.99"` breaks it with no Mac and no
@@ -117,18 +117,18 @@ App Store Connect → **Apps** → GroundWork → **Subscriptions**
 
 ---
 
-## Step 3 — Privacy Policy and Terms of Use ☐
+## Step 3 - Privacy Policy and Terms of Use ☐
 
-**There is no "Terms of Use URL" field in App Store Connect** — only Privacy Policy has one.
+**There is no "Terms of Use URL" field in App Store Connect** - only Privacy Policy has one.
 Guideline 3.1.2 wants functional links to both in the app binary *and* in the store metadata.
 The binary half is already done: on iOS the paywall's two links open the bundled copies in a
 sheet rather than leaving for Safari.
 
 - [ ] **App Information → Privacy Policy URL:**
       `https://mc392.github.io/therapy-tracker/privacy.html`
-- [ ] **App Store → your version → Description** — paste the subscription block; this is where
+- [ ] **App Store → your version → Description** - paste the subscription block; this is where
       the Terms of Use link actually lives. Drafted in `docs/app-store-listing.md`.
-- [ ] **App Information → License Agreement** — leave it on Apple's Standard EULA. A custom one
+- [ ] **App Information → License Agreement** - leave it on Apple's Standard EULA. A custom one
       is entered as *text*, not a URL, and the description link covers the requirement.
 
 The URLs, for pasting:
@@ -144,19 +144,19 @@ Support URL      https://mc392.github.io/therapy-tracker/
 ## Why can't TestFlight see the subscription?
 
 The paywall saying **"Subscription unavailable right now"** means `Product.products(for:)` came
-back empty. The subscription does **not** need to be submitted or approved to be testable — it
+back empty. The subscription does **not** need to be submitted or approved to be testable - it
 needs to be *Ready to Submit*, and the paid agreement has to be active. Work these in order:
 
 1. **Paid Applications agreement is active.** Business → *Agreements, Tax, and Banking*: accept
    it and complete **bank details and tax forms**. Until it is fully active, every product
-   returns empty **with no error of any kind** — the app simply sees nothing. This is the most
+   returns empty **with no error of any kind** - the app simply sees nothing. This is the most
    common cause and the least obvious, because nothing about it looks related to the app.
 2. **The subscription group has its own localised display name.** The reference name is not
    enough.
-3. **The subscription is complete** — reference name, product ID, duration, localisation,
+3. **The subscription is complete** - reference name, product ID, duration, localisation,
    review screenshot, and a **price for the territory your Apple ID is in**. A price set in
    only some territories gives nothing in the others.
-4. **Product ID matches exactly** — `GroundWorkNativePlugin.swift:47` against App Store Connect.
+4. **Product ID matches exactly** - `GroundWorkNativePlugin.swift:47` against App Store Connect.
 5. **Propagation.** Minutes usually, sometimes hours. Nothing to do but re-check.
 
 Not required, despite how it feels: submitting the subscription, approval, submitting an app
@@ -164,14 +164,14 @@ version, or a sandbox tester account. (TestFlight routes to sandbox by itself; a
 account is only for builds run from Xcode.) The "first in-app purchase must be submitted with
 an app version" rule is about **going live**, not about testing.
 
-**No rebuild is needed at any point here** — the product is fetched at runtime, so the build
+**No rebuild is needed at any point here** - the product is fetched at runtime, so the build
 already on your phone starts working the moment App Store Connect is right.
 
 ---
 
-## Step 4 — Test in the simulator ☐
+## Step 4 - Test in the simulator ☐
 
-No Apple approval needed for this — StoreKit can fake the purchase locally.
+No Apple approval needed for this - StoreKit can fake the purchase locally.
 
 ```bash
 npm run ios
@@ -189,22 +189,22 @@ Check each of these:
 - [ ] Settings shows a **Subscription** card listing both tiers
 - [ ] Tax shows a **gold** lock card naming GroundWork Pro; Business analytics shows a **chrome**
       one naming GroundWork Plus, with the retention funnel still readable above it
-- [ ] The tabs are all still **there** — a locked tab still appears and still opens
+- [ ] The tabs are all still **there** - a locked tab still appears and still opens
 - [ ] The paywall shows a **real price against each tier** (if one is blank, that product ID does
       not match; if both are, the group does not)
-- [ ] Buying **Plus** unlocks Business analytics, accreditation and Notes sync — and leaves Tax
+- [ ] Buying **Plus** unlocks Business analytics, accreditation and Notes sync - and leaves Tax
       locked
 - [ ] Buying **Pro** (or upgrading from Plus) unlocks everything, and the upgrade is charged as a
       proration rather than a second subscription
 - [ ] The launch screen shows the tier's own mark: chrome "Plus" on bar 2, gold "Pro" on bar 3
 - [ ] **Restore purchases** works after deleting and reinstalling
-- [ ] Export and backup still work **while locked** — this is the invariant that matters most
+- [ ] Export and backup still work **while locked** - this is the invariant that matters most
 
 - [ ] **Screenshot the paywall** → go back and finish step 2's review screenshot
 
 ---
 
-## Step 5 — Cut a TestFlight build ☐
+## Step 5 - Cut a TestFlight build ☐
 
 **Two routes. Neither needs a Mac.**
 
@@ -214,14 +214,14 @@ Check each of these:
 `npm ci`, `npm run check`, **`npm run sync`** (so the bundled copy of the web app is rebuilt in
 CI, never whatever a local sync left behind), then archive, export and upload. It passes
 `CURRENT_PROJECT_VERSION` to `xcodebuild` on the command line, which overrides the number in the
-project for every target — the watch app included, so the two cannot drift apart.
+project for every target - the watch app included, so the two cannot drift apart.
 
 - [ ] GitHub → **Actions → TestFlight → Run workflow**
-- [ ] Pick the branch — **any branch, not just `main`**, so a fix can reach TestFlight before
+- [ ] Pick the branch - **any branch, not just `main`**, so a fix can reach TestFlight before
       it is merged
 - [ ] **Type a build number** higher than the last one Apple accepted. Left blank it uses the
       workflow's run number, which is monotonic but has no idea what a tag-driven build already
-      used, so it can collide — and Apple rejects a duplicate outright.
+      used, so it can collide - and Apple rejects a duplicate outright.
 
 ### B. `npm run release` (needs a local checkout)
 
@@ -237,19 +237,19 @@ bumped build number so a build is identifiable later, sets `MARKETING_VERSION` w
 Use **A** for a quick fix you want on a phone now; **B** when cutting a release you will want to
 find again.
 
-> ⚠️ **Pushing to GitHub updates the website, not the iPhone app.** A push alone never builds —
+> ⚠️ **Pushing to GitHub updates the website, not the iPhone app.** A push alone never builds -
 > it takes a tag or a manual run. It is very easy to confirm a fix on the live site and assume
 > TestFlight has it.
 
 ---
 
-## Step 6 — Buy it on TestFlight ☐
+## Step 6 - Buy it on TestFlight ☐
 
 TestFlight purchases are free sandbox purchases, so this is the real flow at no cost.
 
 - [ ] Install from TestFlight, tap **Subscribe**, confirm everything unlocks
 - [ ] Delete the app, reinstall, confirm **Restore purchases** brings it back
-- [ ] Cancel the purchase sheet once — it should close silently, with no error toast
+- [ ] Cancel the purchase sheet once - it should close silently, with no error toast
 - [ ] Leave it an hour and confirm the sandbox renewal keeps it active
 
 A **separate sandbox tester account** (App Store Connect → Users and Access → Sandbox →
@@ -260,14 +260,14 @@ This catches what the simulator cannot.
 
 ---
 
-## Step 7 — Comp Charlotte, yourself and the tester ☐
+## Step 7 - Comp Charlotte, yourself and the tester ☐
 
-**On iOS, use Apple's offer codes.** Not licence keys — it is Apple's own mechanism, so there
+**On iOS, use Apple's offer codes.** Not licence keys - it is Apple's own mechanism, so there
 is no payment-route argument at review, and the subscription lands in the recipient's Apple ID
 subscriptions where they expect to manage it.
 
 - [ ] App Store Connect → the subscription you are gifting → **Offer Codes** → create a batch
-      (each tier has its own codes — a Plus code does not unlock Tax)
+      (each tier has its own codes - a Plus code does not unlock Tax)
 - [ ] In the app: Settings → Subscription → View details → **Redeem a code**
 
 Licence keys are for the web (Phase 2) and anything Apple cannot reach. If you want one now:
@@ -283,16 +283,16 @@ tax engine. A licence with no tier in it is read as `pro`, which is what every l
 before Sep 2026 meant.
 
 - The keygen writes the private key to `~/.groundwork/licence-key.json`. **Back it up.** It is
-  not in the repo and cannot be recovered — losing it means re-keying, which invalidates every
+  not in the repo and cannot be recovered - losing it means re-keying, which invalidates every
   licence already issued.
 - It also patches the **public** key into `index.html`. Commit that, and cut a new build before
   it reaches a phone.
-- Keep a record of what you issued (id, name, expiry) **outside this repo** — it holds personal
+- Keep a record of what you issued (id, name, expiry) **outside this repo** - it holds personal
   data, and there is no revocation. Expiry is the only lever.
 
 ---
 
-## Step 8 — Screenshots and listing copy ☐
+## Step 8 - Screenshots and listing copy ☐
 
 `docs/app-store-listing.md` already has the store copy, the "Data Not Collected" answer and the
 screenshot list drafted.
@@ -303,9 +303,9 @@ screenshot list drafted.
 
 ---
 
-## Step 9 — Submit ☐
+## Step 9 - Submit ☐
 
-- [ ] Submit the **subscription and the build together** — a build referencing an unsubmitted
+- [ ] Submit the **subscription and the build together** - a build referencing an unsubmitted
       product fails
 - [ ] Expect at least one round of questions, most often about the paywall or the privacy label
 
@@ -313,10 +313,10 @@ screenshot list drafted.
 
 ## Still open (decide before launch, not after)
 
-- **Price and trial** — step 1.
-- **The founding cohort** — how many, and free-forever or price-locked at launch. See
+- **Price and trial** - step 1.
+- **The founding cohort** - how many, and free-forever or price-locked at launch. See
   `docs/monetisation.md` §6.4; they are different promises with very different long-run costs.
-- **The Phase 2 legacy policy** — decide *before* the free web app has users worth retracting
+- **The Phase 2 legacy policy** - decide *before* the free web app has users worth retracting
   features from, not when Phase 2 starts. `docs/monetisation.md` §7.
 
 ---
@@ -326,9 +326,9 @@ screenshot list drafted.
 | Symptom | Almost certainly |
 |---|---|
 | Paywall says "Subscription unavailable right now" | The product does not exist yet, is still in *Missing Metadata*, hasn't propagated, or the ID does not match `GroundWorkNativePlugin.swift:47` |
-| Upload rejected instantly | Duplicate build number — type an explicit one on a manual run, or use `npm run release` |
+| Upload rejected instantly | Duplicate build number - type an explicit one on a manual run, or use `npm run release` |
 | TestFlight missing a fix you pushed | You pushed to GitHub but did not cut a build |
-| Licence field never appears | `PLUS_PUBKEY` is still `null` — that is deliberate until `--keygen` runs |
+| Licence field never appears | `PLUS_PUBKEY` is still `null` - that is deliberate until `--keygen` runs |
 | A tax test fails | The paywall has been put inside the engine. `npm run check` should have caught it |
 
 ---
@@ -338,4 +338,4 @@ screenshot list drafted.
 - Change the product ID (both sides).
 - Draft the subscription display name and description for step 2.
 - Build the demo dataset for screenshots.
-- Start Phase 2 — `docs/monetisation.md` §5 is the spec.
+- Start Phase 2 - `docs/monetisation.md` §5 is the spec.

@@ -7,7 +7,7 @@
  "testData": {
   "profile": "part-time",
   "anchor": "2026-09-05",
-  "describes": "Part-time, ~£8k profit — under the personal allowance, Class 2 voluntary, accruals basis, use of home at the £18 band.",
+  "describes": "Part-time, ~£8k profit - under the personal allowance, Class 2 voluntary, accruals basis, use of home at the £18 band.",
   "generatedBy": "scripts/make-test-data.mjs",
   "device": null
  },

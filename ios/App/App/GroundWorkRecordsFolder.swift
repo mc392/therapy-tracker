@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 import UniformTypeIdentifiers
 
-/// A folder the counsellor picks — typically inside their own iCloud Drive — that GroundWork
+/// A folder the counsellor picks - typically inside their own iCloud Drive - that GroundWork
 /// writes its records into on every save.
 ///
 /// This is the same shape as GroundWork Notes' `VaultBookmark` + `FileSystemVaultStore`, and
@@ -31,7 +31,7 @@ enum RecordsFolder {
 
     /// The security scope has to be held while the bookmark is made. A URL from the document
     /// picker is unusable outside a balanced `startAccessingSecurityScopedResource()` pair, and
-    /// `bookmarkData` is a use like any other — called outside one it fails with "the file
+    /// `bookmarkData` is a use like any other - called outside one it fails with "the file
     /// couldn't be opened because it doesn't exist", which is the sandbox refusing rather than
     /// the folder being missing. GroundWork Notes learnt this the hard way; see the note on
     /// `RosterBookmark.store` there.
@@ -80,7 +80,7 @@ enum RecordsFolder {
     private static func withFolder<T>(_ body: (URL) throws -> T) throws -> T {
         guard isSet else { throw FolderError.notChosen }
         guard let url = reopen() else {
-            throw FolderError.unreachable("That folder could not be reopened — choose it again.")
+            throw FolderError.unreachable("That folder could not be reopened - choose it again.")
         }
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
@@ -190,7 +190,7 @@ enum RecordsFolder {
     // MARK: - Housekeeping
 
     /// Names of the files directly inside `path` (`""` for the folder itself). Directories and
-    /// dot-files are left out — the caller is pruning dated copies, not browsing.
+    /// dot-files are left out - the caller is pruning dated copies, not browsing.
     static func list(_ path: String) throws -> [String] {
         try withFolder { folder in
             let dir = path.isEmpty ? folder : try child(folder, path)
@@ -204,7 +204,7 @@ enum RecordsFolder {
         }
     }
 
-    /// Removes `path`. A file that is already gone is not an error — the caller is tidying up.
+    /// Removes `path`. A file that is already gone is not an error - the caller is tidying up.
     static func delete(_ path: String) throws {
         try withFolder { folder in
             let target = try child(folder, path)
@@ -227,7 +227,7 @@ enum RecordsFolder {
     /// This is not decoration: it decides whether GroundWork keeps nagging about manual backups.
     /// A folder in iCloud Drive is off this phone, so the nag has nothing left to warn about; a
     /// folder under "On My iPhone" is not, and the reminder has to stay. When we cannot tell, the
-    /// answer is no — a wrongly silenced backup reminder is the one failure this app must not
+    /// answer is no - a wrongly silenced backup reminder is the one failure this app must not
     /// have.
     static func isInICloud(_ url: URL) -> Bool {
         if let v = try? url.resourceValues(forKeys: [.isUbiquitousItemKey]), v.isUbiquitousItem == true { return true }
@@ -240,7 +240,7 @@ enum RecordsFolder {
         guard isSet else { return ["set": false] }
         guard let folder = reopen() else {
             return ["set": true, "name": storedName ?? "", "reachable": false,
-                    "error": "That folder could not be reopened — choose it again."]
+                    "error": "That folder could not be reopened - choose it again."]
         }
         var out: [String: Any] = [
             "set": true,
@@ -263,7 +263,7 @@ enum RecordsFolder {
     }
 
     /// A path a human recognises: "iCloud Drive › GroundWork" rather than 60 characters of
-    /// container UUID. Best effort — an unrecognised provider falls back to the last two
+    /// container UUID. Best effort - an unrecognised provider falls back to the last two
     /// components, which is still more use than the whole path.
     private static func prettyPath(_ url: URL) -> String {
         let parts = url.pathComponents.filter { $0 != "/" }
@@ -290,7 +290,7 @@ enum RecordsFolder {
         return FileManager.default.fileExists(atPath: url.path) && !placeholderExists(for: url)
     }
 
-    /// Asks iCloud for a file that is only a placeholder and — when given a timeout — waits for
+    /// Asks iCloud for a file that is only a placeholder and - when given a timeout - waits for
     /// it. Blocking, so it is called on a background queue; pass `0` to ask and carry on.
     private static func materialise(_ url: URL, timeout: TimeInterval) throws {
         guard !isDownloaded(url) else { return }

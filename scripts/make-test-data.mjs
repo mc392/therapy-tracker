@@ -2,14 +2,14 @@
  *
  *   node scripts/make-test-data.mjs
  *
- * Each file is a REAL GroundWork backup envelope — the same shape backupPayload() writes — so it
+ * Each file is a REAL GroundWork backup envelope - the same shape backupPayload() writes - so it
  * can be restored through Settings › Data & backup › Restore on any device, and read straight off
  * disk by scripts/review-test-data.mjs.
  *
  * WHY THESE ARE GENERATED RATHER THAN HAND-WRITTEN
  *   The engines under test (the tax engine and the twenty ana* trends) only say anything
  *   interesting once there are a few hundred sessions spread over years. Hand-written fixtures at
- *   that size are unmaintainable, and worse, they get tuned until the app agrees with them — the
+ *   that size are unmaintainable, and worse, they get tuned until the app agrees with them - the
  *   exact failure tests/tax-tests.js warns about. Here the DATA is generated to a described shape
  *   ("weekly client, 18% missed, pays about three weeks late") and the expectations are derived
  *   from that shape, never from what the app returned.
@@ -17,7 +17,7 @@
  * ANCHORED TO A DATE, ON PURPOSE
  *   ANCHOR below is the "today" the whole corpus is built around, and every profile is described
  *   relative to it (a client who started "14 months ago"). The dates written into the files are
- *   absolute, so the fixtures are stable and diffable — but a fixture generated for one anchor and
+ *   absolute, so the fixtures are stable and diffable - but a fixture generated for one anchor and
  *   read a year later will have drifted out of the windows the trends engine cares about (last 12
  *   months, last 26 weeks, this tax year). Re-run this script when that happens; it is
  *   deterministic, so nothing but the dates moves.
@@ -83,7 +83,7 @@ const uid = (tag) => tag + "-" + String(++_uid).padStart(5, "0");
 
 /* A client, plus the dated fee history that makes their sessions derive the right rate.
    Fees are ALWAYS history, never a flat field: `derive()` reads effRate(client,date), so a rise
-   part-way through must leave earlier sessions on the old fee — which is the tax figures. */
+   part-way through must leave earlier sessions on the old fee - which is the tax figures. */
 function makeClient(spec) {
   const c = {
     _id: uid("cl"), code: spec.code, status: spec.status,
@@ -98,15 +98,15 @@ function makeClient(spec) {
   return c;
 }
 function rateRows(code, steps) {
-  /* The first step is stamped RATE_EPOCH so a session logged before any rise still resolves — the
+  /* The first step is stamped RATE_EPOCH so a session logged before any rise still resolves - the
      same floor the spreadsheet importer and the setup wizard use. */
   return steps.map((s, i) => ({ _id: uid("rh"), client: code, effectiveFrom: i === 0 ? RATE_EPOCH : isoD(s.from), rate: s.rate }));
 }
 
 const FREQ_DAYS = { "Weekly": 7, "Every 2 weeks": 14, "Every 3 weeks": 21, "Monthly": 28 };
 
-/* Therapists take holidays, and the analytics that matter most — weeks actually worked, the
-   seasonal index, the worst month — are ABOUT those holidays. A generator that produces a session
+/* Therapists take holidays, and the analytics that matter most - weeks actually worked, the
+   seasonal index, the worst month - are ABOUT those holidays. A generator that produces a session
    every single week for four years makes "you worked 52 weeks of 52" true and the card useless.
    Three weeks in August and a fortnight over Christmas is a normal private practice. */
 function inBreak(d) {
@@ -123,7 +123,7 @@ function inBreak(d) {
      missRate               share of appointments that became a late cancellation or DNA
      payLagDays             typical days from session to payment ([lo,hi]); null = never pays.
                             NEGATIVE is paid in advance, which is how a great deal of therapy is
-                            actually paid for — a standing order the week before, or cash at the
+                            actually paid for - a standing order the week before, or cash at the
                             door. Without a profile that does it, the days-to-payment analytic
                             cannot be exercised on the case it was rebuilt for.
      unpaidTailWeeks        recent sessions deliberately left unpaid (money genuinely outstanding)
@@ -137,7 +137,7 @@ function makeSessions(r, spec, ctx) {
   const end = spec.end < TODAY ? spec.end : (spec.upcoming ? addDays(TODAY, 21) : TODAY);
   const unpaidFrom = spec.unpaidTailWeeks ? addDays(TODAY, -7 * spec.unpaidTailWeeks) : null;
   while (d <= end) {
-    if (spec.breaks && inBreak(d)) { d = addDays(d, step); continue; }   /* away — nothing logged */
+    if (spec.breaks && inBreak(d)) { d = addDays(d, step); continue; }   /* away - nothing logged */
     n++;
     const iso = isoD(d);
     const missed = chance(r, spec.missRate || 0);
@@ -151,7 +151,7 @@ function makeSessions(r, spec, ctx) {
       notes: "", adminNote: "", roomPaid: "", roomPaidDate: "", lateCancel: false,
     };
     if (missed && !future) {
-      /* A missed session is charged at the practice's policy — stamped on the session, because
+      /* A missed session is charged at the practice's policy - stamped on the session, because
          editing the policy later must never rewrite what a client was already billed. */
       s.cancelKind = dna ? "dna" : "late";
       s.lateCancel = !dna;
@@ -181,7 +181,7 @@ function makeSessions(r, spec, ctx) {
 
 /* ---------- profiles ---------- */
 /* Each returns the STATE object. Everything the app would have set for itself (normalize's
-   defaults, migration flags) is deliberately left out — restoring these exercises normalize()
+   defaults, migration flags) is deliberately left out - restoring these exercises normalize()
    exactly as a real backup would. */
 
 const CATS = [
@@ -237,7 +237,7 @@ function supervisionRun(state, r, o) {
 /* ---------- 1 · Newly qualified, three months in ---------- */
 /* The empty-ish end of the range: everything the trends engine needs a year of is deliberately
    not there yet, so every readiness gate should say so in plain words rather than draw a chart
-   from four data points. Works at home, so there is no room fee to chase — the case that used to
+   from four data points. Works at home, so there is no room fee to chase - the case that used to
    put every session on the Incomplete worklist for ever. */
 function profileNewcomer() {
   const r = rng("newcomer");
@@ -322,7 +322,7 @@ function profileEstablished() {
   });
   specs.forEach((sp) => {
     st.clients.push(makeClient(sp));
-    /* A fee rise 14 months ago for anyone who was already on the books then — the case that makes
+    /* A fee rise 14 months ago for anyone who was already on the books then - the case that makes
        fee erosion and the dated-rate rule mean something. */
     const steps = [{ rate: sp.rate }];
     if (sp.start < monthsAgo(14) && sp.end > monthsAgo(14)) steps.push({ from: monthsAgo(14), rate: sp.rate + 5 });
@@ -342,9 +342,9 @@ function profileEstablished() {
   recurringCost(st, r, { desc: "Accountant", amount: 480, from: monthsAgo(30), recurrence: "annually", cat: "accountancy", tickRate: 1 });
   recurringCost(st, r, { desc: "Phone & internet", amount: 22, from: monthsAgo(47), cat: "phone", tickRate: 0.7 });
   recurringCost(st, r, { desc: "ICO fee", amount: 40, from: monthsAgo(44), recurrence: "annually", cat: "ico", tickRate: 1 });
-  st.expenses.push({ _id: uid("ex"), desc: "CPD — trauma course", amount: 420, date: isoD(monthsAgo(9)), recurrence: "once", cat: "cpd" });
+  st.expenses.push({ _id: uid("ex"), desc: "CPD - trauma course", amount: 420, date: isoD(monthsAgo(9)), recurrence: "once", cat: "cpd" });
   st.expenses.push({ _id: uid("ex"), desc: "New chair", amount: 260, date: isoD(monthsAgo(22)), recurrence: "once", cat: "equipment" });
-  st.otherIncome.push({ _id: uid("oi"), desc: "Workshop — anxiety", amount: 350, date: isoD(monthsAgo(7)), recurrence: "once", cat: "workshops", scope: "practice" });
+  st.otherIncome.push({ _id: uid("oi"), desc: "Workshop - anxiety", amount: 350, date: isoD(monthsAgo(7)), recurrence: "once", cat: "workshops", scope: "practice" });
   st.otherIncome.push({ _id: uid("oi"), desc: "Supervising a trainee", amount: 120, date: isoD(monthsAgo(18)), recurrence: "monthly", cat: "supervising", scope: "practice" });
   return { st, note: "Four years, 26 clients, room hired per session with a mid-history rate rise, cancellation policy at 0/50/100%." };
 }
@@ -381,7 +381,7 @@ function profilePartTime() {
   supervisionRun(st, r, { from: monthsAgo(26), everyDays: 42, supervisor: "R. Vance", cost: 55 });
   recurringCost(st, r, { desc: "Professional indemnity", amount: 12, from: monthsAgo(26), cat: "insurance", tickRate: 0.9 });
   recurringCost(st, r, { desc: "BACP membership", amount: 175, from: monthsAgo(26), recurrence: "annually", cat: "memberships", tickRate: 1 });
-  return { st, note: "Part-time, ~£8k profit — under the personal allowance, Class 2 voluntary, accruals basis, use of home at the £18 band." };
+  return { st, note: "Part-time, ~£8k profit - under the personal allowance, Class 2 voluntary, accruals basis, use of home at the £18 band." };
 }
 
 /* ---------- 4 · Scotland, high earner, filed returns and payments on account ---------- */
@@ -398,7 +398,7 @@ function profileScotlandHigh() {
     taxRegionYears: { "2022-23": "scotland" },
     /* Plan 2 until it was paid off in 2025-26; nothing after. One scalar could not say this. */
     studentLoanYears: { "2022-23": "plan2", "2026-27": "none" },
-    /* HMRC's own figures for the two filed years, close to but not equal to the app's estimate —
+    /* HMRC's own figures for the two filed years, close to but not equal to the app's estimate -
        which is the realistic case, and the one where the "actual wins everywhere" rule shows.
        The instalments HMRC actually SET for 2024-25 are lower than the calculated ones, and
        2026-27 carries a claim to reduce (SA303), so all three levels of precedence
@@ -458,10 +458,10 @@ function profileScotlandHigh() {
   recurringCost(st, r, { desc: "Accountant", amount: 900, from: monthsAgo(50), recurrence: "annually", cat: "accountancy", tickRate: 1 });
   recurringCost(st, r, { desc: "Software & subscriptions", amount: 28, from: monthsAgo(44), cat: "software", tickRate: 0.6 });
   st.otherIncome.push({ _id: uid("oi"), desc: "Supervision provided", amount: 260, date: isoD(monthsAgo(30)), recurrence: "monthly", cat: "supervising", scope: "practice" });
-  /* A separate trade — must never reach the practice's Self Assessment figure. */
+  /* A separate trade - must never reach the practice's Self Assessment figure. */
   st.otherIncome.push({ _id: uid("oi"), desc: "University teaching", amount: 900, date: isoD(monthsAgo(24)), recurrence: "quarterly", cat: "other", scope: "personal" });
   /* The pension contribution is NOT in `st`: pensionPcm() reads localStorage (tt_pension), so it
-     does not travel in a backup at all — see the review report. The harness applies it as a device
+     does not travel in a backup at all - see the review report. The harness applies it as a device
      setting so the pension path is still exercised. */
   return { st, device: { tt_pension: "400" },
     note: "Scotland, ~£55k profit, Plan 2 student loan ending 2026-27, £400/month pension (a device setting), monthly room rent, two filed years with HMRC's own figures, instalments HMRC set, and a claim to reduce." };
@@ -551,13 +551,13 @@ function profileWindingDown() {
   supervisionRun(st, r, { from: monthsAgo(66), everyDays: 42, supervisor: "H. Price", cost: 50 });
   recurringCost(st, r, { desc: "Insurance", amount: 14, from: monthsAgo(66), to: monthsAgo(3), cat: "insurance", tickRate: 0.9 });
   recurringCost(st, r, { desc: "BACP membership", amount: 165, from: monthsAgo(66), recurrence: "annually", cat: "memberships", tickRate: 1 });
-  return { st, note: "Five and a half years, 30 clients, 28 of them finished — a practice winding down to two clients." };
+  return { st, note: "Five and a half years, 30 clients, 28 of them finished - a practice winding down to two clients." };
 }
 
 /* ---------- 7 · Gone digital: online-only, monthly rent nowhere, everything at home ---------- */
 /* Two things nothing else covers: a practice with no room record beyond home (roomPaidNA true for
    every session by a different route) and a first year that straddles the 5 April boundary, so
-   the same client's sessions land in two tax years. Simple reveal mode, most features off — the
+   the same client's sessions land in two tax years. Simple reveal mode, most features off - the
    engines must not assume a tab is switched on. */
 function profileOnlineOnly() {
   const r = rng("online");
@@ -598,7 +598,7 @@ function profileOnlineOnly() {
 }
 
 /* ---------- 8 · Just installed, one client, nothing else ---------- */
-/* The floor. Every engine has to survive a practice with a single session in it — this is the
+/* The floor. Every engine has to survive a practice with a single session in it - this is the
    state a therapist is in on day one, and a crash or a nonsense figure here is the worst possible
    first impression. */
 function profileDayOne() {
@@ -638,7 +638,7 @@ for (const [name, fn] of PROFILES) {
     /* Not new Date(): a generated-at stamp that moves every run would make every file dirty, and
        restoreConfirm compares this against the device's own last change. Anchored, like the data. */
     exportedAt: ANCHOR + "T09:00:00.000Z",
-    /* `device` is NOT part of the backup — it is the per-device localStorage this profile assumes
+    /* `device` is NOT part of the backup - it is the per-device localStorage this profile assumes
        (see profileScotlandHigh). Recorded here so the harness can reproduce it and so the file
        says out loud which settings a restore would not carry. */
     testData: { profile: name, anchor: ANCHOR, describes: note, generatedBy: "scripts/make-test-data.mjs",

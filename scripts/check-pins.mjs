@@ -7,11 +7,11 @@
  *   it can break is quiet:
  *
  *     1. **A card drawn in one place and not the other.** The whole promise is that the pinned
- *        card IS the Trends card — same builder, same figures. A builder that only works when the
+ *        card IS the Trends card - same builder, same figures. A builder that only works when the
  *        rest of its section has already been built (a shared local left behind in the refactor)
  *        renders perfectly on Trends and throws, or renders empty, on Home.
  *     2. **A pin key that does not match its card.** The key is what settings.homePins stores, so
- *        a card whose pin button toggles a different registry entry pins the wrong analytic — and
+ *        a card whose pin button toggles a different registry entry pins the wrong analytic - and
  *        the reader sees the button light up on the card they tapped.
  *     3. **Home's own rows wired by the wrong selector.** "Coming up" renders .list-item[data-id]
  *        where the id is a SESSION; the pinned cards render the same shape where it is a CLIENT.
@@ -20,7 +20,7 @@
  *
  * EXPECTATIONS COME FROM THE RULE, NOT FROM THE FUNCTIONS
  *   The cap, the storage location, the repair-on-read and "the pinned card is the same card" are
- *   all asserted against what CLAUDE.md and the code comments say they are — never by reading the
+ *   all asserted against what CLAUDE.md and the code comments say they are - never by reading the
  *   value back out of the thing under test. The equality check compares Home's rendering of a
  *   card with Trends' rendering of the same card; if both were wrong in the same way it would
  *   pass, which is why the section text is separately asserted to be non-trivial.
@@ -58,7 +58,7 @@ const CHROME = process.env.CHROMIUM_PATH ||
 /* A practice with enough history that every analytic has something to say. */
 const fixture = join(root, "tests", "test-data", "groundwork-testdata-established.json");
 if (!existsSync(fixture)) {
-  console.error(`Missing ${fixture} — run \`npm run testdata\` first.`);
+  console.error(`Missing ${fixture} - run \`npm run testdata\` first.`);
   process.exit(2);
 }
 const state = JSON.parse(readFileSync(fixture, "utf8"));
@@ -121,8 +121,8 @@ const results = await page.evaluate(async (env) => {
     (await homePinToggle("sources")) === false && homePins().indexOf("sources") < 0);
 
   /* ---- 4. the pinned card is the SAME card ----
-     Build every analytic twice — once through the Trends section path, once through the pin
-     path — and compare the text. A card that only renders correctly when the rest of its
+     Build every analytic twice - once through the Trends section path, once through the pin
+     path - and compare the text. A card that only renders correctly when the rest of its
      section has been built alongside it fails here and nowhere else. */
   let mismatched = [], threw = [], trivial = [];
   for (const def of ANA_CARDS) {
@@ -131,7 +131,7 @@ const results = await page.evaluate(async (env) => {
     try {
       const hb = homePinsBlock();
       const h = document.createElement("div"); h.innerHTML = hb.html || "";
-      /* drop the block's own lead-in row — it is not part of the card */
+      /* drop the block's own lead-in row - it is not part of the card */
       const lead = h.querySelector(".pinlead"); if (lead) lead.remove();
       home = norm(h.textContent);
       const cx = anaCtx();
@@ -187,7 +187,7 @@ const results = await page.evaluate(async (env) => {
 
   /* ---- 7. an analytic that has nothing to say ----
      Review status and Long-term clients are dropped from Trends when there is nobody in them.
-     A card the reader PINNED must not vanish the same way — the space where a chosen figure used
+     A card the reader PINNED must not vanish the same way - the space where a chosen figure used
      to be reads as a fault. */
   const emptyState = JSON.parse(JSON.stringify(st));
   emptyState.clients = []; emptyState.sessions = [];

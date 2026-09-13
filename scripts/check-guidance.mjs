@@ -3,7 +3,7 @@
  *   npm run test:guidance
  *
  * WHAT THIS CATCHES
- *   An info dot whose key was never registered opens nothing — no error, no toast, just a dead
+ *   An info dot whose key was never registered opens nothing - no error, no toast, just a dead
  *   tap. A screen that draws an info link without calling wireInfo() has the same failure. Both
  *   are silent and both have happened. So this walks every screen, segment and sub-tab the app
  *   map lists, plus the forms that carry an info dot, and fires every [data-info] it finds,
@@ -252,7 +252,7 @@ const PROFILES = ["established", "day-one"];
 let failed = 0;
 for (const name of PROFILES) {
   const file = readdirSync(dataDir).find((f) => f.includes(name) && f.endsWith(".json"));
-  if (!file) { console.log(`✗ ${name} — fixture not found`); failed++; continue; }
+  if (!file) { console.log(`✗ ${name} - fixture not found`); failed++; continue; }
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const errs = [];
   page.on("pageerror", (e) => errs.push("pageerror: " + e.message));
@@ -279,7 +279,7 @@ for (const name of PROFILES) {
     bad.forEach((r) => console.log(`    ✗ ${r.name}${r.detail ? "  [" + r.detail + "]" : ""}`));
     [...new Set(errs)].slice(0, 8).forEach((e) => console.log("    " + e));
   } else {
-    console.log(`✓ ${name} — ${results.length} checks`);
+    console.log(`✓ ${name} - ${results.length} checks`);
   }
   await page.close();
 }

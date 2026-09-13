@@ -1,6 +1,6 @@
 /* Renders the GroundWork Plus / Pro paywall at App Store screenshot size, from the real app.
 
-   WHY THIS EXISTS — the catch-22:
+   WHY THIS EXISTS - the catch-22:
    App Store Connect wants a review screenshot before a subscription can leave Missing
    Metadata, and StoreKit cannot fetch a product that is still in Missing Metadata. So on a
    TestFlight build the paywall can only ever say "Subscription unavailable right now", which
@@ -8,7 +8,7 @@
 
    This breaks it without a Mac: it loads the actual index.html, forces the gate on, stubs the
    StoreKit bridge with a price, opens the real openPlusSheet(), and screenshots it at iPhone
-   6.9" size. Nothing is mocked but the store — the layout, copy and buttons are the shipping
+   6.9" size. Nothing is mocked but the store - the layout, copy and buttons are the shipping
    ones.
 
    THE PRICES ARE PLACEHOLDERS. Both subscriptions are on one sheet, so both need one: pass
@@ -78,7 +78,7 @@ await page.goto(URL_, { waitUntil: "networkidle" });
 await page.waitForTimeout(2000);
 await page.evaluate((dark) => {
   try { flowClose(); settings().onboarded = true; } catch {}
-  localStorage.setItem("tt_plus_gate", "on");          // gate ON only — it cannot unlock
+  localStorage.setItem("tt_plus_gate", "on");          // gate ON only - it cannot unlock
   localStorage.setItem("tt_theme", dark ? "dark" : "light");
 }, DARK);
 await page.reload({ waitUntil: "networkidle" });
@@ -107,7 +107,7 @@ await page.waitForTimeout(900);                        // let the sheet settle a
 const priced = (await page.textContent("#plPrice-pro")) + " / " + (await page.textContent("#plPrice-plus"));
 if ((priced.match(/\d/g) || []).length < 2) {
   console.error(`\n  A tier never took a price (reads "${priced}").`);
-  console.error("  The stub did not reach openPlusSheet — check plusNative()/GWPlusNative.\n");
+  console.error("  The stub did not reach openPlusSheet - check plusNative()/GWPlusNative.\n");
   await browser.close(); server.close(); process.exit(1);
 }
 await page.screenshot({ path: OUT, omitBackground: false });
@@ -115,5 +115,5 @@ await browser.close();
 server.close();
 console.log(`  wrote ${OUT}`);
 console.log(`  1320x2868 (iPhone 6.9") · opened from a ${REASON} lock · prices read "${priced.trim()}"`);
-console.log(`  The prices are PLACEHOLDERS — re-run with --price/--price-plus once App Store Connect is set,`);
+console.log(`  The prices are PLACEHOLDERS - re-run with --price/--price-plus once App Store Connect is set,`);
 console.log(`  and replace this with a real device screenshot before submitting for review.`);

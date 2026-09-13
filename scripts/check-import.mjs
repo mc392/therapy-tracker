@@ -5,9 +5,9 @@
  * WHAT THIS IS
  *   The importer is the switching-cost remover: somebody arriving with three years of history in
  *   Excel either gets it in cleanly on day one or never becomes a user. Every check here is a
- *   shape a real spreadsheet takes — a date cell that carries a time, "10:00 - 11:00" in a Time
+ *   shape a real spreadsheet takes - a date cell that carries a time, "10:00 - 11:00" in a Time
  *   column, an "Amount paid" column instead of Y/N, "closed" for a client's status, a workbook
- *   picked instead of a .csv, a sheet with no heading row — and what the importer must make of it.
+ *   picked instead of a .csv, a sheet with no heading row - and what the importer must make of it.
  *
  * EXPECTATIONS COME FROM THE RULE, NEVER FROM THE FUNCTION
  *   Each expected value is written from the documented behaviour (CLAUDE.md § Spreadsheet
@@ -168,7 +168,7 @@ if (bad.length || errs.length) {
   console.log("✗ import");
   bad.forEach((r) => console.log(`    ✗ ${r.name}${r.detail ? "  [" + r.detail + "]" : ""}`));
   [...new Set(errs)].slice(0, 8).forEach((e) => console.log("    " + e));
-} else console.log(`✓ import — ${results.length} checks`);
+} else console.log(`✓ import - ${results.length} checks`);
 await page.close(); await browser.close(); srv.close();
 console.log(failed ? "\nimport checks failed" : `\n${results.length}/${results.length} import checks passed`);
 process.exit(failed ? 1 : 0);

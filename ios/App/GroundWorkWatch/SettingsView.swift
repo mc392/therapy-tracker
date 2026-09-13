@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Two settings, and no more than two. Anything else — which client, what they pay, whether
-/// the room was settled — needs data this app deliberately does not have.
+/// Two settings, and no more than two. Anything else - which client, what they pay, whether
+/// the room was settled - needs data this app deliberately does not have.
 ///
 /// Changing either of these mid-session leaves the running timer alone: its end date is
 /// already fixed and its cues are already scheduled with the system. The change applies to
@@ -23,7 +23,7 @@ struct SettingsView: View {
                     }
                 }
                 Section {
-                    Text("Theatre mode keeps the screen dark and the watch silent — the taps still come through. It is the setting to be in during a session.")
+                    Text("Theatre mode keeps the screen dark and the watch silent - the taps still come through. It is the setting to be in during a session.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }

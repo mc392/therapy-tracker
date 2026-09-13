@@ -1,4 +1,4 @@
-/* Runs tests/tax-tests.js the way a person does — pasted into the app's own console — but
+/* Runs tests/tax-tests.js the way a person does - pasted into the app's own console - but
  * headlessly, so it can be run before a push instead of remembered.
  *
  *   node scripts/run-tax-tests.mjs

@@ -1,4 +1,4 @@
-# T1 — Remove personal data from the fresh-install seed
+# T1 - Remove personal data from the fresh-install seed
 
 **Model:** Sonnet · **Depends on:** nothing · **Touches:** `TherapyTracker-web/index.html`, `CLAUDE.md`
 
@@ -16,12 +16,12 @@ build reaches TestFlight or the store.
    - `roomRateHistory`: `[{"location":"At home","effectiveFrom":"2000-01-01","rate":0}]`
    - Everything else (empty arrays, `clientCategories` defaults, `meta.shell`) unchanged.
    "At home" is kept because it is generic and `sessionForm`'s default location is
-   `"At home"` — verify that default still resolves after the change.
+   `"At home"` - verify that default still resolves after the change.
 
 2. **`loadState()`** (~line 1136). The `seeded` branch writes a snapshot labelled
    `"Imported from spreadsheet (initial)"` and an audit entry
    `"Seeded from 'Tracking Spreadsheet May26.xlsx' (N sessions)"`. Replace with neutral
-   truth: snapshot label `"First run"`, audit summary `"App installed — starting fresh"`.
+   truth: snapshot label `"First run"`, audit summary `"App installed - starting fresh"`.
 
 3. **`normalize()` practice-name fallback** (~line 980). Currently:
    `sg.practiceName=hasData?"Charlotte Bloor Therapy":"GroundWork"`. Change to always
@@ -33,11 +33,11 @@ build reaches TestFlight or the store.
 5. **Sweep**: grep the whole file for `Charlotte`, `Bloor`, `London Bridge`, `Clapham`,
    `May26`, `Tracking Spreadsheet`. Remove or neutralise every hit in code and comments
    (comments referencing the history may simply be reworded). Also update CLAUDE.md's
-   "SEED object" gotcha (§ Known gotchas) — it currently says the seed contains real room
+   "SEED object" gotcha (§ Known gotchas) - it currently says the seed contains real room
    names/rates; after this task it must say the seed is generic.
 
 ## Constraints
-- Do not change the SEED object's key set or types — `loadState`, the tax tests and the
+- Do not change the SEED object's key set or types - `loadState`, the tax tests and the
   localStorage fallback path all consume its shape.
 - Do not touch `TherapyTrackerDB`, `tt_*` keys or the folder name (CLAUDE.md § Naming).
 - The backward-compat checks that treat the literal string `"Therapy Tracker"` as a
@@ -47,7 +47,7 @@ build reaches TestFlight or the store.
 - `npm run check` passes.
 - Serve the app, open in a **fresh browser profile / private window**: setup wizard's
   rooms step shows only "At home £0"; after setup, Settings → Undo & history → Recent
-  activity shows "App installed — starting fresh", not the spreadsheet line.
+  activity shows "App installed - starting fresh", not the spreadsheet line.
 - Paste `tests/tax-tests.js` into the console on a served copy: all tests still pass.
 
 ## Out of scope

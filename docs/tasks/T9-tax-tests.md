@@ -1,18 +1,18 @@
-# T9 — Test coverage for cancellation charging
+# T9 - Test coverage for cancellation charging
 
 **Model:** Sonnet · **Depends on:** nothing · **Touches:** `tests/tax-tests.js` only
 
 ## Why
 IMPROVEMENTS.md's own highest-value open item: the 118-test suite predates schema v5, so
-the `fullRate × cancelPct` path in `derive()` — which feeds revenue, net, SA103 and MTD —
+the `fullRate × cancelPct` path in `derive()` - which feeds revenue, net, SA103 and MTD -
 has zero automated coverage. It was verified by hand once; that check belongs in the
 suite before a public release.
 
-## Ground rules (from CLAUDE.md § Tax engine tests — read that section first)
+## Ground rules (from CLAUDE.md § Tax engine tests - read that section first)
 - **Expected values are derived from the rule, never copied from the app's output.**
   Work each expected figure out in a comment (e.g. "£80 fee × 50% = £40").
 - The suite lives outside `TherapyTracker-web/`, never deploys, never calls `commit()`,
-  and restores live state when it finishes — follow its existing harness conventions
+  and restores live state when it finishes - follow its existing harness conventions
   exactly (read the top of the file: how it snapshots/restores `S`, how cases assert).
 
 ## Cases to add
@@ -33,13 +33,13 @@ suite before a public release.
    `profitBreakdown` total === sum of the four `mtdQuarters()` === `tyNet(y)`.
    Mirror how the existing reconciliation block builds its profiles.
 7. **Receipts include charged missed sessions**: a 50%-charged late cancel appears in
-   `receiptRows` output with the reduced amount (so statements match what was billed) —
+   `receiptRows` output with the reduced amount (so statements match what was billed) -
    only if `receiptRows` is reachable from the test harness without DOM; if it needs the
    DOM, skip and note it in the summary.
 
 ## Also
 - Add a comment block at the top of the new section noting the TY-anchoring caveat that
-  already applies suite-wide (re-anchor after 5 Apr 2027) — do NOT re-anchor anything
+  already applies suite-wide (re-anchor after 5 Apr 2027) - do NOT re-anchor anything
   now.
 
 ## Verify

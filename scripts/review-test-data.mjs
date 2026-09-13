@@ -4,14 +4,14 @@
  *
  * WHAT THIS IS
  *   tests/tax-tests.js checks the tax engine against the HMRC rule on small, purpose-built
- *   states. This checks both engines against WHOLE PRACTICES — four years of sessions, a fee
- *   rise, unpaid work, cancellations at four different charge percentages — and asserts the
+ *   states. This checks both engines against WHOLE PRACTICES - four years of sessions, a fee
+ *   rise, unpaid work, cancellations at four different charge percentages - and asserts the
  *   invariants that only appear at that size:
  *     · the four MTD quarters must add up to the year (that is how the missing per-session room
  *       fee in the SA103 boxes was found);
  *     · profitBreakdown must agree with tyNet, on both bases;
  *     · every ana* function must either be ready or say what is missing, and never throw;
- *     · every Trends and Tax screen must actually render — no crash screen, no console error.
+ *     · every Trends and Tax screen must actually render - no crash screen, no console error.
  *
  * HOW IT RUNS THE APP
  *   The real index.html, in a real browser, served over http. Nothing is extracted or copied, so
@@ -20,7 +20,7 @@
  *
  * DATE-DEPENDENT, like the fixtures
  *   The fixtures are generated around an anchor date (see scripts/make-test-data.mjs) and the
- *   windows the engines use — last 12 months, last 26 weeks, this tax year — are relative to the
+ *   windows the engines use - last 12 months, last 26 weeks, this tax year - are relative to the
  *   real today. Regenerate the fixtures when the anchor drifts, or the readiness gates start
  *   reporting on data that has aged out.
  */
@@ -78,7 +78,7 @@ function inPage(state) {
   const num = (n) => (typeof n === "number" && isFinite(n)) ? Math.round(n * 100) / 100 : n;
 
   /* Load the fixture exactly as a restore would: normalize() does the migrations and defaults. */
-  /* `S` is a top-level `let`, so it lives in the global LEXICAL scope, not on window —
+  /* `S` is a top-level `let`, so it lives in the global LEXICAL scope, not on window -
      assigning window.S would create a second, unread copy. */
   S = normalize(JSON.parse(JSON.stringify(state)));
   try { tyMemoClear(); } catch (e) {}
@@ -273,7 +273,7 @@ function inPage(state) {
   catch (e) { out.errors.push("taxMoments threw: " + (e && e.message)); }
 
   /* Cross-basis reconciliation: whichever basis the practice is on, the OTHER one has to hold
-     together too — a therapist can elect accruals at any time and every figure moves with them. */
+     together too - a therapist can elect accruals at any time and every figure moves with them. */
   try {
     const other = basis === "cash" ? "accruals" : "cash";
     settings().taxBasis = other;
@@ -388,7 +388,7 @@ for (const f of files) {
   const env = JSON.parse(readFileSync(join(dataDir, f), "utf8"));
   const name = (env.testData && env.testData.profile) || f;
   consoleErrors.length = 0;
-  /* Per-device settings this profile assumes. They are deliberately not in the backup — a pension
+  /* Per-device settings this profile assumes. They are deliberately not in the backup - a pension
      contribution changes every tax figure and lives in localStorage, so a restore drops it. */
   await page.evaluate((d) => {
     try { ["tt_pension", "tt_default_rate"].forEach((k) => localStorage.removeItem(k)); } catch (e) {}
@@ -420,7 +420,7 @@ for (const f of files) {
 }
 
 /* ---------- seasonal sweep ----------
-   taxMoments() is pure and returns the prompts live TODAY — which, for most of the year, is none
+   taxMoments() is pure and returns the prompts live TODAY - which, for most of the year, is none
    of them. Reviewing the Tax section on one date therefore says nothing about the part of it that
    only appears in January. The browser clock is moved to five dates that between them fall inside
    every window (file, jan-pay, jul-pay, new-year, mtd-q) and the ids are recorded. */
@@ -455,7 +455,7 @@ try {
 writeFileSync(join(outDir, "_moments.json"), JSON.stringify(sweep, null, 1));
 console.log("\nSeasonal prompts (taxMoments) by date:");
 Object.keys(sweep).forEach((n) => {
-  const line = SWEEP.map((d) => d + ": " + ((sweep[n][d] && sweep[n][d].moments) || []).map((m) => m.id).join("+") || d + ": —").join("  |  ");
+  const line = SWEEP.map((d) => d + ": " + ((sweep[n][d] && sweep[n][d].moments) || []).map((m) => m.id).join("+") || d + ": -").join("  |  ");
   console.log("  " + n.padEnd(18) + line);
 });
 
