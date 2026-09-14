@@ -562,6 +562,7 @@ Touch only - a mouse drag across a page is a text selection and a trackpad's hor
   - **`MTD_HMRC_FIELD` maps each SA103 box to the property name in HMRC's Self Employment Business API** (`premisesRunningCosts`, `professionalFees`, `adminCosts`, …), carried as `hmrcField` in both files. It is a **hint for whoever files, never a claim that this file can be submitted** - same guard-rail as everything else on this screen (`docs/tax-positioning-2026-09.md` §2). Two caveats ride with it permanently: box 24 is "advertising **and** business entertainment" and the API splits those two (every GroundWork category under box 24 is advertising, so it maps to `advertisingCosts`); and the API is versioned and has changed shape between versions, so **the box number is the stable thing** and this column is a convenience. `SA103` gained boxes **15 (turnover) and 16** so the income rows can name a box too - it is a lookup map, never enumerated, so adding keys is safe.
   - **Nothing here is verified against a real bridging tool.** The tests assert the file is internally consistent and its shape is stable; no one has yet fed it to a tool that files. Don't let the copy imply otherwise.
   - **The screen sells the route, not the feature.** Tax › Making Tax Digital's "Filing these" card exists because the old copy ended on *"this app cannot file for you"* - true, and a dead end. It states the three parts, marks the two GroundWork has already done, and links to HMRC's own software list. It must never name a vendor, promise a free option exists for this reader, or rule on whether their setup satisfies the rules; `mtd-what` / `mtd-route` / `mtd-exports` carry the detail. The full claims guard-rail list is `docs/tax-positioning-2026-09.md` §2.
+- **The standing disclaimer is `.vmsg calm`, not `.vmsg warn`** (Sep 2026). `taxDisclaimBar()` is on the screen every time Now or Estimate is opened and nothing has gone wrong, so in amber it shouted a caution at the reader on every visit - and a warning that is always on stops being read as a warning at all. It wears the dotted brand outline of the empty pinned-analytics card (`.card.pinempty`), which is this app's shape for "context, not a problem". **The words are unchanged and must stay** - the caveat is what makes the figures usable; only the shouting went. Anything that genuinely is news keeps `.warn` and keeps the amber.
 
 ### Tax moments & guided flows (added Aug 2026)
 `taxMoments()` is a **pure** function returning the seasonal cards that are live *today* - zero of them for most of the year. It adds no arithmetic: everything comes from `today()`, `curTaxYear()`, `prevTY`, `taxYearRec`, `nextTaxPayment`, `taxPot` and `mtdQuarters`.
@@ -1185,10 +1186,29 @@ reader's own records - and the tab holds their own settings besides. What is bou
   received, overdue, session counts, **`tyNet` (the Net column - that is profit, not tax)**, the MTD
   quarter figures, **due dates** (when money leaves the account is not a calculation, and a date the
   reader cannot see could cost them a penalty), and anything the therapist typed in.
+- **It is drawn in the SHAPE of the missing figure - `£•,•••`, or `••%` where a percentage belongs -
+  never as a badge reading "Locked"** (Sep 2026). Every mask used to be a gold pill with a padlock
+  and that word in it, so the Estimate table alone carried five of them and the tab read as a
+  sales pitch repeated once per figure rather than as one screen waiting on one purchase. The dots
+  say the same thing in the reader's own terms, and the explaining is left where it was already
+  being done properly: the gate card at the top of the screen, the `aria-label`, and the tap.
+  `TAX_MASK_SHAPES` holds the two shapes and `taxMaskHTML(ty, cls, shape)` takes the key - **a
+  percentage masked as `£•,•••` is a different claim**, which is why the pot's rate KPI passes
+  `"pct"`. Nothing computes anything either way, and that is the part that must never move.
+  - **`.taxmask` sets `font:inherit`, and that is load-bearing twice.** The mask takes the size and
+    weight of the figure it stands in for, so a row cannot jump when the year is unlocked (`.big`
+    now only keeps the vertical rhythm, it no longer guesses at a headline's size); and it must put
+    `-webkit-text-fill-color` back to `currentColor`, because `.nowcard .nv` and `.kpi .v` paint
+    their numbers with a clipped gradient over a **transparent fill**, which inherits straight
+    through and would render the dots invisible.
+  - **A line that is not standing in for a figure does not get a mask.** The MTD export note is a
+    sentence about a *file*, with every quarter figure already on the screen above it, so it is a
+    plain muted line with a lock glyph - the export buttons themselves already open the year's
+    sheet.
 - **Unlike `.blurfig` it is not `aria-hidden`** - there is no number being withheld, only a state,
   and the state is announced. The label beside it stays honest and unmasked.
-- **One pill per row**: a breakdown line under a masked total says "not calculated" in words, or two
-  gold pills read as two things to buy.
+- **One mask per row**: a breakdown line under a masked total says "not calculated" in words, or a
+  single row carries four masked figures and says nothing more for it.
 - **Tax › Now short-circuits before any engine call**, and seasonal moments are not raised for a
   locked year - every one of them quotes an amount and `taxMoments()` reaches `taxPot()` to build
   them, so a moment is the one place a masked figure would leak out in a sentence.
