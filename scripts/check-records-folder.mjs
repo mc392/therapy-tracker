@@ -172,6 +172,32 @@ function fakePhone() {
      "ok" presents, "none" is iOS reporting it had no preview, "throw" is a reject, and
      "missing" removes the method altogether - an older build of the app. */
   window.__ics = { mode: "ok", opened: [], shared: [] };
+  /* A fake calendar. `mode` drives the paths: "ok" writes, "denied" is the permission refused,
+     "throw" is the bridge failing. `store` is what ended up in the diary, keyed by event id, so
+     a test can ask whether a second add made a duplicate or rewrote the same entry. */
+  window.__cal = { mode: "ok", store: {}, calls: [], next: 1, calendars: [
+    { id: "cal-personal", title: "Personal", source: "iCloud" },
+    { id: "cal-work", title: "Work", source: "iCloud" }
+  ] };
+  GroundWorkNative.calendarList = async () => {
+    if (window.__cal.mode === "denied") return { granted: false };
+    if (window.__cal.mode === "throw") throw new Error("no bridge");
+    return { granted: true, defaultId: "cal-personal", calendars: window.__cal.calendars.slice() };
+  };
+  GroundWorkNative.calendarAdd = async ({ events, calendarId }) => {
+    if (window.__cal.mode === "denied") return { granted: false };
+    if (window.__cal.mode === "throw") throw new Error("no bridge");
+    window.__cal.calls.push({ events: JSON.parse(JSON.stringify(events)), calendarId });
+    const results = events.map((e) => {
+      const known = e.eventId && window.__cal.store[e.eventId];
+      const id = known ? e.eventId : "ev" + (window.__cal.next++);
+      window.__cal.store[id] = { uid: e.uid, title: e.title, start: e.start, end: e.end,
+                                 location: e.location, calendarId: calendarId || "cal-personal" };
+      return { uid: e.uid, eventId: id, updated: !!known };
+    });
+    const cal = window.__cal.calendars.find((c) => c.id === (calendarId || "cal-personal"));
+    return { granted: true, calendar: cal ? cal.title : "", results };
+  };
   GroundWorkNative.openCalendarFile = async ({ text, filename }) => {
     if (window.__ics.mode === "throw") throw new Error("no view controller");
     window.__ics.opened.push({ filename, text });
@@ -522,6 +548,126 @@ async function main() {
   r = await runExport("x.ics", "text/calendar", "ok");
   check(r.opened.length === 0 && r.shared.length === 1, "ics.fallbackOldBuild",
     "a build whose plugin has no openCalendarFile falls back to the share sheet", r);
+  /* Put it back: everything after this point assumes a current build. */
+  await page.evaluate(() => {
+    Capacitor.Plugins.GroundWorkNative.openCalendarFile = async ({ text, filename }) => {
+      if (window.__ics.mode === "throw") throw new Error("no view controller");
+      window.__ics.opened.push({ filename, text });
+      return { shown: window.__ics.mode === "ok" };
+    };
+  });
+
+  /* ---- 12. Sessions are WRITTEN into the calendar on iOS, not handed over as a file ----
+     Handing iOS a file is a dead end however it is presented, so on a build that can write, the
+     .ics route must not be taken at all. */
+  const calRun = (fn) => page.evaluate((f) => {
+    window.__ics.opened = []; window.__ics.shared = [];
+    window.__cal.calls = [];
+    // eslint-disable-next-line no-eval
+    eval(f);
+    return new Promise((r) => setTimeout(() => r({
+      calls: window.__cal.calls.slice(), store: JSON.parse(JSON.stringify(window.__cal.store)),
+      opened: window.__ics.opened.slice(), shared: window.__ics.shared.slice(),
+      map: JSON.parse(localStorage.getItem("tt_calmap") || "{}"),
+      chosen: localStorage.getItem("tt_calendar") || ""
+    }), 320));
+  }, fn);
+
+  await page.evaluate(() => {
+    localStorage.setItem("tt_calendar", "cal-work");     /* already chosen - no picker */
+    localStorage.removeItem("tt_calmap");
+    window.__cal.store = {}; window.__cal.next = 1;
+    S.sessions = [
+      { _id: "cs1", client: "AA1", date: "2026-10-05", time: "10:00", location: "Room 2", notes: "" },
+      { _id: "cs2", client: "BB2", date: "2026-10-06", time: "14:30", location: "At home", notes: "" }
+    ];
+  });
+
+  let c = await calRun('calAddSession(S.sessions[0])');
+  check(c.calls.length === 1 && c.opened.length === 0 && c.shared.length === 0, "cal.writesNotFile",
+    "a session is written into the calendar and no file is produced at all", c);
+  check(Object.keys(c.store).length === 1, "cal.oneEvent", "one event lands in the diary", c.store);
+  const ev1 = Object.values(c.store)[0] || {};
+  check(ev1.title === "AA1" && ev1.location === "Room 2", "cal.thinEvent",
+    "carrying the client code and the room", ev1);
+  /* The times come from icsFloating, so the session length and the DST rule are not recomputed
+     here - 10:00 plus the 50-minute default. */
+  check(ev1.start === "2026-10-05T10:00" && ev1.end === "2026-10-05T10:50", "cal.wallClock",
+    "with wall-clock start and end taken from the shared arithmetic", ev1);
+  check(ev1.calendarId === "cal-work", "cal.chosenCalendar",
+    "into the calendar the reader chose, not the default", ev1.calendarId);
+  check(c.map.cs1 && Object.keys(c.map).length === 1, "cal.remembersId",
+    "and the event's identifier is remembered against that session", c.map);
+
+  /* THE ONE THAT MATTERS: adding the same session again must rewrite it, not duplicate it. */
+  c = await calRun('calAddSession(S.sessions[0])');
+  check(Object.keys(c.store).length === 1, "cal.noDuplicate",
+    "adding the same session again rewrites the same event rather than duplicating it", c.store);
+  check(c.calls[0] && c.calls[0].events[0].eventId, "cal.sendsKnownId",
+    "because the stored identifier is sent back with it", c.calls[0] && c.calls[0].events[0]);
+
+  /* A session that moves is updated in place. */
+  await page.evaluate(() => { S.sessions[0].time = "16:00"; });
+  c = await calRun('calAddSession(S.sessions[0])');
+  const moved = Object.values(c.store)[0] || {};
+  check(Object.keys(c.store).length === 1 && moved.start === "2026-10-05T16:00", "cal.updatesMove",
+    "a session that moves updates the entry already in the calendar", moved);
+
+  c = await calRun('calAddRange("2026-10-01","2026-10-31","in the next month")');
+  check(c.calls.length === 1 && c.calls[0].events.length === 2, "cal.rangeWrites",
+    "a date range writes every session in it in one go", c.calls[0] && c.calls[0].events.length);
+  check(Object.keys(c.store).length === 2, "cal.rangeNoDuplicate",
+    "and the one already added is not duplicated by the range", c.store);
+
+  /* Refusal must not be a dead end: say what to do, and still leave the file route open. */
+  await page.evaluate(() => { window.__cal.mode = "denied"; });
+  c = await calRun('calAddSession(S.sessions[1])');
+  check(c.calls.length === 0 && (c.opened.length === 1 || c.shared.length === 1), "cal.deniedFallsBack",
+    "refusing calendar access falls back to the file rather than doing nothing", c);
+
+  await page.evaluate(() => { window.__cal.mode = "throw"; });
+  c = await calRun('calAddSession(S.sessions[1])');
+  check(c.opened.length === 1 || c.shared.length === 1, "cal.throwFallsBack",
+    "a failing bridge falls back to the file too", c);
+  await page.evaluate(() => { window.__cal.mode = "ok"; });
+
+  /* An older build, with no EventKit on the plugin, is still the .ics app it always was. */
+  c = await page.evaluate(() => {
+    const keep = window.GWCalendarNative; window.GWCalendarNative = null;
+    window.__ics.opened = []; window.__ics.shared = []; window.__cal.calls = [];
+    calAddSession(S.sessions[1]);
+    return new Promise((r) => setTimeout(() => {
+      window.GWCalendarNative = keep;
+      r({ calls: window.__cal.calls.length, opened: window.__ics.opened.length });
+    }, 300));
+  });
+  check(c.calls === 0 && c.opened === 1, "cal.oldBuildFile",
+    "a build with no calendar methods still hands over the .ics exactly as before", c);
+
+  /* More than one writable calendar and nothing chosen yet: ask, and never write until asked. */
+  await page.evaluate(() => { localStorage.removeItem("tt_calendar"); });
+  const picker = await page.evaluate(() => {
+    window.__cal.calls = [];
+    calAddSession(S.sessions[1]);
+    return new Promise((r) => setTimeout(() => r({
+      open: !!document.querySelector("#sheet.open"),
+      rows: document.querySelectorAll("#sheetBody [data-cal]").length,
+      wrote: window.__cal.calls.length
+    }), 320));
+  });
+  check(picker.open && picker.rows === 2, "cal.picker",
+    "two writable calendars means the reader is asked which one", picker);
+  check(picker.wrote === 0, "cal.pickerBlocks",
+    "and nothing is written to any calendar until they have answered", picker);
+  const picked = await page.evaluate(() => {
+    document.querySelector('#sheetBody [data-cal="cal-work"]').click();
+    return new Promise((r) => setTimeout(() => r({
+      chosen: localStorage.getItem("tt_calendar"),
+      wrote: window.__cal.calls.length
+    }), 320));
+  });
+  check(picked.chosen === "cal-work" && picked.wrote === 1, "cal.pickerRemembers",
+    "choosing one writes there and remembers it for next time", picked);
 
   check(consoleErrors.length === 0, "page.clean", "no uncaught error anywhere in the run", consoleErrors.slice(0, 4));
   check(dialogs.length === 0, "page.noAlerts", "nothing had to fall back to a native alert()", dialogs.slice(0, 4));

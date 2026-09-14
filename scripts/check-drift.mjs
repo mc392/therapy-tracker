@@ -102,6 +102,31 @@ if (existsSync("ios/App/App/GroundWorkNativePlugin.swift")) {
     fail("index.html no longer builds an .ics (`icsFile`) - the native calendar screen has nothing to present");
 }
 
+/* Writing sessions into the phone's calendar. Two silent failures guarded here, and the second
+   one is not silent at all - it is a crash. */
+if (existsSync("ios/App/App/GroundWorkNativePlugin.swift")) {
+  const plugin = readFileSync("ios/App/App/GroundWorkNativePlugin.swift", "utf8");
+  for (const m of ["calendarList", "calendarAdd"]) {
+    if (!plugin.includes(`CAPPluginMethod(name: "${m}"`))
+      fail(`GroundWorkNativePlugin does not declare \`${m}\` - the calendar write would reject at runtime and iOS would drop back to handing over a file, which is the dead end EventKit replaced`);
+    if (!plugin.includes(`@objc func ${m}(`))
+      fail(`GroundWorkNativePlugin declares \`${m}\` but does not implement it`);
+    if (!html.includes(`GW.${m}(`))
+      fail(`index.html no longer calls \`GW.${m}()\` - the native calendar bridge has a method nothing reaches`);
+  }
+  if (!plugin.includes("import EventKit"))
+    fail("GroundWorkNativePlugin no longer imports EventKit - the calendar methods cannot compile without it");
+  if (!html.includes("window.GWCalendarNative"))
+    fail("index.html no longer declares `window.GWCalendarNative` - the shared calendar code's only seam to the native writer");
+  /* iOS does not fail politely here: asking for calendar access with no usage string in the
+     Info.plist terminates the app. Both keys are needed - the deployment target is iOS 15, and
+     iOS 17 reads the full-access one instead of the legacy one. */
+  const plist = readFileSync("ios/App/App/Info.plist", "utf8");
+  for (const k of ["NSCalendarsFullAccessUsageDescription", "NSCalendarsUsageDescription"])
+    if (!plist.includes(k))
+      fail(`Info.plist is missing ${k} - iOS terminates the app when calendar access is requested without it`);
+}
+
 /* GroundWork Plus / Pro: the same silent-failure shape as the records folder above, and now
    across two products. A method the web layer calls that the plugin does not declare rejects at
    runtime, on a phone, and the paywall just says the subscription is unavailable. */
