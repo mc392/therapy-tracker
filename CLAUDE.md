@@ -453,13 +453,28 @@ nowhere to be recorded at all.
 - **`incompleteRows()` is the one definition** - the worklist, the attention-feed count, the
   "anything left?" test after a catch-up and the Goals ring's completion half all read it, so they
   cannot disagree about what is outstanding. The ring's own link lands on that list.
-- **The Incomplete worklist gained an attendance toggle, and Notes done stopped answering
-  attendance.** Ticking notes used to stamp `attendConfirmed` as well, which was defensible while
-  blank *meant* attended and is not now: it would be the app answering on the therapist's behalf,
-  on the one screen she is going through her sessions precisely to answer them. Each row renders a
-  toggle only for the reasons it is actually missing, and **a cancellation or a DNA is recorded in
-  the session form** (tap the client's name) - the charge, the cancelled-on date and the policy
-  behind them belong there, and a three-way control on a bulk row would be a second, poorer copy.
+- **The Incomplete worklist answers all three, and Notes done stopped answering attendance.**
+  Ticking notes used to stamp `attendConfirmed` as well, which was defensible while blank *meant*
+  attended and is not now: it would be the app answering on the therapist's behalf, on the one
+  screen she is going through her sessions precisely to answer them. Each row renders controls
+  only for the reasons it is actually missing, and attendance renders **three mutually exclusive
+  chips - Attended / Late cancel / DNA** (`setAtt()`: choosing one clears the others, choosing the
+  chosen one puts the row back to unanswered). A worklist that could only ever say "attended" is
+  one a therapist has to leave for every missed session she has.
+  - **A missed session states its charge on the row before it is saved.** This is the one control
+    on the screen that moves money, and a fee written off in a bulk sweep with nothing on screen to
+    say so is exactly the silent loss `settings.cancelRules` exists to prevent. The figure comes
+    from `cancelPolicyPct(kind, cancelNoticeHrs(s))` - null notice on an unanswered session, so the
+    policy's fallback, which is the same figure the session form's own box opens on.
+  - **Saving only ever STAMPS `cancelCharge`, never overwrites one**, for the same reason
+    `cancelPctFor()` reads the session and not the policy: a figure already there was put there
+    deliberately. "Attended" does clear a cancellation - kind, flag, date and charge - because that
+    is what choosing it in the form does, and an attended session carries no cancellation.
+  - **Bulk is "All attended" and deliberately nothing else.** Sweeping a worklist into DNA is not
+    something anybody means to do, and it would write off a fee on every row at once.
+  - **The finer detail stays in the session form**, which the row opens by tapping the client's
+    name: the date the session was called off, a charge other than the policy's, and the fee it
+    works out to. The chips answer the question; they are not a second copy of that screen.
 - **`validateSession` no longer warns about a late cancellation dated ahead** (the `lcfuture`
   warning became `dnafuture`). Cancelling a future session is now the intended flow, and warning
   about it would make it ask for a second confirmation. A **DNA** dated ahead is still flagged -

@@ -213,33 +213,92 @@ async function inPage() {
     ok("a session still to come never does, however blank",
       !incompleteRows().some((x) => !derive(x.s).ended));
 
-    /* The worklist clears it, and only it - Notes done must not answer attendance as well. */
+    /* The worklist answers it in full - all three kinds, not just "attended" - and Notes done
+       must not answer it at all. */
     sessFilter.seg = "incomplete"; sessFilter.q = ""; sessFilter.view = "list";
-    go("sessions"); await sleep(150);
-    const row = document.querySelector('.irow[data-id="' + blanked._id + '"]');
-    ok("the worklist offers an attendance tick", !!row && !!row.querySelector('.tgl[data-k="attend"]'));
+    const openList = async () => { go("sessions"); await sleep(150);
+      return document.querySelector('.irow[data-id="' + blanked._id + '"]'); };
+    const chip = (row, v) => row && row.querySelector('.tgl[data-k="att"][data-v="' + v + '"]');
+    let row = await openList();
+    ok("the worklist offers all three answers", !!row &&
+      ["attended", "late", "dna"].every((v) => !!chip(row, v)));
     ok("and no notes tick on a session already written up",
       !!row && !row.querySelector('.tgl[data-k="notes"]'));
+
+    /* One answer, not three ticks: picking a second clears the first. */
     if (row) {
-      row.querySelector('.tgl[data-k="attend"]').click(); await sleep(40);
-      document.querySelector("#saveInc").click(); await sleep(300);
-      const cleared = S.sessions.find((x) => x._id === blanked._id);
-      ok("ticking Attended answers it", attendConfirmed(cleared) === true);
-      ok("and the session leaves the worklist", derive(cleared).complete === true);
+      chip(row, "late").click(); await sleep(40);
+      chip(row, "dna").click(); await sleep(40);
+      ok("the three chips are mutually exclusive",
+        !chip(row, "late").classList.contains("on") && chip(row, "dna").classList.contains("on"));
+      ok("a missed session says on the row what it will be charged",
+        /charged \d+% of/.test(row.querySelector(".attnote").textContent),
+        row.querySelector(".attnote").textContent);
+      chip(row, "dna").click(); await sleep(40);          /* tapping the chosen one un-answers it */
+      ok("choosing the chosen one puts the row back to unanswered",
+        !chip(row, "dna").classList.contains("on") &&
+        /Save \(0\)/.test(document.querySelector("#saveInc").textContent));
     }
+
+    /* DNA: the kind, the flag and the policy's charge, recomputed here from the rule. */
+    if (row) {
+      const wantPct = cancelPolicyPct("dna", null);       /* no notice recorded -> policy's DNA % */
+      chip(row, "dna").click(); await sleep(40);
+      document.querySelector("#saveInc").click(); await sleep(300);
+      const dna = S.sessions.find((x) => x._id === blanked._id);
+      ok("DNA is recorded from the worklist", dna.cancelKind === "dna" && attendConfirmed(dna) === true);
+      ok("a DNA is not a late cancellation", dna.lateCancel === false);
+      ok("and it is charged at the policy, not silently at nothing",
+        dna.cancelCharge === wantPct, `${dna.cancelCharge} vs ${wantPct}`);
+      ok("isCancelled() picks it up", isCancelled(dna) === true);
+      ok("and the session leaves the worklist", derive(dna).complete === true);
+    }
+
+    /* Attended, over the top of that DNA: the same clearing the session form does. */
+    {
+      const s3 = S.sessions.find((x) => x._id === blanked._id);
+      s3.attendConfirmed = false;
+      row = await openList();
+      if (row) { chip(row, "attended").click(); await sleep(40);
+        document.querySelector("#saveInc").click(); await sleep(300); }
+      const att = S.sessions.find((x) => x._id === blanked._id);
+      ok("Attended clears the cancellation it replaces",
+        !att.cancelKind && att.lateCancel === false && att.cancelCharge == null && !att.cancelledAt);
+      ok("and counts as answered", attendConfirmed(att) === true);
+      ok("so the session is worth its full fee again",
+        derive(att).rate === derive(att).fullRate, `${derive(att).rate} vs ${derive(att).fullRate}`);
+    }
+
+    /* A charge already on the record is never overwritten by the policy. */
+    {
+      const s4 = S.sessions.find((x) => x._id === blanked._id);
+      s4.attendConfirmed = false; s4.cancelCharge = 25;
+      row = await openList();
+      if (row) { chip(row, "late").click(); await sleep(40);
+        document.querySelector("#saveInc").click(); await sleep(300); }
+      const kept = S.sessions.find((x) => x._id === blanked._id);
+      ok("an existing charge survives being answered here", kept.cancelCharge === 25, kept.cancelCharge);
+    }
+
     /* A notes-only tick must leave attendance exactly as it found it. */
     const probe = S.sessions.find((x) => x._id === blanked._id);
     probe.notes = ""; probe.attendConfirmed = false;
-    go("sessions"); await sleep(150);
-    const row2 = document.querySelector('.irow[data-id="' + probe._id + '"]');
-    if (row2 && row2.querySelector('.tgl[data-k="notes"]')) {
-      row2.querySelector('.tgl[data-k="notes"]').click(); await sleep(40);
+    probe.cancelKind = null; probe.lateCancel = false; probe.cancelCharge = null;
+    row = await openList();
+    if (row && row.querySelector('.tgl[data-k="notes"]')) {
+      row.querySelector('.tgl[data-k="notes"]').click(); await sleep(40);
       document.querySelector("#saveInc").click(); await sleep(300);
       const after2 = S.sessions.find((x) => x._id === probe._id);
       ok("Notes done writes the notes tick", notesDone(after2) === true);
       ok("Notes done does NOT answer attendance on the therapist's behalf",
         attendConfirmed(after2) === false);
     }
+
+    /* Bulk is "all attended" and nothing else - there is no sweep that writes off every fee. */
+    ok("the only bulk answer is Attended",
+      !!document.querySelector("#allAtt") &&
+      !document.querySelector("#allLate") && !document.querySelector("#allDna"));
+
     S.sessions = S.sessions.filter((x) => x._id !== fut._id);
     sessFilter.seg = "upcoming";
   }

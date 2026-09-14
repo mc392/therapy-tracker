@@ -886,6 +886,12 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:0
 .tgl .tbox{width:16px;height:16px;border-radius:5px;border:2px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:11px}
 .tgl.on{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good);border-color:color-mix(in srgb,var(--good) 50%,transparent)}
 .tgl.on .tbox{background:var(--good);border-color:var(--good);color:#fff}
+/* A missed session is answered, not good news - so the chosen chip is amber rather than green.
+   Same control, same weight; only the colour says which kind of answer it is. */
+.tgl.miss.on{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 50%,transparent)}
+.tgl.miss.on .tbox{background:var(--warn);border-color:var(--warn);color:#fff}
+.irow .attnote{display:none;font-size:12.5px;color:var(--warn);line-height:1.45;padding:0 2px}
+.irow .attnote.show{display:block}
 .tgl.pop{animation:tglpop .42s cubic-bezier(.18,1.5,.5,1)}
 @keyframes tglpop{0%{transform:scale(1)}45%{transform:scale(1.2)}100%{transform:scale(1)}}
 .bulkbar{position:sticky;top:0;background:var(--bg);z-index:2;padding:8px 0}
@@ -5086,7 +5092,7 @@ VIEWS.sessions=function(){
        write-ups do I still owe?") with a bookkeeping one ("which bills have I paid?") - two jobs
        on two different clocks. Room fees are raised by the session and settled in Money › Costs &
        income, beside the rent and everything else the practice pays for.
-       Attendance earned a toggle of its own in Sep 2026, when a blank "did it go ahead?" became a
+       Attendance earned controls of its own in Sep 2026, when a blank "did it go ahead?" became a
        real unanswered state rather than a silent "attended". Before that, ticking Notes done here
        also stamped the attendance flag - which was defensible while blank MEANT attended and is
        not any more: it would be the app answering a question on the therapist's behalf, in the one
@@ -5095,55 +5101,107 @@ VIEWS.sessions=function(){
     rows.sort((a,b)=>parseD(b.s.date)-parseD(a.s.date));
     const miss={};rows.forEach(x=>{miss[x.s._id]={notes:!notesDone(x.s),attend:!attendConfirmed(x.s)};});
     const anyNotes=rows.some(x=>miss[x.s._id].notes), anyAtt=rows.some(x=>miss[x.s._id].attend);
-    container.innerHTML='<div class="bulkbar"><div class="hint" style="margin-top:4px">Sessions still waiting on something - tick what\u2019s done, then Save.</div>'+
+    /* What a missed session would be charged if it were answered here. The notice is unrecorded
+       on a session nobody has answered for, so `cancelNoticeHrs` is null and the policy falls back
+       to the full fee - the same conservative reading, from the same function, that the session
+       form's own box opens on. It is spelled out on the row rather than applied quietly: this is
+       the one control on the screen that moves money, and a fee written off in a bulk sweep with
+       nothing on screen to say so is exactly the silent loss the cancellation rules exist to
+       prevent. The notice date and any other figure stay in the session form. */
+    const chargeFor=(x,kind)=>{
+      const s=x.s, pct=(s.cancelCharge==null)?cancelPolicyPct(kind,cancelNoticeHrs(s)):cancelPctFor(s);
+      return {pct:pct, amt:Math.round((x.d.fullRate||0)*pct)/100};
+    };
+    const ATT=[["attended","Attended"],["late","Late cancel"],["dna","DNA"]];
+    container.innerHTML='<div class="bulkbar"><div class="hint" style="margin-top:4px">Sessions still waiting on something - answer what you can, then Save.</div>'+
       '<div class="bbtns">'+(anyNotes?'<button class="btn sm sec" id="allNotes">✓ All notes done</button>':'')+
         (anyAtt?'<button class="btn sm sec" id="allAtt">✓ All attended</button>':'')+'</div>'+
       '<button class="btn full savebig" id="saveInc">Save (0)</button></div><div id="irows"></div>'+
-      (anyAtt?'<p class="small muted" style="margin:10px 2px 0">A session that was cancelled or missed needs its own form - tap the client’s name to open it.</p>':'')+
+      (anyAtt?'<p class="small muted" style="margin:10px 2px 0">A late cancellation or DNA is charged at your policy’s default. To record the notice you were given, or a different charge, tap the client’s name to open the session.</p>':'')+
       '<p class="small muted" style="margin:10px 2px 0">Room fees are settled separately, under <span class="taxlink" id="incRoomGo">Money › Room fees ›</span></p>';
     const irw=container.querySelector("#irows");
     const stage={};
     irw.innerHTML=rows.map(x=>{const s=x.s,d=x.d,mi=miss[s._id];
-      stage[s._id]={notes:false,attend:false};
+      stage[s._id]={notes:false,att:""};
       /* Only the reasons this session is actually missing get a control. A tick beside something
          already done is a tick that can only be turned off, on a screen whose whole job is
          turning things on. */
-      return '<div class="irow" data-id="'+s._id+'"><div class="itop clk" data-open="'+s._id+'"><div><span class="ittl">'+esc(s.client)+'</span> <span class="isub">'+fmtDshort(s.date)+' · '+esc(s.time||"")+' · #'+esc(s.num)+'</span></div><div class="li-right small muted">'+gbp(d.rate)+'</div></div>'+
+      return '<div class="irow" data-id="'+s._id+'"><div class="itop clk" data-open="'+s._id+'"><div><span class="ittl">'+esc(s.client)+'</span> <span class="isub">'+fmtDshort(s.date)+' · '+esc(s.time||"")+' · #'+esc(s.num)+cancelTag(s,d)+'</span></div><div class="li-right small muted">'+gbp(d.rate)+'</div></div>'+
         '<div class="ctrls">'+
           (mi.notes?'<button class="tgl" data-k="notes" data-id="'+s._id+'"><span class="tbox"></span>Notes done</button>':'')+
-          (mi.attend?'<button class="tgl" data-k="attend" data-id="'+s._id+'"><span class="tbox"></span>Attended</button>':'')+
-        '</div></div>';
+          (mi.attend?ATT.map(a=>'<button class="tgl'+(a[0]==="attended"?"":" miss")+'" data-k="att" data-v="'+a[0]+'" data-id="'+s._id+'"><span class="tbox"></span>'+a[1]+'</button>').join(""):'')+
+        '</div>'+
+        (mi.attend?'<div class="attnote" data-note="'+s._id+'"></div>':'')+
+        '</div>';
     }).join("");
     const rg=container.querySelector("#incRoomGo");
     if(rg)rg.onclick=()=>goRoomCosts();
-    /* The one way to record a late cancellation or a DNA from here: the charge, the date it was
-       called off and the policy behind them all belong to the session form, and a three-way
-       control squeezed onto a bulk row would be a second, poorer copy of it. */
+    /* Everything a missed session needs beyond its kind - the date it was called off, a charge
+       other than the policy's, the fee it works out to - lives in the session form, and the row
+       opens it. The three chips here answer the question; they are not a second copy of that
+       screen. */
     irw.querySelectorAll(".itop[data-open]").forEach(tp=>tp.onclick=()=>sessionForm(S.sessions.find(z=>z._id===tp.dataset.open)));
     const sbtn=container.querySelector("#saveInc");
-    const staged=()=>Object.keys(stage).filter(id=>stage[id].notes||stage[id].attend);
+    const staged=()=>Object.keys(stage).filter(id=>stage[id].notes||stage[id].att);
     const upd=()=>{const n=staged().length;sbtn.textContent="Save ("+n+")";sbtn.classList.toggle("ready",n>0);};
+    const rowOf=id=>rows.find(x=>x.s._id===id);
+    function paintNote(id){
+      const n=irw.querySelector('.attnote[data-note="'+id+'"]'); if(!n)return;
+      const k=stage[id].att, x=rowOf(id);
+      if(!x||k!=="late"&&k!=="dna"){n.textContent="";n.classList.remove("show");return;}
+      const c=chargeFor(x,k);
+      n.textContent=(k==="dna"?"Did not attend":"Late cancellation")+" · charged "+c.pct+"% of "+
+        gbp(x.d.fullRate||0)+" = "+gbp(c.amt)+". Open the session to change it.";
+      n.classList.add("show");
+    }
     function setTgl(btn,on){const id=btn.dataset.id,k=btn.dataset.k;if(stage[id][k]===on)return;stage[id][k]=on;
       btn.classList.toggle("on",on);btn.classList.remove("pop");void btn.offsetWidth;if(on)btn.classList.add("pop");
       Sfx.pop();upd();}
-    irw.querySelectorAll(".tgl").forEach(b=>b.onclick=()=>setTgl(b,!stage[b.dataset.id][b.dataset.k]));
-    const allBtn=(id,k)=>{const b=container.querySelector("#"+id);
-      if(b)b.onclick=()=>irw.querySelectorAll('.tgl[data-k="'+k+'"]').forEach(t=>setTgl(t,true));};
-    allBtn("allNotes","notes");allBtn("allAtt","attend");
+    /* The three attendance chips are one answer, not three ticks: choosing one clears the others,
+       and choosing the one already chosen puts the row back to unanswered. */
+    function setAtt(btn){
+      const id=btn.dataset.id, v=btn.dataset.v, now=(stage[id].att===v)?"":v;
+      stage[id].att=now;
+      irw.querySelectorAll('.tgl[data-k="att"][data-id="'+id+'"]').forEach(b=>{
+        const on=(b.dataset.v===now);
+        b.classList.toggle("on",on);b.classList.remove("pop");void b.offsetWidth;if(on)b.classList.add("pop");});
+      Sfx.pop();paintNote(id);upd();
+    }
+    irw.querySelectorAll('.tgl[data-k="notes"]').forEach(b=>b.onclick=()=>setTgl(b,!stage[b.dataset.id].notes));
+    irw.querySelectorAll('.tgl[data-k="att"]').forEach(b=>b.onclick=()=>setAtt(b));
+    const nb=container.querySelector("#allNotes");
+    if(nb)nb.onclick=()=>irw.querySelectorAll('.tgl[data-k="notes"]').forEach(t=>setTgl(t,true));
+    /* Bulk is "all attended" and deliberately nothing else. Sweeping a whole worklist into DNA is
+       not a thing anybody means to do, and it would write off a fee on every row at once. */
+    const ab=container.querySelector("#allAtt");
+    if(ab)ab.onclick=()=>irw.querySelectorAll('.tgl[data-k="att"][data-v="attended"]').forEach(t=>{if(stage[t.dataset.id].att!=="attended")setAtt(t);});
     sbtn.onclick=async()=>{
       const ids=staged();
-      if(!ids.length){toast("Tick something first");Sfx.error();return}
+      if(!ids.length){toast("Answer something first");Sfx.error();return}
       let cleared=0,notesN=0,attN=0;
       ids.forEach(id=>{const ss=S.sessions.find(z=>z._id===id);if(!ss)return;
         const wasComplete=derive(ss).complete;
         if(stage[id].notes){ss.notes="Y";notesN++;}
-        /* "Attended" and nothing else. A cancellation kind already on the record is left exactly
-           where it is - this button confirms the answer, it does not overwrite one. */
-        if(stage[id].attend){ss.attendConfirmed=true;attN++;}
+        const k=stage[id].att;
+        if(k){
+          attN++;
+          ss.attendConfirmed=true;
+          if(k==="attended"){
+            /* The same clearing the session form does when "Yes - attended" is chosen: an
+               attended session carries no cancellation of any kind. */
+            ss.cancelKind=null;ss.lateCancel=false;ss.cancelledAt="";ss.cancelCharge=null;
+          }else{
+            ss.cancelKind=k;ss.lateCancel=(k==="late");
+            /* Only ever STAMPS a charge, never overwrites one. A figure already on the session was
+               put there deliberately - by the form, by the importer, or by an earlier sweep - and
+               the policy is what to charge from now on, not what was already agreed. */
+            if(ss.cancelCharge==null)ss.cancelCharge=cancelPolicyPct(k,cancelNoticeHrs(ss));
+          }
+        }
         if(!wasComplete&&derive(ss).complete)cleared++;});
       const batch=ids.length;
       const f=gameNoteBatch({cleared:cleared});
-      const what=(notesN&&attN)?"updated":notesN?"written up":"confirmed";
+      const what=(notesN&&attN)?"updated":notesN?"written up":"answered";
       await commit("Catch-up: "+batch+" session"+(batch===1?"":"s")+" "+what);renderTabs();
       const remaining=incompleteRows().length;
       gameShow({batch:batch,completed:cleared>0,toast:"Updated "+batch+" session"+(batch===1?"":"s")+" 🎉",
