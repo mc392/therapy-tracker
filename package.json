@@ -12,6 +12,7 @@
     "test:reports": "node scripts/check-reports.mjs",
     "test:folder": "node scripts/check-records-folder.mjs",
     "test:rent": "node scripts/check-room-rent.mjs",
+    "test:payer": "node scripts/check-payer.mjs",
     "test:tiers": "node scripts/check-tiers.mjs",
     "test:pins": "node scripts/check-pins.mjs",
     "test:projection": "node scripts/check-projection.mjs",

@@ -1,8 +1,14 @@
-# T10 - The trainee record: schema v11
+# T10 - The trainee record: schema v12
 **Model:** Opus · **Depends on:** nothing · **Touches:** `TherapyTracker-web/index.html`, `CLAUDE.md`, `scripts/make-test-data.mjs` (optional)
 
+> **Note (14 Sep 2026): v11 went to the practitioner-model work** — `client.payer`,
+> `settings.payers` and `settings.employmentYears` (see CLAUDE.md § *Who pays for the work* and
+> `docs/practitioner-models-2026-09.md`). **This task is now v12.** Nothing in it conflicts: the
+> payer work touches who is billed, this touches what was delivered, and they meet only on the
+> client record where both fields are optional and absent-means-today.
+
 > **Note (13 Sep 2026): v9 went to room rent and v10 to the report creator**
-> (`settings.reports`, Practice > Reports). This task is now **v11**. That feature also added the first real consumer of these
+> (`settings.reports`, Practice > Reports). That feature also added the first real consumer of these
 > fields — `reportHours()` currently counts every session at the practice session length and
 > says so on the page, which is exactly the gap change 1 closes. Read CLAUDE.md § *Reports for
 > courses and professional bodies* before starting.

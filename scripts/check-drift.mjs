@@ -148,7 +148,11 @@ if (!html.includes('window.Capacitor.isNativePlatform()'))
 const ENGINE_MUST_BE_PURE = [
   "function tyNet(", "function taxLiability(", "function mtdQuarters(",
   "function mtdExport(", "function ledgerBetween(", "function taxForYear(",
-  "function taxPot(", "function taxSchedule(", "function taxTimeline("
+  "function taxPot(", "function taxSchedule(", "function taxTimeline(",
+  /* ukTax gained employment-income stacking in Sep 2026 and reads settings for it, exactly as it
+     already reads the region and the loan plan. It is still called straight from
+     tests/tax-tests.js, so it is still held to the same rule. */
+  "function ukTax(", "function ukBands("
 ];
 for (const fn of ENGINE_MUST_BE_PURE) {
   const at = html.indexOf(fn);
@@ -165,7 +169,11 @@ for (const fn of ENGINE_MUST_BE_PURE) {
     fail(`${fn} calls taxYearPaid()/taxYearLocked() - the tax year gate belongs in the view layer, not the engine`);
 }
 const DATA_PLANE = ["async function commit(", "async function exportJSON(", "function importJSON(",
-  "async function importFromText("];
+  "async function importFromText(",
+  /* Who pays for a client's work decides whether the app asks for money at all. A billing state
+     reaching into it would mean a lapsed subscriber's salaried caseload turning back into a list
+     of debts she does not owe. */
+  "function sessionEarns(", "function payerOf("];
 for (const fn of DATA_PLANE) {
   const at = html.indexOf(fn);
   if (at < 0) { fail(`index.html no longer contains \`${fn}\``); continue; }
