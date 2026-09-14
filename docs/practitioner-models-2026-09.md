@@ -7,6 +7,37 @@ lift it without turning GroundWork into a different product.*
 *Companion to `docs/institutional-partnerships-2026-09.md`, which covers the trainee case from the
 evidence side. This document covers the money side, which that plan deliberately left alone.*
 
+> **Stages 1 to 3 are BUILT (14 Sep 2026), as schema v11.** The analysis below is kept as written
+> rather than rewritten in the past tense, because the reasoning is what a later reader will want.
+> What shipped, and where the mechanics now live:
+>
+> - **Stage 1** — `client.payer` (`PAYERS`, absent = the client pays), the `sessionEarns()` choke
+>   point feeding `derive().earns` → `d.overdue`, revenue-bearing readiness on `anaHourlyRate` and
+>   `anaFloor`, the Money section of Trends replaced by one sentence where nobody pays, `stepPaid`
+>   in setup, and `taxEmploymentBar()`.
+> - **Stage 2** — `settings.payers[]` managed beside Rooms, `client.payerId` and `client.authorised`,
+>   invoices and chasers addressed to the organisation (through the client, never a fifth argument),
+>   and Sessions › Unpaid grouped by who owes it with a per-organisation *Tick all*.
+> - **Stage 3** — `settings.employmentYears`, `ukBands()`/`ukBandsMinus()` split out of `ukTax()` so
+>   a wage sits underneath practice profit, Class 4 and Class 2 deliberately left on profit alone,
+>   and the student loan charged as the increment the practice adds.
+>
+> Mechanics: CLAUDE.md § *Who pays for the work* and § *UK tax engine*. Tests: `npm run test:payer`
+> (106 assertions). **Stage 4 was not built and should not be** — see §5.
+>
+> One deliberate deviation from §5: Stage 3 proposed `{payeIncome, payeTaxPaid}` and **only `pay`
+> shipped**. The tax the employer already deducted changes nothing — what the engine produces is
+> the tax on the *practice*, which is the part Self Assessment collects, and PAYE has already
+> settled the wage. A second field that changed no figure would be a field somebody fills in
+> expecting it to.
+>
+> Two things found during the build that the analysis had not: `anaMonthlySeries` needed an `earn`
+> count of its own (revenue had to stop counting non-earning sessions while `n` and `attended` kept
+> counting every session), and `setEmploymentPay(ty, 0)` has to **store** the zero rather than
+> delete the year, or carry-forward keeps a salary alive after the job has ended. The second was
+> caught by a test written from the documented rule, which is the argument for writing them that
+> way.
+
 ---
 
 ## The answer, before the working

@@ -1607,7 +1607,7 @@ const MAX_SNAP=120;
 /* Data schema version, stamped on state and on every backup. Bump when a change would be
    misread by an older build, and add the matching step to migrate(). Data with no stamp is v1
    (everything written before versioning existed). */
-const SCHEMA_VERSION=10;
+const SCHEMA_VERSION=11;
 function stateSchemaVersion(st){const v=st&&st.meta&&+st.meta.schemaVersion;return v>0?v:1;}
 
 function clone(o){return JSON.parse(JSON.stringify(o))}
@@ -1840,6 +1840,18 @@ function normalize(st){
      place. Import refuses it outright (see validateImport); this path only guards the unlikely
      case of a newer build having written to this device's own database.
 
+     v10 → v11 records WHO PAYS for a client's work (`client.payer`, and `payerId` naming the
+     organisation where one does), and what the practitioner earns from employment in a given tax
+     year (`settings.employmentYears`). Nothing migrates in place: absent means "the client pays
+     me", which is what every record written before this build meant. The bump is entirely for the
+     other direction, and it matters twice over. A v10 build has no payer field, so every salaried
+     or placement session in a v11 backup goes back to being a debt: they reappear on the Unpaid
+     worklist, on its tab badge and in the attention feed as money owed, and the app offers to
+     chase clients who were never billed. And a v10 build has no employment figure, so it puts the
+     personal allowance and the whole basic-rate band back onto practice profit alone and shows a
+     tax estimate that is thousands of pounds light - then saves both losses back. validateImport
+     refuses it.
+
      v9 → v10 adds settings.reports - the reports a therapist has built and saved for a course,
      a placement or a professional body, and which one is their default. A v10 backup can hold
      "CPCAB client log, everything so far, these nine sections, counted as one clinical hour
@@ -2000,6 +2012,73 @@ function eomonth(d){return new Date(d.getFullYear(),d.getMonth()+1,0)}
 function weekNum(d){if(typeof d==="string")d=parseD(d);const onejan=new Date(d.getFullYear(),0,1);
   return Math.ceil((((d-onejan)/86400000)+onejan.getDay()+1)/7)}
 
+/* ============ Who pays for this client's work ============
+   GroundWork was built for one practitioner selling sessions to the people in front of her, and
+   the whole money chain assumes it: effRate -> derive().rate -> paidDate -> tyNet -> ukTax. Plenty
+   of counsellors are not paid that way - salaried at a charity or a service, on placement, or seeing
+   EAP and insurer clients an organisation pays for - and the commonest UK career shape is two of
+   those at once, a salaried post with a private caseload beside it.
+
+   So this is a fact about a CLIENT, not about the practice. A practice-wide "I am employed" switch
+   cannot say "these six are the charity's and these four are mine", which is the case it would most
+   often be asked about, and it would put a third axis beside feat() and plusLocked() answering
+   nearly the same question.
+
+   Absent = "client", so no existing record moves and no existing figure changes. An unrecognised
+   stored key falls back the same way - same rule as CPD_KINDS and SESSION_TYPES. */
+const PAYERS={
+  client:{n:"The client pays me",   d:"Private work. They are billed the session fee and you chase it."},
+  org:   {n:"An organisation pays me", d:"An EAP, an insurer, a charity contract. The fee is real, but the bill goes to them."},
+  none:  {n:"Nobody pays per session", d:"You are salaried, on placement, or seeing this person free. No fee is chased and nothing is counted as owed."}
+};
+function payerOf(c){const k=c&&c.payer;return Object.prototype.hasOwnProperty.call(PAYERS,k)?k:"client";}
+function clientOf(code){return (S.clients||[]).find(x=>(x.code||"").toLowerCase()===(code||"").toLowerCase())||null;}
+function payerOfCode(code){return payerOf(clientOf(code));}
+/* THE choke point. "Does this session earn money anybody has to collect?" - asked by derive() and
+   by every figure that adds fees up, so the answer can never differ between two screens. Four
+   readers used to add their own `rate > 0` test and two forgot, which is exactly how the Unpaid
+   worklist came to hold every session of a practice that charges nothing. */
+function sessionEarns(s){return payerOfCode(s&&s.client)!=="none";}
+/* Does anybody at all pay this practice per session? Answers the practice-wide version for the
+   screens that have to decide whether to exist - the Money section of Trends, the revenue trend on
+   Home - rather than draw a confident chart of zeroes. A practice with no clients yet has not said
+   it charges nothing, so the default is yes. */
+function anyPayingClient(){
+  const cl=S.clients||[];
+  return !cl.length || cl.some(c=>payerOf(c)!=="none");
+}
+/* ===== The organisations that pay =====
+   An EAP, an insurer, a charity contract: a named external party with a rate and a payment rhythm.
+   Deliberately the same shape as a room, which is the closest thing the app already has, and kept
+   in settings rather than at the top of S because it is a handful of rows of configuration that
+   should travel in a backup and never needs its own store.
+
+   A client names one by id. The id is what is stored, never the name, so renaming an organisation
+   does not orphan a caseload. */
+/* What a NEW client starts as, from the setup question. "mixed" means the practitioner has both
+   kinds, so private is the right thing to start on and the exceptions are set as they are added -
+   there is no third default that would be right more often. */
+function defaultPayerKey(){
+  try{return settings().defaultPayer==="none"?"none":"client";}catch(e){return "client";}
+}
+function payerOrgs(){const sg=settings();if(!Array.isArray(sg.payers))sg.payers=[];return sg.payers;}
+function payerOrgById(id){return id?payerOrgs().find(p=>p._id===id)||null:null;}
+/* The organisation actually billed for a client's work, or null. Never answers for a client whose
+   payer is not "org" - a stale payerId left behind by a change of mind must not put an invoice
+   back in front of somebody. */
+function clientPayerOrg(c){return payerOf(c)==="org"?payerOrgById(c&&c.payerId):null;}
+/* How many sessions an organisation has authorised, and how many of those are used. EAPs and
+   insurers authorise a block - six is the commonest - and running past it is the practitioner's
+   problem, not the client's. Counted on sessions that went ahead: a DNA the funder will not pay
+   for has not used one up. Null when no cap was set, which is most clients. */
+function clientAuthorised(c){
+  const cap=+(c&&c.authorised)||0;
+  if(!(cap>0))return null;
+  const lc=(c.code||"").toLowerCase();
+  const used=(S.sessions||[]).filter(s=>(s.client||"").toLowerCase()===lc&&!isCancelled(s)).length;
+  return {cap,used,left:Math.max(0,cap-used),over:Math.max(0,used-cap)};
+}
+
 /* ============ Derived per-session ============ */
 function effRate(client,dateStr){
   const d=parseD(dateStr); if(!d)return null; const cl=(client||"").toLowerCase();
@@ -2032,6 +2111,18 @@ function derive(s){
   const cancelPct=cancelPctFor(s);
   const rate=Math.round(fullRate*cancelPct)/100;
   const room=roomFor(s.location); const roomRate=effRoomRate(s.location,s.date); const due=room?room.due:"n/a";
+  /* Who pays for this client's work. The client record is looked up ONCE here and reused for the
+     status and category below - derive() runs over every session on the app's hottest renders, and
+     a second linear scan of the client list per session is the kind of cost that only shows up on
+     somebody's thousand-session practice.
+
+     A salaried or placement session carries whatever fee is in force (usually £0) but raises
+     nothing to collect, so it must never be `overdue`: that flag is what the Unpaid worklist, its
+     tab badge, the attention feed and the Goals ring all read, and without this every past session
+     of a practice that charges nothing sits on a red badge nobody can clear. */
+  const cl=S.clients.find(c=>(c.code||"").toLowerCase()===(s.client||"").toLowerCase());
+  const payer=payerOf(cl);
+  const earns=payer!=="none";
   const clientPaid=!!s.paidDate;
   const past=d?d<t:false;
   /* `past` is a whole-DAY test and it is what money runs on: a payment is not overdue until the
@@ -2040,7 +2131,7 @@ function derive(s){
      ahead?" cannot be answered before it has. The two differ only for sessions dated today,
      which is exactly the case somebody logging this morning's client falls into. */
   const ended=sessionEnded(s,d,t);
-  const overdue=past&&!clientPaid;
+  const overdue=earns&&past&&!clientPaid;
   let roomBooked = s.room==="-"||s.location==="At home" ? "n/a" : (s.room?"Y":"N");
   /* Three ways a session can have no room fee to settle, and they all mean the same thing to
      every screen downstream: there is no question to ask, so never chase an answer.
@@ -2063,7 +2154,6 @@ function derive(s){
     const next=schedNext(roomSchedule(room),d);            /* first payment date on/after the session */
     if(next)roomDue = (next < t)?"Y":"N";
   }
-  const cl=S.clients.find(c=>(c.code||"").toLowerCase()===(s.client||"").toLowerCase());
   const status=cl?cl.status:""; const category=cl?cl.category:"";
   /* `complete` is the WRITE-UP tick and, since Sep 2026, whether "Did it go ahead?" has actually
      been confirmed (see attendConfirmed). It used to also demand a room-paid answer, which put a
@@ -2076,7 +2166,7 @@ function derive(s){
   if(d){ const tm=(s.time||"00:00").split(":"); const dt=new Date(d); dt.setHours(+tm[0]||0,+tm[1]||0);
     cancelBy=addDays(dt,-3); canCancel=cancelBy>new Date(); }
   return {rate,fullRate,cancelPct,cancelKind:(s.cancelKind||(isLateCancel(s)?"late":null)),
-    roomRate,due,roomPaidNA,roomOwed,clientPaid,past,ended,overdue,roomBooked,roomDue,status,category,complete,cancelBy,canCancel,
+    roomRate,due,roomPaidNA,roomOwed,earns,payer,clientPaid,past,ended,overdue,roomBooked,roomDue,status,category,complete,cancelBy,canCancel,
     week:d?weekNum(d):"",year:d?d.getFullYear():"",taxYear:d?taxYear(d):""};
 }
 /* The Incomplete worklist, in ONE place - the list itself, the count the attention feed raises
@@ -3437,7 +3527,7 @@ VIEWS.home=function(){
   const der=derivedSessions();
   const tyRows=der.filter(x=>x.d.taxYear===ty);
   const t=today();
-  const billed=tyRows.filter(x=>{const d=parseD(x.s.date);return d&&d<=t;}).reduce((a,x)=>a+(x.d.rate||0),0);
+  const billed=tyRows.filter(x=>{const d=parseD(x.s.date);return d&&d<=t&&x.d.earns;}).reduce((a,x)=>a+(x.d.rate||0),0);
   const outstanding=der.filter(x=>x.d.overdue).reduce((a,x)=>a+(x.d.rate||0),0);
   /* "Received" used to sit beside "Billed", and between them they answered one question twice -
      what is missing is the far more useful third number, and Outstanding was already showing it.
@@ -3468,7 +3558,7 @@ VIEWS.home=function(){
   const topClients=S.clients.map(c=>({code:c.code,_id:c._id,n:cCounts[c.code.toLowerCase()]||0,status:c.status})).filter(x=>x.n>=6).sort((a,b)=>b.n-a.n).slice(0,3);
   const loyalCard=topClients.length?'<div class="card"><h2>Longstanding clients</h2>'+topClients.map((x,i)=>{const medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":"•";return'<div class="list-item" data-cid="'+x._id+'"><div class="li-main"><div class="li-title">'+medal+' '+esc(x.code)+'</div><div class="li-sub">'+esc(x.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>';}).join("")+'</div>':'';
   const weekRev={};
-  der.forEach(x=>{const dd=parseD(x.s.date);if(!dd)return;const k=isoD(weekStart(x.s.date));weekRev[k]=(weekRev[k]||0)+(x.d.rate||0);});
+  der.forEach(x=>{const dd=parseD(x.s.date);if(!dd||!x.d.earns)return;const k=isoD(weekStart(x.s.date));weekRev[k]=(weekRev[k]||0)+(x.d.rate||0);});
   const curWk=weekStart(isoD(t)); // Monday of the current week; build 24 consecutive weeks back from here (empty weeks = £0)
   const weekSeries=[];
   for(let i=23;i>=0;i--){const ws=addDays(curWk,-7*i);
@@ -3476,8 +3566,10 @@ VIEWS.home=function(){
   const sparkVals=weekSeries.map(d=>d.revenue);
   const lastW=weekSeries[weekSeries.length-1];
   /* 24 weeks of £0 with two bars in it is not a trend. Ten sessions is where the line starts
-     saying something, in every mode - an established practice passes it on day one. */
-  const sparkCard=S.sessions.length>=10?'<div class="card"><div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Revenue trend</h2><span class="small muted">last 24 weeks</span></div>'+sparkline(sparkVals)+'<div class="row small muted" style="justify-content:space-between;margin-top:4px"><span>'+(weekSeries[0]?"w/c "+esc(weekSeries[0].l):"")+'</span><span><b style="color:var(--brand-dark)">'+gbp(lastW?lastW.revenue:0)+'</b> this week</span></div></div>':'';
+     saying something, in every mode - an established practice passes it on day one. Ten sessions
+     that EARN, though: a salaried or placement caseload passes a bare session count on day one too
+     and then gets twenty-four weeks of nothing, drawn confidently. */
+  const sparkCard=der.filter(x=>x.d.earns).length>=10?'<div class="card"><div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Revenue trend</h2><span class="small muted">last 24 weeks</span></div>'+sparkline(sparkVals)+'<div class="row small muted" style="justify-content:space-between;margin-top:4px"><span>'+(weekSeries[0]?"w/c "+esc(weekSeries[0].l):"")+'</span><span><b style="color:var(--brand-dark)">'+gbp(lastW?lastW.revenue:0)+'</b> this week</span></div></div>':'';
   /* Moved here from Money › Overview. It answers "how busy have I been", which is a Home
      question - nobody opens the money tab to find out whether they took August off. It needs
      one past session to say anything at all, and nothing more: even a sparse year reads as a
@@ -3617,6 +3709,10 @@ VIEWS.home=function(){
 };
 
 let sessFilter={q:"",seg:"upcoming",view:"list"};
+/* How Sessions › Unpaid is grouped: by how long it has been outstanding, or by who owes it.
+   Module-level for the same reason `pracTab` and `projBasis` are - ticking a payment re-renders
+   the list, and a choice held in the closure would be thrown away underneath the reader. */
+let unpaidBy="age";
 let calY=null,calM=null,statGran="month",taxMode="proj",thMode="net",supTab="log";
 /* Which segment each merged tab is showing. Module-level like the others, so a redraw
    (go(tab,{keepScroll:true})) lands the reader back where they were. */
@@ -5092,21 +5188,72 @@ VIEWS.sessions=function(){
     if(!rows.length){container.innerHTML=emptyNote("Nothing overdue 🎉");return}
     const bk=days=>days<7?{o:4,l:"Under 1 week"}:days<14?{o:3,l:"1–2 weeks"}:days<31?{o:2,l:"2 weeks – 1 month"}:days<91?{o:1,l:"1–3 months"}:{o:0,l:"3+ months"};
     rows.forEach(x=>{x._days=Math.floor((t-parseD(x.s.date))/86400000);x._bk=bk(x._days);});
-    const groups={};rows.forEach(x=>{(groups[x._bk.o]=groups[x._bk.o]||{l:x._bk.l,items:[]}).items.push(x);});
-    const order=Object.keys(groups).map(Number).sort((a,b)=>a-b);
-    container.innerHTML='<div class="paybar"><div class="hint" style="margin-top:4px">Tick what\'s been paid, set each date (defaults today), then Save.</div><div class="row" style="gap:8px;flex-wrap:wrap;margin:8px 0"><input type="date" id="allD" value="'+td+'" style="width:140px"><button class="btn sm sec" id="setAll">Apply date to ticked</button><button class="btn sm sec" id="chaseAll">✉ Chase…</button><button class="btn sm savebig" id="savePay">Save payments (0)</button></div></div><div id="prows"></div>';
+    /* GROUPED BY AGE, OR BY WHO OWES IT. Age is the right default for private practice: the
+       question is which debt has been outstanding longest. It is the wrong one for an EAP
+       caseload, where six clients' sessions are all owed by the same organisation, arrive on one
+       remittance and are ticked off together - by age they are scattered down the screen among
+       everybody else's. The toggle only appears once some of the outstanding money is actually
+       owed by an organisation, so a practice that has never met the idea never sees it. */
+    const anyOrg=rows.some(x=>clientPayerOrg(clientOf(x.s.client)));
+    if(!anyOrg)unpaidBy="age";
+    const byPayer=(unpaidBy==="payer"&&anyOrg);
+    const groups={};
+    if(byPayer){
+      rows.forEach(x=>{
+        const org=clientPayerOrg(clientOf(x.s.client));
+        const k=org?("o:"+org._id):"z:direct";
+        (groups[k]=groups[k]||{l:org?org.name:"Paid by the client",items:[],org:org||null}).items.push(x);
+      });
+    }else{
+      rows.forEach(x=>{(groups[x._bk.o]=groups[x._bk.o]||{l:x._bk.l,items:[]}).items.push(x);});
+    }
+    const order=byPayer
+      ? Object.keys(groups).sort((a,b)=>{
+          /* Sorted by the NAME shown, not by the id the key is built from - an id is a timestamp
+             and would put the organisations in the order they were added, which reads as no order
+             at all. Direct clients stay last: the batch jobs are what this grouping is for. */
+          const ga=groups[a],gb=groups[b];
+          if(!!ga.org!==!!gb.org)return ga.org?-1:1;
+          return String(ga.l).localeCompare(String(gb.l),"en-GB");})
+      : Object.keys(groups).map(Number).sort((a,b)=>a-b);
+    container.innerHTML='<div class="paybar"><div class="hint" style="margin-top:4px">Tick what\'s been paid, set each date (defaults today), then Save.</div>'+
+      (anyOrg?'<div class="seg" id="upBy" style="display:inline-flex;margin:8px 0 0">'+
+        '<button data-b="age" class="'+(byPayer?"":"on")+'">By age</button>'+
+        '<button data-b="payer" class="'+(byPayer?"on":"")+'">By who owes it</button></div>':'')+
+      '<div class="row" style="gap:8px;flex-wrap:wrap;margin:8px 0"><input type="date" id="allD" value="'+td+'" style="width:140px"><button class="btn sm sec" id="setAll">Apply date to ticked</button><button class="btn sm sec" id="chaseAll">✉ Chase…</button><button class="btn sm savebig" id="savePay">Save payments (0)</button></div></div><div id="prows"></div>';
     const gstyle=o=>{const m={4:["var(--good)",14],3:["var(--warn)",16],2:["var(--warn)",30],1:["var(--bad)",26],0:["var(--bad)",100]};const a=m[o]||["var(--muted)",14];if(a[1]>=100)return "background:"+a[0]+";color:#fff";return "background:color-mix(in srgb,"+a[0]+" "+a[1]+"%,transparent);color:"+a[0];};
     const prw=container.querySelector("#prows");
     prw.innerHTML=order.map(o=>{const g=groups[o];const tot=g.items.reduce((a,x)=>a+(x.d.rate||0),0);
       g.items.sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
-      return '<div class="grphead" style="'+gstyle(o)+'">'+esc(g.l)+' · '+g.items.length+' · '+gbp(tot)+'</div>'+
-        g.items.map(x=>'<div class="payrow"><input type="checkbox" class="pchk" data-id="'+x.s._id+'"><div class="li-main" data-id="'+x.s._id+'"><div class="li-title">'+esc(x.s.client)+' · '+gbp(x.d.rate)+'</div><div class="li-sub">'+fmtDshort(x.s.date)+' · #'+esc(x.s.num)+' · '+x._days+'d overdue</div></div><input type="date" class="pdate" data-id="'+x.s._id+'" value="'+td+'"></div>').join("");}).join("");
+      return '<div class="grphead" style="'+(byPayer?gstyle(g.org?1:4):gstyle(o))+'">'+esc(g.l)+' · '+g.items.length+' · '+gbp(tot)+
+        (byPayer&&g.org?'<button class="btn sm sec" data-tickorg="'+esc(o)+'" style="float:right;margin:-2px 0 0">Tick all</button>':'')+'</div>'+
+        g.items.map(x=>{
+          /* Grouped by age, the group heading no longer says who owes it, so the row does. Grouped
+             by payer it would be the same word on every row under its own heading. */
+          const org=byPayer?null:clientPayerOrg(clientOf(x.s.client));
+          return '<div class="payrow"><input type="checkbox" class="pchk" data-id="'+x.s._id+'"><div class="li-main" data-id="'+x.s._id+'"><div class="li-title">'+esc(x.s.client)+' · '+gbp(x.d.rate)+
+          (org?' <span class="chip f">'+esc(org.name)+'</span>':'')+'</div><div class="li-sub">'+fmtDshort(x.s.date)+' · #'+esc(x.s.num)+' · '+x._days+'d overdue</div></div><input type="date" class="pdate" data-id="'+x.s._id+'" value="'+td+'"></div>';
+        }).join("");}).join("");
     const sbtn=container.querySelector("#savePay");
     const upd=()=>{const n=prw.querySelectorAll(".pchk:checked").length;sbtn.textContent="Save payments ("+n+")";sbtn.classList.toggle("ready",n>0);};
     prw.querySelectorAll(".pchk").forEach(c=>c.onchange=()=>{Sfx.pop();upd();});
     prw.querySelectorAll(".li-main").forEach(mn=>mn.onclick=()=>{const c=prw.querySelector('.pchk[data-id="'+mn.dataset.id+'"]');c.checked=!c.checked;Sfx.pop();upd();});
     container.querySelector("#setAll").onclick=()=>{const dv=container.querySelector("#allD").value;prw.querySelectorAll(".pchk:checked").forEach(c=>{const di=prw.querySelector('.pdate[data-id="'+c.dataset.id+'"]');if(di)di.value=dv;});};
     container.querySelector("#chaseAll").onclick=()=>chasePickSheet();
+    const upby=container.querySelector("#upBy");
+    if(upby)upby.querySelectorAll("button").forEach(b=>b.onclick=()=>{
+      if(unpaidBy===b.dataset.b)return;
+      unpaidBy=b.dataset.b;renderUnpaid(container,rows,refresh);});
+    /* One remittance from an organisation settles the whole block, which is the job this grouping
+       exists for. It only ticks - the date and the Save are still the reader's, exactly as they
+       are for every other row on the screen. */
+    prw.querySelectorAll("[data-tickorg]").forEach(btn=>btn.onclick=e=>{
+      e.stopPropagation();
+      const g=groups[btn.dataset.tickorg]; if(!g)return;
+      const ids=g.items.map(x=>x.s._id);
+      const all=ids.every(id=>{const c=prw.querySelector('.pchk[data-id="'+id+'"]');return c&&c.checked;});
+      ids.forEach(id=>{const c=prw.querySelector('.pchk[data-id="'+id+'"]');if(c)c.checked=!all;});
+      Sfx.pop();upd();});
     sbtn.onclick=async()=>{const checks=[...prw.querySelectorAll(".pchk:checked")];if(!checks.length){toast("Tick some sessions first");Sfx.error();return}
       let amount=0;
       checks.forEach(c=>{const di=prw.querySelector('.pdate[data-id="'+c.dataset.id+'"]');const ss=S.sessions.find(z=>z._id===c.dataset.id);if(ss){ss.paidDate=di.value||isoD(today());amount+=derive(ss).rate||0;}});
@@ -5451,6 +5598,13 @@ const ATT_FOLD_MIN=3;
 /* ---- shared shaping helpers ---- */
 function anaDer(){return S.sessions.map(s=>({s,d:derive(s),dt:parseD(s.date)})).filter(x=>x.dt);}
 function anaPast(rows,t){t=t||today();return rows.filter(x=>x.dt<=t);}
+/* "Never invent a trend from nothing" is this engine's first rule, and the money cards were
+   applying it to the wrong quantity: they counted SESSIONS, so a salaried or placement caseload
+   sailed past a ten-session gate and got told its effective hourly rate was £0.00 under a heading
+   explaining this is the figure to compare against an employed salary. A money card needs money.
+   Rows that earn AND carry a fee: a £0 private client is a real answer for pro bono work, but it
+   is still nothing for a money chart to measure. */
+function anaEarning(rows){return rows.filter(x=>x.d.earns&&(x.d.rate||0)>0);}
 function anaMedian(arr){
   const a=arr.filter(x=>x!=null&&!isNaN(x)).slice().sort((x,y)=>x-y);
   if(!a.length)return null;
@@ -5467,12 +5621,17 @@ function anaMonthlySeries(months){
   for(let i=months;i>=1;i--){                              /* i=1 is LAST month; the current one is never complete */
     const from=anaMonthStart(t,i), to=anaMonthStart(t,i-1);
     const inM=rows.filter(x=>x.dt>=from&&x.dt<to);
+    /* Revenue counts only what somebody pays for. `n` and `attended` deliberately still count
+       every session - they answer "how busy was this month", which is a different question and one
+       a salaried caseload has a real answer to. `earn` is what a money card gates on. */
+    const earning=inM.filter(x=>x.d.earns);
     out.push({from,to,key:anaMonthKey(from),
       l:ANA_MONTHS[from.getMonth()]+(from.getMonth()===0||i===months?" ’"+String(from.getFullYear()).slice(2):""),
       month:from.getMonth(),year:from.getFullYear(),
-      revenue:Math.round(inM.reduce((a,x)=>a+(x.d.rate||0),0)),
-      full:Math.round(inM.reduce((a,x)=>a+(x.d.fullRate||0),0)),
-      n:inM.length, attended:inM.filter(x=>!isCancelled(x.s)).length});
+      revenue:Math.round(earning.reduce((a,x)=>a+(x.d.rate||0),0)),
+      full:Math.round(earning.reduce((a,x)=>a+(x.d.fullRate||0),0)),
+      n:inM.length, earn:earning.filter(x=>(x.d.rate||0)>0).length,
+      attended:inM.filter(x=>!isCancelled(x.s)).length});
   }
   return out;
 }
@@ -5520,6 +5679,12 @@ function anaFloor(){
   const months=anaMonthlySeries(12);
   const done=months.filter(m=>m.n>0);
   if(done.length<4)return {ready:false,need:"Four months of sessions. You have "+done.length+"."};
+  /* Four months of paid work, not four months of work. Without this a salaried caseload gets a
+     worst, typical and best month all reading £0, drawn as confidently as a real one. */
+  const paid=months.filter(m=>m.earn>0);
+  if(paid.length<4)return {ready:false,need:paid.length
+    ? ("Four months with sessions somebody paid for. You have "+paid.length+".")
+    : "Sessions that carry a fee. None of yours do, so there is no monthly income to compare."};
   const vals=months.map(m=>m.revenue);
   const worst=months.slice().sort((a,b)=>a.revenue-b.revenue)[0];
   const best=months.slice().sort((a,b)=>b.revenue-a.revenue)[0];
@@ -5563,7 +5728,7 @@ function projWindow(from,to){
     const when=cash?(s.paidDate||null):s.date;
     if(cash&&!when)return;
     const dd=parseD(when); if(!dd||dd<from||dd>to)return;
-    const d=derive(s); fees+=(d.rate||0); room+=(d.roomRate||0);});
+    const d=derive(s); fees+=(d.earns?(d.rate||0):0); room+=(d.roomRate||0);});
   const own=r=>{const dd=parseD(r&&r.date); if(dd&&dd>=from&&dd<=to)sup+=(+r.cost||0);};
   (S.supervision||[]).forEach(own); (S.peerSupervision||[]).forEach(own);
   const led=ledgerBetween(from,to,{});
@@ -5728,8 +5893,14 @@ function anaHourlyRate(){
   const t=today(), from=addYears(t,-1);
   const rows=anaDer().filter(x=>x.dt>from&&x.dt<=t);
   if(rows.length<10)return {ready:false,need:"Ten sessions in the last year. You have "+rows.length+"."};
+  /* Ten sessions is not enough on its own - they have to be sessions somebody paid for, or this
+     card divides £0 by a year of real work and calls the answer an hourly rate. */
+  const earners=anaEarning(rows).length;
+  if(earners<10)return {ready:false,need:earners
+    ? ("Ten sessions in the last year that carry a fee. You have "+earners+".")
+    : "Sessions that carry a fee. None of yours do, so there is no hourly rate to work out."};
   const attended=rows.filter(x=>!isCancelled(x.s));
-  const revenue=rows.reduce((a,x)=>a+(x.d.rate||0),0);
+  const revenue=rows.filter(x=>x.d.earns).reduce((a,x)=>a+(x.d.rate||0),0);
   const clinicalH=attended.length*sessionMins()/60;
   /* Admin is charged on every session logged: a cancellation still costs you the rearranging. */
   const adminH=rows.length*adminMinsPerSession()/60;
@@ -6166,7 +6337,7 @@ function anaCostRatio(){
   if(!feat("finances"))return {ready:false,need:"Costs &amp; other income is switched off, so there is nothing to compare turnover against."};
   const t=today(), y1from=addYears(t,-1), y2from=addYears(t,-2);
   const der=anaPast(anaDer(),t);
-  const rev=(from,to)=>der.filter(x=>x.dt>from&&x.dt<=to).reduce((a,x)=>a+(x.d.rate||0),0);
+  const rev=(from,to)=>der.filter(x=>x.dt>from&&x.dt<=to&&x.d.earns).reduce((a,x)=>a+(x.d.rate||0),0);
   const period=(from,to)=>{
     const led=ledgerBetween(from,to,{toDate:true});
     const income=rev(from,to)+led.otherIncome;
@@ -7293,7 +7464,12 @@ VIEWS.practice=function(){
     body.querySelector("#cq").oninput=render; body.querySelector("#addC").onclick=()=>clientForm(null); render();
   }
   function renderRooms(){
-    body.innerHTML='<div class="toolbar"><button class="btn sm" id="addR">＋ New room / location</button></div><div id="rlist"></div>';
+    /* Organisations that pay sit here rather than on Money, for the same reason rooms do: this is
+       where the external parties a practice deals with are SET UP, and what they owe is settled
+       where every other bill is. A room is a named outside party with a rate and a payment
+       rhythm; an EAP is the same shape with the money running the other way. */
+    body.innerHTML='<div class="toolbar"><button class="btn sm" id="addR">＋ New room / location</button></div><div id="rlist"></div>'+
+      '<div id="porgWrap"></div>';
     const r=()=>{
       /* The sub-line used to print the raw legacy code - "Payment due: EOM" - which meant
          nothing to anybody. A rent says when it started and when it stops; a room paid by the
@@ -7320,6 +7496,30 @@ VIEWS.practice=function(){
          set of controls here that would have to be kept in step with it. */
       const gm=body.querySelector("#rGoMoney");
       if(gm)gm.onclick=()=>goRoomCosts("roomRentCard");
+      drawOrgs();
+    };
+    /* The card only appears once there is something to say: an organisation already set up, or a
+       client marked as paid for by one. A practice with neither has not asked this question, and a
+       third empty card on the Rooms screen answers nobody. */
+    const drawOrgs=()=>{
+      const host=body.querySelector("#porgWrap"); if(!host)return;
+      const orgs=payerOrgs();
+      const anyOrgClient=(S.clients||[]).some(c=>payerOf(c)==="org");
+      if(!orgs.length&&!anyOrgClient){host.innerHTML="";return;}
+      const rows=orgs.map(p=>{
+        const n=(S.clients||[]).filter(c=>payerOf(c)==="org"&&c.payerId===p._id).length;
+        return '<div class="list-item" data-pid="'+esc(p._id)+'"><div class="li-main"><div class="li-title">'+esc(p.name)+'</div>'+
+          '<div class="li-sub">'+(p.invoiceDays?('Pays in '+esc(String(p.invoiceDays))+' days'):'No payment terms set')+
+          (p.defaultRate?(' · '+gbp(p.defaultRate)+' a session'):'')+'</div></div>'+
+          '<div class="li-right"><b style="color:var(--brand-dark)">'+n+'</b> <span class="small muted">client'+(n===1?"":"s")+'</span></div></div>';
+      }).join("");
+      host.innerHTML='<div class="card mt" id="payerOrgCard">'+cardHead("Organisations that pay you","who-pays")+
+        (orgs.length?'<div style="margin:0 -6px">'+rows+'</div><p class="small muted">Tap one to edit it. A client is linked to an organisation on their own record.</p>'
+          :emptyNote("No organisations yet. Add one, then set a client’s Who pays to “an organisation”."))+
+        '<button class="btn sec full mt" id="addOrg">＋ Add an organisation</button></div>';
+      host.querySelectorAll(".list-item").forEach(li=>li.onclick=()=>payerOrgForm(payerOrgById(li.dataset.pid),()=>drawOrgs()));
+      host.querySelector("#addOrg").onclick=()=>payerOrgForm(null,()=>drawOrgs());
+      wireInfo(host);
     };
     body.querySelector("#addR").onclick=()=>roomForm(null); r();
   }
@@ -7410,8 +7610,19 @@ VIEWS.practice=function(){
       return {html,folds,funnel:true};
     }
 
-    /* ---- MONEY section ---- */
-    function moneySection(){return anaSection("money",cx);}
+    /* ---- MONEY section ----
+       A practice where nobody pays per session - salaried, or a placement - has no money to
+       analyse, and seven cards each explaining what they are waiting for is a worse answer than
+       one sentence. The individual cards still fail closed on their own (see anaEarning), so this
+       is about not making the reader scroll through the same non-answer seven times. */
+    function moneySection(){
+      if(!anyPayingClient())return {html:'<div class="card"><h2>Nothing to count yet</h2>'+
+        '<p class="small muted">Every client on your books is marked as one nobody pays you per session for, so there is no income here to find a pattern in. '+
+        'The <b>Clients</b>, <b>Time</b> and <b>You</b> sections work exactly as they would for anyone else.</p>'+
+        '<p class="small muted">If some of your work <i>is</i> paid for - privately, or by an organisation - set that on the client’s own record under <b>Who pays</b>.</p></div>',
+        folds:{},folded:0};
+      return anaSection("money",cx);
+    }
 
     /* ---- the sub-nav, and lazy section rendering ---- */
     body.innerHTML=segBar("trseg",TREND_SEGS,trendSeg)+
@@ -7568,6 +7779,56 @@ function mountSchedulePicker(host,sched,o){
     if(dsel)dsel.onchange=()=>{sched.day=dsel.value;draw();};
   };
   draw();
+}
+/* An organisation that pays for a client's sessions - an EAP, an insurer, a charity contract.
+   Four fields and nothing more: who they are, where the invoice goes, how long they take to pay
+   and what they pay a session. Deliberately not a contract record - authorised session counts live
+   on the CLIENT, because they are authorised per person, not per organisation. */
+function payerOrgForm(p,onSaved){
+  const isNew=!p; const m=p?clone(p):{_id:uid(),name:"",contact:"",invoiceDays:null,defaultRate:null,notes:""};
+  const body=el('<div></div>');
+  body.innerHTML=`
+    <label>Name</label><input id="po_name" maxlength="60" value="${esc(m.name||"")}" placeholder="e.g. Health Assured, AXA, Mind Camden">
+    <label>Where invoices go <span class="muted small">(optional)</span></label>
+    <input id="po_contact" maxlength="120" value="${esc(m.contact||"")}" placeholder="An email address, a portal name, a reference">
+    <div class="field2">
+      <div><label>Pays within (days) <span class="muted small">(optional)</span></label>
+        <input type="number" min="0" step="1" id="po_days" value="${esc(m.invoiceDays==null?"":m.invoiceDays)}" placeholder="30"></div>
+      <div><label>Rate a session (£) <span class="muted small">(optional)</span></label>
+        <input type="number" min="0" step="1" id="po_rate" value="${esc(m.defaultRate==null?"":m.defaultRate)}" placeholder="Leave blank"></div>
+    </div>
+    <p class="small muted">The rate here is only a reminder of what they agreed to pay. What a session actually earns still comes from the client’s own fee, so a rate that changes mid-contract keeps its history.</p>
+    <label>Notes <span class="muted small">(optional)</span></label>
+    <textarea id="po_notes" rows="2" placeholder="Reference numbers, who to chase, how they want it billed">${esc(m.notes||"")}</textarea>
+    <button class="btn full mt" id="poSave">Save organisation</button>
+    ${isNew?"":'<button class="btn danger full mt" id="poDel">Delete organisation</button>'}`;
+  body.querySelector("#poSave").onclick=async()=>{
+    const name=body.querySelector("#po_name").value.trim();
+    if(!name){toast("Give it a name");Sfx.error();return;}
+    const num=sel=>{const raw=body.querySelector(sel).value.trim();return raw===""?null:Math.max(0,+raw||0);};
+    Object.assign(m,{name,contact:body.querySelector("#po_contact").value.trim(),
+      invoiceDays:num("#po_days"),defaultRate:num("#po_rate"),notes:body.querySelector("#po_notes").value.trim()});
+    const list=payerOrgs();
+    const ex=list.find(x=>x._id===m._id);
+    if(ex)Object.assign(ex,m);else list.push(m);
+    await commit((isNew?"Added":"Edited")+" organisation: "+m.name);
+    closeSheet();toast("Saved");
+    if(onSaved)onSaved(m._id);
+  };
+  const del=body.querySelector("#poDel");
+  if(del)del.onclick=async()=>{
+    /* Clients pointing at it are unlinked back to "the client pays me" rather than left holding a
+       dead id - a client whose payer is an organisation that no longer exists would be billed to
+       nobody, which is worse than being billed to themselves. */
+    const linked=(S.clients||[]).filter(c=>payerOf(c)==="org"&&c.payerId===m._id);
+    if(!confirm("Delete "+m.name+"?"+(linked.length?"\n\n"+linked.length+" client"+(linked.length===1?"":"s")+" will go back to paying you directly.":"")))return;
+    linked.forEach(c=>{c.payer="client";c.payerId="";});
+    const sg=settings();sg.payers=payerOrgs().filter(x=>x._id!==m._id);
+    await commit("Deleted organisation: "+m.name);
+    closeSheet();toast("Deleted");
+    if(onSaved)onSaved("");
+  };
+  openSheet(isNew?"New organisation":"Organisation: "+m.name,body);
 }
 function roomForm(rm){
   const isNew=!rm; const m=rm?clone(rm):{_id:uid(),location:"",due:"n/a",billing:"session"};
@@ -8329,36 +8590,114 @@ function earliestTaxYearIn(st){
   const yrs=ds.map(d=>taxYear(d)).filter(Boolean).sort();
   return yrs.length?yrs[0]:curTaxYear();
 }
-function ukTax(profit,ty){profit=Math.max(0,profit||0);const r=taxRates(ty);
-  let pa=r.pa;if(profit>100000)pa=Math.max(0,r.pa-(profit-100000)/2);
-  /* Personal pension contributions are paid net and extend the basic-rate band by the gross
-     amount, so higher-rate relief arrives through the bands rather than as a deduction. */
-  const penGross=Math.round(pensionAmt()*12/0.8);
+/* ===== Pay from a job, held against a tax year =====
+   A counsellor with a salaried post and a private caseload beside her is one of the commonest
+   shapes there is, and until Sep 2026 the engine could not see the salary at all: it gave the
+   practice the whole personal allowance a second time and taxed the profit from the bottom of the
+   basic-rate band. On £40k employed plus £15k profit that is thousands of pounds too little, in
+   the one direction that hurts - the shortfall turns up in January.
+
+   Stored per tax year with carry-forward, the same shape as the region and the student-loan plan
+   (see yearValue). Carrying forward is right for the same reason it is right there: somebody in a
+   job in April is usually still in it in March, and the alternative - assuming the salary stopped
+   - understates the bill. An inherited figure is always labelled as inherited on Tax › Per year.
+
+   PAY BEFORE TAX ONLY. The tax the employer already deducted is deliberately not stored: the
+   figure this engine produces is the tax on the PRACTICE, which is what Self Assessment actually
+   collects, and PAYE has not touched it. A second field that changed nothing would be a field
+   somebody fills in expecting it to. */
+function employmentFor(ty){
+  const r=yearValue("employmentYears",ty,null);
+  const pay=(r.v&&+r.v.pay>0)?+r.v.pay:0;
+  return {pay,inherited:pay>0&&!!r.inherited,from:r.from};
+}
+function employmentPay(ty){return employmentFor(ty).pay;}
+/* ZERO IS AN ANSWER AND HAS TO BE STORED. "I left the job in June" is said by putting 0 against
+   the year it stopped, and a zero that deleted the entry would let carry-forward keep the old
+   salary alive for ever - which overstates the bill in every year after the job ended. Only null
+   or a blank clears a year and hands it back to the earlier one. */
+function setEmploymentPay(ty,pay){
+  const m=yearMap("employmentYears"), y=ty||curTaxYear();
+  if(pay==null||pay===""||isNaN(+pay))delete m[y];
+  else m[y]={pay:Math.max(0,Math.round(+pay))};
+}
+/* Does any year have a salary recorded? Used to decide whether the Tax screens need to say
+   anything about employment at all - most practices are purely self-employed and should never
+   meet the subject. */
+function anyEmploymentRecorded(){
+  const m=settings().employmentYears||{};
+  return Object.keys(m).some(k=>m[k]&&+m[k].pay>0);
+}
+
+/* Income tax on a slice of income, given everything below it is already taxed. Split out of
+   ukTax so employment pay can sit UNDERNEATH practice profit: the allowance and the bands are
+   consumed by the salary first, and what the practice owes is the difference between taxing the
+   two together and taxing the salary alone. With no salary recorded `below` is 0 and every figure
+   is identical to what this function has always returned. */
+function ukBands(taxable,ty,penGross){
+  const r=taxRates(ty);
+  taxable=Math.max(0,taxable||0);
+  let pa=r.pa;if(taxable>100000)pa=Math.max(0,r.pa-(taxable-100000)/2);
   const basicTop=r.basicTop+penGross, higherTop=r.higherTop+penGross;
   let b1=0,b2=0,b3=0,scot=null;
   if(taxRegionFor(ty)==="scotland"){
     scot=[];let lower=pa;
     SCOT_BANDS.forEach(bd=>{const top=(bd[0]===Infinity)?Infinity:bd[0]+penGross;
-      const amt=Math.max(0,Math.min(profit,top)-lower);
+      const amt=Math.max(0,Math.min(taxable,top)-lower);
       if(amt>0)scot.push({top:bd[0],rate:bd[1],amt,tax:amt*bd[1]});
       lower=Math.max(lower,top);});
     b1=scot.reduce((a,x)=>a+x.tax,0);
   }else{
-    b1=Math.max(0,Math.min(profit,basicTop)-pa)*0.20;
-    b2=Math.max(0,Math.min(profit,higherTop)-basicTop)*0.40;
-    b3=Math.max(0,profit-higherTop)*0.45;
+    b1=Math.max(0,Math.min(taxable,basicTop)-pa)*0.20;
+    b2=Math.max(0,Math.min(taxable,higherTop)-basicTop)*0.40;
+    b3=Math.max(0,taxable-higherTop)*0.45;
   }
-  const incomeTax=b1+b2+b3;
+  return {pa,b1,b2,b3,scot,tax:b1+b2+b3};
+}
+/* Subtract one band breakdown from another, so what is reported is the part of each band the
+   PROFIT actually fell in rather than the whole stack including the salary. */
+function ukBandsMinus(full,below){
+  const sub=(a,b)=>Math.max(0,(a||0)-(b||0));
+  let scot=null;
+  if(full.scot){
+    const byTop={};(below.scot||[]).forEach(x=>{byTop[x.top]=x;});
+    scot=full.scot.map(x=>{const b=byTop[x.top]||{amt:0,tax:0};
+      return {top:x.top,rate:x.rate,amt:sub(x.amt,b.amt),tax:sub(x.tax,b.tax)};}).filter(x=>x.amt>0);
+  }
+  return {b1:sub(full.b1,below.b1),b2:sub(full.b2,below.b2),b3:sub(full.b3,below.b3),
+    scot,tax:sub(full.tax,below.tax)};
+}
+function ukTax(profit,ty){profit=Math.max(0,profit||0);const r=taxRates(ty);
+  /* Personal pension contributions are paid net and extend the basic-rate band by the gross
+     amount, so higher-rate relief arrives through the bands rather than as a deduction. */
+  const penGross=Math.round(pensionAmt()*12/0.8);
+  /* Pay from a job sits underneath the practice. Zero for almost everybody, and then every figure
+     below is exactly what it was before this existed. */
+  const emp=employmentPay(ty);
+  const full=ukBands(emp+profit,ty,penGross);
+  const below=emp>0?ukBands(emp,ty,penGross):{pa:full.pa,b1:0,b2:0,b3:0,scot:full.scot?[]:null,tax:0};
+  const band=emp>0?ukBandsMinus(full,below):full;
+  const pa=full.pa, b1=band.b1, b2=band.b2, b3=band.b3, scot=band.scot;
+  const incomeTax=band.tax;
+  /* Class 4 and Class 2 are charges on SELF-EMPLOYED profit and are untouched by a salary. The
+     employer deals with Class 1 on the wage, and stacking it here would replace one wrong figure
+     with another. */
   const n1=Math.max(0,Math.min(profit,r.c4upl)-r.c4lpl)*r.c4main;
   const n2=Math.max(0,profit-r.c4upl)*r.c4upper;
   let class2=0;
   if(r.class2Mandatory)class2=profit>=r.spt?r.class2week*52:0;
   else if(settings().class2Voluntary&&profit<r.spt)class2=r.class2week*52;
-  const sl=studentLoanDue(profit,ty);
+  /* Student loan follows the same incremental rule as income tax: what the PRACTICE adds, on the
+     assumption the employer deducted correctly on the wage. Self Assessment works the repayment
+     out on combined income and credits what PAYE already took, which is a figure this app has no
+     way of knowing - so it reports the increment and says so, rather than either ignoring the
+     salary (too little) or charging the whole combined amount again (far too much). */
+  const sl=emp>0?Math.max(0,studentLoanDue(emp+profit,ty)-studentLoanDue(emp,ty)):studentLoanDue(profit,ty);
   const total=incomeTax+n1+n2+class2+sl;
   /* ty, region and slPlan travel with the result so a breakdown can name what it actually used
      rather than re-reading today's settings, which may belong to a different year entirely. */
   return {profit,pa,penGross,scot,b1,b2,b3,incomeTax,n1,n2,class2,sl,total,ty,
+    employment:emp,totalIncome:emp+profit,empTax:below.tax,slSplit:emp>0,
     region:taxRegionFor(ty),slPlan:studentLoanPlanKey(ty),
     effective:profit>0?total/profit:0,r};}
 function tyBounds(ty){const sy=parseInt(ty.slice(0,4));return {start:new Date(sy,3,6),end:new Date(sy+1,3,5)};}
@@ -8770,7 +9109,11 @@ function tyNetCalc(y,toDateOnly){const t=today();let net=0;
     if(cash&&!when)return;
     if(taxYear(when)!==y)return;
     if(toDateOnly){const dd=parseD(when);if(!dd||dd>t)return;}
-    net+=(d.rate||0)-(d.roomRate||0);});
+    /* A session nobody pays for earns nothing, whatever fee is on the client's record - a
+       private client switched to salaried work keeps their rate history, and it must not go on
+       feeding a Self Assessment figure. The ROOM still comes off either way: hiring it is a cost
+       incurred by seeing the client, and who paid for the hour does not change that. */
+    net+=(d.earns?(d.rate||0):0)-(d.roomRate||0);});
   (S.supervision||[]).forEach(sv=>{if(!sv.date||taxYear(sv.date)!==y)return;if(toDateOnly){const dd=parseD(sv.date);if(!dd||dd>t)return;}net-=(+sv.cost||0);});
   (S.peerSupervision||[]).forEach(pv=>{if(!pv.date||taxYear(pv.date)!==y)return;if(toDateOnly){const dd=parseD(pv.date);if(!dd||dd>t)return;}net-=(+pv.cost||0);});
   const b=tyBounds(y);
@@ -8802,7 +9145,7 @@ function tyIncomeCalc(y,toDateOnly){const t=today();let inc=0;
     if(cash&&!when)return;
     if(taxYear(when)!==y)return;
     if(toDateOnly){const dd=parseD(when);if(!dd||dd>t)return;}
-    inc+=(d.rate||0);});
+    inc+=(d.earns?(d.rate||0):0);});
   const b=tyBounds(y);
   inc+=ledgerBetween(b.start,b.end,{toDate:toDateOnly}).otherIncome;
   return Math.round(inc);}
@@ -9334,6 +9677,20 @@ infoDef("referral-source","How they found you",
   '<p class="small">Fill it in and <b>Practice › Business analytics › Clients</b> can tell you which sources bring people who stay, rather than just who enquires. It is the one thing in the app that can change what you do about finding clients.</p>'+
   '<p class="small muted">It is cleared if you ever anonymise a client, because free text can name people.</p>');
 
+infoDef("who-pays","Who pays for this work",
+  '<p class="small">GroundWork was built around private practice, where the person in the room is the person who pays. Plenty of counselling work is not like that, and this is where you say so - <b>per client</b>, not for the whole practice, because a salaried post with a private caseload beside it is one of the commonest shapes there is.</p>'+
+  '<p class="small"><b>The client pays me</b> - private work. The session fee is billed to them, it counts as outstanding until it is paid, and the app will chase it. This is what every client had before the question existed.</p>'+
+  '<p class="small"><b>An organisation pays me</b> - an EAP, an insurer, a charity contract. The fee is real and still counts as income, but statements, invoices and chasers are addressed to the organisation instead, and you can bill a month of them in one go from <b>Sessions › Unpaid</b>. You can also record how many sessions they have authorised.</p>'+
+  '<p class="small"><b>Nobody pays per session</b> - you are salaried, on placement, or seeing this person free. Their sessions still count for everything clinical: hours, attendance, supervision, reports, your accreditation ratio. They simply never appear as money owed, so the Unpaid list stays a list of things you can actually do something about.</p>'+
+  '<p class="small muted">Nothing here changes a session that has already happened, and nothing here is clinical. It only decides who gets the bill.</p>');
+
+infoDef("employment-income","Pay from a job",
+  '<p class="small">If you are employed as well as self-employed - a salaried counselling post, a teaching job, anything on PAYE - your practice profit is taxed <b>on top of</b> that pay, not from scratch. Your personal allowance and your basic-rate band are used up by the salary first.</p>'+
+  '<p class="small">Without it, GroundWork gives your practice the whole allowance a second time and taxes the profit from the bottom of the basic-rate band, which makes the estimate <b>too low</b> - the one direction that hurts, because the shortfall turns up in January.</p>'+
+  '<p class="small">Enter your <b>pay before tax</b> for the year, from your P60 or your final payslip. That is all that is needed - the tax your employer already deducted is deliberately not asked for, because the figure GroundWork works out is the tax on <b>your practice</b>, which is the part Self Assessment actually collects. PAYE has already dealt with the wage.</p>'+
+  '<p class="small">Carried forward like your region and your loan plan: a year with nothing entered uses the most recent earlier year, and says so. If you leave the job, put <b>0</b> against the year you left and the carry-forward stops there.</p>'+
+  '<p class="small muted">Two things are worked out on practice profit alone, and that is correct rather than a shortcut. <b>Class 4 and Class 2 National Insurance</b> are charges on self-employment; Class 1 on your wage is your employer’s job. A <b>student loan</b> is charged as the <i>extra</i> your practice adds on top of your salary, on the assumption your employer deducted correctly on the wage - Self Assessment works it out on the combined figure and credits what PAYE already took, and what PAYE took is not something this app can see.</p>');
+
 infoDef("ana-review","Review status",
   '<p class="small">A client marked <b>Ongoing</b> who has not had a session in <b>three times their own usual interval</b> shows up here. For somebody weekly that is three weeks; for somebody monthly, three months.</p>'+
   '<p class="small">It is not a judgement about the work - it is a prompt to make the record say what is actually happening, because an out-of-date status quietly distorts attendance, retention and every list that leads with “current clients”.</p>'+
@@ -9643,6 +10000,41 @@ function taxDisclaimBar(){
 }
 function wireTaxDisclaimBar(host){
   const n=host.querySelector("#taxDiscMore"); if(n)n.onclick=()=>taxDisclaimerSheet();
+  const e=host.querySelector("#taxEmpLink"); if(e)e.onclick=()=>go("tax",{seg:"allowances",focus:"taxEmpCard"});
+}
+/* ===== "These figures assume your practice is your only income" =====
+   Every tax figure in this app is worked out on practice profit, and until Sep 2026 nothing said
+   so. For a purely self-employed therapist that is right and there is nothing to say - which is
+   why this renders NOTHING unless there is an actual reason to think otherwise, rather than
+   becoming a second permanent banner nobody reads (the same rule that made the standing
+   disclaimer .calm).
+
+   Three signals, all of them things the reader has already told the app: a salary recorded for
+   the year, income logged as a second trade (`scope:"personal"`, which ledgerBetween deliberately
+   keeps out of the practice figure), or a caseload where somebody other than the client pays. */
+function taxEmploymentBar(ty){
+  ty=ty||curTaxYear();
+  const emp=employmentFor(ty);
+  if(emp.pay>0){
+    return '<div class="vmsg calm" style="margin-bottom:12px">'+gi("money")+' <b>'+gbp(emp.pay)+'</b> of employed pay is counted underneath your practice for '+esc(ty)+
+      (emp.inherited?' (carried forward from '+esc(emp.from)+')':'')+
+      ', so the bands below start where your wage left off. '+
+      '<span class="taxlink" id="taxEmpLink">Change it ›</span></div>';
+  }
+  /* A figure of zero that the reader actually entered - "I left the job in June" - is an ANSWER,
+     and `from` is non-null whenever some year at or before this one carries one. Warning somebody
+     that their estimate might be too low, on a year they have explicitly told the app had no
+     salary in it, is the app arguing with its own record. */
+  if(emp.from)return "";
+  const hasPersonal=(S.otherIncome||[]).some(x=>String(x.scope||"practice")==="personal");
+  const salariedWork=(S.clients||[]).some(c=>payerOf(c)==="none");
+  if(!hasPersonal&&!salariedWork&&!anyEmploymentRecorded())return "";
+  const why=hasPersonal?"You have income logged as a separate trade"
+    :salariedWork?"Some of your clients are marked as ones nobody pays you per session for"
+    :"You have recorded employed pay in another year";
+  return '<div class="vmsg calm" style="margin-bottom:12px">'+gi("scales")+' <b>This assumes your practice is your only income.</b> '+
+    esc(why)+', so if you are also employed these figures are <b>too low</b> — a wage uses up your personal allowance first. '+
+    '<span class="taxlink" id="taxEmpLink">Add your pay from a job ›</span></div>';
 }
 
 VIEWS.tax=function(){
@@ -9728,7 +10120,7 @@ VIEWS.tax=function(){
      business, made once and then left alone for years, not a view option to flick between while
      reading an estimate. What stays here is the one line saying which basis these figures are
      on \u2014 that has to travel with the numbers. */
-  body.innerHTML=taxDisclaimBar()+thCard+c2Card+
+  body.innerHTML=taxDisclaimBar()+taxEmploymentBar()+thCard+c2Card+
     '<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">By tax year</h2><div class="seg" id="taxmode" style="display:inline-flex"><button data-m="proj" class="'+(taxMode==="proj"?"on":"")+'">Projected</button><button data-m="todate" class="'+(taxMode==="todate"?"on":"")+'">To date</button></div></div><div class="rawscroll"><table><thead><tr><th>Year</th><th class="num">Tax</th><th class="num">Net</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Overdue</th><th class="num">Sess</th></tr></thead><tbody>'+tyTable+'</tbody></table></div><p class="small muted"><b>'+esc(basisLabel())+'.</b> Tap a Tax or Net figure for the working. <b>*</b> the year in progress is shown as '+(taxMode==="proj"?"a projection for the whole year":"tax on income so far")+'. '+
     (years.some(y=>taxYearLocked(y))?'A Tax figure shown as <b>£•,•••</b> has not been worked out - '+infoLink("tax-packages","tax is bought by the year")+'. ':'')+' '+infoLink("tax-table","What each column means")+' &nbsp;·&nbsp; <span class="taxlink" id="toBasis">Change how figures are counted ›</span></p></div>';
   wireTaxDisclaimBar(body);
@@ -9948,7 +10340,7 @@ function drawNow(host){
     (nxt?'<div class="nv">'+money(nxt.amount)+'</div><div class="nl">due '+fmtD(nxt.when)+' · '+esc(nxt.what)+'</div>'
         :'<div class="nv nvtext">Nothing due yet</div><div class="nl">No tax year has produced a bill.</div>')+'</div>';
 
-  host.innerHTML=taxDisclaimBar()+momHTML+
+  host.innerHTML=taxDisclaimBar()+taxEmploymentBar(ty)+momHTML+
     '<div data-coach="now">'+oweCard+potCard+nextCard+'</div>'+
     '<p class="small muted center" style="margin:0 0 14px">'+
       '<span class="taxlink" id="nowFull">Full estimate ›</span>&nbsp; · &nbsp;'+
@@ -11003,7 +11395,8 @@ function drawAllowances(host){
      plus this one. The strip governs every card on this screen, not just use of home. */
   const years=[...new Set(S.sessions.map(x=>x.date).filter(Boolean).map(d=>taxYear(d))
     .concat(Object.keys(uohYears())).concat(Object.keys(yearMap("studentLoanYears")))
-    .concat(Object.keys(yearMap("taxRegionYears"))).concat([curTaxYear()]))].sort().reverse();
+    .concat(Object.keys(yearMap("taxRegionYears"))).concat(Object.keys(yearMap("employmentYears")))
+    .concat([curTaxYear()]))].sort().reverse();
   /* Newest first, so "‹" (back in time) moves DOWN the strip and "›" moves up it. */
   const yIdx=Math.max(0,years.indexOf(ty));
   const status=taxYearStripStatus(ty), prevSrc=uohPrevSource(ty);
@@ -11066,6 +11459,44 @@ function drawAllowances(host){
       ? '<p class="small muted mt"><span class="taxlink" id="regClr">Clear '+esc(ty)+'\u2019s own setting and carry the earlier year forward again \u203a</span></p>'
       : '')+
     '</div>';
+  /* ===== Pay from a job, per year =====
+     The one thing on this screen that changes a figure the app was previously getting WRONG rather
+     than merely not offering. Without it the practice gets the personal allowance a second time
+     and is taxed from the bottom of the basic-rate band, which on a salaried post plus a private
+     caseload is thousands of pounds too little. Same shape and same carry-forward as the two cards
+     above it, for the same reason: you are usually still in the job in March. */
+  const empInf=employmentFor(ty), empOwn=yearMap("employmentYears")[ty]!=null;
+  const empHas=empInf.pay>0;
+  /* What the salary is actually doing to this year's bands, stated rather than implied. Computed
+     from the engine, never re-derived here - ukTax already reports which bands the profit fell in
+     once the wage is underneath it. */
+  const empWork=(function(){
+    if(!empHas)return "";
+    const r=taxRates(ty), pen=Math.round(pensionAmt()*12/0.8);
+    const below=ukBands(empInf.pay,ty,pen);
+    const usedPA=Math.min(empInf.pay,below.pa);
+    const basicLeft=Math.max(0,(r.basicTop+pen)-Math.max(empInf.pay,below.pa));
+    return '<div class="acc-work" style="margin-top:10px">'+
+      '<div>Your pay uses <b>'+money(usedPA)+'</b> of the '+money(below.pa)+' personal allowance'+
+      (basicLeft>0?' and leaves <b>'+money(basicLeft)+'</b> of the basic-rate band for your practice.'
+        :' and the whole basic-rate band, so practice profit starts at the higher rate.')+'</div>'+
+      '<div class="small muted">Class 4 and Class 2 are still worked out on practice profit alone — National Insurance on a wage is your employer’s.</div></div>';
+  })();
+  const empCard='<div class="card" id="taxEmpCard">'+cardHead("Pay from a job","employment-income")+
+    '<p class="small muted">If you are employed as well as self-employed, your practice profit is taxed <b>on top of</b> that pay. Without it the estimate below is too low.</p>'+
+    (empHas
+      ? '<div class="vmsg ok">💼 <b>'+money(empInf.pay)+'</b> of employed pay is counted underneath your practice in '+esc(ty)+'.'+
+        (empInf.inherited?' <b>Carried forward from '+esc(empInf.from)+'</b>, so it has no figure of its own yet.':'')+'</div>'
+      : '<div class="vmsg">No employed pay recorded for '+esc(ty)+' — the estimate treats your practice as your only income.</div>')+
+    empWork+
+    '<label style="margin-top:12px">Pay before tax in '+esc(ty)+' (£) <span class="muted small">(optional)</span></label>'+
+    '<input type="number" min="0" step="100" id="alEmp" value="'+(empOwn&&empInf.from===ty?esc(empInf.pay):"")+'" placeholder="'+(empInf.inherited&&empHas?esc(empInf.pay)+" carried forward":"From your P60")+'">'+
+    '<button class="btn sec full mt" id="alEmpSave">Save '+esc(ty)+'’s pay</button>'+
+    '<p class="prev">Changing this sets '+esc(ty)+' and every later year. Enter <b>0</b> for the year you left a job and the carry-forward stops there.</p>'+
+    (empOwn&&empInf.from===ty
+      ? '<p class="small muted mt"><span class="taxlink" id="alEmpClr">Clear '+esc(ty)+'’s own figure and carry the earlier year forward again ›</span></p>'
+      : '')+
+    '</div>';
   /* Only during the April window the seasonal card uses, so this is never a permanent button
      for a job that is only worth doing once a year. */
   const reviewRow=newYearWindowOpen()
@@ -11078,7 +11509,7 @@ function drawAllowances(host){
     yearStrip+
     (status.filed?'<div class="vmsg warn" style="margin-top:10px">\ud83d\uddc4 You have marked <b>'+esc(ty)+'</b> as filed. Changing anything below changes figures you have already submitted \u2014 if this is a correction, keep a note of what you changed and why.</div>':'')+
     '</div>';
-  host.innerHTML=yearCard+regCard+slCard+'<div class="card"><h2>Use of home</h2>'+
+  host.innerHTML=yearCard+regCard+empCard+slCard+'<div class="card"><h2>Use of home</h2>'+
     '<p class="small muted">Part of running a home you work from is a business cost. HMRC allows two ways of working it out, and you can pick either one each tax year.</p>'+
     (applied.method&&applied.method!=="none"
       ? '<div class="vmsg ok">\ud83d\udd12 <b>'+esc(applied.method==="simplified"?"Simplified":"Actual costs")+'</b> is what '+esc(ty)+' uses \u2014 '+money(uohMonthlyFor(applied))+' a month, '+money(yearAmt)+' for the year. It is already in your costs and tax estimate.'+
@@ -11114,6 +11545,22 @@ function drawAllowances(host){
   if(rclr)rclr.onclick=async()=>{
     delete yearMap("taxRegionYears")[ty];
     await commit("Cleared the income tax region setting for "+ty);
+    go("tax",{keepScroll:true});};
+  const empSave=host.querySelector("#alEmpSave");
+  if(empSave)empSave.onclick=async()=>{
+    const raw=host.querySelector("#alEmp").value.trim();
+    /* Blank is "I have not answered", which is different from zero - zero is "I left the job",
+       and it has to be storable or the carry-forward would keep a salary alive for ever. */
+    if(raw===""){toast("Enter the pay for "+ty+", or 0 if you had none");Sfx.error();return;}
+    const pay=Math.max(0,Math.round(+raw||0));
+    setEmploymentPay(ty,pay);                 /* one writer, so a zero means the same thing here */
+    await commit("Employed pay for "+ty+": "+gbp(pay));
+    toast(pay>0?gbp(pay)+" counted underneath your practice from "+ty:"No employed pay from "+ty);
+    go("tax",{keepScroll:true});};
+  const empClr=host.querySelector("#alEmpClr");
+  if(empClr)empClr.onclick=async()=>{
+    delete yearMap("employmentYears")[ty];
+    await commit("Cleared the employed pay figure for "+ty);
     go("tax",{keepScroll:true});};
   const slx=host.querySelector("#slSel");
   if(slx)slx.onchange=async()=>{
@@ -12390,7 +12837,7 @@ function clientForm(c,cfOpts){
      form calls throughout to build <option> lists, and a local param of the same name would
      shadow it silently. */
   cfOpts=cfOpts||{};
-  const isNew=!c; const m=c?clone(c):{_id:uid(),code:"",status:"Ongoing",frequency:"Weekly",insurance:"N",notes:"",created:isoD(today())};
+  const isNew=!c; const m=c?clone(c):{_id:uid(),code:"",status:"Ongoing",frequency:"Weekly",insurance:"N",notes:"",created:isoD(today()),payer:defaultPayerKey()};
   const statuses=[...new Set(S.clientCategories.map(x=>x.status).concat(["Ongoing","Paused","Finished"]))];
   const body=el('<div></div>');
   const rateNow=isNew?"":effRate(m.code,isoD(today()));
@@ -12403,6 +12850,18 @@ function clientForm(c,cfOpts){
       <div><label>Usual day</label><select id="c_uday">${opts2([["","From their history"]].concat(SLOT_DAYS.map(d=>[d,SLOT_DAY_NAMES[d]])),m.usualDay||"")}</select></div>
       <div><label>Usual time</label><input type="time" id="c_utime" value="${esc(m.usualTime||"")}"></div></div>
     <p class="small muted" id="c_slotHint"></p>
+    <label>Who pays for this work ${infoDot("who-pays","Who pays for this work")}</label>
+    <select id="c_payer">${opts2(Object.keys(PAYERS).map(k=>[k,PAYERS[k].n]),payerOf(m))}</select>
+    <p class="small muted" id="c_payerNote"></p>
+    <div id="c_orgWrap" hidden>
+      <div class="field2">
+        <div><label>Organisation</label><select id="c_payerOrg"></select></div>
+        <div><label>Sessions authorised <span class="muted small">(optional)</span></label>
+          <input type="number" min="0" step="1" id="c_auth" value="${esc(m.authorised==null?"":m.authorised)}" placeholder="e.g. 6"></div>
+      </div>
+      <p class="small muted" id="c_orgNote"></p>
+      <p class="small muted" id="c_authNote"></p>
+    </div>
     ${isNew?`<label>Starting rate (£)</label><input type="number" min="0" id="c_rate" placeholder="What you charge this client" value="${defaultRate()==null?"":esc(defaultRate())}"><div class="prev" style="margin-top:5px"><span class="taxlink" id="setDefRate">${defaultRate()==null?"Set a default for new clients ›":"Update default (£"+esc(defaultRate())+") ›"}</span></div>`:
       `<div class="hint">Current rate: <b>${gbp(rateNow)}</b> <button class="btn sm" id="chRate" style="float:right">Change rate</button></div>
        <div id="histWrap"></div>`}
@@ -12423,6 +12882,50 @@ function clientForm(c,cfOpts){
       hist.map(r=>`<div class="audit-row"><b>${gbp(r.rate)}</b> from ${fmtD(r.effectiveFrom)}</div>`).join("")+'</details>';
     body.querySelector("#chRate").onclick=()=>rateChange(m.code);
   }
+  /* Who pays. The note under the picker says what the choice actually changes, because the whole
+     point of the field is that it silences chasing - and a control that quietly stops the app
+     asking for money is one the reader has to be able to predict. */
+  /* NO "add one from here". Opening another sheet replaces this one - #sheetBody is a single
+     host - so a round trip to an organisation form would throw away everything typed into this
+     client so far. Organisations are set up in one place, beside Rooms, and this form only ever
+     picks from what is there; the note says so when the list is empty. Same reason the session
+     form hands off to Money to settle a room fee rather than growing its own controls. */
+  const paintPayer=()=>{
+    const k=body.querySelector("#c_payer").value;
+    const note=body.querySelector("#c_payerNote");
+    const wrap=body.querySelector("#c_orgWrap");
+    note.textContent=PAYERS[k]?PAYERS[k].d:"";
+    wrap.hidden=(k!=="org");
+    if(k==="org"){
+      const sel=body.querySelector("#c_payerOrg");
+      const orgs=payerOrgs();
+      sel.innerHTML=opts2(orgs.length?[["","– choose –"]].concat(orgs.map(p=>[p._id,p.name]))
+                                     :[["","– none set up yet –"]], m.payerId||"");
+      sel.disabled=!orgs.length;
+      const oNote=body.querySelector("#c_orgNote");
+      if(oNote)oNote.innerHTML=orgs.length
+        ? "Statements, invoices and chasers for this client are addressed to them."
+        : 'Add one first under <b>Practice › Rooms</b>, then come back and pick it here. The fee still counts as income either way.';
+    }
+    const an=body.querySelector("#c_authNote");
+    const cap=+body.querySelector("#c_auth").value||0;
+    if(an){
+      if(!(cap>0))an.textContent="Leave blank if they have not capped it.";
+      else{
+        const lc=(m.code||"").toLowerCase();
+        const used=(S.sessions||[]).filter(s=>(s.client||"").toLowerCase()===lc&&!isCancelled(s)).length;
+        an.textContent=used+" of "+cap+" used so far"+(used>=cap?" - at or over the cap.":" · "+(cap-used)+" left.")+
+          " Sessions that went ahead only; a DNA does not use one up.";
+      }
+    }
+    /* A client nobody pays for does not need a fee typed, and £0 stops meaning "free" and starts
+       meaning "not applicable". Say which, so the box below does not read as unfilled. */
+    const rateBox=body.querySelector("#c_rate");
+    if(rateBox)rateBox.placeholder=(k==="none")?"Leave blank - nothing is charged":"What you charge this client";
+  };
+  body.querySelector("#c_payer").onchange=()=>{paintPayer();};
+  body.querySelector("#c_auth").oninput=()=>{paintPayer();};
+  paintPayer();
   /* Both fields are overrides: blank means "work it out from what actually happened", which is
      right for almost every client and needs nothing typed. The hint says what that comes to, so
      the blank state is visibly doing something rather than looking unfilled. */
@@ -12449,14 +12952,26 @@ function clientForm(c,cfOpts){
     m.code=body.querySelector("#c_code").value.trim();m.status=body.querySelector("#c_status").value;
     m.frequency=body.querySelector("#c_freq").value;m.insurance=body.querySelector("#c_ins").value;m.notes=body.querySelector("#c_notes").value;m.source=readSource();
     m.usualDay=body.querySelector("#c_uday").value;m.usualTime=body.querySelector("#c_utime").value;
+    /* Who pays. Written as the key, never the display name. The organisation and the authorised
+       count are only kept while "org" is actually the answer - a payerId left behind by a change
+       of mind would put this client back on an invoice the next time somebody read it loosely. */
+    const payerK=body.querySelector("#c_payer").value;
+    m.payer=Object.prototype.hasOwnProperty.call(PAYERS,payerK)?payerK:"client";
+    if(m.payer==="org"){
+      m.payerId=body.querySelector("#c_payerOrg").value||"";
+      const authRaw=body.querySelector("#c_auth").value.trim();
+      m.authorised=authRaw===""?null:Math.max(0,Math.round(+authRaw||0));
+    }else{m.payerId="";m.authorised=null;}
     if(!m.code){toast("Enter a code");return}
     const cat=S.clientCategories.find(x=>x.status===m.status);m.category=cat?cat.category:m.status;
     if(isNew){
       /* A blank fee is not £0 - £0 is a real answer (pro bono, a training placement) and has to be
-         typed. Defaulting a blank to zero would stamp a fee on the client's record nobody chose. */
+         typed. Defaulting a blank to zero would stamp a fee on the client's record nobody chose.
+         The one exception is a client nobody pays for: there the question does not arise at all,
+         so a blank is the honest answer rather than a field to argue with. */
       const rateRaw=body.querySelector("#c_rate").value.trim();
-      if(rateRaw===""){toast("Enter a starting rate (0 if you don’t charge)");Sfx.error();return}
-      const rate=+rateRaw;
+      if(rateRaw===""&&m.payer!=="none"){toast("Enter a starting rate (0 if you don’t charge)");Sfx.error();return}
+      const rate=rateRaw===""?0:+rateRaw;
       if(isNaN(rate)||rate<0){toast("Enter a valid rate");Sfx.error();return}
       if(S.clients.find(x=>x.code.toLowerCase()===m.code.toLowerCase())){toast("Code already exists");return}
       m.rate=rate;S.clients.push(m);
@@ -12715,9 +13230,14 @@ function clientProfile(c){
   const attended=past.filter(x=>!isCancelled(x.s)).length;
   const lcN=past.filter(x=>isCancelled(x.s)).length;
   const dnaN=past.filter(x=>isDNA(x.s)).length;
+  /* Money figures count only the sessions somebody pays for. A client moved from private work
+     onto a salaried or placement footing keeps their rate history, and a "lifetime billed" built
+     from it would go on quoting fees that are no longer charged. */
+  const earnPast=past.filter(x=>x.d.earns);
   /* fee that never arrived because a session was missed and not charged in full */
-  const lostN=past.reduce((a,x)=>a+Math.max(0,(x.d.fullRate||0)-(x.d.rate||0)),0);
-  const billed=past.reduce((a,x)=>a+(x.d.rate||0),0);
+  const lostN=earnPast.reduce((a,x)=>a+Math.max(0,(x.d.fullRate||0)-(x.d.rate||0)),0);
+  const billed=earnPast.reduce((a,x)=>a+(x.d.rate||0),0);
+  const paidFor=payerOf(c)!=="none";
   const owedRows=rows.filter(x=>x.d.overdue&&(x.d.rate||0)>0);
   const owed=owedRows.reduce((a,x)=>a+(x.d.rate||0),0);
   const since=clientAddedDate(c);
@@ -12736,24 +13256,42 @@ function clientProfile(c){
   /* 12-month income sparkline */
   const mVals=[];
   for(let i=11;i>=0;i--){const ms=new Date(t.getFullYear(),t.getMonth()-i,1),me=new Date(t.getFullYear(),t.getMonth()-i+1,1);
-    mVals.push(Math.round(rows.filter(x=>{const d=parseD(x.s.date);return d&&d>=ms&&d<me&&d<=t;}).reduce((a,x)=>a+(x.d.rate||0),0)));}
+    mVals.push(Math.round(rows.filter(x=>{const d=parseD(x.s.date);return d&&d>=ms&&d<me&&d<=t&&x.d.earns;}).reduce((a,x)=>a+(x.d.rate||0),0)));}
   const initials=(c.code||"?").replace(/[^A-Za-z0-9]/g,"").slice(0,2).toUpperCase()||"?";
   const ch=c.status==="Ongoing"?'y':c.status==="Paused"?'f':'na';
   const body=el('<div></div>');
   body.innerHTML='<div class="row" style="gap:12px;margin:4px 0 12px"><div class="avatar">'+esc(initials)+'</div>'+
     '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:17px">'+esc(c.code)+' <span class="chip '+ch+'">'+esc(c.status||"")+'</span></div>'+
-    '<div class="small muted">'+(since?("since "+fmtD(since)+" · "):"")+esc(c.frequency||"")+' · '+gbp(rate)+'/session</div></div></div>'+
+    '<div class="small muted">'+(since?("since "+fmtD(since)+" · "):"")+esc(c.frequency||"")+
+      (payerOf(c)==="none"?'':' · '+gbp(rate)+'/session')+'</div></div></div>'+
+    /* Who pays, and how much of their authorisation is left. Only ever shown when it is not the
+       ordinary case - a private client's row would just say "the client pays" on every profile. */
+    (function(){
+      const p=payerOf(c);
+      if(p==="none")return '<div class="hint">'+gi("practice")+' Nobody pays per session for this client — nothing here is counted as owed.</div>';
+      const org=clientPayerOrg(c); if(!org&&p!=="org")return "";
+      const au=clientAuthorised(c);
+      return '<div class="hint">'+gi("money")+' Billed to <b>'+esc(org?org.name:"an organisation (not chosen yet)")+'</b>'+
+        (au?' · <b>'+au.used+' of '+au.cap+'</b> authorised session'+(au.cap===1?"":"s")+' used'+
+          (au.over?' <span class="chip f">'+au.over+' over</span>':au.left<=1?' <span class="chip f">'+au.left+' left</span>':'')
+         :'')+'</div>';
+    })()+
     '<div class="kpis mb" style="grid-template-columns:1fr 1fr">'+
       '<div class="kpi"><div class="v">'+attended+'</div><div class="l">Sessions attended'+
         (lcN?' · '+lcN+' missed'+(dnaN?' ('+dnaN+' DNA)':''):'')+'</div></div>'+
-      '<div class="kpi"><div class="v">'+gbp(Math.round(billed))+'</div><div class="l">Lifetime billed'+
-        (lostN>0?' · '+gbp(Math.round(lostN))+' not charged':'')+'</div></div>'+
-      '<div class="kpi'+(owed?' bad':' good')+'"><div class="v">'+gbp(Math.round(owed))+'</div><div class="l">'+(owed?("Outstanding · "+owedRows.length+" session"+(owedRows.length===1?"":"s")):"Nothing owed")+'</div></div>'+
+      (paidFor
+        ? '<div class="kpi"><div class="v">'+gbp(Math.round(billed))+'</div><div class="l">Lifetime billed'+
+            (lostN>0?' · '+gbp(Math.round(lostN))+' not charged':'')+'</div></div>'+
+          '<div class="kpi'+(owed?' bad':' good')+'"><div class="v">'+gbp(Math.round(owed))+'</div><div class="l">'+(owed?("Outstanding · "+owedRows.length+" session"+(owedRows.length===1?"":"s")):"Nothing owed")+'</div></div>'
+        /* Two tiles reading "£0" tell a salaried counsellor nothing. The hours are what her work
+           is measured in, so the slots say that instead. */
+        : '<div class="kpi"><div class="v">'+hrsLabel(attended*sessionMins()/60)+'</div><div class="l">Clinical hours</div></div>'+
+          '<div class="kpi"><div class="v">'+(rows.filter(x=>parseD(x.s.date)>t).length)+'</div><div class="l">Booked ahead</div></div>')+
       '<div class="kpi"><div class="v">'+(att?att.pct+"%":"-")+'</div><div class="l">Attendance'+(att&&att.currentPause?' · ⏸ paused '+att.currentPause.days+'d':'')+'</div></div>'+
     '</div>'+
     '<h3>Last 12 weeks</h3><div class="wkdots">'+dotArr.join("")+'</div>'+
     '<div class="small muted mt" style="display:flex;gap:12px;flex-wrap:wrap"><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--brand);vertical-align:-1px"></i> attended</span><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:color-mix(in srgb,var(--bad) 45%,var(--soft));vertical-align:-1px"></i> late cancel</span><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;border:1.5px dashed var(--brand);vertical-align:-1px;box-sizing:border-box"></i> booked</span></div>'+
-    '<h3 class="mt">Monthly income (12 mo)</h3>'+sparkline(mVals)+
+    (paidFor?'<h3 class="mt">Monthly income (12 mo)</h3>'+sparkline(mVals):'')+
     (next?'<div class="hint">Next session: <b>'+fmtDshort(next.s.date)+'</b>'+(next.s.time?' · '+esc(next.s.time):'')+' · '+esc(next.s.location||"")+'</div>':'')+
     '<h3 class="mt">Recent sessions</h3><div id="cpRecent"></div>'+
     '<div class="row mt" style="gap:8px;flex-wrap:wrap">'+
@@ -12861,8 +13399,24 @@ function overdueByClient(){
    precisely so it can be. */
 function chaseText(c,rows){
   const tot=rows.reduce((a,x)=>a+(x.d.rate||0),0);
+  const org=clientPayerOrg(c);
+  /* An organisation is chased about a CLIENT REFERENCE, not about "your sessions" - the person
+     reading it at an EAP has never met anybody in this list, and a message written to the client
+     would be the wrong message sent to the wrong reader. The client code is the reference both
+     sides already share, which is exactly what it is for. */
   const lines=rows.map(x=>"    "+fmtD(x.s.date)+"  -  "+gbp(x.d.rate||0)).join("\n");
   const pay=payToDetails();
+  if(org){
+    return "Hello,\n\n"+
+      "I am writing about "+(rows.length===1?"a session":"some sessions")+" for "+(c.code||"a client")+
+      " that I do not have a payment recorded for.\n\n"+
+      lines+"\n\n"+
+      "Total outstanding: "+gbp(tot)+"\n\n"+
+      (org.contact?"Sent to: "+org.contact+"\n\n":"")+
+      (pay?pay+"\n\n":"")+
+      "If this has already been processed, please ignore this - and do let me know, so I can put my own records right.\n\n"+
+      "Many thanks,\n"+practiceName();
+  }
   return "Hi,\n\n"+
     "A quick note about "+(rows.length===1?"a therapy session":"some therapy sessions")+
     " I don’t have a payment recorded for:\n\n"+
@@ -12947,6 +13501,20 @@ function receiptRows(c,per){
 function receiptSheet(c,o){
   o=o||{};
   const body=el('<div></div>');
+  /* Nobody pays per session for this client, so there is no statement, receipt or invoice to
+     produce - every line would read £0 and the total would be a bill for nothing. Say so rather
+     than printing an empty document: a therapist on a salaried post opening this from a client
+     card has asked a reasonable question and deserves an answer, not a blank page. */
+  if(payerOf(c)==="none"){
+    body.innerHTML='<p class="muted small">'+esc(c.code)+' is marked <b>'+esc(PAYERS.none.n.toLowerCase())+'</b>, '+
+      'so there is nothing to bill them for and no statement to produce.</p>'+
+      '<p class="small muted">If that is wrong - if this client does pay you, or an organisation pays for them - '+
+      'change <b>Who pays</b> on their record.</p>'+
+      '<button class="btn sec full mt" id="rcWho">Open '+esc(c.code)+'’s record ›</button>';
+    body.querySelector("#rcWho").onclick=()=>{closeSheet();setTimeout(()=>clientForm(c),120);};
+    openSheet("Statement · "+c.code,body);
+    return;
+  }
   const kinds=[["statement","Statement - every session in the period"],
                ["receipt","Receipt - the sessions already paid for"],
                ["invoice","Invoice - what is still owed, with a due date"]];
@@ -13006,7 +13574,15 @@ function receiptHTML(c,rows,label,paidOnly){
   const paid=rows.filter(x=>x.d.clientPaid).reduce((a,x)=>a+(x.d.rate||0),0);
   const t=today();
   const num=docNumber(c,kind);
-  const dueDate=isInv?addDays(t,invoiceDays()):null;
+  /* Where the bill actually goes. Read off the client rather than passed in: `printReceipt` is
+     re-declared by the native shell with exactly four parameters, so a fifth would be dropped
+     silently and every invoice printed from an iPhone would come out addressed to the wrong
+     party. The client is already argument one and knows who pays for them. */
+  const org=clientPayerOrg(c);
+  /* An organisation's own terms beat the practice default - "30 days" is usually their number,
+     not the therapist's. */
+  const days=(org&&org.invoiceDays!=null&&+org.invoiceDays>=0)?+org.invoiceDays:invoiceDays();
+  const dueDate=isInv?addDays(t,days):null;
   const payBlock=isInv&&payToDetails()
     ? '<div class="pay"><div class="payh">How to pay</div>'+esc(payToDetails()).replace(/\n/g,"<br>")+'</div>' : "";
   /* print in the chosen scheme's light colours - the on-screen dark theme would be unreadable on paper */
@@ -13032,7 +13608,9 @@ function receiptHTML(c,rows,label,paidOnly){
     '<div class="head"><div><h1>'+esc(practiceName())+'</h1>'+(practiceTagline()?'<div class="sub">'+esc(practiceTagline())+'</div>':'')+'</div>'+
     '<div style="text-align:right"><div style="font-weight:700">'+(isInv?"INVOICE":isRec?"RECEIPT":"STATEMENT")+'</div><div class="sub">'+esc(num)+'</div><div class="sub">Issued '+fmtD(t)+'</div>'+
       (isInv?'<div class="sub"><b>Due '+fmtD(dueDate)+'</b></div>':'')+'</div></div>'+
-    '<p><b>Client:</b> '+esc(c.code)+' &nbsp;·&nbsp; <b>Period:</b> '+esc(label)+'</p>'+
+    (org?'<p><b>'+(isInv?"Invoice to":"For the attention of")+':</b> '+esc(org.name)+
+      (org.contact?'<br><span class="sub">'+esc(org.contact)+'</span>':'')+'</p>':'')+
+    '<p><b>Client'+(org?" reference":"")+':</b> '+esc(c.code)+' &nbsp;·&nbsp; <b>Period:</b> '+esc(label)+'</p>'+
     '<table><thead><tr><th>Date</th><th>Session</th><th>Mode</th><th class="r">Fee</th>'+(isInv?'':'<th>Status</th>')+'</tr></thead><tbody>'+trs+'</tbody></table>'+
     '<div class="tot">'+(isInv?('Amount due: <b>'+gbp(tot)+'</b><br><span class="sub">Payable by '+fmtD(dueDate)+'</span>')
       :isRec?('Total received: <b>'+gbp(tot)+'</b>')
@@ -14285,7 +14863,10 @@ const REVEAL_STEPS=[
   {keys:["receipts"], when:st=>st.sessions.length>=5&&st.sessions.some(s=>s.paidDate),
    emoji:gi("receipts"), title:"Statements for clients",
    sub:"Now that money is actually coming in, <b>Receipts &amp; statements</b> prints a dated statement of what a client has paid - for their insurer, their employer, or their own records."},
-  {keys:["tax","finances"], when:st=>st.sessions.length>=10,
+  /* Ten sessions, AND somebody paying for some of them. Offering a self-assessment estimate to a
+     practitioner who has told the app she is salaried is offering a job she does not have - and
+     the figure behind it would be worked out on a profit of £0. */
+  {keys:["tax","finances"], when:st=>st.sessions.length>=10&&(st.clients||[]).some(c=>payerOf(c)!=="none"),
    emoji:gi("tax"), title:"Ready to think about tax?",
    sub:"Ten sessions in. <b>Tax</b> turns them into a running figure for what to set aside, and <b>Costs &amp; other income</b> takes insurance, room rent and CPD off the profit it is worked out from. They arrive together because the estimate is wrong without the costs."},
   {keys:["gamify"],   when:st=>st.sessions.length>=15,
@@ -14637,10 +15218,53 @@ function stepRooms(w){return{emoji:gi("rooms"), h:"Where do you see clients?",
 /* Nothing here is pre-filled and nothing here is required. A suggested fee or pension figure is a
    business decision the app is not entitled to make on the therapist's behalf, and a number the
    user merely failed to clear reads exactly like one they chose. Blank means blank. */
+/* GroundWork was built for private practice and assumed it everywhere, which left a salaried
+   counsellor, a trainee on placement and anybody seeing EAP clients with no honest route through
+   setup and, afterwards, an Unpaid list they could never clear. One question fixes that, and it is
+   asked BEFORE the fee question because it decides whether the fee question means anything.
+
+   The answer sets the default for new clients only - it is never a practice-wide mode, because the
+   commonest shape of all is a salaried post with a private caseload beside it, and each client
+   says for itself who pays (see PAYERS). */
+function stepPaid(w){return{emoji:gi("fees"), h:"How are you paid?",
+  sub:"This only sets what new clients start as - you can change it per client at any time.",
+  /* Applied on the way out so the very next step - Choose what you need - already shows the
+     result and can be overruled there and then. Exactly the shape stepDepth uses, and for the
+     same reason: a switch flipped invisibly behind a later screen is one nobody can argue with.
+     Only ever on a genuinely fresh install; taking the Tax tab away from somebody who already has
+     records in it would be losing them a feature they are using. */
+  onLeave(){
+    if(w.paidBy!=="none"||!w.fresh)return;
+    if(w.features.tax==null)w.features.tax=false;
+    if(w.features.finances==null)w.features.finances=false;
+  },
+  mount(host){
+    host.innerHTML='<div class="palgrid choices" id="spPaid">'+
+      [["client",gi("money"),"My clients pay me","Private practice. Sessions are billed to the client, GroundWork tracks what is outstanding and can chase it."],
+       ["mixed",gi("rooms"),"Some of it is paid another way","You have private clients plus work an organisation pays for - an EAP, an insurer, a charity contract. New clients start as private and you set the others as you add them."],
+       ["none",gi("practice"),"I’m salaried, or on placement","You are paid a wage, or you are not paid per session at all. Sessions still count for hours, supervision, CPD and reports - they just never show up as money owed."]]
+      .map(o=>'<button type="button" class="palopt'+(w.paidBy===o[0]?" on":"")+'" data-p="'+o[0]+'">'+
+        '<span class="pswatch">'+o[1]+'</span>'+
+        '<span class="pt"><span class="pn">'+o[2]+'</span><span class="pd">'+o[3]+'</span></span></button>').join("")+'</div>'+
+      '<div class="ovnote" id="spPaidNote"></div>';
+    const note=host.querySelector("#spPaidNote");
+    const paint=()=>{
+      note.innerHTML=(w.paidBy==="none")
+        ? 'Because nothing is billed, <b>Tax</b> and <b>Costs &amp; other income</b> start switched off - they are about a self-employed return you may not have to file. If you do have a practice on the side, turn them back on in '+gi("settings")+' <b>Settings › App preferences</b>.'
+        : 'Nothing is hidden either way. If you take on salaried or placement work later, set it on that client’s own record under <b>Who pays</b>.';
+    };
+    paint();
+    host.querySelectorAll("#spPaid .palopt").forEach(b=>b.onclick=()=>{
+      w.paidBy=b.dataset.p;
+      host.querySelectorAll("#spPaid .palopt").forEach(x=>x.classList.toggle("on",x===b));
+      paint();Sfx.tick();});
+  }};}
 function stepMoney(w){
   const val=v=>(v==null||v==="")?"":esc(v);
+  const unpaid=(w.paidBy==="none");
   return{emoji:gi("fees"), h:"Your usual numbers",
-  sub:"Both optional - leave either blank if it doesn’t apply.",
+  sub:unpaid?"Both optional - and the fee is only worth filling in if some of your work is charged for."
+            :"Both optional - leave either blank if it doesn’t apply.",
   mount(host){
     host.innerHTML='<label>Usual session fee for a new client (£) <span class="muted">(optional)</span></label>'+
       '<input id="spRate" type="number" min="0" step="1" placeholder="Leave blank for none" value="'+val(w.rate)+'">'+
@@ -14839,6 +15463,11 @@ async function setupSave(w,opts){
   /* Dated from the CURRENT tax year, never retrospectively: a re-run of setup must not move the
      bands an earlier year was assessed under. */
   if(w.region&&w.region!==taxRegionFor(curTaxYear()))setYearValue("taxRegionYears",curTaxYear(),w.region,"taxRegion");
+  /* How this practitioner is paid, as the DEFAULT for new clients only. Never applied to clients
+     that already exist: who pays for somebody's work is a fact about that arrangement, and
+     rewriting it in bulk from a setup screen is exactly the kind of silent change to money this
+     app avoids everywhere else. */
+  if(w.paidBy==="client"||w.paidBy==="mixed"||w.paidBy==="none")sg.defaultPayer=w.paidBy;
   const rv=sg.reveal=sg.reveal||{mode:"all",shown:[]};
   rv.mode=(w.depth==="simple")?"simple":"all";
   if(!Array.isArray(rv.shown))rv.shown=[];
@@ -14972,11 +15601,18 @@ function startSetup(opts){
        the one a brand-new user wants. Anyone who is not fresh is never asked. */
     depth:fresh?"simple":"all",
     rate:defaultRate(), pension:pensionPcm(), taxAck:!!sg.taxAck,
+    /* How the practitioner is paid. Read back from what is already stored so a re-run shows the
+       existing answer, and defaulted to private practice, which is what every install before this
+       question existed was. */
+    paidBy:(function(){const d=sg.defaultPayer;
+      if(d==="none")return "none";
+      if(d==="mixed")return "mixed";
+      return "client";})(),
     region:taxRegionFor(curTaxYear()),
     bkDays:backupDaysThreshold(), bkActs:backupActsThreshold(),
     rtNotes:retentionCfg().notesYears, rtFin:retentionCfg().financeYears,
     cpdTarget:cpdTarget(),
-    rooms:null, tour:!rerun
+    rooms:null, tour:!rerun, fresh:fresh
   };
   const welcome={emoji:gi("welcome"), h:rerun?"Let’s run through setup again":"Welcome to GroundWork",
     sub:rerun?"Your clients, sessions and payments stay exactly as they are - this only touches how the app looks and behaves."
@@ -14989,6 +15625,10 @@ function startSetup(opts){
     mount(host){const r=host.parentElement.querySelector("#spRestore");if(r)r.onclick=()=>setupRestoreBackup();}};
   const steps=[welcome,stepPractice(w),stepLook(w)];
   if(fresh)steps.push(stepDepth(w));
+  /* Before Choose what you need, so that switching Tax and Costs off for a salaried practitioner
+     is visible on the very next screen and can be overruled there - the same placement, and the
+     same reason, as stepDepth above it. */
+  steps.push(stepPaid(w));
   steps.push(stepFeatures(w),stepNotes(w));
   if(featureOn(w,"supervision"))steps.push(stepCPD(w));
   if(withRooms)steps.push(stepRooms(w));
@@ -15021,7 +15661,7 @@ function startSetup(opts){
    button when a flow supplies one, and nothing else dismisses the overlay (no backdrop click, no
    Escape), so the Continue/Got it button is the only way past it.
    Bump WHATS_NEW and rewrite whatsNewSteps() for the next release. */
-const WHATS_NEW=5;
+const WHATS_NEW=6;
 function whatsNewSeen(){try{return +localStorage.getItem("tt_whatsnew")||0;}catch(e){return 0;}}
 function markWhatsNewSeen(){try{localStorage.setItem("tt_whatsnew",String(WHATS_NEW));}catch(e){}}
 function whatsNewDue(){return whatsNewSeen()<WHATS_NEW;}
@@ -15048,6 +15688,12 @@ function whatsNewSteps(){
     html:ovPoints([
       [gi("calendar"),"Cancel a session before the day","The question used to be hidden until the date arrived, so there was nowhere to record a client calling off next Thursday. It is on every session now, whenever it falls."],
       [gi("done"),"Blank is allowed","Leave it if you are in a hurry. Nothing is assumed - a session you have not answered for simply waits on <b>Sessions › Incomplete</b> once its time has passed, alongside the write-ups."]
+    ])});
+  st.push({emoji:gi("money"), h:"Not everyone is paid by their clients", sub:"Salaried, on placement, or seeing EAP clients - the app no longer assumes private practice.",
+    html:ovPoints([
+      [gi("practice"),"Who pays, per client","On each client’s record. Work nobody pays you per session for still counts for hours, supervision, CPD and reports - it simply stops appearing as money owed, so <b>Sessions › Unpaid</b> stays a list you can actually clear."],
+      [gi("rooms"),"Organisations that pay","An EAP, an insurer, a charity contract - set them up beside your rooms. Their invoices and chasers are addressed to them, and a month of sessions can be ticked off in one go."],
+      [gi("tax"),"Pay from a job","If you are employed as well, <b>Tax › Per year</b> now takes your pay before tax. Your practice is taxed on top of it, which is how HMRC does it - without it the estimate was too low."]
     ])});
   st.push({emoji:gi("cpd"), h:"CPD, all of it", sub:"Practice › Supervision › CPD.",
     html:ovPoints([
@@ -15447,7 +16093,7 @@ const APP_MAP=[
   {tab:"sessions",rows:[["upcoming","Upcoming","what is booked"],["unpaid","Unpaid","payments to chase"],
     ["incomplete","Incomplete","write-ups and attendance still to tick off"],["all","All","everything, newest first - and the calendar"]]},
   {tab:"practice",rows:[["clients","Clients","codes, status, fees and each client’s profile"],
-    ["rooms","Rooms","what each costs you and how it is charged"],
+    ["rooms","Rooms & payers","what each room costs you, and the organisations that pay for clients"],
     ["supervision","Supervision","the log, peer supervision, CPD hours and Form 3A",()=>feat("supervision")],
     ["trends","Business analytics","what your records say about clients, money, time and you",()=>feat("trends")],
     ["reports","Reports","a report of hours, supervision and CPD to print or hand over",()=>feat("reports")]]},
@@ -15456,7 +16102,7 @@ const APP_MAP=[
     ["table","Table","every session as a spreadsheet",()=>feat("raw")]]},
   {tab:"tax",rows:[["now","Now","three numbers, most of the year"],["estimate","Estimate","take-home and the year-by-year table"],
     ["payments","Pot & payments","what to keep back, and every due date"],
-    ["allowances","Per year","student loan, region and use of home, by tax year"],
+    ["allowances","Per year","student loan, region, pay from a job and use of home, by tax year"],
     ["mtd","Making Tax Digital","the four quarters and their exports"]]},
   {tab:"settings",rows:[["business","Your practice","name, cancellation policy, how figures are counted"],
     ["app","App preferences","look, sound and which features are on"],

@@ -251,7 +251,8 @@ Global `S` object - persisted to IndexedDB (`TherapyTrackerDB`) with a localStor
 
 ```js
 S = {
-  clients: [],          // each has _id; usualDay/usualTime override the derived slot
+  clients: [],          // each has _id; usualDay/usualTime override the derived slot;
+                        //   payer/payerId/authorised say who pays for their work (v11)
   rooms: [],            // {location, rate, due, billing:"session"|"monthly", pay:{freq,day}}
   sessions: [],         // therapy sessions
   supervision: [],      // clinical supervision (counts toward the 1:6 ratio)
@@ -278,6 +279,9 @@ S = {
     cpdTarget,          // annual CPD hours target (default 30)
     cpdCountSupervision,// does clinical supervision count toward cpdTarget? (v8, default true)
     cpdCountPeer,       // ditto peer supervision (v8, default true)
+    defaultPayer,       // what a NEW client starts as: "client"|"mixed"|"none" (v11)
+    payers: [],         // organisations that pay - {_id,name,contact,invoiceDays,defaultRate,notes} (v11)
+    employmentYears:{}, // tax year → {pay} before tax, carried forward (v11)
     studentLoanYears:{},// tax year → plan key, carried forward (v6)
     taxRegionYears: {}, // tax year → "rUK"|"scotland", carried forward (v6)
     taxYears: {},       // tax year → what HMRC actually assessed / set / a claim to reduce (v6)
@@ -310,7 +314,8 @@ Key functions:
 - **`tyNet()` and `tyIncome()` are memoised** (`tyMemo`, cleared in `go()`, `commit()` and `normalize()`). Each walks every session and runs `ledgerBetween` twice; the Payments screen asks for several years at once and each year's schedule reaches into the year either side, so uncached the call count grows quadratically with history. Anything that mutates `S` outside those three entry points must call `tyMemoClear()`.
 
 ### Schema versioning
-`SCHEMA_VERSION` (currently `10`) is stamped on `S.meta.schemaVersion` and on every backup envelope. Unstamped data is treated as v1.
+`SCHEMA_VERSION` (currently `11`) is stamped on `S.meta.schemaVersion` and on every backup envelope. Unstamped data is treated as v1.
+- **v11 (Sep 2026)** records **who pays** for a client's work (`client.payer`, `payerId`, `authorised`, plus `settings.payers` and `settings.defaultPayer`) and **pay from a job** (`settings.employmentYears`). Nothing migrates: absent means "the client pays me", which is what every record written before it meant. The bump is for the other direction and it matters twice. A v10 build has no payer field, so every salaried or placement session in a v11 backup turns back into a debt - back on the Unpaid worklist, back on its badge, back in the attention feed, with a Chase button over clients who were never billed. And a v10 build has no employment figure, so it puts the personal allowance and the whole basic-rate band back onto practice profit alone and shows a tax estimate thousands of pounds light - then saves both losses back. See **Who pays for the work** below.
 - **v10 (Sep 2026)** added `settings.reports` - the reports a therapist has built and saved, and which one is their default. A v10 backup can hold "CPCAB client log, everything so far, these nine sections, counted as one clinical hour each"; a v9 build has no such field, so it would drop every saved report and save that loss back. **Only the definitions are stored** - the figures are always rebuilt from the sessions, so an older build loses the saved report, never the data behind it.
 - **v9 (Sep 2026)** gave a room-rent step its own **rhythm** (`freq`) and its own **end date** (`endDate`) - "£150 every week from 1 June until 31 August" rather than "£150, monthly, for ever". Both are optional and their absence means what it always meant, so nothing migrates in place. The bump is for the other direction and it matters twice: a v8 build reading a weekly rent charges it 12 times a year instead of 52, and goes on charging a rent that ended two years ago - then saves both wrong figures back. See **Room rent** below.
 - **v8 (Sep 2026)** added `S.cpd` - CPD that is not supervision - and `settings.cpdCountSupervision` / `cpdCountPeer`. A v8 backup can hold twenty hours of workshops plus "supervision doesn't count for me"; a v7 build has neither field, so it would drop every one of those hours, put supervision back into the total, and save both losses back.- **v7 (Sep 2026)** split the old free-text "Notes done?" box into a boolean tick and a separate `adminNote`. A v7 backup can hold "invoice goes to her employer" in `adminNote`; a v6 build has no such field and would drop every one of those comments, then save the loss back. See **Notes vs admin comments** below.
@@ -321,6 +326,72 @@ Key functions:
 - Bump it when a change would be **misread** by an older build, and add the matching step to the ordered migration block in `normalize()`.
 - `validateImport()` **refuses** a backup whose version is newer than the running app - importing would silently drop unknown fields and then save that loss back over good data.
 - `normalize()` never downgrades newer data in place.
+
+### Who pays for the work (v11, Sep 2026) - the sole-trader assumption, lifted
+GroundWork was built for one practitioner selling sessions to the people in front of her, and the
+assumption ran the whole length of the money chain: `effRate` → `derive().rate` → `s.paidDate` →
+`tyNet` → `ukTax`. Plenty of counselling work is not like that - salaried at a charity or a
+service, on placement, or EAP and insurer clients an organisation pays for - and **the commonest UK
+career shape is two of those at once**, a salaried post with a private caseload beside it. Analysis
+and the staged plan this implements: `docs/practitioner-models-2026-09.md`.
+
+- **It is a fact about a CLIENT, never a practice-wide mode.** `client.payer` is keyed - `client` /
+  `org` / `none`, `PAYERS` holds the display text - and **absent means `client`**, which is what
+  every record written before this meant, so nothing migrates and no existing figure moves. An
+  unrecognised stored key falls back the same way, like `CPD_KINDS`. A practice-wide switch cannot
+  say "these six are the charity's and these four are mine", and it would put a third axis beside
+  `feat()` and `plusLocked()` answering nearly the same question.
+- **`sessionEarns(s)` is THE choke point** - "does this session raise money somebody has to
+  collect?" - and `derive()` reads it into `d.earns`, which gates `d.overdue`. That one line is the
+  whole of the worst bug this fixed: four readers used to add their own `rate > 0` test and **two
+  forgot**, so a practitioner who charges nothing carried a permanent red badge on Sessions
+  counting every session she had ever logged, over a button offering to chase her clients for the
+  money. The four surviving `rate > 0` guards are now redundant and are deliberately **kept** -
+  they still answer the different question of a genuinely free session for a client who does pay.
+- **The clinical half must never read it.** Who funds the work does not touch `derive().complete`,
+  the Incomplete worklist, attendance, hours, supervision, the ratio or a report's figures. That is
+  the room-fee lesson from Sep 2026 one level up, and `npm run test:payer` asserts a salaried
+  caseload still produces its clinical hours and still chases its own write-ups.
+- **`anyPayingClient()`** answers the practice-wide version, for screens that have to decide
+  whether to exist at all. A practice with no clients yet has not said it charges nothing, so the
+  default is yes.
+- **A money analytic needs money, not sessions.** `anaHourlyRate` and `anaFloor` gated on a session
+  count, so a salaried caseload sailed past ten sessions and was told its effective hourly rate was
+  **£0.00** under a heading explaining this is the figure to compare against an employed salary.
+  Both now also count revenue-bearing rows (`anaEarning`, and `m.earn` on `anaMonthlySeries`), and
+  where nobody pays at all the **Money section of Trends** is replaced by one sentence rather than
+  seven cards each explaining what they are waiting for. `anaMonthlySeries`'s `revenue`/`full` count
+  only earning sessions; `n` and `attended` deliberately still count every session, because "how
+  busy was this month" is a question a salaried caseload has a real answer to.
+- **Setup asks once, before Choose what you need.** `stepPaid` - my clients pay me / some of it is
+  paid another way / I'm salaried or on placement - sets `settings.defaultPayer` for **new clients
+  only** and, on a genuinely fresh install, switches `tax` and `finances` off in its `onLeave` so
+  the very next step shows the result and can overrule it. Same placement and same reason as
+  `stepDepth`. It never rewrites existing clients: who pays for somebody's work is a fact about that
+  arrangement, not something a setup screen bulk-edits. `REVEAL_STEPS`' tax step also now requires
+  somebody to be paying.
+
+**The organisation that pays.** `settings.payers[]` is a small list managed beside Rooms (the
+closest existing thing: a named outside party with a rate and a payment rhythm, money running the
+other way). A client names one by **id**, so renaming an organisation never orphans a caseload.
+- **`clientPayerOrg(c)` refuses to answer for a client whose payer is not `org`**, so a stale
+  `payerId` left behind by a change of mind can never put an invoice back in front of somebody.
+  Deleting an organisation unlinks its clients back to `client` rather than leaving a dead id.
+- **The document reads the payer off the CLIENT, never a new argument.** `receiptHTML(c, rows,
+  label, paidOnly)` still takes exactly four parameters - the native shell re-declares
+  `printReceipt` with those four and a fifth would be dropped silently, so every invoice printed
+  from an iPhone would come out addressed to the wrong party. `npm run test:payer` asserts the
+  arity. An organisation's own `invoiceDays` beats the practice default, because "30 days" is
+  usually their number.
+- **`chaseText` writes a different message**, not the same one re-addressed: the person reading it
+  at an EAP has never met anybody in the list, so it leads on the client *reference*.
+- **Sessions › Unpaid groups by age OR by who owes it** (`unpaidBy`, module-level so a redraw does
+  not throw the choice away). Age is right for private practice; it is wrong for an EAP caseload,
+  where six clients' sessions arrive on one remittance and by age are scattered down the screen.
+  The toggle only appears once some of the outstanding money is actually owed by an organisation.
+- **`client.authorised`** is the block an EAP authorises, counted against sessions that **went
+  ahead** - a DNA the funder will not pay for has not used one up. It lives on the client, not the
+  organisation, because authorisation is per person.
 
 ### Business finances (added Aug 2026 - one choke point)
 `ledgerBetween(from, to, {toDate})` is the **only** place expenses, other income and monthly room rent are totalled. `tyNet()` adds its `total`; the tax-year table's Net column now prints `tx.netAll` (i.e. `tyNet`) rather than recomputing `billed - room - sup` inline, so the Net and Tax columns cannot drift apart. Anything new that reports money goes through it too.
@@ -603,6 +674,14 @@ Touch only - a mouse drag across a page is a text selection and a trackpad's hor
 - **Payments on account.** `taxSchedule(ty)` - once the liability passes £1,000, January is the balancing payment *plus* 50%, with another 50% in July. `poaBase()` excludes Class 2 and student loan, which never form part of a payment on account.
 - **Class 2** is no longer mandatory (2024/25+) but can be paid voluntarily below the Small Profits Threshold; the app offers it rather than omitting it.
 - **Region, student loan, pension.** Scottish bands via `settings.taxRegion`; `SL_PLANS` for plans 1/2/4/5/PG; pension contributions extend the basic-rate band (`penGross`) rather than being deducted after tax.
+- **Pay from a job (v11, Sep 2026) - the one figure the engine was getting WRONG.** `ukTax(profit, ty)` took self-employed profit and nothing else, applying the **full personal allowance and the whole basic-rate band** to it. On a £40,000 salaried post with a £15,000 private caseload that is £3,460 too little in 2026-27 - in the one direction that hurts, because the shortfall turns up in January. And the app already held the salary: `otherIncome` with `scope:"personal"` exists for "a second job", correctly kept out of the SA103 total and then never stacked for the bands.
+  - `settings.employmentYears[ty] = {pay}` via `yearValue`/`setYearValue`, carried forward exactly like the region and the loan plan - somebody in a job in April is usually still in it in March, and assuming it stopped understates the bill. Edited on **Tax › Per year**, which is inputs rather than calculations and is therefore outside the paywall.
+  - **`ukBands(taxable, ty, penGross)` was split out of `ukTax`** so the wage can sit underneath: tax on profit is `tax(wage + profit) − tax(wage)`, and `ukBandsMinus` subtracts the breakdowns so a card reports the bands the **profit** fell in rather than the whole stack. With no salary recorded `below` is zero and every figure is byte-identical to what it always was - there is a parity harness behind that claim, and all 134 tax tests still pass untouched.
+  - **The allowance taper is on TOTAL income** (correct - it is adjusted net income), but **Class 4 and Class 2 stay on profit alone**: they are charges on self-employment and the employer deals with Class 1. Stacking them would replace one wrong figure with another.
+  - **Student loan is the INCREMENT the practice adds** (`studentLoanDue(wage+profit) − studentLoanDue(wage)`), on the assumption the employer deducted correctly. Self Assessment works it out on combined income and credits what PAYE already took, which this app cannot see - so it reports the increment and says so, rather than ignoring the wage (far too little) or charging the whole combined amount again (far too much).
+  - **The tax deducted by the employer is deliberately NOT stored.** What this engine produces is the tax on the *practice*, which is the part Self Assessment collects; PAYE has already dealt with the wage. A second field that changed nothing would be a field somebody fills in expecting it to.
+  - **`setEmploymentPay(ty, 0)` stores a zero, it does not delete the year.** "I left the job in June" is said with a 0, and a zero that cleared the entry would let carry-forward keep the old salary alive for ever. Only null or a blank hands a year back to the earlier one. One writer, so the card and the helper cannot disagree.
+  - **`taxEmploymentBar(ty)` renders NOTHING for a purely self-employed practice.** It speaks only on a signal the reader has already given - a salary recorded, income logged as a separate trade, or a caseload somebody else pays for - because a second permanent banner beside the standing disclaimer is one nobody reads (the same rule that made that disclaimer `.calm`). And a year the reader has **explicitly** put a zero against is an answer, not a gap - the bar stays silent rather than arguing with the app's own record.
 - **Per-year settings.** Both student loan and **region** are editable against a *past* year on **Tax › Per year** (Sep 2026). The engine always read region by year, but the only control that wrote it was the Settings card and it always wrote `curTaxYear()` - so a move to or from Scotland silently re-assessed every earlier year under today's bands. Settings still owns the "from now on" decision and links across for the rest. `yearValue(key, ty, fallback)` / `setYearValue()` hold a setting against a tax year with carry-forward from the most recent earlier year - the same shape as `uohForYear`. Student loan (`studentLoanPlanKey`) and region (`taxRegionFor`) both use it, and `ukTax(profit, ty)` reads them by year. **The legacy scalars migrate onto `earliestTaxYearIn(st)`**, which is what makes carry-forward reproduce exactly the figures the install was already showing. Never read `settings.studentLoan` / `settings.taxRegion` directly - they are kept in step with the latest year only so an older build sees something sensible.
 - **Estimate vs assessment.** `taxLiability(ty)` is the one place a year's number comes from, and it reports `src`: `actual` (entered from a filed return - HMRC's figure wins everywhere), `estimate` (year ended, nothing entered) or `projected` (year still running, run-rated to a full year). `poa` is the part instalments are worked out from, never Class 2 or student loan.
 - **`poaTowards(ty)`** gives the two instalments due towards a year, set by the year before it. Precedence: a recorded **claim to reduce** (SA303) beats **what HMRC actually set** (`poaSet`) beats the calculated figure. A claim never reduces the tax - it defers it to January pound for pound, and there is a test asserting exactly that.
@@ -662,6 +741,9 @@ npm run test:tax             # tests/tax-tests.js in a headless browser instead 
 npm run test:behaviour       # opens the sheets, clicks Save, asserts what landed in S
 npm run test:reports         # the report engine, the gate and the screen, over all eight
 npm run test:rent            # room rent: rhythms, date ranges, the ledger, and the ungated card
+npm run test:payer           # who pays: the payer field and its choke point, the Unpaid worklist
+                             #   and its badge, the money analytics' readiness, the organisation
+                             #   documents and batching, and employment income stacked under profit
 npm run test:tiers           # the Pro / tax-year gate matrix, the mask, and the migration defaults
 npm run test:pins            # pinning an analytic to Home: the registry, the cap, the picker,
                              #   and that Home's copy of a card is identical to Trends'
@@ -1356,7 +1438,7 @@ The tour used to be eight full-screen `.ov` cards describing controls the reader
 - **Getting started** (Sep 2026): `startCardHTML()` / `startItems()` - the first block on Home (`HOME_CARDS` key `start`) for a practice under `START_MAX_SESSIONS` (25) sessions, until dismissed. Seven rows, **every one derived from the data** (a client exists, a session is logged, `cancelChosen()`, `payToDetails()`, `lastBackupTs()`), never from a stored tick; the two answers that cannot be read from data - "I'm starting fresh" and "I only work from home" - are the only stored ones, in `settings.start`, so they travel in a backup. `settings.start.recordsLater` is the third thing stored there and is **not** an answer: it is setup's "yes, but not this minute", so it leaves the records row undone and only marks it as the one to start on (`lead` → the **Start here** chip). **The first row is the point of the card**: `startRecordsSheet()` asks which kind of records the reader has and hands them to the right tool, saying which one *adds* (the spreadsheet import) and which *replaces* (a backup restore). `impCommit()` and `importFromText()` stamp `start.records` themselves, so the row ticks without the reader saying so. An established practice never sees it; the **Still on defaults** card is its version for them.
 - **Still on defaults** (Sep 2026): `decisionsCardHTML()` at the top of Settings › Your practice - the business settings the app is deciding by default until the reader does: the cancellation policy (`cancelChosen()`: `normalize()` seeds a default, so the test is "still exactly the default and never touched"; `wireCancelRules`'s save sets `cancelRulesChosen`), a blank *how to pay*, an unconfirmed tax region, a working week on defaults. Rows link with `focus` to the card (every Settings card now carries an id), and the card disappears with the last row.
 - **Search & help** (Sep 2026): the magnifier in the header (`#helpBtn`, kept on desktop where the gear is hidden) opens `findSheet()`. Empty, it holds the help this screen has - its own `TIPS` replayed (the tips fire once by themselves; this is their second life), Getting started while it shows, **what to do and how often right under it** (`appJobsSheet()`), the app map, the tour, What's new. Typed into, `findIndex(q)` searches clients, sessions, rooms, `ANA_CARDS`, `APP_MAP` screens, `SETTINGS_INDEX` (a static list of Settings cards with keywords, group and card id - keep it in step with `VIEWS.settings`), `INFO` topics and `APP_JOBS`. Every hit is a link. `segOf(tab)` is the one place a tab's current segment is read; `coachMaybeTip` uses it too.
-- **What's new**: `WHATS_NEW` (currently **5**) against `tt_whatsnew` in localStorage; `whatsNewSteps()` is rewritten each release cycle and describes only that cycle - the Aug 2026 reorganisation notes were replaced in Sep 2026 rather than appended to, because ten steps is a wall nobody reads. Bump the constant whenever the steps change.
+- **What's new**: `WHATS_NEW` (currently **6**) against `tt_whatsnew` in localStorage; `whatsNewSteps()` is rewritten each release cycle and describes only that cycle - the Aug 2026 reorganisation notes were replaced in Sep 2026 rather than appended to, because ten steps is a wall nobody reads. Bump the constant whenever the steps change.
 - **Previous records are asked about, not assumed - and the wizard only ever TELLS** (Sep 2026). `stepImport` is "Do you have records from before?": it describes the two kinds (a spreadsheet, which **adds**; a GroundWork backup, which **replaces**) and then takes one of two answers - **"Yes - I'll bring them in"** (`later`) or **"No - starting fresh"** (`fresh`, stored as `start.records="fresh"` by `setupSave`).
   - **`later` is a job outstanding, never an answer, and must never reach `start.records`** - that field is what ticks the Getting started row off. It is recorded as **`settings.start.recordsLater`**, cleared the moment the question is really answered (`startAnswer("records",…)`, `impCommit()`, `importFromText()`).
   - This replaced three answers that were each an *action*: picking a kind launched the importer or a file picker there and then. Somebody whose spreadsheet was on the other computer had no honest answer - "starting fresh" ticks the row and they are never reminded, and picking "a spreadsheet" then cancelling still stamped `start.records="imported"`, a job marked done that nobody did. **Don't reintroduce an in-step launch that stages an answer.**
@@ -1365,6 +1447,7 @@ The tour used to be eight full-screen `.ov` cards describing controls the reader
 - **Re-run**: `confirmRerunSetup()` - warning sheet requiring the user to type `RESET SETUP`. Skips the rooms step once sessions exist.
 - **Feature flags**: `feat(key)` gates tabs (`TABS[].ft`), gamification (`celebrate`, `Confetti.burst`), attention feed, receipts, accreditation, `peer` (peer supervision, dep: supervision) and `finances` (costs & other income, dep: income). Off = hidden, never deleted.
 - **Removed Sep 2026: the quick-add command bar** (`parseQuickLog` / `quickLogBuild` / `mountQuickLog`, the `quickadd` flag and its reveal step). It was a second, less capable route into the session form - every session it created still had to be opened and corrected. A stored `features.quickadd` on an existing install is now inert; don't reintroduce the key.
+- **How are you paid?** `stepPaid()` sits **before** `stepFeatures`, not with the money questions, because it decides whether they mean anything - and because its `onLeave` switches `tax` and `finances` off for a salaried practitioner on a fresh install, which has to be visible on the very next screen so it can be overruled there. Same placement and same reason as `stepDepth`. It writes `settings.defaultPayer`, which is the default for **new clients only** - see **Who pays for the work**.
 - **Retention step**: `stepRetention()` sits between money and backup, and its `validate()` refuses blanks or anything outside 1–50 years - a retention period nobody chose is a compliance decision made by a default.
 - **Every icon in a setup step is `gi()`, never an emoji character** (Sep 2026). The step heroes already were; the bodies still carried 🌱 🗂 🔒 📥 🔐 ⤓ ↩︎ ✕ ＋ ☀ ☾ and an inline ⚙ in "⚙ Settings › Features", which is exactly the mismatch the glyph table was built to end - the wizard is the first screen anyone sees and it was the last one still drawing in the platform's emoji font. `settings` (the header's own gear), `sprout`, `grid`, `sun`, `moon`, `plus`, `close`, `key` and `undo` were added to `GLYPH` for it. Two places still hold characters on purpose: the `celebrate()` overlay, which is emoji by design, and `startSetup`'s skip `confirm()`, which is a native dialog and cannot render markup. Settings' own **theme chips and sound button** were converted in the same pass - they are the same two controls the wizard draws, and leaving one pair on ☀/☾/🔊 would have been a visible split between the wizard and the screen it sends people to. Both segs carry `flex-wrap:wrap`: three chips with a glyph each are wider than a 320px phone and neither has a `.segwrap` scroller. A label set through `textContent` has to become `innerHTML` when it takes a glyph - that caught the passphrase button and the sound button.
 - **`.palopt`'s `.pn`/`.pd` are `display:block`.** As inline spans the name and description ran together into one paragraph - *"Start simpleSessions, clients, money owed…"* - which reads as a typo. Same shape as `.ftrow .fn`/`.fd`.
@@ -1398,6 +1481,8 @@ view element, and `go(tab,opts)` calls it. Inside a view the segments are plain 
 | `findSheet()` | Search & help, from the header magnifier: search across everything, or this screen's tips, Getting started, the jobs list, the map, the tour and What's new |
 | `startCardHTML()` / `startRecordsSheet()` | Getting started on Home, and the chooser that routes previous records to the importer or the restore |
 | `decisionsCardHTML()` | "Still on defaults" at the top of Settings › Your practice |
+| `payerOrgForm()` / the card in `renderRooms()` | The organisations that pay for clients, set up beside Rooms |
+| `drawAllowances()` | Tax › Per year — the year strip, region, **pay from a job**, student loan, use of home |
 
 Small helpers most screens reach for (all near the top of the script): `derivedSessions()` (every
 session paired with `derive()`), `goSessions(seg)` (land on a Sessions worklist), `goRoomCosts(card)`

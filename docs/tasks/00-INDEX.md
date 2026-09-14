@@ -51,7 +51,7 @@ Same rules and same kickoff prompt.
 
 | # | Task file | Model | Depends on | One-line scope |
 |---|---|---|---|---|
-| T10 | T10-training-record.md | **Opus** | - | The trainee record: per-session duration, type, three-way medium, supervision hours, placements, personal therapy, CPD reflection (schema v11) |
+| T10 | T10-training-record.md | **Opus** | - | The trainee record: per-session duration, type, three-way medium, supervision hours, placements, personal therapy, CPD reflection (schema v12) |
 T10 is Stage 1 of `docs/institutional-partnerships-2026-09.md` and is safe to implement
 regardless of how that plan's Stage 0 (find a partner course) turns out - the fields are worth
 having for any trainee. It also contains the one live correction in that plan: supervision is
