@@ -134,6 +134,175 @@ async function inPage() {
     }
   }
 
+  /* ===== "Did it go ahead?": always on screen, optional, and Incomplete is its deadline =====
+     Blank stopped meaning "attended" in Sep 2026 and became a genuine unanswered state. Three
+     things have to hold together or the field is a trap: the control is rendered even for a
+     session that has not happened, a save leaves a blank blank, and a blank on a session that
+     HAS happened lands on the Incomplete worklist. Expectations come from the rule - the clock
+     is the session's own start plus sessionMins(), recomputed here, never read back. */
+  {
+    /* validateSession raises WARNINGS on some fixtures (a session for a client marked Finished,
+       say) and the form answers the first click by arming "Save anyway". That is the real
+       behaviour and the test has to live with it rather than around it: click, and click again
+       if the button is still asking. */
+    const saveForm = async () => {
+      const b = document.querySelector("#sheetBody #save");
+      if (!b) return;
+      b.click(); await sleep(200);
+      const b2 = document.querySelector("#sheetBody #save");
+      if (b2 && /anyway/i.test(b2.textContent)) { b2.click(); await sleep(250); }
+    };
+    const rule = (s) => {                                    /* derive().ended, from the rule */
+      const d = parseD(s.date); if (!d) return false;
+      const tm = String(s.time || "").match(/^(\d{1,2}):(\d{2})/);
+      if (!tm) return d < today();
+      const dt = new Date(d); dt.setHours(+tm[1], +tm[2], 0, 0);
+      return new Date(dt.getTime() + sessionMins() * 60000) <= new Date();
+    };
+    ok("derive().ended matches the start-plus-length rule on every session",
+      !S.sessions.some((s) => derive(s).ended !== rule(s)),
+      S.sessions.filter((s) => derive(s).ended !== rule(s)).length + " disagree");
+
+    /* A future session. There was no control here at all until Sep 2026. */
+    const fut = { _id: "att_future_" + Date.now(), client: S.sessions[0].client, num: "",
+      date: isoD(addDays(today(), 14)), time: "10:00", mode: "In-person",
+      location: S.sessions[0].location, room: "-", invoice: "", paidDate: "", receipt: "",
+      notes: "", roomPaid: "", roomPaidDate: "", lateCancel: false };
+    S.sessions.push(fut);
+    sessionForm(fut); await sleep(80);
+    const sel = document.querySelector("#sheetBody #f_attend");
+    ok("a future session is still asked whether it went ahead", !!sel && sel.offsetParent !== null);
+    ok("the blank is offered as a value of its own", !!sel && sel.options[0].value === "");
+    ok("and it is not labelled attended", !!sel && !/attend/i.test(sel.options[0].text));
+    ok("attended is an answer of its own",
+      !!sel && [...sel.options].some((o) => o.value === "attended"));
+    if (sel) {
+      /* Cancelling next Thursday: the reason the control had to come out of hiding. */
+      sel.value = "late"; sel.dispatchEvent(new Event("change")); await sleep(40);
+      ok("choosing a cancellation reveals the charge", 
+        document.querySelector("#sheetBody #f_cxWrap").style.display !== "none");
+      ok("a cancellation dated ahead is no longer warned about",
+        !validateSession({ ...fut, cancelKind: "late", lateCancel: true })
+          .warnings.some((w) => w.code === "dnafuture"));
+      ok("but a DNA dated ahead still is",
+        validateSession({ ...fut, cancelKind: "dna" }).warnings.some((w) => w.code === "dnafuture"));
+      await saveForm();
+      const saved = S.sessions.find((x) => x._id === fut._id);
+      ok("a future cancellation is recorded", saved.cancelKind === "late" && saved.lateCancel === true);
+      ok("and counts as answered", attendConfirmed(saved) === true);
+    }
+    closeSheet();
+
+    /* Blank must survive a save - the old form stamped the flag from the date alone. */
+    sessionForm(S.sessions.find((x) => x._id === fut._id)); await sleep(80);
+    const s2 = document.querySelector("#sheetBody #f_attend");
+    if (s2) { s2.value = ""; s2.dispatchEvent(new Event("change")); await sleep(40);
+      await saveForm(); }
+    const blanked = S.sessions.find((x) => x._id === fut._id);
+    ok("saving with the blank chosen leaves it unanswered", attendConfirmed(blanked) === false);
+    ok("and clears the cancellation with it",
+      !blanked.cancelKind && blanked.lateCancel === false && !blanked.cancelledAt && blanked.cancelCharge == null);
+    closeSheet();
+
+    /* The same session, moved into the past: a blank answer is now outstanding. */
+    blanked.date = isoD(addDays(today(), -2)); blanked.notes = "Y";
+    ok("a blank answer on a session that has happened is incomplete",
+      derive(blanked).complete === false && missingReasons(blanked).includes("attendance"));
+    ok("and it reaches the Incomplete worklist",
+      incompleteRows().some((x) => x.s._id === blanked._id));
+    ok("a session still to come never does, however blank",
+      !incompleteRows().some((x) => !derive(x.s).ended));
+
+    /* The worklist answers it in full - all three kinds, not just "attended" - and Notes done
+       must not answer it at all. */
+    sessFilter.seg = "incomplete"; sessFilter.q = ""; sessFilter.view = "list";
+    const openList = async () => { go("sessions"); await sleep(150);
+      return document.querySelector('.irow[data-id="' + blanked._id + '"]'); };
+    const chip = (row, v) => row && row.querySelector('.tgl[data-k="att"][data-v="' + v + '"]');
+    let row = await openList();
+    ok("the worklist offers all three answers", !!row &&
+      ["attended", "late", "dna"].every((v) => !!chip(row, v)));
+    ok("and no notes tick on a session already written up",
+      !!row && !row.querySelector('.tgl[data-k="notes"]'));
+
+    /* One answer, not three ticks: picking a second clears the first. */
+    if (row) {
+      chip(row, "late").click(); await sleep(40);
+      chip(row, "dna").click(); await sleep(40);
+      ok("the three chips are mutually exclusive",
+        !chip(row, "late").classList.contains("on") && chip(row, "dna").classList.contains("on"));
+      ok("a missed session says on the row what it will be charged",
+        /charged \d+% of/.test(row.querySelector(".attnote").textContent),
+        row.querySelector(".attnote").textContent);
+      chip(row, "dna").click(); await sleep(40);          /* tapping the chosen one un-answers it */
+      ok("choosing the chosen one puts the row back to unanswered",
+        !chip(row, "dna").classList.contains("on") &&
+        /Save \(0\)/.test(document.querySelector("#saveInc").textContent));
+    }
+
+    /* DNA: the kind, the flag and the policy's charge, recomputed here from the rule. */
+    if (row) {
+      const wantPct = cancelPolicyPct("dna", null);       /* no notice recorded -> policy's DNA % */
+      chip(row, "dna").click(); await sleep(40);
+      document.querySelector("#saveInc").click(); await sleep(300);
+      const dna = S.sessions.find((x) => x._id === blanked._id);
+      ok("DNA is recorded from the worklist", dna.cancelKind === "dna" && attendConfirmed(dna) === true);
+      ok("a DNA is not a late cancellation", dna.lateCancel === false);
+      ok("and it is charged at the policy, not silently at nothing",
+        dna.cancelCharge === wantPct, `${dna.cancelCharge} vs ${wantPct}`);
+      ok("isCancelled() picks it up", isCancelled(dna) === true);
+      ok("and the session leaves the worklist", derive(dna).complete === true);
+    }
+
+    /* Attended, over the top of that DNA: the same clearing the session form does. */
+    {
+      const s3 = S.sessions.find((x) => x._id === blanked._id);
+      s3.attendConfirmed = false;
+      row = await openList();
+      if (row) { chip(row, "attended").click(); await sleep(40);
+        document.querySelector("#saveInc").click(); await sleep(300); }
+      const att = S.sessions.find((x) => x._id === blanked._id);
+      ok("Attended clears the cancellation it replaces",
+        !att.cancelKind && att.lateCancel === false && att.cancelCharge == null && !att.cancelledAt);
+      ok("and counts as answered", attendConfirmed(att) === true);
+      ok("so the session is worth its full fee again",
+        derive(att).rate === derive(att).fullRate, `${derive(att).rate} vs ${derive(att).fullRate}`);
+    }
+
+    /* A charge already on the record is never overwritten by the policy. */
+    {
+      const s4 = S.sessions.find((x) => x._id === blanked._id);
+      s4.attendConfirmed = false; s4.cancelCharge = 25;
+      row = await openList();
+      if (row) { chip(row, "late").click(); await sleep(40);
+        document.querySelector("#saveInc").click(); await sleep(300); }
+      const kept = S.sessions.find((x) => x._id === blanked._id);
+      ok("an existing charge survives being answered here", kept.cancelCharge === 25, kept.cancelCharge);
+    }
+
+    /* A notes-only tick must leave attendance exactly as it found it. */
+    const probe = S.sessions.find((x) => x._id === blanked._id);
+    probe.notes = ""; probe.attendConfirmed = false;
+    probe.cancelKind = null; probe.lateCancel = false; probe.cancelCharge = null;
+    row = await openList();
+    if (row && row.querySelector('.tgl[data-k="notes"]')) {
+      row.querySelector('.tgl[data-k="notes"]').click(); await sleep(40);
+      document.querySelector("#saveInc").click(); await sleep(300);
+      const after2 = S.sessions.find((x) => x._id === probe._id);
+      ok("Notes done writes the notes tick", notesDone(after2) === true);
+      ok("Notes done does NOT answer attendance on the therapist's behalf",
+        attendConfirmed(after2) === false);
+    }
+
+    /* Bulk is "all attended" and nothing else - there is no sweep that writes off every fee. */
+    ok("the only bulk answer is Attended",
+      !!document.querySelector("#allAtt") &&
+      !document.querySelector("#allLate") && !document.querySelector("#allDna"));
+
+    S.sessions = S.sessions.filter((x) => x._id !== fut._id);
+    sessFilter.seg = "upcoming";
+  }
+
   /* ===== CPD ===== */
   S.cpd = [];
   const base = cpdYearHours();

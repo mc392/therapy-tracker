@@ -872,6 +872,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:0
 .irow{display:flex;flex-direction:column;gap:9px;padding:12px 6px;border-bottom:1px solid var(--line);border-radius:10px;transition:opacity .3s}
 .irow:last-child{border-bottom:0}
 .irow .itop{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.irow .itop.clk{cursor:pointer} .irow .itop.clk:active{opacity:.65}
 .irow .ittl{font-weight:600;font-size:15px}
 .irow .isub{font-size:12.5px;color:var(--muted)}
 .irow .ctrls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
@@ -885,6 +886,12 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:0
 .tgl .tbox{width:16px;height:16px;border-radius:5px;border:2px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:11px}
 .tgl.on{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good);border-color:color-mix(in srgb,var(--good) 50%,transparent)}
 .tgl.on .tbox{background:var(--good);border-color:var(--good);color:#fff}
+/* A missed session is answered, not good news - so the chosen chip is amber rather than green.
+   Same control, same weight; only the colour says which kind of answer it is. */
+.tgl.miss.on{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 50%,transparent)}
+.tgl.miss.on .tbox{background:var(--warn);border-color:var(--warn);color:#fff}
+.irow .attnote{display:none;font-size:12.5px;color:var(--warn);line-height:1.45;padding:0 2px}
+.irow .attnote.show{display:block}
 .tgl.pop{animation:tglpop .42s cubic-bezier(.18,1.5,.5,1)}
 @keyframes tglpop{0%{transform:scale(1)}45%{transform:scale(1.2)}100%{transform:scale(1)}}
 .bulkbar{position:sticky;top:0;background:var(--bg);z-index:2;padding:8px 0}
@@ -2004,6 +2011,12 @@ function derive(s){
   const room=roomFor(s.location); const roomRate=effRoomRate(s.location,s.date); const due=room?room.due:"n/a";
   const clientPaid=!!s.paidDate;
   const past=d?d<t:false;
+  /* `past` is a whole-DAY test and it is what money runs on: a payment is not overdue until the
+     day of the session is out. `ended` asks the same question to the minute - has this session
+     actually finished - and it is what the Incomplete worklist runs on, because "did it go
+     ahead?" cannot be answered before it has. The two differ only for sessions dated today,
+     which is exactly the case somebody logging this morning's client falls into. */
+  const ended=sessionEnded(s,d,t);
   const overdue=past&&!clientPaid;
   let roomBooked = s.room==="-"||s.location==="At home" ? "n/a" : (s.room?"Y":"N");
   /* Three ways a session can have no room fee to settle, and they all mean the same thing to
@@ -2040,9 +2053,14 @@ function derive(s){
   if(d){ const tm=(s.time||"00:00").split(":"); const dt=new Date(d); dt.setHours(+tm[0]||0,+tm[1]||0);
     cancelBy=addDays(dt,-3); canCancel=cancelBy>new Date(); }
   return {rate,fullRate,cancelPct,cancelKind:(s.cancelKind||(isLateCancel(s)?"late":null)),
-    roomRate,due,roomPaidNA,roomOwed,clientPaid,past,overdue,roomBooked,roomDue,status,category,complete,cancelBy,canCancel,
+    roomRate,due,roomPaidNA,roomOwed,clientPaid,past,ended,overdue,roomBooked,roomDue,status,category,complete,cancelBy,canCancel,
     week:d?weekNum(d):"",year:d?d.getFullYear():"",taxYear:d?taxYear(d):""};
 }
+/* The Incomplete worklist, in ONE place - the list itself, the count the attention feed raises
+   and the "anything left?" test after a catch-up all read this, so they can never disagree about
+   what is outstanding. `ended`, not `past`: a session logged this morning with nothing answered
+   is outstanding this afternoon, not tomorrow. */
+function incompleteRows(der){return (der||derivedSessions()).filter(x=>x.d.ended&&!x.d.complete);}
 /* Every session paired with what derive() says about it - the shape most screens start from.
    Nothing is cached: derive() reads today's date and the client and room records, so a fresh
    pass per render is what keeps a screen honest after a rate change. */
@@ -2884,9 +2902,13 @@ function gameGoals(){ const der=derivedSessions();
   const payPast=past.filter(x=>(x.d.rate||0)>0);
   const paid=payPast.filter(x=>x.d.clientPaid).length, over=payPast.length-paid;
   const paidPct=payPast.length?Math.round(paid/payPast.length*100):100;
-  const complete=past.filter(x=>x.d.complete).length;
-  const compPct=past.length?Math.round(complete/past.length*100):100;
-  return {paidPct,paid,over,compPct,complete,incomplete:past.length-complete,totalPast:past.length}; }
+  /* Money is counted on `past` (a payment is not late until the day is out) and the write-up ring
+     on `ended`, because the ring's "Complete sessions ›" link lands on the Incomplete worklist and
+     a ring that disagreed with the list it points at is worse than no ring. */
+  const done=der.filter(x=>x.d.ended);
+  const complete=done.filter(x=>x.d.complete).length;
+  const compPct=done.length?Math.round(complete/done.length*100):100;
+  return {paidPct,paid,over,compPct,complete,incomplete:done.length-complete,totalPast:past.length}; }
 
 /* update records BEFORE commit so they persist; returns flags */
 /* No "biggest catch-up" record: rewarding the size of a backlog cleared rewards letting one
@@ -3396,7 +3418,7 @@ VIEWS.home=function(){
   const st=computeStreak(), goals=gameGoals(), rec=ensureGame().records;
   const goalsCard=!feat("gamify")?'':'<div class="card"><h2>Goals</h2><div class="rings">'+
     ringSVG(goals.paidPct,goals.over>0?(goals.over+" payment"+(goals.over===1?"":"s")+" overdue"):"All payments in ✓")+
-    ringSVG(goals.compPct,goals.incomplete>0?(goals.incomplete+" session"+(goals.incomplete===1?"":"s")+" to complete"):"Every session written up ✓")+
+    ringSVG(goals.compPct,goals.incomplete>0?(goals.incomplete+" session"+(goals.incomplete===1?"":"s")+" to complete"):"Every session up to date ✓")+
     '</div>'+((goals.over>0||goals.incomplete>0)?'<p class="small muted center" style="margin:10px 0 0">'+(goals.over>0?'<span class="taxlink" id="goPay">Collect payments ›</span>':"")+(goals.over>0&&goals.incomplete>0?' &nbsp;·&nbsp; ':"")+(goals.incomplete>0?'<span class="taxlink" id="goInc">Complete sessions ›</span>':"")+'</p>':"")+'</div>';
   const mk=(emoji,val,lab,locked)=>'<div class="bdg'+(locked?" locked":"")+'"><span class="be">'+emoji+'</span><div><div class="bv">'+val+'</div><div class="bl">'+lab+'</div></div></div>';
   const cCounts=clientSessionCounts();
@@ -3920,14 +3942,35 @@ function payChip(s,d){return d.clientPaid?'<span class="chip y">paid '+fmtDM(s.p
    written still reads correctly and `derive().complete` is untouched. This is the single place
    that decides what counts as written up; the form now only ever writes "Y" or "". */
 function notesDone(s){return !!(s&&s.notes&&String(s.notes).trim());}
-/* Whether "Did it go ahead?" has actually been looked at, alongside notes, for `derive().complete`
-   (Sep 2026). This is NOT the same question as attendVal(s) - a blank cancelKind already means
-   "attended" and always has, so testing that would make the requirement vacuous. `attendConfirmed`
-   is a separate flag the session form stamps true on every save where the field was on screen
-   (i.e. the date isn't in the future - see paintCancel), so it is genuinely absent until someone
-   has saved the session with a chance to answer it. Pre-existing complete sessions are grandfathered
-   in by a one-time backfill in normalize() so upgrading never retroactively un-completes them. */
+/* Whether "Did it go ahead?" has actually been ANSWERED, alongside notes, for `derive().complete`.
+   It is a flag of its own and deliberately not a test of attendVal(s): the answer and the act of
+   answering are two different facts, because "attended" is a blank `cancelKind` and so is a
+   session nobody has looked at yet.
+   Until Sep 2026 the form stamped it true on every save where the field happened to be on screen,
+   which made it a side-effect of saving rather than anybody's answer. The control is now
+   permanently visible and genuinely optional, so this is written straight from it - any of the
+   three answers sets it, the blank "not recorded yet" clears it. Pre-existing complete sessions
+   are grandfathered in by a one-time backfill in normalize(), so upgrading never retroactively
+   un-completes them. */
 function attendConfirmed(s){return !!(s&&s.attendConfirmed);}
+/* When a session finished, to the minute - its start plus the practice's session length. Null
+   when there is no time on the record, which is a real shape: an imported row from a sheet with
+   no Time column has a date and nothing else. */
+function sessionEndsAt(s,d){
+  d=d||parseD(s&&s.date); if(!d)return null;
+  const tm=String((s&&s.time)||"").match(/^(\d{1,2}):(\d{2})/); if(!tm)return null;
+  const dt=new Date(d); dt.setHours(+tm[1]||0,+tm[2]||0,0,0);
+  return new Date(dt.getTime()+sessionMins()*60000);
+}
+/* Has this session actually happened yet? The Incomplete worklist's clock - see derive().ended.
+   A session with no time recorded has no minute to test, so it falls back to the whole-day test
+   `past` uses, which is the only honest reading of a date with nothing else on it. */
+function sessionEnded(s,d,t){
+  const e=sessionEndsAt(s,d);
+  if(e)return e<=new Date();
+  d=d||parseD(s&&s.date);
+  return d?d<(t||today()):false;
+}
 /* What is missing from the RECORD of a session. Room fees were on this list until Sep 2026 and
    should not have been: an unsettled room fee is a bill outstanding, not an incomplete session,
    and it is raised, listed and ticked off in Money › Costs & income like every other bill. */
@@ -3974,8 +4017,18 @@ function cancelNoticeHrs(s){
    policy** -- the charge is stamped when the session is logged, so editing the policy later
    cannot reach back and rewrite what a client was already billed. A session with nothing stamped
    is a full-fee session, which is what every session was before v5. */
-/* the session form's three-way control: "" attended | "late" | "dna" */
-function attendVal(s){return (s&&s.cancelKind)?s.cancelKind:(isLateCancel(s)?"late":"");}
+/* What the session form's "Did it go ahead?" control shows. FOUR values, and the blank one is the
+   point: "" is *not recorded yet*, which is a different fact from "attended" and is why the two
+   cannot share a slot. A recorded answer lives in `cancelKind` ("late" / "dna") or, for an
+   attended session, in `attendConfirmed` alone - there is deliberately no `cancelKind:"attended"`,
+   because every reader downstream treats a truthy cancelKind as a missed session. */
+function attendVal(s){
+  if(s&&s.cancelKind)return s.cancelKind;
+  if(isLateCancel(s))return "late";
+  return attendConfirmed(s)?"attended":"";
+}
+/* The three values that count as an answer. Anything else is the blank. */
+function attendAnswered(v){return v==="attended"||v==="late"||v==="dna";}
 function cancelPctFor(s){
   if(!s)return 100;
   const v=s.cancelCharge;
@@ -4903,8 +4956,14 @@ function validateSession(m){
       else if(n>p+1)warnings.push({code:"seqgap",msg:"#"+n+" skips ahead of the prior session (#"+p+" on "+fmtDMY(prior.date)+")"});}
     else if(n>0&&next){const nx=+next.num||0;
       if(nx&&n>=nx)warnings.push({code:"seqlow",msg:"#"+n+" is not below the next session (#"+nx+" on "+fmtDMY(next.date)+")"});}}
-  /* WARN: late cancellation on a future session */
-  if(isCancelled(m)&&md&&md>t)warnings.push({code:"lcfuture",msg:(isDNA(m)?"DNA":"Late cancellation")+" recorded on a future session"});
+  /* WARN: a DNA on a session that has not happened.
+     A LATE CANCELLATION dated ahead is no longer flagged, and that is the point of the change:
+     a client ringing on Monday to call off Thursday is the commonest thing "Did it go ahead?"
+     has to record, and since Sep 2026 the control is on screen for a future session precisely so
+     it can be. Warning about it would make the intended flow ask for a second confirmation.
+     A DNA is still a contradiction - nobody can have failed to turn up to a session that has not
+     happened yet - so it keeps its warning. */
+  if(isDNA(m)&&md&&md>t)warnings.push({code:"dnafuture",msg:"“Did not attend” recorded on a session that hasn’t happened yet"});
   return {errors,warnings};
 }
 /* practice-wide integrity checks (beyond per-session validation) */
@@ -4943,7 +5002,7 @@ VIEWS.sessions=function(){
         renderUnpaid(list,rows,renderRows);return;
       }
       if(sessFilter.seg==="incomplete"){
-        rows=rows.filter(x=>x.d.past&&!x.d.complete).sort((a,b)=>parseD(b.s.date)-parseD(a.s.date));
+        rows=incompleteRows(rows).sort((a,b)=>parseD(b.s.date)-parseD(a.s.date));
         renderIncomplete(list,rows,renderRows);return;
       }
       if(sessFilter.seg==="upcoming")rows=rows.filter(x=>parseD(x.s.date)>=t).sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
@@ -5028,55 +5087,125 @@ VIEWS.sessions=function(){
       refresh();};
   }
   function renderIncomplete(container,rows,refresh){
-    const td=isoD(today());
-    /* Notes only. Room fees were ticked off here as well until Sep 2026, which mixed a clinical
-       worklist ("which write-ups do I still owe?") with a bookkeeping one ("which bills have I
-       paid?") - two jobs on two different clocks. Room fees are raised by the session and settled
-       in Money › Costs & income, beside the rent and everything else the practice pays for. */
-    if(!rows.length){container.innerHTML='<div class="center" style="padding:30px 10px"><div style="font-size:48px">🌟</div><p class="muted" style="margin-top:6px">Every past session is written up. Spotless!</p></div>';return}
+    /* Two questions, both about the session itself: is it written up, and did it go ahead. Room
+       fees were ticked off here as well until Sep 2026, which mixed a clinical worklist ("which
+       write-ups do I still owe?") with a bookkeeping one ("which bills have I paid?") - two jobs
+       on two different clocks. Room fees are raised by the session and settled in Money › Costs &
+       income, beside the rent and everything else the practice pays for.
+       Attendance earned controls of its own in Sep 2026, when a blank "did it go ahead?" became a
+       real unanswered state rather than a silent "attended". Before that, ticking Notes done here
+       also stamped the attendance flag - which was defensible while blank MEANT attended and is
+       not any more: it would be the app answering a question on the therapist's behalf, in the one
+       place she is going through her sessions precisely to answer them. */
+    if(!rows.length){container.innerHTML='<div class="center" style="padding:30px 10px"><div style="font-size:48px">🌟</div><p class="muted" style="margin-top:6px">Every session that has happened is written up and accounted for. Spotless!</p></div>';return}
     rows.sort((a,b)=>parseD(b.s.date)-parseD(a.s.date));
-    container.innerHTML='<div class="bulkbar"><div class="hint" style="margin-top:4px">Sessions you haven’t marked as written up - tick the ones that are done, then Save.</div>'+
-      '<div class="bbtns"><button class="btn sm sec" id="allNotes">✓ All notes done</button></div>'+
+    const miss={};rows.forEach(x=>{miss[x.s._id]={notes:!notesDone(x.s),attend:!attendConfirmed(x.s)};});
+    const anyNotes=rows.some(x=>miss[x.s._id].notes), anyAtt=rows.some(x=>miss[x.s._id].attend);
+    /* What a missed session would be charged if it were answered here. The notice is unrecorded
+       on a session nobody has answered for, so `cancelNoticeHrs` is null and the policy falls back
+       to the full fee - the same conservative reading, from the same function, that the session
+       form's own box opens on. It is spelled out on the row rather than applied quietly: this is
+       the one control on the screen that moves money, and a fee written off in a bulk sweep with
+       nothing on screen to say so is exactly the silent loss the cancellation rules exist to
+       prevent. The notice date and any other figure stay in the session form. */
+    const chargeFor=(x,kind)=>{
+      const s=x.s, pct=(s.cancelCharge==null)?cancelPolicyPct(kind,cancelNoticeHrs(s)):cancelPctFor(s);
+      return {pct:pct, amt:Math.round((x.d.fullRate||0)*pct)/100};
+    };
+    const ATT=[["attended","Attended"],["late","Late cancel"],["dna","DNA"]];
+    container.innerHTML='<div class="bulkbar"><div class="hint" style="margin-top:4px">Sessions still waiting on something - answer what you can, then Save.</div>'+
+      '<div class="bbtns">'+(anyNotes?'<button class="btn sm sec" id="allNotes">✓ All notes done</button>':'')+
+        (anyAtt?'<button class="btn sm sec" id="allAtt">✓ All attended</button>':'')+'</div>'+
       '<button class="btn full savebig" id="saveInc">Save (0)</button></div><div id="irows"></div>'+
+      (anyAtt?'<p class="small muted" style="margin:10px 2px 0">A late cancellation or DNA is charged at your policy’s default. To record the notice you were given, or a different charge, tap the client’s name to open the session.</p>':'')+
       '<p class="small muted" style="margin:10px 2px 0">Room fees are settled separately, under <span class="taxlink" id="incRoomGo">Money › Room fees ›</span></p>';
     const irw=container.querySelector("#irows");
     const stage={};
-    irw.innerHTML=rows.map(x=>{const s=x.s,d=x.d;
-      stage[s._id]={notes:false};
-      return '<div class="irow" data-id="'+s._id+'"><div class="itop"><div><span class="ittl">'+esc(s.client)+'</span> <span class="isub">'+fmtDshort(s.date)+' · #'+esc(s.num)+'</span></div><div class="li-right small muted">'+gbp(d.rate)+'</div></div>'+
-        '<div class="ctrls"><button class="tgl" data-k="notes" data-id="'+s._id+'"><span class="tbox"></span>Notes done</button></div></div>';
+    irw.innerHTML=rows.map(x=>{const s=x.s,d=x.d,mi=miss[s._id];
+      stage[s._id]={notes:false,att:""};
+      /* Only the reasons this session is actually missing get a control. A tick beside something
+         already done is a tick that can only be turned off, on a screen whose whole job is
+         turning things on. */
+      return '<div class="irow" data-id="'+s._id+'"><div class="itop clk" data-open="'+s._id+'"><div><span class="ittl">'+esc(s.client)+'</span> <span class="isub">'+fmtDshort(s.date)+' · '+esc(s.time||"")+' · #'+esc(s.num)+cancelTag(s,d)+'</span></div><div class="li-right small muted">'+gbp(d.rate)+'</div></div>'+
+        '<div class="ctrls">'+
+          (mi.notes?'<button class="tgl" data-k="notes" data-id="'+s._id+'"><span class="tbox"></span>Notes done</button>':'')+
+          (mi.attend?ATT.map(a=>'<button class="tgl'+(a[0]==="attended"?"":" miss")+'" data-k="att" data-v="'+a[0]+'" data-id="'+s._id+'"><span class="tbox"></span>'+a[1]+'</button>').join(""):'')+
+        '</div>'+
+        (mi.attend?'<div class="attnote" data-note="'+s._id+'"></div>':'')+
+        '</div>';
     }).join("");
     const rg=container.querySelector("#incRoomGo");
     if(rg)rg.onclick=()=>goRoomCosts();
+    /* Everything a missed session needs beyond its kind - the date it was called off, a charge
+       other than the policy's, the fee it works out to - lives in the session form, and the row
+       opens it. The three chips here answer the question; they are not a second copy of that
+       screen. */
+    irw.querySelectorAll(".itop[data-open]").forEach(tp=>tp.onclick=()=>sessionForm(S.sessions.find(z=>z._id===tp.dataset.open)));
     const sbtn=container.querySelector("#saveInc");
-    const count=()=>Object.keys(stage).filter(id=>stage[id].notes).length;
-    const upd=()=>{const n=count();sbtn.textContent="Save ("+n+")";sbtn.classList.toggle("ready",n>0);};
+    const staged=()=>Object.keys(stage).filter(id=>stage[id].notes||stage[id].att);
+    const upd=()=>{const n=staged().length;sbtn.textContent="Save ("+n+")";sbtn.classList.toggle("ready",n>0);};
+    const rowOf=id=>rows.find(x=>x.s._id===id);
+    function paintNote(id){
+      const n=irw.querySelector('.attnote[data-note="'+id+'"]'); if(!n)return;
+      const k=stage[id].att, x=rowOf(id);
+      if(!x||k!=="late"&&k!=="dna"){n.textContent="";n.classList.remove("show");return;}
+      const c=chargeFor(x,k);
+      n.textContent=(k==="dna"?"Did not attend":"Late cancellation")+" · charged "+c.pct+"% of "+
+        gbp(x.d.fullRate||0)+" = "+gbp(c.amt)+". Open the session to change it.";
+      n.classList.add("show");
+    }
     function setTgl(btn,on){const id=btn.dataset.id,k=btn.dataset.k;if(stage[id][k]===on)return;stage[id][k]=on;
       btn.classList.toggle("on",on);btn.classList.remove("pop");void btn.offsetWidth;if(on)btn.classList.add("pop");
       Sfx.pop();upd();}
-    irw.querySelectorAll(".tgl").forEach(b=>b.onclick=()=>setTgl(b,!stage[b.dataset.id][b.dataset.k]));
-    container.querySelector("#allNotes").onclick=()=>irw.querySelectorAll('.tgl[data-k="notes"]').forEach(b=>setTgl(b,true));
+    /* The three attendance chips are one answer, not three ticks: choosing one clears the others,
+       and choosing the one already chosen puts the row back to unanswered. */
+    function setAtt(btn){
+      const id=btn.dataset.id, v=btn.dataset.v, now=(stage[id].att===v)?"":v;
+      stage[id].att=now;
+      irw.querySelectorAll('.tgl[data-k="att"][data-id="'+id+'"]').forEach(b=>{
+        const on=(b.dataset.v===now);
+        b.classList.toggle("on",on);b.classList.remove("pop");void b.offsetWidth;if(on)b.classList.add("pop");});
+      Sfx.pop();paintNote(id);upd();
+    }
+    irw.querySelectorAll('.tgl[data-k="notes"]').forEach(b=>b.onclick=()=>setTgl(b,!stage[b.dataset.id].notes));
+    irw.querySelectorAll('.tgl[data-k="att"]').forEach(b=>b.onclick=()=>setAtt(b));
+    const nb=container.querySelector("#allNotes");
+    if(nb)nb.onclick=()=>irw.querySelectorAll('.tgl[data-k="notes"]').forEach(t=>setTgl(t,true));
+    /* Bulk is "all attended" and deliberately nothing else. Sweeping a whole worklist into DNA is
+       not a thing anybody means to do, and it would write off a fee on every row at once. */
+    const ab=container.querySelector("#allAtt");
+    if(ab)ab.onclick=()=>irw.querySelectorAll('.tgl[data-k="att"][data-v="attended"]').forEach(t=>{if(stage[t.dataset.id].att!=="attended")setAtt(t);});
     sbtn.onclick=async()=>{
-      const ids=Object.keys(stage).filter(id=>stage[id].notes);
-      if(!ids.length){toast("Tick something first");Sfx.error();return}
-      let cleared=0;
+      const ids=staged();
+      if(!ids.length){toast("Answer something first");Sfx.error();return}
+      let cleared=0,notesN=0,attN=0;
       ids.forEach(id=>{const ss=S.sessions.find(z=>z._id===id);if(!ss)return;
         const wasComplete=derive(ss).complete;
-        ss.notes="Y";
-        /* This worklist is notes-only by design, but `complete` now also needs attendConfirmed
-           (see attendConfirmed()). A row that reaches here is already past, so whatever it
-           carries for attendance - a cancellation kind already on record, or nothing, which reads
-           as attended - is the real answer; ticking a session done here is the same act as saving
-           it from the session form with that answer left exactly as it stands. Without this a
-           session could be ticked here every time and never leave the list. */
-        ss.attendConfirmed=true;
+        if(stage[id].notes){ss.notes="Y";notesN++;}
+        const k=stage[id].att;
+        if(k){
+          attN++;
+          ss.attendConfirmed=true;
+          if(k==="attended"){
+            /* The same clearing the session form does when "Yes - attended" is chosen: an
+               attended session carries no cancellation of any kind. */
+            ss.cancelKind=null;ss.lateCancel=false;ss.cancelledAt="";ss.cancelCharge=null;
+          }else{
+            ss.cancelKind=k;ss.lateCancel=(k==="late");
+            /* Only ever STAMPS a charge, never overwrites one. A figure already on the session was
+               put there deliberately - by the form, by the importer, or by an earlier sweep - and
+               the policy is what to charge from now on, not what was already agreed. */
+            if(ss.cancelCharge==null)ss.cancelCharge=cancelPolicyPct(k,cancelNoticeHrs(ss));
+          }
+        }
         if(!wasComplete&&derive(ss).complete)cleared++;});
       const batch=ids.length;
       const f=gameNoteBatch({cleared:cleared});
-      await commit("Catch-up: "+batch+" session"+(batch===1?"":"s")+" written up");renderTabs();
-      const remaining=S.sessions.filter(s=>{const d=derive(s);return d.past&&!d.complete;}).length;
+      const what=(notesN&&attN)?"updated":notesN?"written up":"answered";
+      await commit("Catch-up: "+batch+" session"+(batch===1?"":"s")+" "+what);renderTabs();
+      const remaining=incompleteRows().length;
       gameShow({batch:batch,completed:cleared>0,toast:"Updated "+batch+" session"+(batch===1?"":"s")+" 🎉",
-        allClear:remaining===0,allClearEmoji:"🌟",allClearTitle:"Everything's written up!",allClearSub:"No past session is waiting on notes.",
+        allClear:remaining===0,allClearEmoji:"🌟",allClearTitle:"Everything's up to date!",allClearSub:"No session that has happened is waiting on you.",
         bigEffort:cleared>=5,bigEffortSub:cleared+" sessions completed in one sweep"},f);
       refresh();};
   }
@@ -11981,10 +12110,10 @@ function sessionForm(s,o){
      <label>Admin comment <span class="muted small">(optional)</span> ${infoDot("admin-comment","About admin comments")}</label>
      <textarea id="f_admin" rows="2" placeholder="e.g. “invoice goes to her employer”, “moved from Tuesday”">${esc(m.adminNote||"")}</textarea>
      <div id="f_attendWrap">
-       <label style="margin-top:14px">Did it go ahead?</label>
-       <select id="f_attend">${opts2([["","Yes - attended"],["late","Late cancellation"],["dna","Did not attend (DNA)"]],attendVal(m))}</select>
+       <label style="margin-top:14px">Did it go ahead? <span class="muted small">(optional)</span></label>
+       <select id="f_attend">${opts2([["","– not recorded yet –"],["attended","Yes - attended"],["late","Late cancellation"],["dna","Did not attend (DNA)"]],attendVal(m))}</select>
+       <p class="small muted" id="f_attendNote"></p>
      </div>
-     <p class="small muted" id="f_attendFuture" style="display:none;margin-top:14px">You’ll be able to record whether this session went ahead once its date has arrived.</p>
      <div id="f_cxWrap" style="display:none">
        <div class="field2">
          <div><label>Cancelled on <span class="muted small">(optional)</span></label><input type="date" id="f_cxOn" value="${esc(m.cancelledAt||"")}"></div>
@@ -12012,20 +12141,21 @@ function sessionForm(s,o){
       /* `lateCancel` stays the flag it always was, so older builds and the notes convention still
          read correctly; `cancelKind` carries the finer distinction and `cancelCharge` the money. */
       const kind=g("#f_attend").value;
-      m.cancelKind=kind||null;
+      const missed=(kind==="late"||kind==="dna");
+      m.cancelKind=missed?kind:null;
       m.lateCancel=(kind==="late");
-      if(!kind){m.cancelledAt="";m.cancelCharge=null;}
+      if(!missed){m.cancelledAt="";m.cancelCharge=null;}
       else{
         m.cancelledAt=g("#f_cxOn").value||"";
         const raw=g("#f_cxPct").value.trim();
         m.cancelCharge=raw===""?cancelPolicyPct(kind,cancelNoticeHrs(m)):Math.max(0,Math.min(100,+raw||0));
       }
-      /* "Did it go ahead?" is now required for `derive().complete`, alongside notes - see
-         attendConfirmed(). It is only ever confirmed here, by actually saving the form while the
-         field was on screen (i.e. the date isn't in the future - same test as paintCancel's). A
-         session saved while still future-dated has not answered the question yet, so it stays
-         unconfirmed until it is saved again once its date has arrived. */
-      m.attendConfirmed=(m.date<=isoD(today()));};
+      /* "Did it go ahead?" is what `derive().complete` needs alongside notes - see
+         attendConfirmed(). The flag is now written straight from the control, so leaving it on
+         the blank "not recorded yet" saves a session that is genuinely unanswered and stays on
+         the Incomplete worklist until somebody answers it. It used to be stamped true by the act
+         of saving a past-dated session, which meant the app recorded an answer nobody gave. */
+      m.attendConfirmed=attendAnswered(kind);};
     g("#f_client").onchange=()=>{const code=g("#f_client").value; sync(); m.client=code;
       if(isNew&&code){const sg=suggestFor(code);Object.assign(m,{num:sg.num,time:sg.time,mode:sg.mode,location:sg.location,room:sg.room});
         if(!lockDate)m.date=sg.date;}
@@ -12079,22 +12209,24 @@ function sessionForm(s,o){
        while the date was unknown would silently stick even once the notice was known. Typing in
        the box clears the mark and the number is then left alone. */
     const paintCancel=()=>{
-      /* "Did it go ahead?" asks about something that has already happened - a session dated
-         tomorrow can't have gone ahead OR been cancelled yet, so the question doesn't make sense
-         to ask and is hidden until the date arrives. Blank (attended) is what a future session
-         already reads as, so nothing needs resetting on save - just don't let a future date carry
-         a cancellation kind forward from an earlier, later-moved date. */
-      const isFuture=g("#f_date").value>isoD(today());
-      g("#f_attendWrap").style.display=isFuture?"none":"";
-      g("#f_attendFuture").style.display=isFuture?"":"none";
-      if(isFuture){
-        if(g("#f_attend").value)g("#f_attend").value="";
-        g("#f_cxWrap").style.display="none";
+      /* The control is ALWAYS on screen, including for a session still in the future. It used to
+         be hidden until the date arrived, on the reasoning that a session dated tomorrow cannot
+         have gone ahead yet - but a client ringing on Monday to call off Thursday is the single
+         commonest thing this field has to record, and there was nowhere to put it. Leaving it
+         blank is a real answer-shaped hole rather than a silent "attended", so nothing is being
+         asserted early either; the note underneath says which of the two a blank is today. */
+      const kind=g("#f_attend").value;
+      const missed=(kind==="late"||kind==="dna");
+      g("#f_cxWrap").style.display=missed?"":"none";
+      const an=g("#f_attendNote");
+      if(!missed){
+        an.textContent = kind ? ""
+          : (g("#f_date").value>isoD(today())
+             ? "You can leave this until the session has happened - nothing is waiting on it yet."
+             : "Left blank, so this session sits on Sessions › Incomplete until you answer it.");
         refreshHint();return;
       }
-      const kind=g("#f_attend").value;
-      g("#f_cxWrap").style.display=kind?"":"none";
-      if(!kind){refreshHint();return;}
+      an.textContent="";
       const pctIn=g("#f_cxPct");
       const probe={date:g("#f_date").value,time:g("#f_time").value,cancelledAt:g("#f_cxOn").value||""};
       const hrs=cancelNoticeHrs(probe);
@@ -12138,7 +12270,7 @@ function sessionForm(s,o){
       const prevComplete=exists?derive(exists).complete:false;
       if(exists){Object.assign(exists,m);await commit("Edited session: "+m.client+" "+m.date);}
       else{S.sessions.push(m);await commit("Added session: "+m.client+" "+m.date);}
-      const dNow=derive(m);const justCompleted=dNow.past&&dNow.complete&&!prevComplete;
+      const dNow=derive(m);const justCompleted=dNow.ended&&dNow.complete&&!prevComplete;
       let milestone=null;
       if(!exists&&!isCancelled(m)){const cnt=S.sessions.filter(x=>(x.client||"").toLowerCase()===(m.client||"").toLowerCase()&&!isCancelled(x)).length;
         milestone=[6,12,20,30,50,75,100].find(T=>cnt-1<T&&cnt>=T)||null;}
@@ -12462,9 +12594,15 @@ function attentionItems(){
     const oldest=od.reduce((m,x)=>{const d=parseD(x.s.date);return(!m||d<m)?d:m;},null);
     items.push({cls:"bad",e:gi("money"),msg:"<b>"+od.length+" session"+(od.length===1?"":"s")+" unpaid</b> · "+gbp(amt)+" outstanding",
       sub:oldest?("oldest "+fmtDM(oldest)):"",btn:"Collect",act:()=>goSessions("unpaid")});}
-  const inc=der.filter(x=>x.d.past&&!x.d.complete);
-  if(inc.length)items.push({cls:"warn",e:gi("notes"),msg:"<b>"+inc.length+" session"+(inc.length===1?"":"s")+" incomplete</b>",
-    sub:"notes not written up yet",btn:"Catch up",act:()=>goSessions("incomplete")});
+  const inc=incompleteRows(der);
+  if(inc.length){
+    /* Name what is actually missing. "Notes not written up" was the only reason this row could
+       have until attendance joined it, and a practice whose write-ups are all done being told
+       its notes are outstanding is a prompt nobody can act on. */
+    const noNotes=inc.filter(x=>!notesDone(x.s)).length, noAtt=inc.filter(x=>!attendConfirmed(x.s)).length;
+    const sub=(noNotes&&noAtt)?"notes and attendance outstanding":noNotes?"notes not written up yet":"attendance not recorded yet";
+    items.push({cls:"warn",e:gi("notes"),msg:"<b>"+inc.length+" session"+(inc.length===1?"":"s")+" incomplete</b>",
+      sub:sub,btn:"Catch up",act:()=>goSessions("incomplete")});}
   const rd=der.filter(x=>x.d.roomDue==="Y");
   if(rd.length){const amt=rd.reduce((a,x)=>a+(x.d.roomRate||0),0);
     items.push({cls:"warn",e:gi("rooms"),msg:"<b>Room fees due</b> · "+gbp(amt)+" across "+rd.length+" session"+(rd.length===1?"":"s"),
@@ -14842,7 +14980,7 @@ function startSetup(opts){
    button when a flow supplies one, and nothing else dismisses the overlay (no backdrop click, no
    Escape), so the Continue/Got it button is the only way past it.
    Bump WHATS_NEW and rewrite whatsNewSteps() for the next release. */
-const WHATS_NEW=4;
+const WHATS_NEW=5;
 function whatsNewSeen(){try{return +localStorage.getItem("tt_whatsnew")||0;}catch(e){return 0;}}
 function markWhatsNewSeen(){try{localStorage.setItem("tt_whatsnew",String(WHATS_NEW));}catch(e){}}
 function whatsNewDue(){return whatsNewSeen()<WHATS_NEW;}
@@ -14864,6 +15002,11 @@ function whatsNewSteps(){
     html:ovPoints([
       [gi("notes"),"A tick, and an admin comment","The notes box is now a tick for whether your write-up is done. Practical reminders go in the admin comment, which shows under the session in the list."],
       [gi("receipts"),"Invoices, receipts and chasers","From a client’s profile: a statement, a receipt for what was paid, or an invoice for what is owed - plus a payment reminder to copy into an email. <b>Sessions › Unpaid</b> has <b>Chase…</b> too."]
+    ])});
+  st.push({emoji:gi("done"), h:"Did it go ahead?", sub:"On every session now, and you can leave it for later.",
+    html:ovPoints([
+      [gi("calendar"),"Cancel a session before the day","The question used to be hidden until the date arrived, so there was nowhere to record a client calling off next Thursday. It is on every session now, whenever it falls."],
+      [gi("done"),"Blank is allowed","Leave it if you are in a hurry. Nothing is assumed - a session you have not answered for simply waits on <b>Sessions › Incomplete</b> once its time has passed, alongside the write-ups."]
     ])});
   st.push({emoji:gi("cpd"), h:"CPD, all of it", sub:"Practice › Supervision › CPD.",
     html:ovPoints([
@@ -15261,7 +15404,7 @@ function findSheet(){
 const APP_MAP=[
   {tab:"home",rows:[[null,"Home","your four figures, what needs attention, what is coming up, and anything you have pinned"]]},
   {tab:"sessions",rows:[["upcoming","Upcoming","what is booked"],["unpaid","Unpaid","payments to chase"],
-    ["incomplete","Incomplete","write-ups still to tick off"],["all","All","everything, newest first - and the calendar"]]},
+    ["incomplete","Incomplete","write-ups and attendance still to tick off"],["all","All","everything, newest first - and the calendar"]]},
   {tab:"practice",rows:[["clients","Clients","codes, status, fees and each client’s profile"],
     ["rooms","Rooms","what each costs you and how it is charged"],
     ["supervision","Supervision","the log, peer supervision, CPD hours and Form 3A",()=>feat("supervision")],
@@ -15284,7 +15427,7 @@ const APP_JOBS=[
   ["Every week",[
     ["Log each session as it happens",()=>sessionForm(null)],
     ["Tick off what has been paid",()=>goSessions("unpaid")],
-    ["Mark your write-ups done",()=>goSessions("incomplete")],
+    ["Mark write-ups and attendance done",()=>goSessions("incomplete")],
     ["Export a backup",()=>go("settings",{openGroup:"data"})]]],
   ["Every month",[
     ["Settle room fees and rent",()=>goRoomCosts(),()=>feat("money")&&(anyPerUseRoom()||S.rooms.some(r=>roomBilling(r)==="monthly"))],
