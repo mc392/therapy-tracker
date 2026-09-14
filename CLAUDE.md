@@ -371,20 +371,33 @@ and the staged plan this implements: `docs/practitioner-models-2026-09.md`.
   arrangement, not something a setup screen bulk-edits. `REVEAL_STEPS`' tax step also now requires
   somebody to be paying.
 
-**The organisation that pays.** `settings.payers[]` is a small list managed on **Practice › Rooms
-& payers** (the closest existing thing: a named outside party with a rate and a payment rhythm,
-money running the other way). A client names one by **id**, so renaming an organisation never
-orphans a caseload.
-- **The segment was renamed from "Rooms" when this landed, and the KEY was not.** `seg:"rooms"` is
-  in deep links, `TAB_ALIAS` and a dozen `go()` calls and must never move; only the label did.
-  "Set-up" was considered and rejected - the app already has a setup *wizard* and a Settings ›
-  *Setup & help* group, and three unrelated "setup"s is the confusion the copy rule about screen
-  labels exists to prevent. "Payer" is the app's own word by now: the client record asks *Who pays
-  for this work*.
-- **The card renders with nothing in it, deliberately.** It was first written gated on an
-  organisation already existing, which is a chicken-and-egg - setup and the client form both send
-  the reader here to add their *first* one, and the card that does it was the one thing not on the
-  screen. A set-up surface that appears only once you have used it is not a set-up surface.
+**The organisation that pays.** `settings.payers[]` is a small list, and it lives on **Practice ›
+Clients**, on that screen's own inner strip - *Clients* / *Clients' insurers*. A client names one
+by **id**, so renaming an organisation never orphans a caseload.
+- **It was beside Rooms first, and that was the wrong grouping.** The reasoning was "the external
+  parties a practice deals with" - a room is a named outside party with a rate and a rhythm, an EAP
+  is the same shape with the money running the other way. True, and beside the point: who pays for
+  a client is a fact about the **client**, it is set on the client's own record, and Clients is the
+  screen somebody is already on when they need it. Rooms is rooms again, under that name.
+- **`renderClients` is a PANEL with a nested strip**, the same shape as `supervisionPanel()`.
+  `clientsTab` is module-level for the reason `supTab` and `pracTab` are: saving a client
+  re-renders Practice, and a choice held in a closure vanishes underneath the reader.
+  **It is deliberately not in `SWIPE_BARS`** - one bar per screen answers the gesture and it is the
+  screen's own, exactly as for Supervision's four. It is also not in `APP_MAP` (which lists tabs and
+  segments, not nested strips), so `check-guidance.mjs` walks it **by name** alongside Supervision
+  and Trends, or the `who-pays` dot inside it goes unchecked.
+- **`drawOrgs(host)` takes its host** rather than reaching for a fixed id, which is what let the
+  card move screens without the card caring. **The card renders with nothing in it, deliberately**:
+  it was first gated on an organisation already existing, which is a chicken-and-egg - setup and
+  the client form both send the reader here to add their *first* one, and the card that does it was
+  the one thing not on the screen. A set-up surface that appears only once you have used it is not
+  a set-up surface.
+- **Every "add one first under…" pointer goes through `goPayers()`**, and is a LINK, not a sentence
+  naming a screen. A pointer that cannot be followed is worse than none - the reader has to hold
+  the path in their head and go looking, and when the screen moves the sentence silently becomes a
+  lie (which is exactly what happened to "under Practice › Rooms"). `goPayers()` sets `clientsTab`
+  **before** `go()`, because `renderClients` reads it as it draws. From the client form the link
+  closes the sheet first, and the wording never implies the edit is kept.
 - **`clientPayerOrg(c)` refuses to answer for a client whose payer is not `org`**, so a stale
   `payerId` left behind by a change of mind can never put an invoice back in front of somebody.
   Deleting an organisation unlinks its clients back to `client` rather than leaving a dead id.
@@ -652,7 +665,7 @@ Six collapsible `<details class="sgrp">` groups (**business / app** / data / rec
 
 ## Tabs (restructured Aug 2026)
 **Home · Sessions · Practice · Money · Tax.** `TAB_ALIAS` maps the old names (`clients`, `supervision`, `income`, `raw`) onto the new tab **and a segment**, so old deep links land somewhere meaningful; `go(tab,{seg})` sets it. A plain tab tap stays on whatever segment the reader last used.
-- **Practice** - Clients / **Rooms & payers** / Supervision / Business analytics / **Reports, last** (Sep 2026: the first three are places you go to *do* something, the last two are where you go to read and to produce something, so they stay together at the end rather than splitting the doing screens). The last two carry the `premium` segment class and put `.bizA` on the panel - they are the parts of Practice this practice pays extra for. `supervisionPanel()` and `rawPanel()` are panels, not views: they are mounted whole so their inner sub-tabs keep working. Supervision's own sub-tabs are Log / Peer / **CPD** / Insights.
+- **Practice** - Clients / Rooms / Supervision / Business analytics / **Reports, last** (Sep 2026: the first three are places you go to *do* something, the last two are where you go to read and to produce something, so they stay together at the end rather than splitting the doing screens). The last two carry the `premium` segment class and put `.bizA` on the panel - they are the parts of Practice this practice pays extra for. `supervisionPanel()` and `rawPanel()` are panels, not views: they are mounted whole so their inner sub-tabs keep working. Supervision's own sub-tabs are Log / Peer / **CPD** / Insights.
 - **Money** - Overview / Costs & income / Table.
 - **Tax** - Now / Estimate / Pot & payments / Per year / Making Tax Digital (renamed from "Quarterly (MTD)", Sep 2026). **Now** is the default (`taxSeg`) and the only screen most of the year: the standing disclaimer, any live seasonal moments, then three numbers - on track to owe (`taxLiability`), keep in your pot (`taxPot`), next payment (`nextTaxPayment`) - each tapping through to the screen that owns its detail. It **summarises, never replaces**: the pot *summary* card moved off Estimate onto it, so **Estimate** now carries the take-home, the basis and the by-year table, while everything about paying - the buffer, the balance, every due date, and what HMRC actually assessed - still lives on **Pot & payments**, so no figure appears twice with two different explanations behind it. **Per year** is "things set per tax year" (renamed from "Allowances" in T6 - student loan and region aren't allowances): one year strip at the top governs every card below it (`taxYearStripStatus`), then student loan, then use of home. Region is *not* here - it moved to Settings.- The old `income` feature flag became `money` + `tax`; `normalize()` carries `income:false` across to both rather than switching a hidden tab back on.
 
@@ -1500,7 +1513,7 @@ view element, and `go(tab,opts)` calls it. Inside a view the segments are plain 
 | `findSheet()` | Search & help, from the header magnifier: search across everything, or this screen's tips, Getting started, the jobs list, the map, the tour and What's new |
 | `startCardHTML()` / `startRecordsSheet()` | Getting started on Home, and the chooser that routes previous records to the importer or the restore |
 | `decisionsCardHTML()` | "Still on defaults" at the top of Settings › Your practice |
-| `payerOrgForm()` / the card in `renderRooms()` | The organisations that pay for clients, on Practice › Rooms & payers |
+| `payerOrgForm()` / `drawOrgs(host)` | The organisations that pay for clients, on Practice › Clients › Clients’ insurers |
 | `drawAllowances()` | Tax › Per year — the year strip, region, **pay from a job**, student loan, use of home |
 
 Small helpers most screens reach for (all near the top of the script): `derivedSessions()` (every

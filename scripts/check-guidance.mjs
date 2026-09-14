@@ -86,6 +86,16 @@ async function inPage(profile) {
       }
       continue;
     }
+    /* Clients gained its own inner strip when the organisations that pay moved here from Rooms.
+       Nested strips are not in SWIPE_BARS and are not reachable from APP_MAP, so like Supervision
+       and Trends they have to be walked by name or the who-pays dot goes unchecked. */
+    if (tab === "practice" && opts.seg === "clients") {
+      for (const ct of ["list", "payers"]) {
+        clientsTab = ct; go(tab, opts); await sleep(30); fireInfo(document.getElementById("main"), "practice/clients/" + ct);
+      }
+      clientsTab = "list";
+      continue;
+    }
     if (tab === "practice" && opts.seg === "supervision") {
       for (const st of ["log", "peer", "cpd", "metrics"]) {
         supTab = st; go(tab, opts); await sleep(30); fireInfo(document.getElementById("main"), "practice/supervision/" + st);
