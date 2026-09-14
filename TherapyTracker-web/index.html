@@ -441,10 +441,12 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
    against, hence the two-layer background: `padding-box` paints the button's own fill,
    `border-box` paints the ramp into the border itself. */
 .seg button.premium{position:relative;border:1.5px solid transparent;border-radius:9px;
+  background:linear-gradient(transparent,transparent) padding-box,
+    linear-gradient(135deg,var(--tier3-1),var(--tier3-2) 38%,var(--tier3-3) 72%,var(--tier3-4)) border-box;
+  box-shadow:0 0 5px var(--tier3-glow)}
+.seg button.premium.on{color:var(--brand-dark);
   background:linear-gradient(var(--card),var(--card)) padding-box,
     linear-gradient(135deg,var(--tier3-1),var(--tier3-2) 38%,var(--tier3-3) 72%,var(--tier3-4)) border-box;
-  box-shadow:0 0 7px var(--tier3-glow)}
-.seg button.premium.on{color:var(--brand-dark);
   box-shadow:0 1px 2px var(--ring),0 2px 10px -4px var(--ring),0 0 9px var(--tier3-glow)}
 /* The frame around Business analytics itself, not just its tab - a thin gold rule above the
    content, so the screen it opens onto still reads as the paid-for one once the reader has already
