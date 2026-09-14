@@ -388,18 +388,14 @@ fee paid?" dropdown inside the session form, and leaving it blank left the sessi
 *incomplete* - a bookkeeping question inside a clinical worklist, on a session that could not be
 "done" until the therapist had said whether she had paid her landlord for it.
 
-- **`derive().complete` is the write-up tick plus the attendance confirmation, and nothing
+- **`derive().complete` is the write-up tick plus the attendance answer, and nothing
   else** - `complete = notesDone(s) && attendConfirmed(s)`, and `missingReasons()` returns
   those two. Attendance joined it in Sep 2026 (it was notes only when room fees moved out);
-  the bookkeeping question is what was removed and it stays out. **`attendConfirmed` is only
-  ever written by saving the session form with that field on screen**, never derived - a
-  logged session already means "attended", so inferring it would make the requirement
-  vacuous. That is also why `meta.attendConfirmBackfill` exists: without it every already-done
-  session in an existing practice would flip to incomplete the moment this build loads and
-  flood the worklist. It grandfathers in anything that counted as done under the old rule
-  (notes ticked), once, and is gated so it can never re-stamp a session deliberately left
-  unconfirmed. The Incomplete worklist ticks attendance itself on rows it clears - every row
-  reaching it is already past.
+  the bookkeeping question is what was removed and it stays out. `meta.attendConfirmBackfill`
+  grandfathers in anything that counted as done under the old rule (notes ticked), once, and is
+  gated so it can never re-stamp a session deliberately left unanswered - without it every
+  already-done session in an existing practice would flip to incomplete the moment this build
+  loads and flood the worklist. See **Attendance** below for how the answer is now written.
 - **`derive().roomOwed`** is the liability: a per-session rate applies, and `roomPaid` is neither
   `"Y"` nor `"n/a"`. **Blank means "not settled yet"** - which is what `roomDue` always took it to
   mean. `roomDue` still splits that into `"Y"` (the room's own payment date has passed) and `"N"`
@@ -430,6 +426,50 @@ false only when there genuinely is one. Three cases make it true: no room record
 monthly rent; or the room charged £0 per session **on that session's date** ("At home", or any room
 in a practice that bills monthly). `anyPerUseRoom()` answers the practice-wide version and decides
 whether the Room fees card appears at all.
+
+### Attendance: always asked, never required (Sep 2026)
+"Did it go ahead?" is on the session form for **every** session, future ones included, and leaving
+it blank is a real answer-shaped hole rather than a silent "attended". It was previously a
+three-way control (`"" attended | late | dna`) **hidden whenever the date was in the future**, and
+`attendConfirmed` was stamped true by the mere act of saving a past-dated session - so the app
+recorded an answer nobody had given, and a client ringing on Monday to call off Thursday had
+nowhere to be recorded at all.
+
+- **Four values now, and the blank is the point.** `attendVal(s)` returns `""` (not recorded yet),
+  `"attended"`, `"late"` or `"dna"`; `attendAnswered(v)` is the three that count as an answer.
+  **There is deliberately no `cancelKind:"attended"`** - every reader downstream (`isDNA`,
+  `cancelTag`, `derive().cancelKind`) treats a truthy `cancelKind` as a *missed* session, so an
+  attended session is a blank `cancelKind` plus `attendConfirmed`. Storage is unchanged: the two
+  fields the form already wrote, carrying one extra distinction between them.
+- **`m.attendConfirmed = attendAnswered(kind)`** in the form's `sync()`, straight from the control,
+  never from the date. That is the whole change: the flag is the therapist's answer, not a
+  side-effect of pressing Save.
+- **`derive().ended` is the Incomplete worklist's clock, and it is NOT `past`.** `past` is a
+  whole-**day** test and it is what money runs on - a payment is not overdue until the day of the
+  session is out. `ended` (`sessionEnded()`, start plus `sessionMins()`) asks the same question to
+  the minute, because "did it go ahead?" cannot be answered before it has. They differ only for
+  sessions dated today, which is exactly the case somebody logging this morning's client falls
+  into. A session with no time recorded has no minute to test and falls back to the day.
+- **`incompleteRows()` is the one definition** - the worklist, the attention-feed count, the
+  "anything left?" test after a catch-up and the Goals ring's completion half all read it, so they
+  cannot disagree about what is outstanding. The ring's own link lands on that list.
+- **The Incomplete worklist gained an attendance toggle, and Notes done stopped answering
+  attendance.** Ticking notes used to stamp `attendConfirmed` as well, which was defensible while
+  blank *meant* attended and is not now: it would be the app answering on the therapist's behalf,
+  on the one screen she is going through her sessions precisely to answer them. Each row renders a
+  toggle only for the reasons it is actually missing, and **a cancellation or a DNA is recorded in
+  the session form** (tap the client's name) - the charge, the cancelled-on date and the policy
+  behind them belong there, and a three-way control on a bulk row would be a second, poorer copy.
+- **`validateSession` no longer warns about a late cancellation dated ahead** (the `lcfuture`
+  warning became `dnafuture`). Cancelling a future session is now the intended flow, and warning
+  about it would make it ask for a second confirmation. A **DNA** dated ahead is still flagged -
+  nobody can have failed to turn up to a session that has not happened.
+- **The spreadsheet importer still stamps `attendConfirmed:true` on every row** and should: the
+  sheet's own late-cancellation column, or its absence, *is* the answer, and re-asking it per
+  imported row would mean opening hundreds of sessions to confirm what the file already said.
+- `npm run test:behaviour` drives all of it: the control rendering on a future session, a
+  cancellation saved ahead of the date, a blank surviving a save, the `ended` clock recomputed from
+  the rule on every session in four practices, and Notes done leaving attendance alone.
 
 ### Notes vs admin comments (v7, Sep 2026)
 The session "Notes done?" box was one free-text field doing two unrelated jobs: a tick that the write-up was finished, and - for anyone who used it that way - a scratchpad. Now:
@@ -1281,7 +1321,7 @@ The tour used to be eight full-screen `.ov` cards describing controls the reader
 - **Getting started** (Sep 2026): `startCardHTML()` / `startItems()` - the first block on Home (`HOME_CARDS` key `start`) for a practice under `START_MAX_SESSIONS` (25) sessions, until dismissed. Seven rows, **every one derived from the data** (a client exists, a session is logged, `cancelChosen()`, `payToDetails()`, `lastBackupTs()`), never from a stored tick; the two answers that cannot be read from data - "I'm starting fresh" and "I only work from home" - are the only stored ones, in `settings.start`, so they travel in a backup. `settings.start.recordsLater` is the third thing stored there and is **not** an answer: it is setup's "yes, but not this minute", so it leaves the records row undone and only marks it as the one to start on (`lead` → the **Start here** chip). **The first row is the point of the card**: `startRecordsSheet()` asks which kind of records the reader has and hands them to the right tool, saying which one *adds* (the spreadsheet import) and which *replaces* (a backup restore). `impCommit()` and `importFromText()` stamp `start.records` themselves, so the row ticks without the reader saying so. An established practice never sees it; the **Still on defaults** card is its version for them.
 - **Still on defaults** (Sep 2026): `decisionsCardHTML()` at the top of Settings › Your practice - the business settings the app is deciding by default until the reader does: the cancellation policy (`cancelChosen()`: `normalize()` seeds a default, so the test is "still exactly the default and never touched"; `wireCancelRules`'s save sets `cancelRulesChosen`), a blank *how to pay*, an unconfirmed tax region, a working week on defaults. Rows link with `focus` to the card (every Settings card now carries an id), and the card disappears with the last row.
 - **Search & help** (Sep 2026): the magnifier in the header (`#helpBtn`, kept on desktop where the gear is hidden) opens `findSheet()`. Empty, it holds the help this screen has - its own `TIPS` replayed (the tips fire once by themselves; this is their second life), Getting started while it shows, **what to do and how often right under it** (`appJobsSheet()`), the app map, the tour, What's new. Typed into, `findIndex(q)` searches clients, sessions, rooms, `ANA_CARDS`, `APP_MAP` screens, `SETTINGS_INDEX` (a static list of Settings cards with keywords, group and card id - keep it in step with `VIEWS.settings`), `INFO` topics and `APP_JOBS`. Every hit is a link. `segOf(tab)` is the one place a tab's current segment is read; `coachMaybeTip` uses it too.
-- **What's new**: `WHATS_NEW` (currently **4**) against `tt_whatsnew` in localStorage; `whatsNewSteps()` is rewritten each release cycle and describes only that cycle - the Aug 2026 reorganisation notes were replaced in Sep 2026 rather than appended to, because ten steps is a wall nobody reads. Bump the constant whenever the steps change.
+- **What's new**: `WHATS_NEW` (currently **5**) against `tt_whatsnew` in localStorage; `whatsNewSteps()` is rewritten each release cycle and describes only that cycle - the Aug 2026 reorganisation notes were replaced in Sep 2026 rather than appended to, because ten steps is a wall nobody reads. Bump the constant whenever the steps change.
 - **Previous records are asked about, not assumed - and the wizard only ever TELLS** (Sep 2026). `stepImport` is "Do you have records from before?": it describes the two kinds (a spreadsheet, which **adds**; a GroundWork backup, which **replaces**) and then takes one of two answers - **"Yes - I'll bring them in"** (`later`) or **"No - starting fresh"** (`fresh`, stored as `start.records="fresh"` by `setupSave`).
   - **`later` is a job outstanding, never an answer, and must never reach `start.records`** - that field is what ticks the Getting started row off. It is recorded as **`settings.start.recordsLater`**, cleared the moment the question is really answered (`startAnswer("records",…)`, `impCommit()`, `importFromText()`).
   - This replaced three answers that were each an *action*: picking a kind launched the importer or a file picker there and then. Somebody whose spreadsheet was on the other computer had no honest answer - "starting fresh" ticks the row and they are never reminded, and picking "a spreadsheet" then cancelling still stamped `start.records="imported"`, a job marked done that nobody did. **Don't reintroduce an in-step launch that stages an answer.**
