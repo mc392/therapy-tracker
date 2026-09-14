@@ -439,9 +439,13 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
    was undone - it was chrome while chrome meant "the cheaper subscription", and keeping it would
    now imply a second product that does not exist. A gradient border needs a solid base to clip
    against, hence the two-layer background: `padding-box` paints the button's own fill,
-   `border-box` paints the ramp into the border itself. */
+   `border-box` paints the ramp into the border itself. A fully transparent `padding-box` layer
+   does not occlude the gradient underneath it - it lets the border-box layer show straight through
+   the whole button, not just the 1.5px ring, which is what made an unselected tab read as solid
+   gold. Painting the padding-box with the pill's own tint (`.seg`'s background) is what limits the
+   gold to the border and lets the button match the rest of the bar underneath it. */
 .seg button.premium{position:relative;border:1.5px solid transparent;border-radius:9px;
-  background:linear-gradient(transparent,transparent) padding-box,
+  background:linear-gradient(color-mix(in srgb,var(--soft) 72%,transparent),color-mix(in srgb,var(--soft) 72%,transparent)) padding-box,
     linear-gradient(135deg,var(--tier3-1),var(--tier3-2) 38%,var(--tier3-3) 72%,var(--tier3-4)) border-box}
 .seg button.premium.on{color:var(--brand-dark);
   background:linear-gradient(var(--card),var(--card)) padding-box,
