@@ -3261,6 +3261,12 @@ let _setStickyUpdate=null;    /* current wireSettingsSticky's update(), for devi
    reached by focusing the card. One place to change either. */
 function goSessions(seg){sessFilter.view="list";sessFilter.seg=seg;go("sessions");}
 function goRoomCosts(card){go("money",{seg:"costs",focus:card||"roomFeesCard"});}
+/* The organisations that pay for clients, on their own strip inside Practice > Clients. The
+   inner tab has to be set BEFORE go(), because renderClients reads `clientsTab` as it draws -
+   navigating to the segment and then flipping the strip would render the client list first and
+   swap it a frame later. Every "add one first under..." pointer in the app comes through here,
+   so the screen can move again without a copy sweep. */
+function goPayers(){clientsTab="payers";go("practice",{seg:"clients"});}
 function go(tab,opts){
   opts=opts||{};
   const rz=resolveTab(tab,opts.seg); tab=rz.tab;
@@ -3713,7 +3719,7 @@ let sessFilter={q:"",seg:"upcoming",view:"list"};
    Module-level for the same reason `pracTab` and `projBasis` are - ticking a payment re-renders
    the list, and a choice held in the closure would be thrown away underneath the reader. */
 let unpaidBy="age";
-let calY=null,calM=null,statGran="month",taxMode="proj",thMode="net",supTab="log";
+let calY=null,calM=null,statGran="month",taxMode="proj",thMode="net",supTab="log",clientsTab="list";
 /* Which segment each merged tab is showing. Module-level like the others, so a redraw
    (go(tab,{keepScroll:true})) lands the reader back where they were. */
 let pracTab="clients", moneySeg="overview", taxSeg="now";
@@ -7418,11 +7424,7 @@ VIEWS.practice=function(){
      Rooms every time. The "premium" class gives its own tab a small accent - it is the one part
      of Practice this practice pays extra for. */
   const segs=[["clients","Clients"]];
-  /* The label, never the key: `seg:"rooms"` is in deep links, TAB_ALIAS and a dozen go() calls.
-     Renamed Sep 2026 when the organisations that pay for clients moved onto this screen - it is
-     no longer only rooms, and a reader sent here to "add an organisation" has to be able to see
-     where they are being sent. */
-  segs.push(["rooms","Rooms & payers"]);
+  segs.push(["rooms","Rooms"]);
   if(feat("supervision"))segs.push(["supervision","Supervision"]);
   if(feat("trends"))segs.push(["trends","Business analytics","premium"]);
   /* Reports sits AFTER Business analytics deliberately: the first three segments are places you
@@ -7434,46 +7436,67 @@ VIEWS.practice=function(){
   if(pracTab==="reports"&&!feat("reports"))pracTab="clients";
   v.innerHTML=segBar("crtab",segs,pracTab)+'<div id="crbody"></div>';
   const body=v.querySelector("#crbody");
+  /* Clients is a PANEL with its own inner strip, the same shape as Supervision: the people, and
+     the organisations that pay for some of them. The organisations lived beside Rooms first,
+     which read as "outside parties the practice deals with" - true, and the wrong grouping. Who
+     pays for a client is a fact about the CLIENT, it is set on the client's own record, and this
+     is the screen somebody is already on when they need it.
+
+     `clientsTab` is module-level for the same reason `supTab` and `pracTab` are: saving a client
+     re-renders Practice, and a choice held in a closure would vanish underneath the reader.
+
+     It is deliberately NOT in SWIPE_BARS. One bar per screen answers the gesture and it is the
+     screen's own - a nested strip that also answered it would make a swipe mean something
+     different depending on how far down the finger landed. Same rule as Supervision's four. */
   function renderClients(){
-    body.innerHTML='<div class="toolbar"><button class="btn sm" id="addC">＋ New client</button></div><div class="search"><input id="cq" placeholder="Search clients…"></div><div id="clist"></div>';
-    const render=()=>{
-      const q=(body.querySelector("#cq").value||"").toLowerCase();
-      const order={Ongoing:0,"Initial session booked":0,Paused:1,Finished:2};
-      const lastSeen=lastSessionDates(), counts=clientSessionCounts();
-      let cs=S.clients.slice().sort((a,b)=>(order[a.status]??9)-(order[b.status]??9)||a.code.localeCompare(b.code));
-      if(q)cs=cs.filter(c=>(c.code+" "+(c.notes||"")+" "+(c.status||"")).toLowerCase().includes(q));
-      const li=c=>{
-        const r=effRate(c.code,isoD(today()));const ch=c.status==="Ongoing"?'y':c.status==="Paused"?'f':'na';
-        const seen=lastSeen[(c.code||"").toLowerCase()];
-        return '<div class="list-item" data-id="'+c._id+'"><div class="li-main"><div class="li-title">'+esc(c.code)+' <span class="chip '+ch+'">'+esc(c.status||"")+'</span></div><div class="li-sub">'+esc(c.frequency||"")+(seen?' · last seen '+fmtDMY(seen):'')+(c.notes?" · "+esc(c.notes):"")+'</div></div><div class="li-right">'+gbp(r)+'</div></div>';};
-      /* A search is someone looking for a specific person, very possibly one who finished years
-         ago - so it never folds. Folding only applies to the unfiltered list, and only once
-         there are enough finished clients for it to be worth a tap. */
-      const aged=q?[]:cs.filter(c=>!trendsIsCurrent(c,lastSeen[(c.code||"").toLowerCase()]));
-      const doFold=aged.length>=AGED_MIN;
-      const cur=doFold?cs.filter(c=>trendsIsCurrent(c,lastSeen[(c.code||"").toLowerCase()])):cs;
-      const old=doFold?aged:[];
-      const oldSessions=old.reduce((a,c)=>a+(counts[(c.code||"").toLowerCase()]||0),0);
-      const oldLast=old.map(c=>lastSeen[(c.code||"").toLowerCase()]).filter(Boolean).sort((a,b)=>b-a)[0];
-      body.querySelector("#clist").innerHTML='<div class="card" style="padding:4px 12px">'+
-        (cur.length?cur.map(li).join("")
-          :'<p class="muted small center" style="padding:14px">'+(q?"No clients match.":"No current clients - everyone is in the list below.")+'</p>')+
-        (old.length?agedFold("cl","Finished & long inactive · "+plural(old.length,"client"),
-          plural(oldSessions,"session")+' between them'+(oldLast?' · last seen '+fmtDMY(oldLast):'')):"")+
-        '</div>';
-      body.querySelectorAll("#clist .list-item").forEach(l=>l.onclick=()=>clientProfile(S.clients.find(c=>c._id===l.dataset.id)));
-      wireAgedFolds(body,{cl:()=>old.map(li).join("")},id=>{
-        const c=S.clients.find(x=>x._id===id); if(c)clientProfile(c);});
+    body.innerHTML='<div class="seg mb" id="cltab" style="display:inline-flex">'+
+        '<button data-ct="list" class="'+(clientsTab==="list"?"on":"")+'">Clients</button>'+
+        '<button data-ct="payers" class="'+(clientsTab==="payers"?"on":"")+'">Clients’ insurers</button>'+
+      '</div><div id="clbody"></div>';
+    const cb=body.querySelector("#clbody");
+    const drawList=()=>{
+      cb.innerHTML='<div class="toolbar"><button class="btn sm" id="addC">＋ New client</button></div><div class="search"><input id="cq" placeholder="Search clients…"></div><div id="clist"></div>';
+      const render=()=>{
+        const q=(cb.querySelector("#cq").value||"").toLowerCase();
+        const order={Ongoing:0,"Initial session booked":0,Paused:1,Finished:2};
+        const lastSeen=lastSessionDates(), counts=clientSessionCounts();
+        let cs=S.clients.slice().sort((a,b)=>(order[a.status]??9)-(order[b.status]??9)||a.code.localeCompare(b.code));
+        if(q)cs=cs.filter(c=>(c.code+" "+(c.notes||"")+" "+(c.status||"")).toLowerCase().includes(q));
+        const li=c=>{
+          const r=effRate(c.code,isoD(today()));const ch=c.status==="Ongoing"?'y':c.status==="Paused"?'f':'na';
+          const seen=lastSeen[(c.code||"").toLowerCase()];
+          return '<div class="list-item" data-id="'+c._id+'"><div class="li-main"><div class="li-title">'+esc(c.code)+' <span class="chip '+ch+'">'+esc(c.status||"")+'</span></div><div class="li-sub">'+esc(c.frequency||"")+(seen?' · last seen '+fmtDMY(seen):'')+(c.notes?" · "+esc(c.notes):"")+'</div></div><div class="li-right">'+gbp(r)+'</div></div>';};
+        /* A search is someone looking for a specific person, very possibly one who finished years
+           ago - so it never folds. Folding only applies to the unfiltered list, and only once
+           there are enough finished clients for it to be worth a tap. */
+        const aged=q?[]:cs.filter(c=>!trendsIsCurrent(c,lastSeen[(c.code||"").toLowerCase()]));
+        const doFold=aged.length>=AGED_MIN;
+        const cur=doFold?cs.filter(c=>trendsIsCurrent(c,lastSeen[(c.code||"").toLowerCase()])):cs;
+        const old=doFold?aged:[];
+        const oldSessions=old.reduce((a,c)=>a+(counts[(c.code||"").toLowerCase()]||0),0);
+        const oldLast=old.map(c=>lastSeen[(c.code||"").toLowerCase()]).filter(Boolean).sort((a,b)=>b-a)[0];
+        cb.querySelector("#clist").innerHTML='<div class="card" style="padding:4px 12px">'+
+          (cur.length?cur.map(li).join("")
+            :'<p class="muted small center" style="padding:14px">'+(q?"No clients match.":"No current clients - everyone is in the list below.")+'</p>')+
+          (old.length?agedFold("cl","Finished & long inactive · "+plural(old.length,"client"),
+            plural(oldSessions,"session")+' between them'+(oldLast?' · last seen '+fmtDMY(oldLast):'')):"")+
+          '</div>';
+        cb.querySelectorAll("#clist .list-item").forEach(l=>l.onclick=()=>clientProfile(S.clients.find(c=>c._id===l.dataset.id)));
+        wireAgedFolds(cb,{cl:()=>old.map(li).join("")},id=>{
+          const c=S.clients.find(x=>x._id===id); if(c)clientProfile(c);});
+      };
+      cb.querySelector("#cq").oninput=render; cb.querySelector("#addC").onclick=()=>clientForm(null); render();
     };
-    body.querySelector("#cq").oninput=render; body.querySelector("#addC").onclick=()=>clientForm(null); render();
+    const drawPayers=()=>drawOrgs(cb);
+    const route=()=>(clientsTab==="payers"?drawPayers():drawList());
+    body.querySelector("#cltab").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{
+      clientsTab=bt.dataset.ct;
+      body.querySelector("#cltab").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));
+      route();});
+    route();
   }
   function renderRooms(){
-    /* Organisations that pay sit here rather than on Money, for the same reason rooms do: this is
-       where the external parties a practice deals with are SET UP, and what they owe is settled
-       where every other bill is. A room is a named outside party with a rate and a payment
-       rhythm; an EAP is the same shape with the money running the other way. */
-    body.innerHTML='<div class="toolbar"><button class="btn sm" id="addR">＋ New room / location</button></div><div id="rlist"></div>'+
-      '<div id="porgWrap"></div>';
+    body.innerHTML='<div class="toolbar"><button class="btn sm" id="addR">＋ New room / location</button></div><div id="rlist"></div>';
     const r=()=>{
       /* The sub-line used to print the raw legacy code - "Payment due: EOM" - which meant
          nothing to anybody. A rent says when it started and when it stops; a room paid by the
@@ -7500,32 +7523,6 @@ VIEWS.practice=function(){
          set of controls here that would have to be kept in step with it. */
       const gm=body.querySelector("#rGoMoney");
       if(gm)gm.onclick=()=>goRoomCosts("roomRentCard");
-      drawOrgs();
-    };
-    /* The card only appears once there is something to say: an organisation already set up, or a
-       client marked as paid for by one. A practice with neither has not asked this question, and a
-       third empty card on the Rooms screen answers nobody. */
-    const drawOrgs=()=>{
-      const host=body.querySelector("#porgWrap"); if(!host)return;
-      const orgs=payerOrgs();
-      /* ALWAYS RENDERED, even with nothing in it. It was gated on an organisation already
-         existing, which is a chicken-and-egg: setup and the client form both send the reader here
-         to add their first one, and the card that does it was the one thing not on the screen.
-         This is a set-up surface - an empty one that says what it is for is the point of it. */
-      const rows=orgs.map(p=>{
-        const n=(S.clients||[]).filter(c=>payerOf(c)==="org"&&c.payerId===p._id).length;
-        return '<div class="list-item" data-pid="'+esc(p._id)+'"><div class="li-main"><div class="li-title">'+esc(p.name)+'</div>'+
-          '<div class="li-sub">'+(p.invoiceDays?('Pays in '+esc(String(p.invoiceDays))+' days'):'No payment terms set')+
-          (p.defaultRate?(' · '+gbp(p.defaultRate)+' a session'):'')+'</div></div>'+
-          '<div class="li-right"><b style="color:var(--brand-dark)">'+n+'</b> <span class="small muted">client'+(n===1?"":"s")+'</span></div></div>';
-      }).join("");
-      host.innerHTML='<div class="card mt" id="payerOrgCard">'+cardHead("Organisations that pay you","who-pays")+
-        (orgs.length?'<div style="margin:0 -6px">'+rows+'</div><p class="small muted">Tap one to edit it. A client is linked to an organisation on their own record.</p>'
-          :emptyNote("Nothing here unless an EAP, an insurer or a charity pays for some of your clients. Add one, then set that client’s Who pays to “an organisation”."))+
-        '<button class="btn sec full mt" id="addOrg">＋ Add an organisation</button></div>';
-      host.querySelectorAll(".list-item").forEach(li=>li.onclick=()=>payerOrgForm(payerOrgById(li.dataset.pid),()=>drawOrgs()));
-      host.querySelector("#addOrg").onclick=()=>payerOrgForm(null,()=>drawOrgs());
-      wireInfo(host);
     };
     body.querySelector("#addR").onclick=()=>roomForm(null); r();
   }
@@ -7786,6 +7783,37 @@ function mountSchedulePicker(host,sched,o){
   };
   draw();
 }
+/* The organisations that pay for clients - an EAP, an insurer, a charity contract. Drawn into
+   whatever host it is given, so the screen that owns it can move without the card caring; it
+   lives under Practice > Clients > Clients' insurers, beside the people it bills for.
+
+   ALWAYS RENDERED, even with nothing in it. It was first gated on an organisation already
+   existing, which is a chicken-and-egg: setup and the client form both send the reader here to
+   add their FIRST one, and the card that does it was the one thing not on the screen. A set-up
+   surface that appears only once you have used it is not a set-up surface. */
+function drawOrgs(host){
+  if(!host)return;
+  const orgs=payerOrgs();
+  /* ALWAYS RENDERED, even with nothing in it. It was gated on an organisation already
+         existing, which is a chicken-and-egg: setup and the client form both send the reader here
+         to add their first one, and the card that does it was the one thing not on the screen.
+         This is a set-up surface - an empty one that says what it is for is the point of it. */
+      const rows=orgs.map(p=>{
+        const n=(S.clients||[]).filter(c=>payerOf(c)==="org"&&c.payerId===p._id).length;
+        return '<div class="list-item" data-pid="'+esc(p._id)+'"><div class="li-main"><div class="li-title">'+esc(p.name)+'</div>'+
+          '<div class="li-sub">'+(p.invoiceDays?('Pays in '+esc(String(p.invoiceDays))+' days'):'No payment terms set')+
+          (p.defaultRate?(' · '+gbp(p.defaultRate)+' a session'):'')+'</div></div>'+
+          '<div class="li-right"><b style="color:var(--brand-dark)">'+n+'</b> <span class="small muted">client'+(n===1?"":"s")+'</span></div></div>';
+      }).join("");
+      host.innerHTML='<div class="card" id="payerOrgCard">'+cardHead("Who pays for your clients","who-pays")+
+        (orgs.length?'<div style="margin:0 -6px">'+rows+'</div><p class="small muted">Tap one to edit it. A client is linked to an organisation on their own record.</p>'
+          :emptyNote("Nothing here unless an EAP, an insurer or a charity pays for some of your clients. Add one, then set that client’s <b>Who pays</b> to “an organisation”."))+
+        '<button class="btn sec full mt" id="addOrg">＋ Add an organisation</button></div>';
+  host.querySelectorAll(".list-item").forEach(li=>li.onclick=()=>payerOrgForm(payerOrgById(li.dataset.pid),()=>drawOrgs(host)));
+  host.querySelector("#addOrg").onclick=()=>payerOrgForm(null,()=>drawOrgs(host));
+  wireInfo(host);
+}
+
 /* An organisation that pays for a client's sessions - an EAP, an insurer, a charity contract.
    Four fields and nothing more: who they are, where the invoice goes, how long they take to pay
    and what they pay a session. Deliberately not a contract record - authorised session counts live
@@ -8219,7 +8247,7 @@ function financeForm(kind,rec){
       const looksLikeRent=(g("#f_cat").value==="roomhire")||/rent/i.test(g("#f_desc").value);
       if(w){w.style.display=(looksLikeRent&&monthlyRooms.length)?"":"none";
         w.innerHTML="⚠️ "+esc(monthlyRooms.join(", "))+(monthlyRooms.length===1?" is":" are")+
-          " already billed as rent from <b>Practice › Rooms &amp; payers</b>, and counted in your costs automatically. Only add rent here for a room the app doesn’t know about.";}
+          " already billed as rent from <b>Practice › Rooms</b>, and counted in your costs automatically. Only add rent here for a room the app doesn’t know about.";}
     }
     if(isInc)g("#f_scopeNote").innerHTML=finPersonal(m)
       ? "Kept out of your practice’s net income and tax estimate - a second job or tutoring is a separate trade, taxed on its own. It’s still logged and totalled here."
@@ -8318,7 +8346,7 @@ function roomRentCard(){
       (done.length?'<details class="dz" style="margin-top:10px"><summary>Settled in the last fortnight ('+done.length+')</summary>'+done.map(chargeRow).join("")+'</details>':'')
     : '<p class="muted small mt">'+(live.length
         ? 'Nothing due in the next few weeks.'
-        : 'No rent is being charged at the moment - set one on the room in <b>Practice › Rooms &amp; payers</b>.')+'</p>';
+        : 'No rent is being charged at the moment - set one on the room in <b>Practice › Rooms</b>.')+'</p>';
   return '<div class="card" id="roomRentCard"><h2>Room rent</h2>'+
     '<p class="small muted">Rooms you pay for whether or not you use them. '+infoLink("payments-due-ticking")+'</p>'+
     ((overdue.length||next)?'<div class="kpis mt" style="grid-template-columns:1fr 1fr">'+
@@ -8467,7 +8495,7 @@ function financeCards(){
     const inTY=roomRentOccurrences(b.start,b.end).filter(o=>(o.location||"").toLowerCase()===(r.location||"").toLowerCase())
       .reduce((a,o)=>a+o.amount,0);
     return '<div class="list-item"><div class="li-main"><div class="li-title">'+esc(r.location)+' <span class="chip f">rent</span></div>'+
-      '<div class="li-sub">Set in Practice › Rooms &amp; payers · '+gbp(inTY)+' this tax year</div></div>'+
+      '<div class="li-sub">Set in Practice › Rooms · '+gbp(inTY)+' this tax year</div></div>'+
       '<div class="li-right">'+gbp(rs.live?rs.amount:0)+'<span class="small muted">'+esc(rentUnit(rs.freq))+'</span></div></div>';}).join("");
   const exps=sortFin(S.expenses||[]), incs=sortFin(S.otherIncome||[]);
   const costTotal=led.expenses+led.roomRent;
@@ -9687,7 +9715,7 @@ infoDef("who-pays","Who pays for this work",
   '<p class="small">GroundWork was built around private practice, where the person in the room is the person who pays. Plenty of counselling work is not like that, and this is where you say so - <b>per client</b>, not for the whole practice, because a salaried post with a private caseload beside it is one of the commonest shapes there is.</p>'+
   '<p class="small"><b>The client pays me</b> - private work. The session fee is billed to them, it counts as outstanding until it is paid, and the app will chase it. This is what every client had before the question existed.</p>'+
   '<p class="small"><b>An organisation pays me</b> - an EAP, an insurer, a charity contract. The fee is real and still counts as income, but statements, invoices and chasers are addressed to the organisation instead, and you can bill a month of them in one go from <b>Sessions › Unpaid</b>. You can also record how many sessions they have authorised.</p>'+
-  '<p class="small muted">Organisations are set up under <b>Practice › Rooms &amp; payers</b> — the same screen as your rooms, because both are standing arrangements with somebody outside the practice. Add one there first, then pick it on the client.</p>'+
+  '<p class="small muted">Organisations are set up under <b>Practice › Clients › Clients’ insurers</b> — beside the people they pay for, because who funds a client is a fact about that client. Add one there first, then pick it on the client’s own record.</p>'+
   '<p class="small"><b>Nobody pays per session</b> - you are salaried, on placement, or seeing this person free. Their sessions still count for everything clinical: hours, attendance, supervision, reports, your accreditation ratio. They simply never appear as money owed, so the Unpaid list stays a list of things you can actually do something about.</p>'+
   '<p class="small muted">Nothing here changes a session that has already happened, and nothing here is clinical. It only decides who gets the bill.</p>');
 
@@ -12894,8 +12922,8 @@ function clientForm(c,cfOpts){
      asking for money is one the reader has to be able to predict. */
   /* NO "add one from here". Opening another sheet replaces this one - #sheetBody is a single
      host - so a round trip to an organisation form would throw away everything typed into this
-     client so far. Organisations are set up in one place, on Practice › Rooms & payers, and this
-     picks from what is there; the note says so when the list is empty. Same reason the session
+     client so far. Organisations are set up in one place, on Practice > Clients > Clients'
+     insurers, and this only picks from what is there; the note says so when the list is empty. Same reason the session
      form hands off to Money to settle a room fee rather than growing its own controls. */
   const paintPayer=()=>{
     const k=body.querySelector("#c_payer").value;
@@ -12911,8 +12939,14 @@ function clientForm(c,cfOpts){
       sel.disabled=!orgs.length;
       const oNote=body.querySelector("#c_orgNote");
       if(oNote)oNote.innerHTML=orgs.length
-        ? "Statements, invoices and chasers for this client are addressed to them."
-        : 'Add one first under <b>Practice › Rooms &amp; payers</b>, then come back and pick it here. The fee still counts as income either way.';
+        ? 'Statements, invoices and chasers for this client are addressed to them. <span class="taxlink" id="c_orgGo">Manage them ›</span>'
+        : 'None set up yet. <span class="taxlink" id="c_orgGo">Add one under Clients › Clients’ insurers ›</span> then come back and pick it here — the fee counts as income either way.';
+      /* A real link, not a sentence naming a screen. Opening it closes this sheet, which loses
+         whatever is typed here - so on an EXISTING client it saves nothing and simply navigates
+         (the reader came to set the payer and has been told where to do it), and the wording
+         never promises otherwise. */
+      const oGo=body.querySelector("#c_orgGo");
+      if(oGo)oGo.onclick=()=>{closeSheet();goPayers();};
     }
     const an=body.querySelector("#c_authNote");
     const cap=+body.querySelector("#c_auth").value||0;
@@ -14669,7 +14703,7 @@ function impStagePreview(){
       esc([...p.newClients.values()].map(c=>c.code).join(", "))+'</div>':'')+
     (p.newRooms.size?'<div class="hint"><b>Locations that will be created</b><br>'+
       esc([...p.newRooms.values()].map(r=>r.location+" ("+gbp(r.rate)+"/session)").join(", "))+
-      '<div class="prev" style="margin-top:6px">Set when each room’s fee falls due in <b>Practice › Rooms &amp; payers</b> - imported rooms start as “n/a”.</div></div>':'')+
+      '<div class="prev" style="margin-top:6px">Set when each room’s fee falls due in <b>Practice › Rooms</b> - imported rooms start as “n/a”.</div></div>':'')+
     '<h3 style="margin:16px 0 6px;font-size:15px">First '+show.length+' of '+p.recs.length+'</h3>'+
     '<div style="overflow:auto"><table><thead><tr><th>Client</th><th>Date</th><th>Time</th><th class="num">Fee</th><th>Paid</th><th>Room</th></tr></thead><tbody>'+
     show.map(r=>'<tr><td><b>'+esc(r.client)+'</b>'+(r._update?' <span class="chip s">update</span>':'')+'</td>'+
@@ -15215,7 +15249,7 @@ function stepRooms(w){return{emoji:gi("rooms"), h:"Where do you see clients?",
             '<button class="rmx" data-x="'+i+'" title="Remove" aria-label="Remove">'+gi("close")+'</button>'+
           '</div>').join("")+'</div>'+
         '<button class="btn sec sm mt" id="rmAdd">'+gi("plus")+' Add a location</button>'+
-        '<div class="ovnote">Sessions at home usually cost <b>£0</b>. Pick <b>per month</b> for a room on a flat rent. Start dates, invoice dates and later changes are all set on the room in <b>Practice › Rooms &amp; payers</b>.</div>';
+        '<div class="ovnote">Sessions at home usually cost <b>£0</b>. Pick <b>per month</b> for a room on a flat rent. Start dates, invoice dates and later changes are all set on the room in <b>Practice › Rooms</b>.</div>';
       host.querySelectorAll(".rmrow").forEach(row=>{
         const i=+row.dataset.i;
         row.querySelectorAll("[data-f]").forEach(inp=>inp.oninput=inp.onchange=()=>{
@@ -15270,7 +15304,7 @@ function stepPaid(w){return{emoji:gi("fees"), h:"How are you paid?",
       note.innerHTML=(w.paidBy==="none")
         ? 'Because nothing is billed, <b>Tax</b> and <b>Costs &amp; other income</b> start switched off - they are about a self-employed return you may not have to file. If you do have a practice on the side, turn them back on in '+gi("settings")+' <b>Settings › App preferences</b>.'
         : (w.paidBy==="mixed")
-        ? 'Add each organisation once under '+gi("rooms")+' <b>Practice › Rooms &amp; payers</b>, then pick it on the clients they pay for. Everything else works exactly as it does for a private client - the fee is still income, it is still chased, it just goes to them.'
+        ? 'Add each organisation once under '+gi("practice")+' <b>Practice › Clients › Clients’ insurers</b>, then pick it on the clients they pay for. Everything else works exactly as it does for a private client - the fee is still income, it is still chased, it just goes to them.'
         : 'Nothing is hidden either way. If you take on salaried or placement work later, set it on that client’s own record under <b>Who pays</b>.';
     };
     paint();
@@ -15595,7 +15629,7 @@ function startSetup(opts){
   opts=opts||{};
   const sg=settings();
   const rerun=!!opts.rerun;
-  /* rooms are only offered on a genuinely fresh start - once sessions exist they belong in Practice › Rooms & payers */
+  /* rooms are only offered on a genuinely fresh start - once sessions exist they belong in Practice › Rooms */
   const withRooms=!rerun||S.sessions.length===0;
   /* "Start simple" is only offered on a genuinely fresh install. Presenting it to someone who
      already has data would be offering to hide tabs they are already using. */
@@ -15696,7 +15730,7 @@ function whatsNewSteps(){
   st.push({emoji:gi("rooms"), h:"Room fees moved out of the session form", sub:"Logging a session no longer asks whether you have paid for the room.",
     html:ovPoints([
       [gi("rooms"),"A session raises its own fee","In a room you pay for by the hour, every session raises a fee by itself. Settle them under <b>Money › Costs &amp; income</b>, beside the rent."],
-      [gi("money"),"Rent with a rhythm and an end date","Weekly, monthly, quarterly - from a date, to a date. Set on the room in Practice › Rooms & payers, ticked off in the same place as the fees."],
+      [gi("money"),"Rent with a rhythm and an end date","Weekly, monthly, quarterly - from a date, to a date. Set on the room in Practice › Rooms, ticked off in the same place as the fees."],
       [gi("done"),"Complete means written up and confirmed","A session is complete once your notes are ticked and you have said whether it went ahead."]
     ])});
   st.push({emoji:gi("notes"), h:"On a session", sub:"Two small changes to the form, and a way to get paid.",
@@ -15712,7 +15746,7 @@ function whatsNewSteps(){
   st.push({emoji:gi("money"), h:"Not everyone is paid by their clients", sub:"Salaried, on placement, or seeing EAP clients - the app no longer assumes private practice.",
     html:ovPoints([
       [gi("practice"),"Who pays, per client","On each client’s record. Work nobody pays you per session for still counts for hours, supervision, CPD and reports - it simply stops appearing as money owed, so <b>Sessions › Unpaid</b> stays a list you can actually clear."],
-      [gi("rooms"),"Organisations that pay","An EAP, an insurer, a charity contract - set them up under <b>Practice › Rooms &amp; payers</b>. Their invoices and chasers are addressed to them, and a month of sessions can be ticked off in one go."],
+      [gi("practice"),"Who pays for your clients","An EAP, an insurer, a charity contract - set them up under <b>Practice › Clients › Clients’ insurers</b>. Their invoices and chasers are addressed to them, and a month of sessions can be ticked off in one go."],
       [gi("tax"),"Pay from a job","If you are employed as well, <b>Tax › Per year</b> now takes your pay before tax. Your practice is taxed on top of it, which is how HMRC does it - without it the estimate was too low."]
     ])});
   st.push({emoji:gi("cpd"), h:"CPD, all of it", sub:"Practice › Supervision › CPD.",
@@ -16112,8 +16146,8 @@ const APP_MAP=[
   {tab:"home",rows:[[null,"Home","your four figures, what needs attention, what is coming up, and anything you have pinned"]]},
   {tab:"sessions",rows:[["upcoming","Upcoming","what is booked"],["unpaid","Unpaid","payments to chase"],
     ["incomplete","Incomplete","write-ups and attendance still to tick off"],["all","All","everything, newest first - and the calendar"]]},
-  {tab:"practice",rows:[["clients","Clients","codes, status, fees and each client’s profile"],
-    ["rooms","Rooms & payers","what each room costs you, and the organisations that pay for clients"],
+  {tab:"practice",rows:[["clients","Clients","codes, status, fees and each client’s profile — plus the organisations that pay for them"],
+    ["rooms","Rooms","what each room costs you and how it is charged"],
     ["supervision","Supervision","the log, peer supervision, CPD hours and Form 3A",()=>feat("supervision")],
     ["trends","Business analytics","what your records say about clients, money, time and you",()=>feat("trends")],
     ["reports","Reports","a report of hours, supervision and CPD to print or hand over",()=>feat("reports")]]},
@@ -16242,7 +16276,7 @@ const TIPS=[
   {k:"practice",tab:"practice",
    steps:()=>[
     {emoji:gi("peer"),h:"Your people and places",sel:"#crtab",
-     body:"<b>Clients</b> and their profiles, <b>Rooms &amp; payers</b> - what each room costs you and who pays for your clients - <b>Supervision</b> and your CPD hours, <b>Business analytics</b> for how things are going \u2014 and <b>Reports</b> to put any of it on a page for a course or a professional body."},
+     body:"<b>Clients</b> and their profiles, <b>Rooms</b> and what each costs you, <b>Supervision</b> and your CPD hours, <b>Business analytics</b> for how things are going \u2014 and <b>Reports</b> to put any of it on a page for a course or a professional body."},
     {emoji:gi("fees"),h:"Put fee changes on a date",
      body:"Use <b>Change rate</b> rather than editing the number. Old sessions keep the fee you actually charged - and that’s what your tax figures are built on. Rooms work the same way."}]},
   {k:"money",tab:"money",ft:"money",
@@ -16335,7 +16369,7 @@ function confirmRerunSetup(){
     '<div class="acc-work"><div>• Clients, sessions or supervision entries</div><div>• Payments, fee history or room cost history</div>'+
       '<div>• Your backups or restore points</div></div>'+
     (withRooms?'<div class="vmsg err" style="margin-top:14px">You have no sessions logged, so setup will also rebuild your <b>rooms list</b>. Rooms you remove there are gone from the list.</div>'
-      :'<div class="vmsg ok" style="margin-top:14px">You already have sessions logged, so the rooms step will be <b>skipped</b> - manage rooms in Practice › Rooms &amp; payers instead.</div>')+
+      :'<div class="vmsg ok" style="margin-top:14px">You already have sessions logged, so the rooms step will be <b>skipped</b> - manage rooms in Practice › Rooms instead.</div>')+
     '<p class="small muted mt">A restore point is saved before anything changes, and ↩︎ Undo will bring your settings back.</p>'+
     '<button class="btn sec full mt" id="rsExp">⤓ Export a backup first</button>'+
     '<label style="margin-top:16px">Type <b>RESET SETUP</b> to confirm</label>'+

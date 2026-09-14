@@ -310,14 +310,27 @@ const results = await page.evaluate(async () => {
   build([{ code: "S1", rate: 60 }], 2);
   settings().payers = [];                                  /* a practice that has never met one */
   tyMemoClear();
-  pracTab = "rooms";
+  /* The organisations live under Clients, on that screen's own inner strip - who funds a client
+     is a fact about the client. Rooms is rooms again. */
+  pracTab = "rooms"; clientsTab = "list";
   go("practice"); await sleep(300);
+  ok("Rooms is labelled Rooms",
+    [...document.querySelectorAll("#crtab button")].some((b) => b.textContent.trim() === "Rooms"),
+    [...document.querySelectorAll("#crtab button")].map((b) => b.textContent.trim()).join(" | "));
+  ok("…and carries no organisations card any more", !document.querySelector("#payerOrgCard"));
+  pracTab = "clients";
+  go("practice"); await sleep(300);
+  ok("Clients has its own inner strip", !!document.querySelector("#cltab"));
+  ok("…naming the people and who pays for them",
+    [...document.querySelectorAll("#cltab button")].map((b) => b.textContent.trim()).join("|") === "Clients|Clients’ insurers",
+    [...document.querySelectorAll("#cltab button")].map((b) => b.textContent.trim()).join(" | "));
+  ok("the client list is what it opens on", !!document.querySelector("#clist"));
+  ok("…and the organisations card is not on it yet", !document.querySelector("#payerOrgCard"));
+  document.querySelector('#cltab button[data-ct="payers"]').click(); await sleep(200);
   ok("the organisations card is on the screen before any organisation exists",
     !!document.querySelector("#payerOrgCard"));
   ok("…and offers the button that creates the first one", !!document.querySelector("#addOrg"));
-  ok("the segment is no longer labelled just 'Rooms'",
-    [...document.querySelectorAll('#crtab button, .seg button')].some((b) => /Rooms\s*&\s*payers/i.test(b.textContent)),
-    [...document.querySelectorAll('#crtab button, .seg button')].map((b) => b.textContent.trim()).join(" | "));
+  ok("…and the client list is put away while it shows", !document.querySelector("#clist"));
   /* and it really creates one, from that button, on that screen */
   document.querySelector("#addOrg").click(); await sleep(200);
   const ob = document.querySelector("#sheetBody");
@@ -327,8 +340,9 @@ const results = await page.evaluate(async () => {
   ob.querySelector("#poSave").click(); await sleep(250);
   ok("saving stores the organisation", payerOrgs().length === 1 && payerOrgs()[0].name === "Mind Camden",
     JSON.stringify(payerOrgs()));
-  go("practice"); await sleep(250);
+  goPayers(); await sleep(250);
   ok("…and it is listed on the card afterwards", /Mind Camden/.test(document.querySelector("#payerOrgCard").textContent));
+  ok("goPayers lands on Clients, not Rooms", pracTab === "clients" && clientsTab === "payers", pracTab + "/" + clientsTab);
 
   /* the fee box: present for a paying client, gone for one nobody pays for */
   clientForm(null); await sleep(200);
@@ -357,6 +371,43 @@ const results = await page.evaluate(async () => {
   await sleep(80);
   ok("switching back to a paying answer brings the rate block back",
     eb.querySelector("#c_rateWrap").hidden === false);
+  closeSheet(); await sleep(100);
+
+  /* ============ 4e. the pointer is a LINK, and it goes where it says ============
+     "Add one under Practice › Rooms" was a sentence naming a screen, and the screen it named had
+     since moved. A pointer that cannot be followed is worse than none: the reader has to hold the
+     path in their head and go looking. */
+  build([{ code: "L1", rate: 60 }], 2);
+  settings().payers = [];                                  /* nothing set up, so the note points */
+  tyMemoClear();
+  pracTab = "clients"; clientsTab = "list";
+  clientForm(S.clients[0]); await sleep(200);
+  const lb = document.querySelector("#sheetBody");
+  lb.querySelector("#c_payer").value = "org";
+  lb.querySelector("#c_payer").dispatchEvent(new Event("change"));
+  await sleep(80);
+  const note = lb.querySelector("#c_orgNote");
+  ok("with no organisations set up the note offers a way to add one", !!lb.querySelector("#c_orgGo"),
+    note && note.textContent.trim().slice(0, 80));
+  ok("…and names the screen it goes to", /Clients’ insurers/.test(note.textContent), note.textContent.trim().slice(0, 90));
+  ok("…and does not name the old one", !/Rooms/.test(note.textContent), note.textContent.trim().slice(0, 90));
+  lb.querySelector("#c_orgGo").click(); await sleep(300);
+  ok("following it closes the sheet", !document.querySelector("#sheet").classList.contains("open"));
+  ok("…and actually lands on the organisations strip", pracTab === "clients" && clientsTab === "payers",
+    pracTab + "/" + clientsTab);
+  ok("…with the card right there", !!document.querySelector("#payerOrgCard"));
+  /* Once one exists the note stops nagging and just offers to manage them. */
+  settings().payers = [{ _id: "px", name: "Vitality" }];
+  clientsTab = "list";
+  clientForm(S.clients[0]); await sleep(200);
+  const lb2 = document.querySelector("#sheetBody");
+  lb2.querySelector("#c_payer").value = "org";
+  lb2.querySelector("#c_payer").dispatchEvent(new Event("change"));
+  await sleep(80);
+  ok("with one set up the note stops telling you to add one",
+    !/Add one/i.test(lb2.querySelector("#c_orgNote").textContent),
+    lb2.querySelector("#c_orgNote").textContent.trim().slice(0, 80));
+  ok("…but still offers the way there", !!lb2.querySelector("#c_orgGo"));
   closeSheet(); await sleep(100);
 
   /* ============ 5. employment income sits underneath the practice ============ */
