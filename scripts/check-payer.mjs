@@ -301,6 +301,64 @@ const results = await page.evaluate(async () => {
   ok("…and the client now earns nothing", sessionEarns(S.sessions[0]) === false);
   closeSheet(); await sleep(100);
 
+  /* ============ 4d. the set-up surface, and the fee box that must go away ============
+     Three things a reader hit in the first five minutes of using this:
+       - setup says "add an organisation under Practice › Rooms & payers" and the card that does
+         it was gated on an organisation already existing. Chicken-and-egg: there was no way in.
+       - the tab still said "Rooms" while being told to find payers on it.
+       - picking "nobody pays per session" left a fee box on screen asking to be filled in. */
+  build([{ code: "S1", rate: 60 }], 2);
+  settings().payers = [];                                  /* a practice that has never met one */
+  tyMemoClear();
+  pracTab = "rooms";
+  go("practice"); await sleep(300);
+  ok("the organisations card is on the screen before any organisation exists",
+    !!document.querySelector("#payerOrgCard"));
+  ok("…and offers the button that creates the first one", !!document.querySelector("#addOrg"));
+  ok("the segment is no longer labelled just 'Rooms'",
+    [...document.querySelectorAll('#crtab button, .seg button')].some((b) => /Rooms\s*&\s*payers/i.test(b.textContent)),
+    [...document.querySelectorAll('#crtab button, .seg button')].map((b) => b.textContent.trim()).join(" | "));
+  /* and it really creates one, from that button, on that screen */
+  document.querySelector("#addOrg").click(); await sleep(200);
+  const ob = document.querySelector("#sheetBody");
+  ok("the button opens the organisation form", !!ob.querySelector("#po_name"));
+  ob.querySelector("#po_name").value = "Mind Camden";
+  ob.querySelector("#po_days").value = "30";
+  ob.querySelector("#poSave").click(); await sleep(250);
+  ok("saving stores the organisation", payerOrgs().length === 1 && payerOrgs()[0].name === "Mind Camden",
+    JSON.stringify(payerOrgs()));
+  go("practice"); await sleep(250);
+  ok("…and it is listed on the card afterwards", /Mind Camden/.test(document.querySelector("#payerOrgCard").textContent));
+
+  /* the fee box: present for a paying client, gone for one nobody pays for */
+  clientForm(null); await sleep(200);
+  const nb = document.querySelector("#sheetBody");
+  ok("a new client starts with the fee box visible", nb.querySelector("#c_rateWrap").hidden === false);
+  nb.querySelector("#c_payer").value = "none";
+  nb.querySelector("#c_payer").dispatchEvent(new Event("change"));
+  await sleep(80);
+  ok("choosing 'nobody pays per session' takes the fee box away",
+    nb.querySelector("#c_rateWrap").hidden === true);
+  /* THE POINT: the hidden box still holds whatever was prefilled, and must not be read. */
+  nb.querySelector("#c_rate").value = "60";
+  nb.querySelector("#c_code").value = "NOFEE";
+  nb.querySelector("#cSave").click(); await sleep(250);
+  const made = S.clients.find((c) => c.code === "NOFEE");
+  ok("the client saves without complaining about a missing rate", !!made);
+  ok("…and a fee left sitting in the hidden box is NOT written", made && made.rate === 0, made && made.rate);
+  ok("…nor into their rate history", (S.rateHistory || []).filter((r) => r.client === "NOFEE").every((r) => r.rate === 0),
+    JSON.stringify((S.rateHistory || []).filter((r) => r.client === "NOFEE")));
+  /* switching back brings it straight back - this only ever hides */
+  clientForm(made); await sleep(200);
+  const eb = document.querySelector("#sheetBody");
+  ok("an existing non-paying client's rate block is hidden too", eb.querySelector("#c_rateWrap").hidden === true);
+  eb.querySelector("#c_payer").value = "client";
+  eb.querySelector("#c_payer").dispatchEvent(new Event("change"));
+  await sleep(80);
+  ok("switching back to a paying answer brings the rate block back",
+    eb.querySelector("#c_rateWrap").hidden === false);
+  closeSheet(); await sleep(100);
+
   /* ============ 5. employment income sits underneath the practice ============ */
   /* 2026-27 rUK: PA 12,570 · basic top 50,270. Derived from the HMRC rule, not from the app.
        tax(55,000) = (50,270-12,570)*.20 + (55,000-50,270)*.40 = 7,540 + 1,892 = 9,432
