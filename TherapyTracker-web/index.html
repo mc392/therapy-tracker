@@ -600,6 +600,16 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
 .vmsg.err{background:color-mix(in srgb,var(--bad) 14%,var(--card));border:1px solid color-mix(in srgb,var(--bad) 45%,transparent);color:var(--bad)}
 .vmsg.warn{background:color-mix(in srgb,var(--warn) 14%,var(--card));border:1px solid color-mix(in srgb,var(--warn) 42%,transparent);color:var(--warn)}
 .vmsg.ok{background:color-mix(in srgb,var(--good) 14%,var(--card));border:1px solid color-mix(in srgb,var(--good) 40%,transparent);color:var(--good)}
+/* A standing note, not news. The tax disclaimer travels with every figure on the tab and is read
+   every month, so in amber it shouted a caution at somebody who had done nothing wrong, every
+   single visit - and a warning that is always on stops being a warning. It borrows the dotted
+   brand outline of the empty pinned-analytics card (.card.pinempty above), which is the shape in
+   this app that reads as "context, not a problem". Anything that genuinely IS news keeps .warn
+   and keeps the amber. */
+.vmsg.calm{background:color-mix(in srgb,var(--brand) 5%,transparent);
+  border:1.5px dashed color-mix(in srgb,var(--brand) 34%,transparent);color:var(--muted);font-weight:600}
+.vmsg.calm b{color:var(--ink);font-weight:750}
+.vmsg.calm .gi{color:var(--brand)}
 .prev{font-size:11px;color:var(--muted);margin-top:3px}
 .acc-work{margin-top:10px;padding:11px 13px;border:1px solid var(--line);border-radius:12px;background:var(--soft);font-size:12.5px;line-height:1.75;color:var(--ink)}
 .acc-work div{margin:1px 0} .acc-work b{font-weight:700}
@@ -1296,22 +1306,35 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 /* ===== The tax mask =====
    What stands in for a figure that was never calculated. NOT a blur: .blurfig below computes a
    real number and hides it, which is right for the projection tile because that figure is the
-   practice's own history. Here there is nothing behind the pill at all, so it is drawn as an
-   obviously-empty control rather than as a smudged number - a blur implies a value is sitting
-   there, and implying that about a tax figure nobody has paid for is the wrong promise twice. */
-.taxmask{display:inline-flex;align-items:center;gap:5px;vertical-align:middle;
-  font:inherit;font-size:12.5px;font-weight:800;letter-spacing:.01em;cursor:pointer;
-  padding:3px 9px;border-radius:999px;color:var(--tgink);
-  background:color-mix(in srgb,var(--tg3) 13%,transparent);
-  border:1px solid color-mix(in srgb,var(--tg3) 38%,transparent)}
-.taxmask .gi{width:13px;height:13px;flex:none}
+   practice's own history. Here there is nothing behind the mask at all, so nothing is smudged -
+   a blur implies a value is sitting there, and implying that about a tax figure nobody has paid
+   for is the wrong promise twice.
+
+   IT IS DRAWN IN THE SHAPE OF THE FIGURE IT REPLACES (£•,••• / ••%), not as a badge reading
+   "Locked" (Sep 2026). Every masked figure used to be a gold pill with a padlock and that word
+   in it, so a screen carrying five of them read as five sales pitches stacked on top of each
+   other rather than as one screen waiting on one purchase. The dots say the same thing in the
+   reader's own terms - this is where a number goes, and there is no number yet - and the honest
+   sentence stays exactly where it always was: on the card above, in the aria-label, and on the
+   tap. Nothing is computed either way; that is the part that must never change.
+
+   `font:inherit` is load-bearing twice. The mask takes the size and weight of the figure it
+   stands in for, so no row jumps when a year is unlocked and `.big` no longer has to guess at a
+   headline's size. And `-webkit-text-fill-color` has to be put back to currentColor, because the
+   slots it sits in (.nowcard .nv, .kpi .v) paint their numbers with a clipped gradient over a
+   transparent fill - which inherits straight through and would render the dots invisible. */
+.taxmask{display:inline-flex;align-items:center;vertical-align:baseline;
+  font:inherit;letter-spacing:.04em;cursor:pointer;-webkit-text-fill-color:currentColor;
+  padding:0 .3em;border-radius:.34em;
+  color:color-mix(in srgb,var(--tgink) 62%,var(--muted));
+  background:color-mix(in srgb,var(--tg3) 8%,transparent);
+  border:1px dashed color-mix(in srgb,var(--tg3) 34%,transparent)}
 .taxmask:active{transform:scale(.97)}
-/* In a KPI or a .nv headline slot the pill sits where a big number would, so it needs the room
-   a big number had - otherwise the card collapses and the row jumps when a year is unlocked. */
-.taxmask.big{font-size:14px;padding:7px 13px;margin:2px 0}
+/* In a KPI or a .nv headline slot the mask already fills a big number's slot by inheriting its
+   font, so `.big` only has to keep the vertical rhythm those cards were built with. */
+.taxmask.big{margin:2px 0}
 /* In a table cell it is competing with a column of numbers for a width nobody has to spare. */
-td .taxmask{font-size:11.5px;padding:2px 7px;gap:4px;white-space:nowrap}
-td .taxmask .gi{width:12px;height:12px}
+td .taxmask{white-space:nowrap;padding:0 .22em}
 .nv .taxmask.big{margin-top:2px}
 /* ===== The companion-app card (Settings › Data & backup) =====
    GroundWork Notes is a whole second app, and the card that sets up the link between the two sat
@@ -2660,18 +2683,28 @@ function tierTagHTML(t){
 
    The label beside a mask stays honest and unmasked ("On track to owe for 2026-27"), exactly as
    the locked projection tile does. And unlike .blurfig this is NOT aria-hidden: there is no number
-   being withheld from a screen reader, only a state, and the state is worth announcing. */
+   being withheld from a screen reader, only a state, and the state is worth announcing.
+
+   WHAT IT LOOKS LIKE IS DOTS IN THE SHAPE OF THE MISSING FIGURE, not a padlock and the word
+   "Locked" (Sep 2026). A screen with five masks on it was five badges each asking to be bought,
+   which is a great deal of selling for one purchase; the dots read as "a number goes here and
+   there isn't one yet", which is the truth, and the explaining is left to the card above them and
+   to the label a screen reader gets. The shape has to match the figure it stands in for - a
+   percentage masked as £•,••• would be a different claim - so callers that sit in a percentage
+   slot pass "pct". Nothing here computes anything, and that is the rule that must never move. */
 function taxMaskLabel(ty){
   const why=taxLockReason(ty);
   return why==="sub"?"Locked. GroundWork Pro is needed as well as the "+ty+" tax year."
     :why==="both"?"Locked. Needs GroundWork Pro and the "+ty+" tax year to calculate this."
     :"Locked. Unlock the "+ty+" tax year to calculate this.";
 }
-/* The inline pill, for a figure inside a sentence, a table cell or a KPI slot. */
-function taxMaskHTML(ty,cls){
+const TAX_MASK_SHAPES={money:"£•,•••",pct:"••%"};
+/* The inline mask, for a figure inside a sentence, a table cell or a KPI slot. */
+function taxMaskHTML(ty,cls,shape){
+  const txt=TAX_MASK_SHAPES[shape]||TAX_MASK_SHAPES.money;
   return '<button type="button" class="taxmask tier-pro'+(cls?" "+cls:"")+'" data-taxpack="'+esc(ty)+'"'+
     ' aria-label="'+esc(taxMaskLabel(ty))+'" title="'+esc(taxMaskLabel(ty))+'">'+
-    gi("lock")+'<span>Locked</span></button>';
+    '<span aria-hidden="true">'+txt+'</span></button>';
 }
 /* The full card, for a screen whose whole point is a figure. */
 function taxMaskCard(ty,title,blurb){
@@ -9602,7 +9635,10 @@ VIEWS.money=function(){
    read every month and the caveat has to travel with them. One definition, because "Now" and
    "Estimate" both carry it and two copies would eventually say two different things. */
 function taxDisclaimBar(){
-  return '<div class="vmsg warn" style="margin-bottom:12px">'+gi("scales")+' <b>Estimates, not tax advice.</b> Uses published HMRC rates to help you plan and trust your return. '+
+  /* .calm, not .warn: this is on the screen every time the tab is opened and nothing has gone
+     wrong, so it is context rather than an alert - see the .vmsg.calm rule. The words are
+     unchanged; only the shouting is. */
+  return '<div class="vmsg calm" style="margin-bottom:12px">'+gi("scales")+' <b>Estimates, not tax advice.</b> Uses published HMRC rates to help you plan and trust your return. '+
     '<span class="taxlink" id="taxDiscMore">What this means ›</span></div>';
 }
 function wireTaxDisclaimBar(host){
@@ -9694,7 +9730,7 @@ VIEWS.tax=function(){
      on \u2014 that has to travel with the numbers. */
   body.innerHTML=taxDisclaimBar()+thCard+c2Card+
     '<div class="card"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">By tax year</h2><div class="seg" id="taxmode" style="display:inline-flex"><button data-m="proj" class="'+(taxMode==="proj"?"on":"")+'">Projected</button><button data-m="todate" class="'+(taxMode==="todate"?"on":"")+'">To date</button></div></div><div class="rawscroll"><table><thead><tr><th>Year</th><th class="num">Tax</th><th class="num">Net</th><th class="num">Billed</th><th class="num">Recv\'d</th><th class="num">Overdue</th><th class="num">Sess</th></tr></thead><tbody>'+tyTable+'</tbody></table></div><p class="small muted"><b>'+esc(basisLabel())+'.</b> Tap a Tax or Net figure for the working. <b>*</b> the year in progress is shown as '+(taxMode==="proj"?"a projection for the whole year":"tax on income so far")+'. '+
-    (years.some(y=>taxYearLocked(y))?'A locked Tax figure has not been worked out - '+infoLink("tax-packages","tax is bought by the year")+'. ':'')+' '+infoLink("tax-table","What each column means")+' &nbsp;·&nbsp; <span class="taxlink" id="toBasis">Change how figures are counted ›</span></p></div>';
+    (years.some(y=>taxYearLocked(y))?'A Tax figure shown as <b>£•,•••</b> has not been worked out - '+infoLink("tax-packages","tax is bought by the year")+'. ':'')+' '+infoLink("tax-table","What each column means")+' &nbsp;·&nbsp; <span class="taxlink" id="toBasis">Change how figures are counted ›</span></p></div>';
   wireTaxDisclaimBar(body);
   /* [data-y] only - .taxlink is also the style for the pension link, which is not a year. */
   body.querySelectorAll(".taxlink[data-y]").forEach(elx=>elx.onclick=()=>{
@@ -10608,7 +10644,8 @@ function drawPayments(host){
   const potLockedCard='<div class="card" data-coach="pot"><h2>Your tax pot</h2>'+
     '<p class="small muted">What to keep back so the bill is already covered when it lands.</p>'+
     '<div class="kpis mt">'+
-      '<div class="kpi"><div class="v">'+taxMaskHTML(ty,"big")+'</div><div class="l">of everything you’re paid, set aside</div></div>'+
+      /* A share, not an amount: masked in the shape of the figure that belongs in the slot. */
+      '<div class="kpi"><div class="v">'+taxMaskHTML(ty,"big","pct")+'</div><div class="l">of everything you’re paid, set aside</div></div>'+
       '<div class="kpi"><div class="v">'+taxMaskHTML(ty,"big")+'</div><div class="l">should be put by today</div></div>'+
     '</div>'+
     '<p class="small muted mt">Working out what to keep back means working out the tax first. '+
@@ -10924,7 +10961,11 @@ function drawMTD(host){
   if(taxYearLocked(ty)){
     const row=host.querySelector("#mtdExpCsv");
     if(row&&row.parentNode)row.parentNode.insertAdjacentHTML("afterend",
-      '<div class="small muted" style="margin-top:8px">'+taxMaskHTML(ty)+
+      /* NOT a mask: nothing here stands in for a figure. Every quarter figure above is the
+         practice's own money added up and is on the screen already - it is the FILE that needs
+         the year. So this is a line of explanation under the buttons rather than a badge asking
+         to be bought, and the buttons themselves already open that year's sheet when tapped. */
+      '<div class="small muted" style="margin-top:8px">'+gi("lock")+
       ' Exporting '+esc(ty)+'\u2019s quarters needs that tax year. The figures above are your own and stay as they are.</div>');
   }
   wireInfo(host); plusWireLocks(host);

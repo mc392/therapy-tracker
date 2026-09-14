@@ -303,21 +303,39 @@ that fails if somebody reimplements this as a blur.
 
 ### 5.2 The markup
 
-`taxMaskHTML(ty, cls)` is the inline pill; `taxMaskCard(ty, title, blurb)` is the full card for a
-screen whose whole point is a figure. Rules they keep:
+`taxMaskHTML(ty, cls, shape)` is the inline mask; `taxMaskCard(ty, title, blurb)` is the full card
+for a screen whose whole point is a figure. Rules they keep:
 
+- **It is drawn in the shape of the figure it replaces** - `£•,•••`, or `••%` where a percentage
+  belongs (`TAX_MASK_SHAPES`, keyed by the `shape` argument, money by default). Until Sep 2026 each
+  one was a gold pill carrying a padlock and the word **Locked**, and the Estimate table alone put
+  five of them down a single column: the tab read as a sales pitch repeated once per figure rather
+  than as one screen waiting on one purchase. The dots make the same statement in the reader's own
+  terms - a number goes here and there isn't one yet - and the explaining stays where it was
+  already being done properly: the gate card at the top of the screen, the `aria-label`, and the
+  tap. **A percentage masked as `£•,•••` would be a different claim**, which is why the shape is an
+  argument rather than one string. Nothing is computed either way; that part is unchanged.
+- **`.taxmask` sets `font:inherit`**, so the mask is exactly the size and weight of the figure it
+  stands in for and no row jumps when a year is unlocked - `.big` is now only vertical rhythm. It
+  also has to put `-webkit-text-fill-color` back to `currentColor`: `.nowcard .nv` and `.kpi .v`
+  paint their numbers with a clipped gradient over a transparent fill, and that fill inherits.
+- **A line that is not standing in for a figure does not get a mask at all.** The MTD export note
+  is a sentence about a *file* with every quarter figure already on the screen above it, so it is a
+  plain muted line with a lock glyph; the export buttons already open the year's sheet.
 - **A real `aria-label`, not `aria-hidden`.** `.blurfig` hides its number from a screen reader
   because the number is there and is being withheld. Here there is no number, only a state, and the
-  state is worth announcing: *"Locked. Unlock the 2026-27 tax year to calculate this."*
+  state is worth announcing: *"Locked. Unlock the 2026-27 tax year to calculate this."* The dots
+  themselves are `aria-hidden` inside the button, so nobody is read "pound bullet comma bullet".
 - **The label beside it stays honest and unmasked** - "On track to owe for 2026-27" still says what
   the figure would be, exactly as the locked projection tile does.
 - **It is a button**, and it opens the package sheet for *that year*, not a generic paywall. It
   calls `stopPropagation()`, because masks sit inside cards that navigate on click.
 - **It names the year in its label**, because the year is what is bought and a table can have some
   rows open and some not.
-- **Gold** (`.tier-pro`), like everything else that costs money.
-- **One pill per row.** A breakdown line under a masked total says "not calculated" in words - two
-  gold pills on one row read as two separate things to buy.
+- **Gold** (`.tier-pro`), like everything else that costs money - but a muted gold on a dashed
+  outline rather than a filled badge, so it reads as an empty slot and not as a button to buy.
+- **One mask per row.** A breakdown line under a masked total says "not calculated" in words -
+  otherwise a single timeline row carries four masked figures and says nothing more for them.
 
 ### 5.3 Screen by screen
 
