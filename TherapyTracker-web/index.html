@@ -5125,7 +5125,7 @@ VIEWS.sessions=function(){
   const body=v.querySelector("#sbody");
   function renderList(){
     body.innerHTML='<div class="search"><input id="sq" placeholder="Search client, location, comment…" value="'+esc(sessFilter.q)+'"></div>'+
-      '<div class="seg" id="seg"><div class="segwrap">'+(function(){var od=S.sessions.filter(x=>derive(x).overdue).length;return ["upcoming","unpaid","incomplete","all"].map(s=>'<button data-s="'+s+'" class="'+(sessFilter.seg===s?"on":"")+'">'+s[0].toUpperCase()+s.slice(1)+(s==="unpaid"&&od?' <span class="badge">'+od+'</span>':"")+'</button>').join("");})()+'</div></div>'+
+      '<div class="seg mb" id="seg"><div class="segwrap">'+(function(){var od=S.sessions.filter(x=>derive(x).overdue).length;return ["upcoming","unpaid","incomplete","all"].map(s=>'<button data-s="'+s+'" class="'+(sessFilter.seg===s?"on":"")+'">'+s[0].toUpperCase()+s.slice(1)+(s==="unpaid"&&od?' <span class="badge">'+od+'</span>':"")+'</button>').join("");})()+'</div></div>'+
       '<div id="slist" class="card" style="padding:4px 12px"></div>';
     const renderRows=()=>{
       const t=today();let rows=derivedSessions();
