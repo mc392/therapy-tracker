@@ -13833,22 +13833,52 @@ function icsSessionsBetween(fromISO,toISO){
   return S.sessions.filter(s=>s.date&&s.date>=fromISO&&s.date<=toISO&&!isCancelled(s))
     .sort((a,b)=>(a.date+"T"+(a.time||"")).localeCompare(b.date+"T"+(b.time||"")));
 }
+/* ===== The native seam =====
+   The one join between this block and anything platform-specific, exactly the rule
+   window.GWPlusNative follows: shared code never calls Capacitor directly. Absent in a browser,
+   and absent on an iPhone whose build predates it - in which case every route below falls back
+   to the .ics file, which is still a complete way to do this.
+
+   It exists because handing iOS a FILE turned out to be a dead end however it was presented.
+   The share sheet buries Calendar; Quick Look renders the events but offers no way to accept
+   them, and the "Add All" screen Safari shows has no public API behind it. Writing the events
+   is the only route on iOS that ends with them in the diary. See docs/ios-native.md. */
+function calNative(){ try{ return window.GWCalendarNative || null; }catch(e){ return null; } }
+/* "20260915T100000" -> "2026-09-15T10:00". The native layer is handed wall-clock strings built
+   by icsFloating and NOT its own arithmetic, so the daylight-saving rule and the session length
+   are worked out in exactly one place for both platforms. */
+function calWall(compact){
+  return compact.slice(0,4)+"-"+compact.slice(4,6)+"-"+compact.slice(6,8)+"T"+compact.slice(9,11)+":"+compact.slice(11,13);
+}
+/* What the native layer needs, and nothing more - the same thin event the .ics carries. */
+function calEventFor(s){
+  const start=icsFloating(s.date,s.time,0);
+  if(!start)return null;
+  return {uid:String(s._id||""),title:icsTitle(s),start:calWall(start),
+          end:calWall(icsFloating(s.date,s.time,sessionMins())),location:String(s.location||"")};
+}
 function calAddSession(s){
   if(!s||!s.date){toast("This session needs a date first");Sfx.error();return;}
+  const N=calNative();
+  if(N){N.add([s]);return;}
   download(icsFileName("session-"+(s.client||"")+"-"+s.date),icsFile([s]),"text/calendar");
   toast("Calendar file downloaded");
 }
 function calAddRange(fromISO,toISO,label){
   const list=icsSessionsBetween(fromISO,toISO);
   if(!list.length){toast("No sessions "+label);Sfx.error();return;}
+  const N=calNative();
+  if(N){N.add(list);return;}
   download(icsFileName("sessions-"+fromISO+"-to-"+toISO),icsFile(list),"text/calendar");
   toast(list.length+" session"+(list.length===1?"":"s")+" downloaded for your calendar");
 }
 infoDef("calendar-export","Adding sessions to your calendar",
-  '<p class="small">This sends your sessions to whatever calendar you already use - the Calendar app on your phone, Google Calendar, Outlook. GroundWork makes a small <b>.ics</b> file, which is the standard every calendar understands, and hands it over. On an iPhone that opens the share sheet; on a computer it downloads and opens in your calendar.</p>'+
-  '<div class="grp-h">It is a copy, not a live link</div>'+
-  '<p class="small">Nothing syncs in the background and nothing connects the two apps. If you <b>move</b> a session in GroundWork afterwards, the entry already in your calendar does not move with it.</p>'+
-  '<p class="small">What you can do is send it again. Each entry is tagged with that session\u2019s own reference, so adding it a second time <b>updates</b> the one already in your calendar rather than leaving you with two. If you <b>delete</b> a session here, though, you will need to delete it in your calendar yourself.</p>'+
+  '<p class="small">This puts your sessions in the calendar you already use.</p>'+
+  '<div class="grp-h">On the iPhone app</div>'+
+  '<p class="small">Sessions are written <b>straight into your calendar</b>. GroundWork asks for permission the first time, and asks which calendar to use if you have more than one - that choice is remembered, and you can change it in <b>Settings \u203a This iPhone</b>.</p>'+
+  '<p class="small">If a session <b>moves</b>, adding it again updates the entry that is already there rather than leaving you with two. Deleting a session here does not remove it from your calendar, though - you will need to do that yourself.</p>'+
+  '<div class="grp-h">In a browser</div>'+
+  '<p class="small">A small <b>.ics</b> file is made instead - the standard every calendar understands - and your browser hands it to Apple Calendar, Outlook or Google Calendar. That is a copy rather than a live link: nothing syncs in the background, and moving a session here does not move the entry already in your calendar. Sending it again usually updates it, because each entry carries that session\u2019s own reference.</p>'+
   '<div class="grp-h">What it says, and what it does not</div>'+
   '<p class="small">Each entry carries the <b>client code</b>, the time, the length of your usual session and the room. That is all. No name, no fee, no session number, no notes.</p>'+
   '<p class="small">That is deliberate. Once an entry is in Google or Apple Calendar it sits on their servers and is visible to anything you have given calendar access to - and the fact that a particular person is in therapy at a particular time is sensitive on its own, even with no name attached. If your calendar is one other people can see, it is worth knowing that even a code is a regular weekly appointment somebody could ask about.</p>'+
@@ -17031,6 +17061,140 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
     shareDownload(name, text, type);
   };
 
+  /* ================= Sessions go straight into the phone's calendar =================
+     HANDING iOS A FILE IS A DEAD END, AND THAT IS WHY THIS EXISTS (Sep 2026). The share sheet
+     buries Calendar among Save to Files and AirDrop. Quick Look, tried next, renders the events
+     and then offers no way to accept them - only a close button and a share icon. The screen
+     Safari shows ("2 Events", with Add All) is Calendar's own import sheet and has no public API
+     behind it at all. So on iOS the file route is abandoned for the real one: EventKit, writing
+     the events into the diary itself. One tap, no sheet, nothing to find in the Files app.
+
+     It is also the only route that can UPDATE. A session that moves is rewritten in place,
+     because the event's identifier was kept when it was first added - which is the thing
+     Calendar's own Add All button does not do.
+
+     WHY FULL ACCESS AND NOT WRITE-ONLY. iOS 17 split the permission, and write-only is the
+     smaller ask - but reading an event back by its identifier, which is what makes a move a
+     move rather than a duplicate, needs full access. The Info.plist string says so in those
+     words. Older builds take the single pre-17 permission.
+
+     `tt_calmap` (session id -> event identifier) and `tt_calendar` (the chosen calendar) are
+     localStorage, NEVER `S` - the same rule as tt_lock. An event identifier means nothing on
+     another phone, so carrying one in a backup would have a restore point at events that do not
+     exist there. An empty map on a new phone is the correct answer: it adds them afresh. */
+  const calMap = () => { try{ return JSON.parse(LSget("tt_calmap","{}")) || {}; }catch(e){ return {}; } };
+  const calMapSet = (m) => LSset("tt_calmap", JSON.stringify(m));
+
+  async function calPickCalendar(){
+    if(!GW || !GW.calendarList) return { granted:true, id:"" };
+    let r;
+    try{ r = await GW.calendarList(); }catch(e){ return { granted:true, id:"" }; }
+    if(!r || !r.granted) return { granted:false, id:"" };
+    const list = (r.calendars || []).filter(c => c && c.id);
+    const stored = LSget("tt_calendar","");
+    /* A calendar that has since been deleted must not silently send every session to the
+       default one without saying so - the choice is re-asked instead. */
+    if(stored && list.some(c => c.id === stored)) return { granted:true, id:stored };
+    if(list.length <= 1){
+      const id = list.length ? list[0].id : (r.defaultId || "");
+      if(id) LSset("tt_calendar", id);
+      return { granted:true, id:id };
+    }
+    /* More than one writable calendar, and which one matters: a therapy diary must not land in
+       a calendar somebody shares with their family by accident. Asked once, then remembered. */
+    const body = el('<div></div>');
+    body.innerHTML =
+      '<p class="small muted">Your sessions will be added to this calendar. You can change it later in <b>Settings › This iPhone</b>.</p>'+
+      list.map(c =>
+        '<div class="list-item" data-cal="'+esc(c.id)+'"><div class="li-main">'+
+        '<div class="li-title">'+esc(c.title||"Calendar")+(c.id===r.defaultId?' <span class="muted small">(default)</span>':'')+'</div>'+
+        (c.source ? '<div class="li-sub">'+esc(c.source)+'</div>' : '')+
+        '</div></div>').join("");
+    /* sheetPromise, not a hand-rolled observer - it is the app's one way of asking a question in
+       a sheet and it resolves null however the sheet is dismissed, so no promise can hang. */
+    const chosen = await sheetPromise("Which calendar?", body, (b, fin) => {
+      b.querySelectorAll("[data-cal]").forEach(n => n.onclick = () => fin(n.dataset.cal));
+    });
+    if(!chosen) return { granted:true, id:null };      /* dismissed - nothing is written */
+    LSset("tt_calendar", chosen);
+    return { granted:true, id:chosen };
+  }
+
+  async function calAddNative(list){
+    const events = [];
+    const map = calMap();
+    (list || []).forEach(s => {
+      const e = calEventFor(s);
+      if(!e) return;
+      if(map[e.uid]) e.eventId = map[e.uid];
+      events.push(e);
+    });
+    if(!events.length){ toast("Nothing to add"); return; }
+
+    const pick = await calPickCalendar();
+    if(!pick.granted){
+      /* Refused. Say what to do about it, then leave the file route open rather than leaving
+         the reader with nothing at all. */
+      toast("GroundWork needs calendar access - iPhone Settings › GroundWork");
+      Sfx.error();
+      calDownloadFallback(list);
+      return;
+    }
+    if(pick.id === null) return;                        /* the picker was dismissed */
+
+    let r;
+    try{
+      r = await GW.calendarAdd({ events: events, calendarId: pick.id || "" });
+    }catch(e){
+      toast("Could not reach your calendar");
+      Sfx.error();
+      calDownloadFallback(list);
+      return;
+    }
+    if(!r || !r.granted){
+      toast("GroundWork needs calendar access - iPhone Settings › GroundWork");
+      Sfx.error();
+      calDownloadFallback(list);
+      return;
+    }
+
+    const res = (r.results || []).filter(x => x && x.eventId);
+    if(!res.length){
+      toast(r.error ? "Could not add to your calendar" : "Nothing was added");
+      Sfx.error();
+      return;
+    }
+    const m = calMap();
+    res.forEach(x => { m[x.uid] = x.eventId; });
+    calMapSet(m);
+
+    const added = res.filter(x => !x.updated).length, updated = res.length - added;
+    const where = r.calendar ? (" to " + r.calendar) : "";
+    const part = [];
+    if(added) part.push(added + " added");
+    if(updated) part.push(updated + " updated");
+    toast(part.join(", ") + where);
+    try{ Sfx.pop(); }catch(e){}
+  }
+
+  /* The pre-EventKit route, kept for a refusal or a failure: download() is still wrapped, so an
+     .ics reaches openCalendarFile and the reader at least has the file. */
+  function calDownloadFallback(list){
+    try{
+      if(!list || !list.length) return;
+      if(list.length === 1)
+        download(icsFileName("session-"+(list[0].client||"")+"-"+list[0].date), icsFile(list), "text/calendar");
+      else
+        download(icsFileName("sessions-"+list[0].date+"-to-"+list[list.length-1].date), icsFile(list), "text/calendar");
+    }catch(e){}
+  }
+
+  /* Declared only when the plugin really has the methods, so the shared code's `if(N)` is a
+     true test of whether this device can write to a calendar at all. An older build falls
+     through to the .ics exactly as it did before. */
+  if(GW && GW.calendarAdd && GW.calendarList)
+    window.GWCalendarNative = { add: calAddNative };
+
   /* ================= Where your records are kept =================
      GroundWork Notes keeps the counsellor's records in a folder she picks - normally inside her
      own iCloud Drive - and the thing everyone notices about it is that there is nothing to
@@ -17794,6 +17958,11 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
           '<p class="prev">How long you can leave GroundWork before it asks again.</p>'
         : '<div class="vmsg warn mt">'+gi("lock")+' This iPhone has no passcode or Face ID set up, so the app lock is unavailable. Add one in the iPhone’s own Settings.</div>')+
       '</div>'+
+      (window.GWCalendarNative ?
+      '<div class="card">'+cardHead("Your calendar","calendar-export")+
+        '<p class="small muted" style="margin:-2px 0 0">Where <b>Add to my calendar</b> puts your sessions. Each entry carries your client code, the time and the room, and nothing else.</p>'+
+        '<div class="mt" id="natCal"></div>'+
+      '</div>' : '')+
       '<div class="card">'+cardHead("Where your records are saved","backups-explained")+
         '<p class="small muted" style="margin:-2px 0 0">Every change you make is written into a folder you choose - normally in <b>iCloud Drive</b> - so your practice lives in your own files rather than only inside this app.</p>'+
         '<div class="mt" id="natFolder"></div>'+
@@ -17806,6 +17975,48 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
         "Ask before showing your records, and hide them in the app switcher.", lockOn(), !canLock) +
       ovToggleRow("natNotify", gi("attention"), "Daily reminders",
         "A morning notification when payments, notes or supervision need you.", notifyOn(), false);
+
+    /* The chosen calendar, by name rather than by the identifier that is actually stored - an
+       identifier tells the reader nothing about which diary their sessions are going into.
+
+       IT ASKS WHERE ACCESS STANDS AND NEVER ASKS FOR IT (`ask:false`). Painting this card used to
+       call calendarList() plainly, which requests access - so opening Settings to check a backup
+       raised "GroundWork would like access to your calendar" out of nowhere, on a screen that had
+       not been asked for anything of the kind. That is startling, and it is what App Review
+       Guideline 5.1.1 means by a permission request with no context. The prompt belongs to the
+       button below, and to Add to my calendar, where somebody has actually asked for this. */
+    const calHost = d.querySelector("#natCal");
+    if(calHost){
+      const paint = async () => {
+        let r = null;
+        try{ r = await GW.calendarList({ ask:false }); }catch(e){}
+        const st = (r && r.status) || "unasked";
+        /* Three states, because they need three different things said. "Never asked" used to be
+           reported as "no access - go to iPhone Settings", which sends somebody off to fix a
+           permission nobody has ever offered them. */
+        let line;
+        if(st === "granted"){
+          const id = LSget("tt_calendar","");
+          const hit = ((r && r.calendars) || []).find(c => c.id === (id || r.defaultId));
+          line = hit ? 'Adding to <b>'+esc(hit.title)+'</b>.'
+                     : 'Not chosen yet - you will be asked which one the first time you add a session.';
+        }else if(st === "denied" || st === "restricted"){
+          line = gi("warning")+' Calendar access is off. Turn it on in the iPhone’s own Settings › GroundWork.';
+        }else{
+          line = 'GroundWork will ask for permission the first time you add a session.';
+        }
+        calHost.innerHTML =
+          '<div class="prev" style="margin:0 0 10px">'+line+'</div>'+
+          '<button class="btn sec" id="natCalPick">Choose a calendar</button>';
+        calHost.querySelector("#natCalPick").onclick = async () => {
+          LSset("tt_calendar","");              /* clearing it is what makes the picker reappear */
+          const pick = await calPickCalendar();  /* user-initiated, so this one may prompt */
+          if(!pick.granted){ toast("GroundWork needs calendar access - iPhone Settings › GroundWork"); Sfx.error(); }
+          paint();
+        };
+      };
+      paint();
+    }
 
     const lockSw = host.querySelector('[data-sw="natLock"]');
     lockSw.onclick = async () => {

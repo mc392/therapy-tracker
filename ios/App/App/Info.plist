@@ -26,6 +26,10 @@
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>GroundWork adds the sessions you choose to your calendar, and updates them if a session moves. Each entry carries only your client code, the time and the room - never a name, a fee or any note. Full access is needed so a session that moves can be updated rather than added twice.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>GroundWork adds the sessions you choose to your calendar, and updates them if a session moves. Each entry carries only your client code, the time and the room - never a name, a fee or any note.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>GroundWork uses Face ID to keep your client records locked when the app is closed. Your data never leaves this device.</string>
 	<key>UIApplicationSceneManifest</key>

@@ -35,6 +35,37 @@ Two things to keep true, because this answer stops being honest the moment eithe
   means re-answering the questionnaire.
 - **The share sheet is not collection.** Exports go where the therapist sends them. Apple
   does not count a user-initiated share as data the developer collects.
+- **Calendar access is not collection either.** The app writes sessions into a calendar the
+  therapist picks and reads back only events it created itself, by an identifier it stored;
+  nothing is transmitted anywhere. Apple defines collection as data leaving the device, so the
+  label is unchanged - but re-read this line if the calendar feature ever grows.
+
+## Calendar permission - what to expect at review
+
+Not a special-approval permission: no entitlement, no form, no pre-approval. Three things carry
+it, and the first is the one that gets apps rejected.
+
+- **The prompt is raised at the point of use.** Tapping *Add to my calendar*, or *Choose a
+  calendar*, is what asks. Nothing else in the app requests access - Settings reports the status
+  without requesting it. Guideline 5.1.1 wants exactly this, and it shipped wrong once (see
+  `docs/ios-native.md`), so it is asserted in two places rather than remembered.
+- **Full access rather than write-only is the one thing a reviewer may query.** iOS 17 split the
+  permission so apps that only add events need not read the diary, so asking for the larger one
+  invites the question. The answer is functional and is already in the purpose string: updating a
+  session that moved means reading that event back by its identifier, and write-only cannot. If
+  review asks, say that; do not soften it into "for a better experience".
+- **The purpose strings name what is written and what is not** - the client code, the time and the
+  room, never a name, a fee or a note. `NSCalendarsFullAccessUsageDescription` is read on iOS 17+
+  and `NSCalendarsUsageDescription` below it; the deployment target is iOS 15, so **both** are
+  needed. iOS terminates the app if access is requested without one.
+
+Reviewer note, if one is wanted:
+
+> GroundWork writes the practitioner's own session times into a calendar she chooses. Full
+> calendar access is used solely to update an event the app previously created when a session is
+> rescheduled; nothing is read for any other purpose and no calendar data leaves the device.
+
+EventKit is not one of Apple's "required reason" APIs, so this adds nothing to a privacy manifest.
 
 Worth adding to `privacy.html` before review, if it is not explicit already: client records
 are special-category data under UK GDPR, they never leave the device, and Charlotte remains

@@ -1,5 +1,6 @@
 import Foundation
 import Capacitor
+import EventKit
 import LocalAuthentication
 import StoreKit
 import UIKit
@@ -27,6 +28,11 @@ import WebKit
 ///    an **Add All** button. The share sheet buries it behind "Save to Files" and leaves the
 ///    reader to find the file again in the Files app - a dead end for the one export whose
 ///    whole purpose is landing in Calendar. `openCalendarFile` presents that screen instead.
+///  * **Writing sessions into the calendar** - handing iOS an `.ics` is a dead end however it
+///    is presented (the share sheet buries Calendar; Quick Look shows the events but offers no
+///    way to accept them; Calendar's own "Add All" import sheet has no public API). EventKit is
+///    the only route that ends with the sessions in the diary, and the only one that can update
+///    a session that has moved instead of leaving a duplicate.
 ///  * **The records folder** - a folder the user picks, normally in iCloud Drive, that every
 ///    save is written into. A browser cannot keep a durable grant to a folder on iOS at all;
 ///    a security-scoped bookmark can, which is what turns "remember to export a backup" into
@@ -44,6 +50,8 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "authenticate", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "sharePDF", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "openCalendarFile", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "calendarList", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "calendarAdd", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "plusProducts", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "plusStatus", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "plusPurchase", returnType: CAPPluginReturnPromise),
@@ -665,6 +673,175 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
                 self.icsDelegate = nil
                 call.resolve(["shown": false])
             }
+        }
+    }
+}
+
+extension GroundWorkNativePlugin {
+
+    // MARK: - Writing sessions into the phone's own calendar
+
+    /// One store for the life of the app. EventKit is documented as expensive to spin up, and a
+    /// fresh one per call would also re-ask the permission machinery every time.
+    private static let eventStore = EKEventStore()
+
+    /// iOS 17 split calendar permission in two, and this asks for the LARGER one deliberately:
+    /// updating a session that has moved means reading its event back by identifier, which
+    /// write-only access cannot do. The Info.plist string says exactly that.
+    private func withCalendarAccess(_ call: CAPPluginCall, _ body: @escaping (EKEventStore) -> Void) {
+        let store = Self.eventStore
+        let done: (Bool, Error?) -> Void = { [weak self] granted, _ in
+            DispatchQueue.main.async {
+                if granted { body(store) }
+                else { call.resolve(["granted": false, "status": self?.calendarAuthStatus() ?? "denied"]) }
+            }
+        }
+        if #available(iOS 17.0, *) { store.requestFullAccessToEvents(completion: done) }
+        else { store.requestAccess(to: .event, completion: done) }
+    }
+
+    /// Where access stands, **without asking for it**. iOS 17 replaced `.authorized` with
+    /// `.fullAccess` / `.writeOnly`; the two branches are kept apart because `.authorized` and
+    /// `.fullAccess` share a raw value and listing both in one switch will not compile.
+    private func calendarAuthStatus() -> String {
+        let s = EKEventStore.authorizationStatus(for: .event)
+        if #available(iOS 17.0, *) {
+            switch s {
+            case .fullAccess:   return "granted"
+            case .writeOnly:    return "writeonly"
+            case .denied:       return "denied"
+            case .restricted:   return "restricted"
+            case .notDetermined: return "unasked"
+            @unknown default:   return "unasked"
+            }
+        }
+        switch s {
+        case .authorized:    return "granted"
+        case .denied:        return "denied"
+        case .restricted:    return "restricted"
+        case .notDetermined: return "unasked"
+        @unknown default:    return "unasked"
+        }
+    }
+
+    private func calendarPayload(_ store: EKEventStore) -> [String: Any] {
+        let cals = store.calendars(for: .event).filter { $0.allowsContentModifications }
+        return [
+            "granted": true,
+            "status": "granted",
+            "defaultId": store.defaultCalendarForNewEvents?.calendarIdentifier ?? "",
+            "calendars": cals.map { [
+                "id": $0.calendarIdentifier,
+                "title": $0.title,
+                "source": $0.source?.title ?? ""
+            ] as [String: Any] }
+        ]
+    }
+
+    /// Wall clock, exactly as the web layer stores a session: "2026-09-15T10:00". No timezone
+    /// travels with a session, so the phone's own is the only honest reading - and the arithmetic
+    /// behind these strings (the session length, the daylight-saving morning) is done once, in
+    /// `icsFloating`, for both platforms.
+    private static let wallClock: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd'T'HH:mm"
+        return f
+    }()
+
+    /// The calendars this phone can actually be written to, so the reader can choose. A therapy
+    /// diary landing in a calendar shared with the family by default is the thing to avoid.
+    /// `ask: false` reports where access stands and **never raises the permission sheet**. The
+    /// Settings card is the only caller that passes it, and it must: a permission prompt fired by
+    /// opening a settings page is startling, has no context to justify it, and is squarely what
+    /// App Review Guideline 5.1.1 objects to. The prompt belongs to the moment somebody asks for
+    /// a session to be added, which is where every other caller sits.
+    @objc func calendarList(_ call: CAPPluginCall) {
+        let status = calendarAuthStatus()
+        if call.getBool("ask", true) == false && status != "granted" {
+            call.resolve(["granted": false, "status": status, "calendars": []])
+            return
+        }
+        withCalendarAccess(call) { [weak self] store in
+            guard let self = self else { return }
+            call.resolve(self.calendarPayload(store))
+        }
+    }
+
+    /// Adds each event, or rewrites the one a stored identifier points at. Returns an identifier
+    /// per session so the web layer can recognise the same session next time - that record is
+    /// what turns a second export from a duplicate into an update.
+    @objc func calendarAdd(_ call: CAPPluginCall) {
+        /* Both routes, because the bridge's typed accessor and the raw options dictionary have
+           not always agreed about an array of objects across Capacitor versions, and getting this
+           wrong rejects every add on a real phone while every test here still passes. */
+        let parsed = (call.getArray("events") as? [[String: Any]])
+            ?? (call.options["events"] as? [[String: Any]])
+        guard let raw = parsed, !raw.isEmpty else {
+            call.reject("events is required")
+            return
+        }
+        let wanted = call.getString("calendarId") ?? ""
+
+        withCalendarAccess(call) { store in
+            var target = store.defaultCalendarForNewEvents
+            if !wanted.isEmpty, let c = store.calendar(withIdentifier: wanted),
+               c.allowsContentModifications { target = c }
+            guard let cal = target else {
+                call.resolve(["granted": true, "error": "no writable calendar", "results": []])
+                return
+            }
+
+            /* Saved with commit:false and committed once at the end - but the identifiers are
+               read back AFTER that commit, because an event's identifier is not guaranteed to
+               exist until it has been written. Holding the objects is what makes that possible. */
+            var pending: [(uid: String, event: EKEvent, updating: Bool)] = []
+            var failed: [[String: Any]] = []
+
+            for it in raw {
+                guard let uid = it["uid"] as? String,
+                      let startS = it["start"] as? String,
+                      let endS = it["end"] as? String,
+                      let start = Self.wallClock.date(from: startS),
+                      let end = Self.wallClock.date(from: endS) else { continue }
+
+                /* An identifier the app stored last time. The reader may have deleted that event
+                   in Calendar since, in which case a fresh one is made rather than the add
+                   quietly doing nothing. */
+                var known: EKEvent?
+                if let id = it["eventId"] as? String, !id.isEmpty {
+                    known = store.event(withIdentifier: id)
+                }
+                let updating = known != nil
+                let event = known ?? EKEvent(eventStore: store)
+
+                event.title = (it["title"] as? String) ?? "Session"
+                event.startDate = start
+                event.endDate = end
+                let loc = (it["location"] as? String) ?? ""
+                event.location = loc.isEmpty ? nil : loc
+                if !updating { event.calendar = cal }
+
+                do {
+                    try store.save(event, span: .thisEvent, commit: false)
+                    pending.append((uid, event, updating))
+                } catch {
+                    failed.append(["uid": uid, "error": error.localizedDescription])
+                }
+            }
+
+            do { try store.commit() } catch {
+                call.resolve(["granted": true, "error": error.localizedDescription, "results": []])
+                return
+            }
+
+            var results: [[String: Any]] = pending.map {
+                ["uid": $0.uid,
+                 "eventId": $0.event.eventIdentifier ?? "",
+                 "updated": $0.updating] as [String: Any]
+            }
+            results.append(contentsOf: failed)
+            call.resolve(["granted": true, "calendar": cal.title, "results": results])
         }
     }
 }

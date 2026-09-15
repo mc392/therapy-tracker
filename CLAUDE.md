@@ -941,32 +941,62 @@ to Apple Calendar or Outlook. Nothing was added to `GroundWorkNativePlugin.swift
 - `renderCal()` gained this screen's **first info dot**, so it gained a `wireInfo(body)` call with
   it. The guidance test walks `APP_MAP` segments and the calendar is a view toggle rather than a
   segment, so that dot is asserted in `check-behaviour.mjs` instead.
-- **On iOS the file opens the system's own event screen, NOT the share sheet** (Sep 2026). The
-  `download()` wrapper branches on the file - `isCalendarFile()`, the `.ics` extension or a
-  `text/calendar` type - and sends it to the plugin's `openCalendarFile`, which presents
-  `UIDocumentInteractionController.presentPreview`: the screen Safari shows, headed *2 Events*
-  with **Add All**. The share sheet offered Save to Files, AirDrop and WhatsApp, none of which is
-  Calendar, so the iPhone app was worse than the web build at the one export whose whole purpose
-  is landing in a calendar. No calendar permission is asked for or needed - the app hands iOS a
-  file and iOS asks the questions. **Every failure path still falls back to the share sheet** (an
-  older build with no such method, a reject, and `{shown:false}` meaning iOS had no preview): a
-  file the reader cannot reach at all is worse than one behind an awkward sheet. Detail in
-  `docs/ios-native.md` § Calendar files.
-- **"Add All" does not apply updates, and nothing in the file can make it.** Re-exporting a
-  session already in the calendar updates it only when the reader taps into that individual
-  event; the bulk button adds rather than reconciles. That is Apple's importer and it behaves
-  the same on the web build - the derived UID and rising `SEQUENCE` are already exactly what the
-  format asks for. The only guaranteed fix is **EventKit**, writing events directly and storing
-  an identifier per session, which is the two-way-sync feature (a calendar permission prompt, an
-  iOS-only surface, and a schema bump). Deliberately not done; don't "fix" it by fiddling with
-  `METHOD:` - turning the file into `REQUEST` makes every session an invitation with an
-  organiser, which is worse.
+- **ON iOS THE SESSIONS ARE WRITTEN INTO THE CALENDAR, NOT HANDED OVER AS A FILE** (Sep 2026).
+  **Handing iOS a file is a dead end, and it took three attempts to accept that.** The share
+  sheet buries Calendar among Save to Files and AirDrop. Quick Look
+  (`UIDocumentInteractionController.presentPreview`, the route Safari takes) renders the events
+  perfectly and then offers **no way to accept them** - a close button and a share icon, nothing
+  else. The *2 Events / Add All* screen Safari shows is Calendar's own import sheet and **there
+  is no public API for it**. So iOS goes through **EventKit** (`calendarAdd` / `calendarList`):
+  one tap, no sheet, nothing to find in Files.
+- **That is also the only route that can UPDATE.** The event identifier is kept against the
+  session, so a session that moves is rewritten in place - which Calendar's own Add All button
+  does not do. Don't try to fix the file instead: the derived UID and rising `SEQUENCE` are
+  already exactly what the format asks for, and turning `METHOD:` into `REQUEST` makes every
+  session an invitation with an organiser, which is worse.
+- **Full access, not write-only, and the update is the reason.** iOS 17 split the permission and
+  write-only is the smaller ask, but reading an event back by its identifier needs full access -
+  and without that read a move is a duplicate. **`Info.plist` must carry both**
+  `NSCalendarsFullAccessUsageDescription` and `NSCalendarsUsageDescription` (deployment target is
+  iOS 15): **iOS terminates the app** if access is requested without one, so `check-drift.mjs`
+  asserts both.
+- **`tt_calmap` (session id → event identifier) and `tt_calendar` (the chosen calendar) are
+  localStorage, NEVER `S`** - the same rule as `tt_lock`, and the reason a schema bump was not
+  needed. An event identifier means nothing on another phone, so carrying one in a backup would
+  point a restore at events that do not exist; an empty map on a new phone correctly adds afresh.
+- **The reader is asked WHICH calendar** when more than one is writable, once, through
+  `sheetPromise` like every other question - a therapy diary landing in a calendar shared with
+  the family by default is what that prevents. Changeable in Settings › This iPhone.
+- **THE PERMISSION SHEET BELONGS TO THE MOMENT SOMEBODY ASKS FOR A SESSION TO BE ADDED, AND
+  NOWHERE ELSE.** `calendarList({ask:false})` reports where access stands without requesting it,
+  and the Settings card is its only caller. It shipped calling `calendarList()` plainly, so
+  opening Settings › This iPhone to check a backup raised "GroundWork would like access to your
+  calendar" on a screen nobody had asked a calendar question on - startling, and squarely what
+  **App Review Guideline 5.1.1** means by a request with no context. `check-drift.mjs` asserts
+  both halves of the flag and `npm run test:folder` counts prompts, because this is invisible in
+  any test that only checks what a screen renders.
+- **The card answers THREE states, not two** - granted (names the calendar), denied or restricted
+  (where to turn it back on), and never-asked (it will be asked for when it is needed). Reporting
+  "no access - go to iPhone Settings" to somebody who has never been offered the permission sends
+  them to fix something nobody asked them.
+- **`window.GWCalendarNative` is the only seam** (same rule as `window.GWPlusNative`: shared code
+  never calls Capacitor directly), and it is declared **only when the plugin really has both
+  methods**, so the shared code's `if(N)` is a true test of whether this device can write at all.
+  The native layer is handed wall-clock strings built by **`icsFloating`**, never its own
+  arithmetic, so the session length and the DST rule are worked out once for both platforms.
+- **Every failure path falls back to the `.ics`** - permission refused (which also says where to
+  turn it on), a bridge that throws, or an older build. The file route below is still live: it is
+  what a browser gets and what an iPhone gets when it cannot write.
 - **Three tests, deliberately split.** `npm run test:calendar` proves the file is well formed (68
   assertions, pure node, functions lifted out of `index.html` by their markers).
   `check-behaviour.mjs` proves the *controls* exist, are wired and produce it - a perfect builder
-  nothing calls ships nothing. `npm run test:folder` proves the iOS routing against a fake
-  Capacitor: an `.ics` reaches the event screen, everything else still reaches the share sheet,
-  and all three fallbacks work. The Swift itself has never been compiled.
+  nothing calls ships nothing. `npm run test:folder` proves the **iOS write path** against a fake
+  Capacitor and a fake calendar (53 assertions in all): the session is written rather than turned
+  into a file, the event is thin, the times come from the shared arithmetic, **adding the same
+  session twice rewrites one event rather than making two**, a move updates it, the picker blocks
+  until answered, and refusal / a throw / an older build each fall back to the `.ics`. **The Swift
+  itself has never been compiled** - so whether EventKit behaves as written is the one thing none
+  of this proves.
 
 ## Restore from backup (Settings › Data & backup - hardened Aug 2026)
 `importJSON()` is a whole-state replace, so it is gated by **smart friction, not uniform friction** - `restoreConfirm()` picks one of two tiers from `restorePlan()`. A restore onto a new phone stays one tap; stamping a stale file over weeks of newer entries earns the same ladder as erase.

@@ -73,7 +73,7 @@ the copied bundle (5.8MB that has no business in an app binary).
 | **Face ID / Touch ID lock** | nothing - the PWA has no lock at all | custom Swift plugin |
 | **Daily reminders** | the Attention feed, which cannot speak while the app is shut | `@capacitor/local-notifications` |
 | **Share sheet for exports** | `<a download>`, which does nothing in a WKWebView | `@capacitor/filesystem` + `@capacitor/share` |
-| **The "Add All" event screen** | the share sheet, which offers everything except Calendar | custom Swift plugin |
+| **Sessions written into the calendar** | a file the reader has to find somewhere to put | custom Swift plugin (EventKit) |
 | **Receipts as real PDFs** | `window.print()`, a no-op in a WKWebView | custom Swift plugin |
 | **The records folder** | the File System Access API, which iOS does not have | custom Swift plugin |
 | **Automatic backups** | the same, for anyone with no folder chosen | `@capacitor/filesystem` |
@@ -88,7 +88,52 @@ localStorage, not in `S`. `S` travels in backups, and restoring a backup onto a 
 must not silently switch that phone's lock off, tell it that a copy it has never written was
 saved five minutes ago, or point it at a folder it has no permission to open.
 
-## Calendar files open the event screen, not the share sheet (Sep 2026)
+## Sessions are written into the calendar (EventKit, Sep 2026)
+
+**Handing iOS a file is a dead end, and it took three attempts to accept that.** The share sheet
+buries Calendar among Save to Files and AirDrop. Quick Look - tried next, because it is the route
+Safari takes - renders the events perfectly and then offers **no way to accept them**: a close
+button and a share icon, nothing else. The screen Safari actually shows, headed *2 Events* with an
+**Add All** button, is Calendar's own import sheet and **there is no public API for it**. So the
+file route is abandoned on iOS in favour of writing the events.
+
+- **`calendarAdd` writes them; `calendarList` offers the choice of calendar.** One tap, no sheet,
+  nothing to find in the Files app afterwards.
+- **It is also the only route that can UPDATE**, which is the complaint the file route could never
+  answer. The event identifier is kept against the session, so a session that moves is rewritten in
+  place. Calendar's own Add All button does not do this.
+- **Full access, not write-only, and the reason is that update.** iOS 17 split the permission and
+  write-only is the smaller ask - but reading an event back by its identifier needs full access,
+  and without that read a move is a duplicate. Both `NSCalendarsFullAccessUsageDescription` (iOS
+  17+) and `NSCalendarsUsageDescription` (the deployment target is iOS 15) are in `Info.plist`.
+  **iOS terminates the app** if access is requested without them, which is why `check-drift.mjs`
+  asserts both.
+- **`tt_calmap` (session id → event identifier) and `tt_calendar` (the chosen calendar) are
+  localStorage, never `S`** - the same rule as `tt_lock`. An event identifier means nothing on
+  another phone, so carrying one in a backup would point a restore at events that do not exist. An
+  empty map on a new phone is the correct answer: it adds them afresh.
+- **The permission sheet is raised at the point of use and nowhere else.**
+  `calendarList({ask:false})` reports the status without requesting it, which is what the Settings
+  card calls; `calendarAuthStatus()` is the Swift side of that. Painting that card used to request
+  access, so opening Settings raised the prompt out of nowhere - the shape App Review Guideline
+  5.1.1 objects to. Both halves are asserted in `check-drift.mjs`, and `test:folder` counts
+  prompts.
+- **The reader is asked WHICH calendar when there is more than one writable**, once, through
+  `sheetPromise` like every other question. A therapy diary landing in a calendar shared with the
+  family by default is the thing this prevents. Changeable in Settings › This iPhone.
+- **The times are not recomputed here.** The native layer is handed wall-clock strings built by
+  `icsFloating`, so the session length and the daylight-saving rule are worked out once for both
+  platforms - and the `.ics` test suite covers the iOS path's arithmetic too.
+- **`window.GWCalendarNative` is the only seam**, the same rule as `window.GWPlusNative`: shared
+  code never calls Capacitor directly. It is declared **only when the plugin really has both
+  methods**, so the shared code's `if(N)` is a true test of whether this device can write to a
+  calendar at all.
+- **Every failure path falls back to the `.ics`** - permission refused, a bridge that throws, or an
+  older build with no EventKit. Refusal also says where to turn it on. The file route below is
+  therefore still live and still tested; it is what a browser gets, and what an iPhone gets when it
+  cannot write.
+
+## The .ics fallback: Quick Look rather than the share sheet (Sep 2026)
 
 `download()` is wrapped once for every export, and an `.ics` is the single file that does not
 want what that wrapping gives. Everything else here is a document to put somewhere. A calendar
