@@ -114,6 +114,15 @@ if (existsSync("ios/App/App/GroundWorkNativePlugin.swift")) {
     if (!html.includes(`GW.${m}(`))
       fail(`index.html no longer calls \`GW.${m}()\` - the native calendar bridge has a method nothing reaches`);
   }
+  /* The Settings card asks where access stands; it must never ask FOR it. A permission sheet
+     raised by opening a settings page is what App Review Guideline 5.1.1 calls a request with no
+     context, and it shipped that way once already. */
+  if (!html.includes("ask:false"))
+    fail("index.html no longer passes `ask:false` to calendarList - painting the Settings card would raise the calendar permission prompt on a screen nobody asked a calendar question on");
+  if (!plugin.includes('call.getBool("ask"'))
+    fail("GroundWorkNativePlugin no longer honours the `ask` flag on calendarList - the web layer's `ask:false` would silently prompt anyway");
+  if (!plugin.includes("func calendarAuthStatus("))
+    fail("GroundWorkNativePlugin no longer has calendarAuthStatus() - reporting access without requesting it is the whole point of that flag");
   if (!plugin.includes("import EventKit"))
     fail("GroundWorkNativePlugin no longer imports EventKit - the calendar methods cannot compile without it");
   if (!html.includes("window.GWCalendarNative"))

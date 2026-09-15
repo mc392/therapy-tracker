@@ -175,14 +175,26 @@ function fakePhone() {
   /* A fake calendar. `mode` drives the paths: "ok" writes, "denied" is the permission refused,
      "throw" is the bridge failing. `store` is what ended up in the diary, keyed by event id, so
      a test can ask whether a second add made a duplicate or rewrote the same entry. */
-  window.__cal = { mode: "ok", store: {}, calls: [], next: 1, calendars: [
-    { id: "cal-personal", title: "Personal", source: "iCloud" },
-    { id: "cal-work", title: "Work", source: "iCloud" }
-  ] };
-  GroundWorkNative.calendarList = async () => {
-    if (window.__cal.mode === "denied") return { granted: false };
+  window.__cal = { mode: "ok", status: "granted", prompts: 0, store: {}, calls: [], next: 1,
+    calendars: [
+      { id: "cal-personal", title: "Personal", source: "iCloud" },
+      { id: "cal-work", title: "Work", source: "iCloud" }
+    ] };
+  /* `prompts` counts the permission sheet. `ask:false` must never raise one - that is the whole
+     point of the Settings card's call, and the thing this can prove. */
+  GroundWorkNative.calendarList = async (o) => {
     if (window.__cal.mode === "throw") throw new Error("no bridge");
-    return { granted: true, defaultId: "cal-personal", calendars: window.__cal.calendars.slice() };
+    const asking = !(o && o.ask === false);
+    let st = window.__cal.mode === "denied" ? "denied" : window.__cal.status;
+    if (st !== "granted") {
+      if (!asking) return { granted: false, status: st, calendars: [] };
+      window.__cal.prompts++;
+      if (window.__cal.mode === "denied" || window.__cal.status === "denied")
+        return { granted: false, status: "denied", calendars: [] };
+      window.__cal.status = "granted";
+    }
+    return { granted: true, status: "granted", defaultId: "cal-personal",
+             calendars: window.__cal.calendars.slice() };
   };
   GroundWorkNative.calendarAdd = async ({ events, calendarId }) => {
     if (window.__cal.mode === "denied") return { granted: false };
@@ -668,6 +680,55 @@ async function main() {
   });
   check(picked.chosen === "cal-work" && picked.wrote === 1, "cal.pickerRemembers",
     "choosing one writes there and remembers it for next time", picked);
+
+  /* ---- 13. Settings never raises the permission sheet ----
+     Opening Settings to check a backup must not produce "GroundWork would like access to your
+     calendar" on a screen nobody asked a calendar question on. App Review Guideline 5.1.1 calls
+     that a request without context, and it is startling regardless of review. */
+  const openDevice = () => page.evaluate(() => {
+    window.__cal.prompts = 0;
+    go("settings");
+    return new Promise((r) => setTimeout(() => {
+      const d = document.querySelector('details[data-g="device"]');
+      if (d) d.open = true;
+      setTimeout(() => r({
+        prompts: window.__cal.prompts,
+        line: (document.querySelector("#natCal .prev") || {}).textContent || "",
+        hasButton: !!document.querySelector("#natCal #natCalPick")
+      }), 260);
+    }, 260));
+  });
+
+  await page.evaluate(() => { window.__cal.status = "unasked"; localStorage.removeItem("tt_calendar"); });
+  let s = await openDevice();
+  check(s.prompts === 0, "cal.settingsNoPrompt",
+    "opening Settings with access never asked for raises no permission sheet", s);
+  check(/ask for permission the first time/i.test(s.line), "cal.settingsUnasked",
+    "and says permission will be asked for when it is actually needed", s.line);
+  check(s.hasButton, "cal.settingsButton", "the way to choose a calendar is still there", s);
+
+  await page.evaluate(() => { window.__cal.status = "denied"; });
+  s = await openDevice();
+  check(s.prompts === 0, "cal.settingsDeniedNoPrompt",
+    "and raises none when access was refused either", s);
+  check(/iPhone/i.test(s.line) && /off/i.test(s.line), "cal.settingsDenied",
+    "saying where to turn it back on - never the same line as 'not asked yet'", s.line);
+
+  await page.evaluate(() => {
+    window.__cal.status = "granted"; localStorage.setItem("tt_calendar", "cal-work");
+  });
+  s = await openDevice();
+  check(s.prompts === 0 && /Work/.test(s.line), "cal.settingsGranted",
+    "and names the chosen calendar once access is granted, still without asking", s);
+
+  /* The prompt belongs HERE, where somebody has asked for a session to be added. */
+  await page.evaluate(() => { window.__cal.status = "unasked"; window.__cal.prompts = 0; });
+  const atUse = await page.evaluate(() => {
+    calAddSession(S.sessions[0]);
+    return new Promise((r) => setTimeout(() => r({ prompts: window.__cal.prompts }), 320));
+  });
+  check(atUse.prompts === 1, "cal.promptAtPointOfUse",
+    "adding a session is what raises the permission sheet", atUse);
 
   check(consoleErrors.length === 0, "page.clean", "no uncaught error anywhere in the run", consoleErrors.slice(0, 4));
   check(dialogs.length === 0, "page.noAlerts", "nothing had to fall back to a native alert()", dialogs.slice(0, 4));

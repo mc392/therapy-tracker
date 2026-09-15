@@ -690,13 +690,52 @@ extension GroundWorkNativePlugin {
     /// write-only access cannot do. The Info.plist string says exactly that.
     private func withCalendarAccess(_ call: CAPPluginCall, _ body: @escaping (EKEventStore) -> Void) {
         let store = Self.eventStore
-        let done: (Bool, Error?) -> Void = { granted, _ in
+        let done: (Bool, Error?) -> Void = { [weak self] granted, _ in
             DispatchQueue.main.async {
-                if granted { body(store) } else { call.resolve(["granted": false]) }
+                if granted { body(store) }
+                else { call.resolve(["granted": false, "status": self?.calendarAuthStatus() ?? "denied"]) }
             }
         }
         if #available(iOS 17.0, *) { store.requestFullAccessToEvents(completion: done) }
         else { store.requestAccess(to: .event, completion: done) }
+    }
+
+    /// Where access stands, **without asking for it**. iOS 17 replaced `.authorized` with
+    /// `.fullAccess` / `.writeOnly`; the two branches are kept apart because `.authorized` and
+    /// `.fullAccess` share a raw value and listing both in one switch will not compile.
+    private func calendarAuthStatus() -> String {
+        let s = EKEventStore.authorizationStatus(for: .event)
+        if #available(iOS 17.0, *) {
+            switch s {
+            case .fullAccess:   return "granted"
+            case .writeOnly:    return "writeonly"
+            case .denied:       return "denied"
+            case .restricted:   return "restricted"
+            case .notDetermined: return "unasked"
+            @unknown default:   return "unasked"
+            }
+        }
+        switch s {
+        case .authorized:    return "granted"
+        case .denied:        return "denied"
+        case .restricted:    return "restricted"
+        case .notDetermined: return "unasked"
+        @unknown default:    return "unasked"
+        }
+    }
+
+    private func calendarPayload(_ store: EKEventStore) -> [String: Any] {
+        let cals = store.calendars(for: .event).filter { $0.allowsContentModifications }
+        return [
+            "granted": true,
+            "status": "granted",
+            "defaultId": store.defaultCalendarForNewEvents?.calendarIdentifier ?? "",
+            "calendars": cals.map { [
+                "id": $0.calendarIdentifier,
+                "title": $0.title,
+                "source": $0.source?.title ?? ""
+            ] as [String: Any] }
+        ]
     }
 
     /// Wall clock, exactly as the web layer stores a session: "2026-09-15T10:00". No timezone
@@ -712,18 +751,20 @@ extension GroundWorkNativePlugin {
 
     /// The calendars this phone can actually be written to, so the reader can choose. A therapy
     /// diary landing in a calendar shared with the family by default is the thing to avoid.
+    /// `ask: false` reports where access stands and **never raises the permission sheet**. The
+    /// Settings card is the only caller that passes it, and it must: a permission prompt fired by
+    /// opening a settings page is startling, has no context to justify it, and is squarely what
+    /// App Review Guideline 5.1.1 objects to. The prompt belongs to the moment somebody asks for
+    /// a session to be added, which is where every other caller sits.
     @objc func calendarList(_ call: CAPPluginCall) {
-        withCalendarAccess(call) { store in
-            let cals = store.calendars(for: .event).filter { $0.allowsContentModifications }
-            call.resolve([
-                "granted": true,
-                "defaultId": store.defaultCalendarForNewEvents?.calendarIdentifier ?? "",
-                "calendars": cals.map { [
-                    "id": $0.calendarIdentifier,
-                    "title": $0.title,
-                    "source": $0.source?.title ?? ""
-                ] as [String: Any] }
-            ])
+        let status = calendarAuthStatus()
+        if call.getBool("ask", true) == false && status != "granted" {
+            call.resolve(["granted": false, "status": status, "calendars": []])
+            return
+        }
+        withCalendarAccess(call) { [weak self] store in
+            guard let self = self else { return }
+            call.resolve(self.calendarPayload(store))
         }
     }
 

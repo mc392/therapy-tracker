@@ -112,6 +112,12 @@ file route is abandoned on iOS in favour of writing the events.
   localStorage, never `S`** - the same rule as `tt_lock`. An event identifier means nothing on
   another phone, so carrying one in a backup would point a restore at events that do not exist. An
   empty map on a new phone is the correct answer: it adds them afresh.
+- **The permission sheet is raised at the point of use and nowhere else.**
+  `calendarList({ask:false})` reports the status without requesting it, which is what the Settings
+  card calls; `calendarAuthStatus()` is the Swift side of that. Painting that card used to request
+  access, so opening Settings raised the prompt out of nowhere - the shape App Review Guideline
+  5.1.1 objects to. Both halves are asserted in `check-drift.mjs`, and `test:folder` counts
+  prompts.
 - **The reader is asked WHICH calendar when there is more than one writable**, once, through
   `sheetPromise` like every other question. A therapy diary landing in a calendar shared with the
   family by default is the thing this prevents. Changeable in Settings › This iPhone.

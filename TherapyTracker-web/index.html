@@ -17977,29 +17977,41 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
         "A morning notification when payments, notes or supervision need you.", notifyOn(), false);
 
     /* The chosen calendar, by name rather than by the identifier that is actually stored - an
-       identifier tells the reader nothing about which diary their sessions are going into. */
+       identifier tells the reader nothing about which diary their sessions are going into.
+
+       IT ASKS WHERE ACCESS STANDS AND NEVER ASKS FOR IT (`ask:false`). Painting this card used to
+       call calendarList() plainly, which requests access - so opening Settings to check a backup
+       raised "GroundWork would like access to your calendar" out of nowhere, on a screen that had
+       not been asked for anything of the kind. That is startling, and it is what App Review
+       Guideline 5.1.1 means by a permission request with no context. The prompt belongs to the
+       button below, and to Add to my calendar, where somebody has actually asked for this. */
     const calHost = d.querySelector("#natCal");
     if(calHost){
       const paint = async () => {
-        const id = LSget("tt_calendar","");
-        let name = "";
-        try{
-          const r = await GW.calendarList();
-          if(r && r.granted){
-            const hit = (r.calendars||[]).find(c => c.id === (id || r.defaultId));
-            name = hit ? hit.title : "";
-          }else name = null;                    /* access refused, or never asked for yet */
-        }catch(e){ name = ""; }
+        let r = null;
+        try{ r = await GW.calendarList({ ask:false }); }catch(e){}
+        const st = (r && r.status) || "unasked";
+        /* Three states, because they need three different things said. "Never asked" used to be
+           reported as "no access - go to iPhone Settings", which sends somebody off to fix a
+           permission nobody has ever offered them. */
+        let line;
+        if(st === "granted"){
+          const id = LSget("tt_calendar","");
+          const hit = ((r && r.calendars) || []).find(c => c.id === (id || r.defaultId));
+          line = hit ? 'Adding to <b>'+esc(hit.title)+'</b>.'
+                     : 'Not chosen yet - you will be asked which one the first time you add a session.';
+        }else if(st === "denied" || st === "restricted"){
+          line = gi("warning")+' Calendar access is off. Turn it on in the iPhone’s own Settings › GroundWork.';
+        }else{
+          line = 'GroundWork will ask for permission the first time you add a session.';
+        }
         calHost.innerHTML =
-          '<div class="prev" style="margin:0 0 10px">'+
-          (name === null ? gi("warning")+' No calendar access yet - iPhone Settings › GroundWork.'
-           : name ? 'Adding to <b>'+esc(name)+'</b>.'
-           : 'Not chosen yet - you will be asked the first time you add a session.')+'</div>'+
+          '<div class="prev" style="margin:0 0 10px">'+line+'</div>'+
           '<button class="btn sec" id="natCalPick">Choose a calendar</button>';
         calHost.querySelector("#natCalPick").onclick = async () => {
           LSset("tt_calendar","");              /* clearing it is what makes the picker reappear */
-          const r = await calPickCalendar();
-          if(!r.granted){ toast("GroundWork needs calendar access - iPhone Settings › GroundWork"); Sfx.error(); }
+          const pick = await calPickCalendar();  /* user-initiated, so this one may prompt */
+          if(!pick.granted){ toast("GroundWork needs calendar access - iPhone Settings › GroundWork"); Sfx.error(); }
           paint();
         };
       };

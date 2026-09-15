@@ -967,6 +967,18 @@ to Apple Calendar or Outlook. Nothing was added to `GroundWorkNativePlugin.swift
 - **The reader is asked WHICH calendar** when more than one is writable, once, through
   `sheetPromise` like every other question - a therapy diary landing in a calendar shared with
   the family by default is what that prevents. Changeable in Settings › This iPhone.
+- **THE PERMISSION SHEET BELONGS TO THE MOMENT SOMEBODY ASKS FOR A SESSION TO BE ADDED, AND
+  NOWHERE ELSE.** `calendarList({ask:false})` reports where access stands without requesting it,
+  and the Settings card is its only caller. It shipped calling `calendarList()` plainly, so
+  opening Settings › This iPhone to check a backup raised "GroundWork would like access to your
+  calendar" on a screen nobody had asked a calendar question on - startling, and squarely what
+  **App Review Guideline 5.1.1** means by a request with no context. `check-drift.mjs` asserts
+  both halves of the flag and `npm run test:folder` counts prompts, because this is invisible in
+  any test that only checks what a screen renders.
+- **The card answers THREE states, not two** - granted (names the calendar), denied or restricted
+  (where to turn it back on), and never-asked (it will be asked for when it is needed). Reporting
+  "no access - go to iPhone Settings" to somebody who has never been offered the permission sends
+  them to fix something nobody asked them.
 - **`window.GWCalendarNative` is the only seam** (same rule as `window.GWPlusNative`: shared code
   never calls Capacitor directly), and it is declared **only when the plugin really has both
   methods**, so the shared code's `if(N)` is a true test of whether this device can write at all.
