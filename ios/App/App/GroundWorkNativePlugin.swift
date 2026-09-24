@@ -33,6 +33,8 @@ import WebKit
 ///    way to accept them; Calendar's own "Add All" import sheet has no public API). EventKit is
 ///    the only route that ends with the sessions in the diary, and the only one that can update
 ///    a session that has moved instead of leaving a duplicate.
+///  * **Haptics** - `haptic` plays the system's own feedback generators for the web layer's
+///    `haptic(kind)`; a browser has no way to reach the Taptic Engine at all.
 ///  * **The records folder** - a folder the user picks, normally in iCloud Drive, that every
 ///    save is written into. A browser cannot keep a durable grant to a folder on iOS at all;
 ///    a security-scoped bookmark can, which is what turns "remember to export a backup" into
@@ -65,7 +67,8 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "folderWrite", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "folderRead", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "folderList", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "folderDelete", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "folderDelete", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "haptic", returnType: CAPPluginReturnPromise)
     ]
 
     // MARK: - The records folder
@@ -451,6 +454,31 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
                 call.reject(error.localizedDescription)
             }
         }
+    }
+
+    // MARK: - Haptics
+
+    /// A tap the reader can feel, from the web layer's `haptic(kind)`. The generators are the
+    /// system's own, so the iPhone's Settings › Sounds & Haptics › System Haptics switch turns
+    /// every one of these off with nothing for the app to check. UIKit feedback generators must
+    /// be used on the main thread; the call resolves at once because nothing waits on a tap.
+    @objc func haptic(_ call: CAPPluginCall) {
+        let kind = call.getString("kind") ?? "light"
+        DispatchQueue.main.async {
+            switch kind {
+            case "select":
+                UISelectionFeedbackGenerator().selectionChanged()
+            case "medium":
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            case "success":
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            case "warn":
+                UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            default:
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            }
+        }
+        call.resolve()
     }
 
     // MARK: - Biometrics

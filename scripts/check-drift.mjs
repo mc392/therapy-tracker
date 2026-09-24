@@ -136,6 +136,20 @@ if (existsSync("ios/App/App/GroundWorkNativePlugin.swift")) {
       fail(`Info.plist is missing ${k} - iOS terminates the app when calendar access is requested without it`);
 }
 
+/* Haptics: the same silent-failure shape, at its mildest - drop the Swift method and the iPhone
+   simply stops tapping, with nothing anywhere to say so. */
+if (existsSync("ios/App/App/GroundWorkNativePlugin.swift")) {
+  const plugin = readFileSync("ios/App/App/GroundWorkNativePlugin.swift", "utf8");
+  if (!plugin.includes('CAPPluginMethod(name: "haptic"'))
+    fail("GroundWorkNativePlugin does not declare `haptic` - every tap the web layer asks for would be rejected, silently, on a phone");
+  if (!plugin.includes("@objc func haptic("))
+    fail("GroundWorkNativePlugin declares `haptic` but does not implement it");
+  if (!html.includes("GW.haptic(") || !html.includes("window.GWHapticsNative"))
+    fail("index.html no longer reaches `GW.haptic()` through `window.GWHapticsNative` - the shared haptic() helper's only seam");
+  if (!html.includes("function haptic("))
+    fail("index.html no longer defines haptic() - the native method has nothing calling it");
+}
+
 /* GroundWork Plus / Pro: the same silent-failure shape as the records folder above, and now
    across two products. A method the web layer calls that the plugin does not declare rejects at
    runtime, on a phone, and the paywall just says the subscription is unavailable. */
