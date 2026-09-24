@@ -14,7 +14,7 @@ Renamed: the `<title>`, header, `--appname` tab-rail label, `practiceName()` fal
 ### Brand colours - the default palette IS the brand
 `:root` (and its `[data-theme="dark"]` pair) is the **sage/GroundWork** scheme; there is no `[data-palette="sage"]` block because sage is the built-in default. Its values are taken from the artwork: `--brand:#5C7A6D` and `--brand-dark:#3C4F44` are the launch screen's mark and wordmark colours, and `--bg:#F5F8F5` is the launch screen's own top colour so the splash fades into the app rather than stepping to a different white.
 - These had drifted **teal** (`#0C9683`) in the glassmorphic pass, which left the Sage swatch in Settings promising a green the app never rendered. Anything that names a brand colour must be changed here **and** in the artwork together.
-- `--gs1` is deliberately the brand green, a shade darker than the icon's own top stop (`#6A8B7C`): the header title is 18px/700, just under the WCAG large-text threshold, and white on `#6A8B7C` is only 3.75:1. Check contrast before touching the header gradient.
+- `--gs1` is deliberately the brand green, a shade darker than the icon's own top stop (`#6A8B7C`): the header title is 17px/700 (`--t-lg`), under the WCAG large-text threshold, and white on `#6A8B7C` is only 3.75:1. Check contrast before touching the header gradient.
 - `icon-180/192/512.png` are downscales of `icon-ideas/groundwork/icon-1024.png`. Regenerate them from that source (PowerShell + `System.Drawing`, HighQualityBicubic) rather than editing them individually, and bump the SW cache - icons are served cache-first.
 
 ### Launch screen
@@ -71,7 +71,7 @@ itself and `ios/App/App/public/` is a gitignored copy rebuilt on every sync. Ful
 - **`sw.js` is skipped on native** (service workers do not register on Capacitor's scheme and the
   bundle is already local) and pruned from the copied app, along with `icon-ideas/`.
 - **Two Swift files are wired by `scripts/add-native-plugin.mjs`**, not one:
-  `GroundWorkNativePlugin.swift` (the `@objc` surface) and `GroundWorkRecordsFolder.swift` (the
+  `GroundWorkNativePlugin.swift` (the `@objc` surface, including `haptic`) and `GroundWorkRecordsFolder.swift` (the
   records folder's bookmark and file IO). Adding a third means adding it to that script's `FILES`
   list, and `npm run check` asserts both are in the Xcode target.
 
@@ -200,6 +200,9 @@ desktop builds keep looking deliberate. Three things, and the traps in each:
 - **The active tab is a soft tint, not the filled gradient pill.** A pill inside a capsule reads as
   a button inside a button. Pure colour alone was too close to `--muted` to see at a glance on a real
   screen, hence the 16% sage wash behind it. Desktop overrides this with its own white tint.
+  **Since Sep 2026 the tint is one `.tabpill` that glides between tabs** - see *Motion, type and
+  surfaces* below. `button.on` keeps its own tint underneath `.haspill`, so a script failure falls
+  back to exactly this.
 - **`.ftrow` is a grouped list**, not one box per row: hairline separators inset to where the text
   starts, with only the ends of a run rounded. It uses **`:has()`, not `:last-child`** - the setup
   wizard puts an `.ovnote` straight after the last row, so the run does not always end its container.
@@ -209,6 +212,87 @@ desktop builds keep looking deliberate. Three things, and the traps in each:
 Not done, and deliberately: **large-title navigation.** It would retire the sage gradient header that
 carries the brand on every screen, and it is the change that makes the web builds look like they are
 pretending to be an iPhone. See the design comparison referenced in `docs/ios-native.md`.
+
+### Motion, type and surfaces (Sep 2026)
+A pass at making the app feel native rather than merely look it. What made it read as "slightly
+off" was inconsistency, not any one screen - twenty-five font sizes, eight hand-typed animation
+curves, and two colours left over from the teal era - so most of this is **tokens**, and the rest
+is motion that follows the finger. `npm run test:motion` (`scripts/check-motion.mjs`, 34 checks)
+covers all of it, and is the **only** harness that runs the animated paths - see `motionOK()`.
+
+- **Colour.** `--accent` (violet `#8B7BF0`) and `--hi` (cyan `#06B6D4`) never came across in the
+  sage pass. `--accent` is now a dusty heather (`#8C8BC4` / ink `#4E4C8F`) and `--hi` a warm clay
+  (`#A85A36` / ink `#8A4526`); both are redefined for dark. **`--hi` is deliberately warm**: it is
+  the net-income line and dots drawn *over* green chart bars, and a deeper sage there would vanish.
+  `--on-hi` is the text colour on a `--hi` fill (the celebration ribbon) - white in light, near-black
+  in dark, because white on the dark-mode clay is 2.3:1.
+- **Type scale: `--t-2xs` … `--t-3xl`** (10, 11, 12, 13, 14, 15, 16, 17, 19, 22, 25). Every
+  `font-size` in the stylesheet names one; the half-pixel sizes (12.5, 13.5, 14.5, 15.5) are gone
+  from the whole file. **`--t-input` is 16px and must stay 16** - iOS zooms into any form control
+  smaller than that. JS-built markup uses the same numbers as **literals**, because a printed report
+  or receipt opens in its own window where the variables do not exist. Display sizes (emoji, the
+  splash) and the 9px chart labels stay literal. `test:motion` fails on a size off the scale.
+- **`font-variant-numeric:tabular-nums` on `body`** (and on both printed documents): every digit
+  the same width, so money lines up like a ledger and `countUp()` does not jitter sideways.
+- **Three curves: `--ease-out`, `--ease-spring`, `--ease-firm`** (iOS's sheet curve, for anything
+  that follows or springs back from a finger), plus `--dur-fast/--dur/--dur-slow`. No
+  `cubic-bezier()` may appear outside the token block - `test:motion` asserts it.
+- **Cards are solid, not glass.** `.card`, `.kpi` and `.sgrp` have an opaque `--card` fill, a
+  hairline `--edge` and a layered `--shadow` (contact + short + long). Glass everywhere read as one
+  flat grey sheet and was the most expensive thing to paint on an older iPhone - one backdrop blur
+  per card, recomposited every scroll frame. **Glass is kept for chrome that floats over content**
+  (header pills, the tab bar, the sheet scrim, sticky bars). `--glass`/`--blur` still exist for
+  those.
+- **`motionOK()` is the one JS answer to "may this animate?"** - false under Reduce Motion and
+  under automation (`navigator.webdriver`). It gates only the parts that would make a synchronous
+  step asynchronous: the view transition, the sheet's closing ghost, the stack, the card cascade.
+  Every other harness therefore sees the app behave exactly as before; `check-motion.mjs` hides
+  `webdriver` before load so these paths are tested somewhere. **Don't gate CSS-only decoration on
+  it** - that runs under test like anywhere else.
+- **Screens arrive from the direction of travel.** A tab-bar tap goes through `navTo()`, which uses
+  `document.startViewTransition` where it exists: only the **root** snapshot slides (it is exactly
+  what the reader saw, at whatever scroll); `header.top` and `nav.tabs` are named and excluded, so
+  the pill is seen gliding in the live bar. **Never name `<main>`** for a transition - a group morphs
+  between the old and new element boxes, and `<main>` is several screens tall and was scrolled.
+  Every other `go()` stays synchronous and slides in by CSS (`.from-r`/`.from-l`, 12px - the same
+  16px-padding ceiling as the segment slide). A `keepScroll` redraw or a same-tab `go()` gets
+  `.quiet`: **a save must never replay an entrance.**
+- **Cards cascade in** (`staggerIn()`, 35ms apart, first screenful only, max ten) on real
+  navigation. The `.stagger` class is **removed on `animationend`**: a finished animation with
+  `fill-mode:both` still holds `transform:none`, which would outrank every `:active` press-scale on
+  a card for as long as the screen is open.
+- **The tab pill** (`placeTabPill()`) is FLIP-animated because `renderTabs()` rebuilds every button:
+  it is set back to the old rect with transitions off, then released to the new one. `.haspill` is
+  only added once it is placed.
+- **Sheets.** They slide the full height in on `--ease-firm`; the scrim fades. **`closeSheet()`
+  still removes `.open` synchronously** - `sheetPromise`'s observer and every caller depend on it;
+  the slide away is a separate inert `.closing` ghost (`pointer-events:none`), cleared by the next
+  `openSheet()`, and only played for a sheet that was really open. The drag gained velocity (a flick
+  of 0.55px/ms closes from 24px), a rubber band upwards, a spring back, and a haptic detent at the
+  close distance; a drag-close slides away from where the finger let go.
+- **The page steps back behind a sheet** (`sheetStack()`, `html.sheet-up`, phone only).
+  `header.top`, the banners and `<main>` each scale to `--stack-scale` about **the middle of the
+  screen** (a per-element `transform-origin`), so they shrink together. **Never transform `.app`**:
+  `nav.tabs` is `position:fixed` inside it and a transformed ancestor turns fixed into absolute.
+  The fixed Settings title bar (`.sgstick`) is hidden for the same reason while it runs.
+- **The header condenses on scroll** with a CSS scroll-driven animation (`animation-timeline:
+  scroll(root)`, behind `@supports`, phone only). **Every pixel of padding it gives up is handed back
+  as `margin-bottom`**, so its footprint never changes - a sticky header that got shorter would move
+  the page under the thumb, which changes the scroll, which changes the header. The title shrinks by
+  `transform`, never `font-size`. This is not large-title navigation; the brand header stays.
+- **Checkboxes are drawn** (`appearance:none`): the box fills and the tick is wiped in by a
+  shrinking brand-coloured background layer - WebKit gives an `<input>` no `::before`/`::after`. They
+  carry `min-width/min-height`, because several containers set `width:auto` on their checkbox and
+  an input with no native appearance has no intrinsic size. Radios keep the platform control.
+- **Toasts spring up** from 14px below instead of only fading.
+- **Haptics: `haptic(kind)`** - `select` / `light` / `medium` / `success` / `warn` - reaches the
+  Taptic Engine through **`window.GWHapticsNative`**, declared in the native block only when
+  `GW.haptic` exists, and does nothing anywhere else. Wired to: a tab change, a segment swipe (and
+  its wall), switches and ticks (one delegated listener), the swipe-to-mark-paid detent and success,
+  the sheet-drag detent, `celebrate()`, and a failed save. **Keep them rare** - a tap on every tap is
+  noise. The web Vibration API was deliberately not used. The Swift method uses the system's own
+  feedback generators, so iOS's System Haptics switch governs it; `check-drift.mjs` asserts both
+  halves. **Never compiled**, like the rest of the Swift.
 
 ### Two CSS traps this file has now hit more than once
 - **A later single-class rule beats `.card`, and `.plusgate` did exactly that** (Sep 2026). `.plusgate{padding:4px 2px 2px}` is right for a paid *surface* dropped inside a sheet that already has padding, but on a `.card` it outranked `.card{padding:18px}` on source order alone - so every gate card had **two pixels** of side padding and its full-width CTA sat hard on the gold ring, reading as a second outline on the button rather than as a frame around it. `.card.plusgate{padding:20px 18px 18px}` puts it back; the ring is `::before`/`::after` at `left:0;right:0` and is unaffected.
@@ -790,6 +874,10 @@ npm run test:import          # the spreadsheet importer against the shapes real 
 npm run test:calendar        # the .ics export against RFC 5545: escaping, 75-octet folding,
                              #   floating times across midnight and a DST morning, the stable UID,
                              #   the range filter. Pure node - no browser, no Playwright
+npm run test:motion          # the motion layer with motion ON (webdriver hidden): the tab pill,
+                             #   view transitions, sheets closing synchronously, the page stack,
+                             #   the header never moving the page, Reduce Motion, haptics, and the
+                             #   type scale and curve tokens in the stylesheet
 npm run test:swipe           # swiping between sub-tabs, as real touch events through the browser's
                              #   own input pipeline: every bar end to end, the walls at both ends,
                              #   and everything that owns a sideways drag instead. Builds its own
@@ -1456,9 +1544,9 @@ deleted because the picker and the wizard step still call it.
 - **Every lock and mask paints from six local variables** (`--tg1`..`--tg4`, `--tgglow`, `--tgink`)
   set by `.tier-pro`, rather than naming the ramp. That indirection is kept at one rung because it
   is what made the two-tier build possible in one pass and a second paid colour would then be a
-  class rather than a sweep. The ring is a `::before` rather than a gradient border, because `.card`
-  is a translucent glass surface and a border-box gradient would have to repaint the fill and lose
-  the blur. `--tier3-ink` is the only member of the ramp redefined for dark, because it is the only
+  class rather than a sweep. The ring is a `::before` rather than a gradient border, so the card's
+  own fill and shadow are untouched (it dates from when `.card` was translucent glass; cards are
+  solid since Sep 2026). `--tier3-ink` is the only member of the ramp redefined for dark, because it is the only
   one used as **text** - check any change at 13px on a real screen, not in a swatch.
 - **The launch screen wears the subscription, not the purchases.** A pre-paint script in `<head>`
   reads `tt_plus` and stamps `data-plus="pro"` on `<html>`, so a subscriber's splash never starts
