@@ -487,9 +487,15 @@ const results = await page.evaluate(async () => {
   ok("…and is still offered to a private one", taxStep.when(S) === true);
 
   /* ============ 8. the schema bump ============ */
-  ok("the schema version is stamped at 11", SCHEMA_VERSION === 11, SCHEMA_VERSION);
-  ok("a v11 backup is refused by a build that reads v10",
-    validateImport({ schemaVersion: 12, state: { clients: [], sessions: [] } }).ok === false);
+  /* At least 11, not exactly: v12 (supervising, Sep 2026) sits on top of it. What this test owns is
+     that the payer fields are behind a bump an older build refuses. */
+  ok("the schema version is at least 11", SCHEMA_VERSION >= 11, SCHEMA_VERSION);
+  ok("a backup newer than this build is refused",
+    /* The STATE, with its version in meta. Passing an envelope was refused for having no sessions
+       array, so this check used to pass whatever the version said. */
+    validateImport({ clients: [], sessions: [], meta: { schemaVersion: SCHEMA_VERSION + 1 } }).ok === false);
+  ok("…while one at this build's version is accepted",
+    validateImport({ clients: [], sessions: [], meta: { schemaVersion: SCHEMA_VERSION } }).ok === true);
   ok("a v10 backup still restores here", stateSchemaVersion({ meta: { schemaVersion: 10 } }) === 10);
 
   return out;

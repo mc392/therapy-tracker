@@ -1761,7 +1761,7 @@ const MAX_SNAP=120;
 /* Data schema version, stamped on state and on every backup. Bump when a change would be
    misread by an older build, and add the matching step to migrate(). Data with no stamp is v1
    (everything written before versioning existed). */
-const SCHEMA_VERSION=11;
+const SCHEMA_VERSION=12;
 function stateSchemaVersion(st){const v=st&&st.meta&&+st.meta.schemaVersion;return v>0?v:1;}
 
 function clone(o){return JSON.parse(JSON.stringify(o))}
@@ -1805,6 +1805,11 @@ function normalize(st){
      new, but anyone already running with it keeps it: pulling a feature out from under someone
      mid-accreditation would lose them the one screen they're keeping records for. */
   if(sg.features.accreditation==null)sg.features.accreditation=hasData?true:false;
+  /* Supervising others (v12) is a minority need no session count can reveal, so it is OFF until
+     asked for - in setup or in Settings - exactly like peer supervision is asked rather than
+     offered. The one exception is data that already holds a supervisee: a restore must never
+     hide the screen those records are kept on. */
+  if(sg.features.supervising==null)sg.features.supervising=(st.clients||[]).some(c=>c&&c.kind==="supervisee");
   if(sg.cpdTarget==null)sg.cpdTarget=30;
   /* v8: does supervision count toward the CPD target? Both default TRUE, which is exactly what
      the app did before the question could be asked, so no existing install's figure moves. It is
@@ -1993,6 +1998,17 @@ function normalize(st){
      Data stamped newer than this build is left completely untouched - never downgrade it in
      place. Import refuses it outright (see validateImport); this path only guards the unlikely
      case of a newer build having written to this device's own database.
+
+     v11 → v12 records how long a session actually ran (`s.mins`, blank = the practice length)
+     and that a "client" is in fact somebody the practitioner SUPERVISES (`client.kind`, plus
+     `client.mins`, the usual length of their supervision). Nothing migrates in place: absent
+     means a 50-minute-or-whatever-the-practice-says session with a client, which is what every
+     record written before this build meant. The bump is for the other direction and it matters
+     twice. A v11 build has no `kind`, so every session of supervision GIVEN in a v12 backup goes
+     back to being a clinical hour - into Form 3A, the 1:6 ratio and every report submitted to a
+     course, flattering the ratio in exactly the direction that hides a compliance problem. And a
+     v11 build has no `mins`, so a 90-minute session reads as 50 in every hours figure. Then it
+     saves both losses back. validateImport refuses it.
 
      v10 → v11 records WHO PAYS for a client's work (`client.payer`, and `payerId` naming the
      organisation where one does), and what the practitioner earns from employment in a given tax
@@ -2194,6 +2210,48 @@ function payerOfCode(code){return payerOf(clientOf(code));}
    readers used to add their own `rate > 0` test and two forgot, which is exactly how the Unpaid
    worklist came to hold every session of a practice that charges nothing. */
 function sessionEarns(s){return payerOfCode(s&&s.client)!=="none";}
+/* ============ Somebody you supervise, not a client ============
+   A practitioner who also supervises sees supervisees on the same rhythm, bills them the same way
+   and wants them in the same diary - so a supervisee is a CLIENT RECORD carrying `kind`, not a new
+   entity, and the fee history, the Unpaid worklist, invoices, chasers, the calendar and the whole
+   tax path work for them unchanged (a supervision fee is turnover in the same SA103 box).
+
+   What must NOT happen is that work counting as CLINICAL work. Supervision given is not client
+   contact: counted into Form 3A or the 1:6 ratio it flatters the ratio in exactly the direction
+   that hides a compliance problem, and counted into a report it inflates the hours on a form
+   somebody submits to a course. So every clinical reader goes through ONE question - the same
+   shape as sessionEarns() one axis over - and a session whose client record is missing is
+   clinical, which is what it was before this existed.
+
+   Absent = "client". An unrecognised stored key falls back the same way. */
+const CLIENT_KINDS={
+  client:    {n:"A client",     d:"Therapy. Counts toward your clinical hours, the supervision ratio, reports and client analytics."},
+  supervisee:{n:"A supervisee", d:"Somebody you supervise. Billed and diarised like a client, but kept out of every clinical figure."}
+};
+function kindOf(c){return c&&c.kind==="supervisee"?"supervisee":"client";}
+function isSupervisee(c){return kindOf(c)==="supervisee";}
+/* THE choke point for the clinical half. derive() reads it as `d.clinical`; loops that do not
+   already have a derived row use clinicalCodeTest() so they do not scan the client list per session. */
+function sessionClinical(s){return !isSupervisee(clientOf(s&&s.client));}
+function clinicalCodeTest(){
+  const sup=new Set();
+  (S.clients||[]).forEach(c=>{if(isSupervisee(c))sup.add((c.code||"").toLowerCase());});
+  return s=>!sup.has(((s&&s.client)||"").toLowerCase());
+}
+function clinicalClients(){return (S.clients||[]).filter(c=>!isSupervisee(c));}
+function supervisees(){return (S.clients||[]).filter(isSupervisee);}
+/* How long a session ran, in minutes. Its own recorded length wins; then, for a supervisee only,
+   the usual length on their record; then the practice-wide setting. The supervisee rung is
+   deliberately NOT offered to clinical clients: every clinical hours figure should move only when
+   somebody records a length against a session, never because a client record was edited. Blank
+   is stored as nothing, never as 50 - a stored default would freeze the session against a later
+   change to the practice setting. */
+function sessionLen(s,cl){
+  const own=+(s&&s.mins); if(own>0)return own;
+  if(cl===undefined)cl=clientOf(s&&s.client);
+  const u=isSupervisee(cl)?+(cl.mins):0;
+  return u>0?u:sessionMins();
+}
 /* Does anybody at all pay this practice per session? Answers the practice-wide version for the
    screens that have to decide whether to exist - the Money section of Trends, the revenue trend on
    Home - rather than draw a confident chart of zeroes. A practice with no clients yet has not said
@@ -2278,6 +2336,9 @@ function derive(s){
   const cl=S.clients.find(c=>(c.code||"").toLowerCase()===(s.client||"").toLowerCase());
   const payer=payerOf(cl);
   const earns=payer!=="none";
+  /* Supervision GIVEN is real work and real income, never clinical work - see sessionClinical(). */
+  const clinical=!isSupervisee(cl);
+  const mins=sessionLen(s,cl||null);
   const clientPaid=!!s.paidDate;
   const past=d?d<t:false;
   /* `past` is a whole-DAY test and it is what money runs on: a payment is not overdue until the
@@ -2285,7 +2346,7 @@ function derive(s){
      actually finished - and it is what the Incomplete worklist runs on, because "did it go
      ahead?" cannot be answered before it has. The two differ only for sessions dated today,
      which is exactly the case somebody logging this morning's client falls into. */
-  const ended=sessionEnded(s,d,t);
+  const ended=sessionEnded(s,d,t,mins);
   const overdue=earns&&past&&!clientPaid;
   let roomBooked = s.room==="-"||s.location==="At home" ? "n/a" : (s.room?"Y":"N");
   /* Three ways a session can have no room fee to settle, and they all mean the same thing to
@@ -2321,7 +2382,7 @@ function derive(s){
   if(d){ const tm=(s.time||"00:00").split(":"); const dt=new Date(d); dt.setHours(+tm[0]||0,+tm[1]||0);
     cancelBy=addDays(dt,-3); canCancel=cancelBy>new Date(); }
   return {rate,fullRate,cancelPct,cancelKind:(s.cancelKind||(isLateCancel(s)?"late":null)),
-    roomRate,due,roomPaidNA,roomOwed,earns,payer,clientPaid,past,ended,overdue,roomBooked,roomDue,status,category,complete,cancelBy,canCancel,
+    roomRate,due,roomPaidNA,roomOwed,earns,payer,clinical,mins,clientPaid,past,ended,overdue,roomBooked,roomDue,status,category,complete,cancelBy,canCancel,
     week:d?weekNum(d):"",year:d?d.getFullYear():"",taxYear:d?taxYear(d):""};
 }
 /* The Incomplete worklist, in ONE place - the list itself, the count the attention feed raises
@@ -3860,7 +3921,7 @@ VIEWS.home=function(){
     mk("⚡",(rec.mostClearedAtOnce||0),"Most cleared at once",!rec.mostClearedAtOnce)+
     mk("✅",goals.complete,"Sessions completed",!goals.complete)+
     '</div></div>';
-  const topClients=S.clients.map(c=>({code:c.code,_id:c._id,n:cCounts[c.code.toLowerCase()]||0,status:c.status})).filter(x=>x.n>=6).sort((a,b)=>b.n-a.n).slice(0,3);
+  const topClients=clinicalClients().map(c=>({code:c.code,_id:c._id,n:cCounts[c.code.toLowerCase()]||0,status:c.status})).filter(x=>x.n>=6).sort((a,b)=>b.n-a.n).slice(0,3);
   const loyalCard=topClients.length?'<div class="card"><h2>Longstanding clients</h2>'+topClients.map((x,i)=>{const medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":"•";return'<div class="list-item" data-cid="'+x._id+'"><div class="li-main"><div class="li-title">'+medal+' '+esc(x.code)+'</div><div class="li-sub">'+esc(x.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>';}).join("")+'</div>':'';
   const weekRev={};
   der.forEach(x=>{const dd=parseD(x.s.date);if(!dd||!x.d.earns)return;const k=isoD(weekStart(x.s.date));weekRev[k]=(weekRev[k]||0)+(x.d.rate||0);});
@@ -4391,17 +4452,17 @@ function attendConfirmed(s){return !!(s&&s.attendConfirmed);}
 /* When a session finished, to the minute - its start plus the practice's session length. Null
    when there is no time on the record, which is a real shape: an imported row from a sheet with
    no Time column has a date and nothing else. */
-function sessionEndsAt(s,d){
+function sessionEndsAt(s,d,mins){
   d=d||parseD(s&&s.date); if(!d)return null;
   const tm=String((s&&s.time)||"").match(/^(\d{1,2}):(\d{2})/); if(!tm)return null;
   const dt=new Date(d); dt.setHours(+tm[1]||0,+tm[2]||0,0,0);
-  return new Date(dt.getTime()+sessionMins()*60000);
+  return new Date(dt.getTime()+(mins||sessionLen(s))*60000);
 }
 /* Has this session actually happened yet? The Incomplete worklist's clock - see derive().ended.
    A session with no time recorded has no minute to test, so it falls back to the whole-day test
    `past` uses, which is the only honest reading of a date with nothing else on it. */
-function sessionEnded(s,d,t){
-  const e=sessionEndsAt(s,d);
+function sessionEnded(s,d,t,mins){
+  const e=sessionEndsAt(s,d,mins);
   if(e)return e<=new Date();
   d=d||parseD(s&&s.date);
   return d?d<(t||today()):false;
@@ -4470,10 +4531,13 @@ function cancelPctFor(s){
   return (v==null||isNaN(+v))?100:Math.max(0,Math.min(100,+v));
 }
 /* clinical (client-contact) hours from logged sessions: each session that has taken place = 1 hr (50-min min); missed / late-cancelled excluded */
-function clinicalStats(){const t=today();let inP=0,onl=0;
+function clinicalStats(){const t=today();let inP=0,onl=0,given=0;
+  const clin=clinicalCodeTest();
   S.sessions.forEach(s=>{const d=parseD(s.date);if(!d||d>t||isCancelled(s))return;
+    /* Supervision you GIVE is not client contact - counted here it would flatter the 1:6 ratio. */
+    if(!clin(s)){given++;return;}
     if((s.mode||"")==="Online")onl++;else inP++;});
-  return {inPerson:inP,online:onl,logged:inP+onl};}
+  return {inPerson:inP,online:onl,logged:inP+onl,given:given};}
 /* ===== CPD hours =====
    What nearly every practising therapist actually needs: hours done in the last 12 months against
    their annual CPD requirement. Supervision and peer supervision both count toward it. The Form 3A
@@ -4677,7 +4741,7 @@ function mountAccreditation(host){if(!host||!feat("accreditation"))return;
         :ratio<=6?'<div class="vmsg ok" style="margin-top:10px">✓ Within the 1:6 requirement - 1 supervision hr per '+r1(ratio)+' client hrs.</div>'
         :'<div class="vmsg err" style="margin-top:10px">'+gi("blocked")+' Over the 1:6 limit - '+r1(clinical)+' clinical hrs need ≥ '+r1(minSup)+' supervision hrs ('+r1(minSup-sup)+' more).</div>')+
       '<div class="acc-work">'+
-        '<div><b>Clinical</b> = logged sessions '+cs.logged+(other?' + other '+r1(other):'')+' = <b>'+r1(clinical)+' hrs</b> <span class="muted">(late cancellations excluded)</span></div>'+
+        '<div><b>Clinical</b> = logged sessions '+cs.logged+(other?' + other '+r1(other):'')+' = <b>'+r1(clinical)+' hrs</b> <span class="muted">(late cancellations excluded'+(cs.given?'; '+cs.given+' session'+(cs.given===1?'':'s')+' of supervision you gave are not clinical hours and are left out':'')+')</span></div>'+
         '<div><b>Supervision</b> = logged sessions '+supSess+' + training '+r1(train)+' + placement '+r1(place)+' = <b>'+r1(sup)+' hrs</b></div>'+
         (peer?'<div><b>Peer supervision</b> = '+r1(peer)+' hrs <span class="muted">(counted in your total hours, never in the ratio)</span></div>':'')+
         '<div><b>Ratio</b> = '+r1(clinical)+' ÷ '+r1(sup)+' = <b>'+(ratio!=null?r1(ratio):'-')+'</b> &nbsp;(must be ≤ 6; lower = more supervision)</div>'+
@@ -4780,7 +4844,10 @@ function reportCtx(spec){
      delivered, however firmly it is in the diary. */
   const end=rg.to>t?t:rg.to;
   const inRange=d=>{const x=d?parseD(d):null;return !!x&&x>=rg.from&&x<=end;};
+  /* Supervision GIVEN never reaches a report: every section here is client work, and a supervisee's
+     sessions counted as client hours would inflate a form somebody submits to a course. */
   const sess=(S.sessions||[]).filter(s=>inRange(s.date)).map(s=>({s:s,d:derive(s)}))
+    .filter(x=>x.d.clinical)
     .sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
   return {
     spec:spec, range:rg, end:end, inRange:inRange,
@@ -4834,36 +4901,58 @@ function reportHourMode(spec){
   return REPORT_HOUR_MODES.some(x=>x[0]===m)?m:"clinical";   /* an unknown stored mode falls back */
 }
 function reportHours(ctx){
-  const n=ctx.attended.length, mins=sessionMins(), mode=reportHourMode(ctx.spec);
+  const n=ctx.attended.length, mode=reportHourMode(ctx.spec);
   const plural=n===1?"":"s";
+  /* Each session's own length (v12): what was recorded against it, else the practice length. */
+  const lenOf=x=>(x.d&&x.d.mins)||sessionLen(x.s);
+  const lens=ctx.attended.map(lenOf);
+  const total=lens.reduce((a,b)=>a+b,0);
+  const own=ctx.attended.filter(x=>+(x.s&&x.s.mins)>0).length;
+  const uniform=!n||lens.every(m=>m===lens[0]);
+  const mins=n?(uniform?lens[0]:Math.round(total/n)):sessionMins();
+  /* Hours for ONE session in the mode in force, so a per-client row is a sum of these and can
+     never disagree with the headline built from the same function. */
+  const of=x=>mode==="actual"?lenOf(x)/60:mode==="prorata"?lenOf(x)/CLINICAL_HOUR_MINS:1;
   let hours, basis;
   if(mode==="actual"){
-    hours=n*mins/60;
-    basis=n+" attended session"+plural+" × "+mins+" minutes of elapsed time = "+hrsLabel(hours);
+    hours=total/60;
+    basis=uniform
+      ? n+" attended session"+plural+" × "+mins+" minutes of elapsed time = "+hrsLabel(hours)
+      : n+" attended sessions, "+total+" minutes of elapsed time between them = "+hrsLabel(hours);
   }else if(mode==="prorata"){
-    const per=mins/CLINICAL_HOUR_MINS;
-    hours=n*per;
-    basis=n+" attended session"+plural+" × "+mins+" minutes ÷ the "+CLINICAL_HOUR_MINS+
-      "-minute clinical hour = "+r1(per)+" clinical hours each = "+hrsLabel(hours);
+    hours=total/CLINICAL_HOUR_MINS;
+    basis=uniform
+      ? n+" attended session"+plural+" × "+mins+" minutes ÷ the "+CLINICAL_HOUR_MINS+
+        "-minute clinical hour = "+r1(mins/CLINICAL_HOUR_MINS)+" clinical hours each = "+hrsLabel(hours)
+      : n+" attended sessions, "+total+" minutes between them ÷ the "+CLINICAL_HOUR_MINS+
+        "-minute clinical hour = "+hrsLabel(hours);
   }else{
     hours=n;
     basis=n+" attended session"+plural+" counted as one clinical hour each — the "+
-      CLINICAL_HOUR_MINS+"-minute therapeutic hour, which is what your sessions are set to"+
-      (mins===CLINICAL_HOUR_MINS?"":" (yours are "+mins+" minutes)")+".";
+      CLINICAL_HOUR_MINS+"-minute therapeutic hour"+
+      (uniform?(", which is what your sessions are set to"+(mins===CLINICAL_HOUR_MINS?"":" (yours are "+mins+" minutes)")):
+        " (your sessions vary in length)")+".";
   }
-  /* A practice whose sessions are not a standard hour, still counting one hour each. The
-     therapist is the only person who can know which their course wants, so say it, don't fix it. */
-  const standard=mins>=45&&mins<=60;
-  const mismatch=(mode==="clinical"&&!standard)
-    ? ("Your sessions are "+mins+" minutes, which is not the standard 50-to-60-minute hour, and "+
-       "this report is counting each of them as one clinical hour. Pro rata they would be "+
-       hrsLabel(n*mins/CLINICAL_HOUR_MINS)+". Check which your course asks for.")
+  /* Sessions that are not a standard hour, still counting one hour each. The therapist is the
+     only person who can know which their course wants, so say it, don't fix it. */
+  const odd=lens.filter(m=>m<45||m>60).length;
+  const mismatch=(mode==="clinical"&&n&&odd)
+    ? ((uniform?"Your sessions are "+mins+" minutes, which is not":odd+" of these sessions "+(odd===1?"is":"are")+" not")+
+       " the standard 50-to-60-minute hour, and this report is counting each of them as one clinical hour. "+
+       "Pro rata they would be "+hrsLabel(total/CLINICAL_HOUR_MINS)+". Check which your course asks for.")
+    : (mode==="clinical"&&!n&&!(sessionMins()>=45&&sessionMins()<=60))
+    ? ("Your sessions are "+sessionMins()+" minutes, which is not the standard 50-to-60-minute hour, and "+
+       "this report counts each session as one clinical hour. Check which your course asks for.")
     : "";
   return {
-    sessions:n, mins:mins, mode:mode, hours:hours, basis:basis, mismatch:mismatch,
-    caveat:"GroundWork records a session, not its length, so every session is counted at the "+
-      "practice session length ("+mins+" minutes). A session that actually ran longer or shorter "+
-      "is not reflected here."
+    sessions:n, mins:mins, total:total, own:own, uniform:uniform, mode:mode, hours:hours, of:of,
+    basis:basis, mismatch:mismatch,
+    caveat:own
+      ? (own+" of "+n+" session"+plural+" carr"+(own===1?"ies":"y")+" its own recorded length; the rest are counted "+
+         "at the practice session length ("+sessionMins()+" minutes).")
+      : ("GroundWork counts every session at the practice session length ("+sessionMins()+" minutes) unless a "+
+         "length was recorded against it. A session that actually ran longer or shorter and was not recorded is "+
+         "not reflected here.")
   };
 }
 
@@ -4908,15 +4997,15 @@ const REPORT_SECTIONS={
       if(!ctx.attended.length)return null;
       /* One session's worth of hours, whichever mode is in force — derived from the block
          total so a per-client row can never disagree with the headline above it. */
-      const h=reportHours(ctx), per=h.sessions?(h.hours/h.sessions):0;
+      const h=reportHours(ctx);
       const by={};
       ctx.attended.forEach(x=>{const c=(x.s.client||"—").trim()||"—";
-        const e=by[c]||(by[c]={n:0,first:null,last:null,modes:{}});
-        e.n++;const d=parseD(x.s.date);
+        const e=by[c]||(by[c]={n:0,h:0,first:null,last:null,modes:{}});
+        e.n++;e.h+=h.of(x);const d=parseD(x.s.date);
         if(!e.first||d<e.first)e.first=d; if(!e.last||d>e.last)e.last=d;
         const m=(x.s.mode||"").trim();if(m)e.modes[m]=(e.modes[m]||0)+1;});
       const rows=Object.keys(by).sort((a,b)=>by[b].n-by[a].n||a.localeCompare(b))
-        .map(c=>[c,String(by[c].n),String(r1(by[c].n*per)),fmtRD(by[c].first),fmtRD(by[c].last)]);
+        .map(c=>[c,String(by[c].n),String(r1(by[c].h)),fmtRD(by[c].first),fmtRD(by[c].last)]);
       return {title:"Client work by client",
         table:{head:["Client","Sessions","Hours","First","Last"],rows:rows,align:["","num","num","",""]},
         note:"Clients appear by their confidential code only. No names, no fees and nothing clinical is included."};
@@ -5352,6 +5441,9 @@ function validateSession(m){
   const cl=m.client?S.clients.find(c=>(c.code||"").toLowerCase()===(m.client||"").toLowerCase()):null;
   const sameClient=s=>(s.client||"").toLowerCase()===(m.client||"").toLowerCase();
   const hasNum=m.num!==""&&m.num!=null;
+  /* BLOCK: a recorded length outside anything a session could be. Blank is fine - it means the usual. */
+  if(m.mins!=null&&m.mins!==""&&!(+m.mins>=5&&+m.mins<=600))
+    errors.push({code:"mins",msg:"Length has to be between 5 and 600 minutes - or leave it blank for the usual."});
   /* BLOCK: exact time clash (can't be in two places at once) */
   if(m.date&&m.time){const clash=S.sessions.find(s=>s._id!==id&&s.date===m.date&&(s.time||"")===(m.time||""));
     if(clash)errors.push({code:"timeclash",msg:"Time clash with "+esc(clash.client||"another session")+" at "+esc(m.time)+" on "+fmtDMY(m.date)});}
@@ -5758,6 +5850,7 @@ function supervisionPanel(){
   v.innerHTML='<div class="seg mb" id="suptab" style="display:inline-flex"><button data-st="log" class="'+(supTab==="log"?"on":"")+'">Log</button>'+
     (feat("peer")?'<button data-st="peer" class="'+(supTab==="peer"?"on":"")+'">Peer</button>':'')+
     '<button data-st="cpd" class="'+(supTab==="cpd"?"on":"")+'">CPD</button>'+
+    (feat("supervising")?'<button data-st="giving" class="'+(supTab==="giving"?"on":"")+'">Supervising</button>':'')+
     '<button data-st="metrics" class="'+(supTab==="metrics"?"on":"")+'">Insights</button></div><div id="supbody"></div>';
   const sb=v.querySelector("#supbody");
   {
@@ -5817,6 +5910,49 @@ function supervisionPanel(){
       sb.querySelector("#addCpd").onclick=()=>cpdForm(null);
       sb.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>cpdForm((S.cpd||[]).find(x=>x._id===li.dataset.id)));
     }
+    /* Supervision GIVEN. The other three tabs are supervision received; this one is the other side
+       of the table. Supervisees are client records (see kindOf), so this is a view over them
+       rather than a log of its own - the sessions are logged, billed and chased where every
+       session is. */
+    function drawGiving(){
+      const t=today(), from=addYears(t,-1), list=supervisees();
+      const lc=new Set(list.map(c=>(c.code||"").toLowerCase()));
+      const rows=derivedSessions().filter(x=>lc.has((x.s.client||"").toLowerCase()));
+      const yr=rows.filter(x=>{const d=parseD(x.s.date);return d&&d>from&&d<=t;});
+      const went=yr.filter(x=>!isCancelled(x.s));
+      const hrs=went.reduce((a,x)=>a+x.d.mins,0)/60;
+      const billed=yr.filter(x=>x.d.earns).reduce((a,x)=>a+(x.d.rate||0),0);
+      const current=list.filter(c=>clientCategory(c.status)!=="Finished");
+      const last={},n={};
+      rows.forEach(x=>{const k=(x.s.client||"").toLowerCase(),d=parseD(x.s.date);if(!d||d>t||isCancelled(x.s))return;
+        n[k]=(n[k]||0)+1; if(!last[k]||d>last[k])last[k]=d;});
+      const next={};
+      rows.forEach(x=>{const k=(x.s.client||"").toLowerCase(),d=parseD(x.s.date);if(!d||d<=t||isCancelled(x.s))return;
+        if(!next[k]||d<next[k])next[k]=d;});
+      const li=c=>{const k=(c.code||"").toLowerCase();
+        return '<div class="list-item" data-id="'+esc(c._id)+'"><div class="li-main">'+
+          '<div class="li-title">'+esc(c.code)+' <span class="chip '+(clientCategory(c.status)==="Finished"?"na":"y")+'">'+esc(c.status||"")+'</span></div>'+
+          '<div class="li-sub">'+esc(c.frequency||"")+' · '+sessionLen({},c)+' min'+
+            (last[k]?' · last '+fmtDMY(last[k]):' · not seen yet')+(next[k]?' · next '+fmtDshort(next[k]):'')+'</div></div>'+
+          '<div class="li-right"><b>'+(n[k]||0)+'</b> <span class="small muted">sessions</span></div></div>';};
+      const sorted=list.slice().sort((a,b)=>(clientCategory(a.status)==="Finished")-(clientCategory(b.status)==="Finished")||a.code.localeCompare(b.code));
+      sb.innerHTML='<div class="toolbar"><button class="btn sm" id="addSupee">＋ Add supervisee</button>'+
+          (list.length?'<button class="btn sm sec" id="logSupee">＋ Log a session</button>':'')+'</div>'+
+        '<div class="kpis mb">'+
+          '<div class="kpi"><div class="v">'+current.length+'</div><div class="l">Supervisees now</div></div>'+
+          '<div class="kpi"><div class="v">'+went.length+'</div><div class="l">Sessions, last 12 months</div></div>'+
+          '<div class="kpi"><div class="v">'+hrsLabel(hrs)+'</div><div class="l">Supervision given</div></div>'+
+          '<div class="kpi"><div class="v">'+gbp(Math.round(billed))+'</div><div class="l">Billed, last 12 months</div></div>'+
+        '</div>'+
+        '<div class="card" style="padding:4px 12px">'+(sorted.length?sorted.map(li).join("")
+          :emptyNote("Nobody yet. Add a supervisee, or open an existing client record and set “This is” to a supervisee."))+'</div>'+
+        '<p class="small muted center">Kept out of your clinical hours, the ratio, reports and client analytics. '+infoLink("supervising","What counts where")+'</p>';
+      wireInfo(sb);
+      sb.querySelector("#addSupee").onclick=()=>clientForm(null,{kind:"supervisee"});
+      const lg=sb.querySelector("#logSupee"); if(lg)lg.onclick=()=>sessionForm(null);
+      sb.querySelectorAll(".list-item[data-id]").forEach(el2=>el2.onclick=()=>{
+        const c=(S.clients||[]).find(x=>x._id===el2.dataset.id); if(c)clientForm(c);});
+    }
     function drawMetrics(){
       const t=today();
       const sup=(S.supervision||[]).slice().filter(s=>s.date).sort((a,b)=>parseD(a.date)-parseD(b.date));
@@ -5829,7 +5965,7 @@ function supervisionPanel(){
       if(sup.length>=2)avgGap=Math.round((parseD(sup[sup.length-1].date)-parseD(sup[0].date))/86400000/(sup.length-1));
       const lastDisc={};
       sup.forEach(s=>{const d=parseD(s.date);if(!d)return;(s.clients||[]).forEach(code=>{const k=code.toLowerCase();if(!lastDisc[k]||d>lastDisc[k])lastDisc[k]=d;});});
-      const active=S.clients.filter(c=>clientCategory(c.status)==="Active");
+      const active=clinicalClients().filter(c=>clientCategory(c.status)==="Active");
       const rows=active.map(c=>{const ld=lastDisc[c.code.toLowerCase()];
         return {code:c.code,date:ld||null,days:ld?Math.floor((t-ld)/86400000):null};})
         .sort((a,b)=>{if(a.days==null&&b.days==null)return a.code.localeCompare(b.code);if(a.days==null)return -1;if(b.days==null)return 1;return b.days-a.days;});
@@ -5849,7 +5985,8 @@ function supervisionPanel(){
       mountAccreditation(sb.querySelector("#accMount"));
     }
     if(supTab==="peer"&&!feat("peer"))supTab="log";   // feature switched off since it was last open
-    const route=()=>supTab==="metrics"?drawMetrics():supTab==="cpd"?drawCPD():supTab==="peer"?drawPeer():drawLog();
+    if(supTab==="giving"&&!feat("supervising"))supTab="log";
+    const route=()=>supTab==="metrics"?drawMetrics():supTab==="cpd"?drawCPD():supTab==="peer"?drawPeer():supTab==="giving"?drawGiving():drawLog();
     v.querySelector("#suptab").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{supTab=bt.dataset.st;
       v.querySelector("#suptab").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));route();});
     route();
@@ -6207,7 +6344,8 @@ function anaHourlyRate(){
     : "Sessions that carry a fee. None of yours do, so there is no hourly rate to work out."};
   const attended=rows.filter(x=>!isCancelled(x.s));
   const revenue=rows.filter(x=>x.d.earns).reduce((a,x)=>a+(x.d.rate||0),0);
-  const clinicalH=attended.length*sessionMins()/60;
+  /* Every hour worked, supervision given included - this is a question about the working week. */
+  const clinicalH=attended.reduce((a,x)=>a+x.d.mins,0)/60;
   /* Admin is charged on every session logged: a cancellation still costs you the rearranging. */
   const adminH=rows.length*adminMinsPerSession()/60;
   const inWin=d=>{const x=d?parseD(d):null;return x&&x>from&&x<=t;};
@@ -6317,7 +6455,7 @@ const ANA_COHORT_MARKS=[4,8,12,24];
 function anaCohorts(){
   const t=today();
   const firsts={},lasts={};
-  anaPast(anaDer(),t).filter(x=>!isCancelled(x.s)).forEach(x=>{
+  anaPast(anaDer(),t).filter(x=>!isCancelled(x.s)&&x.d.clinical).forEach(x=>{
     const k=(x.s.client||"").toLowerCase(); if(!k)return;
     if(!firsts[k]||x.dt<firsts[k])firsts[k]=x.dt;
     if(!lasts[k]||x.dt>lasts[k])lasts[k]=x.dt;
@@ -6375,7 +6513,7 @@ function anaEpisodes(){
     g.n++; if(!g.first||x.dt<g.first)g.first=x.dt; if(!g.last||x.dt>g.last)g.last=x.dt;
   });
   const eps=[],live=[];
-  S.clients.forEach(c=>{
+  clinicalClients().forEach(c=>{
     const g=byClient[(c.code||"").toLowerCase()]; if(!g||!g.n)return;
     const fd=freqDays(c), gap=(t-g.last)/86400000;
     /* clientCategory, not catOf - catOf is the expenses/income category lookup and takes
@@ -6415,7 +6553,7 @@ const ANA_DRIFT_FACTOR=1.5;
 function anaDrifting(){
   const t=today(), rows=anaDer();
   const out=[],review=[];
-  S.clients.forEach(c=>{
+  clinicalClients().forEach(c=>{
     /* clientCategory, not catOf - see anaEpisodes. catOf(c.status) never equalled "Finished",
        so every finished client was landing on a list headed "clients you have NOT marked as
        finished". */
@@ -6457,14 +6595,16 @@ function anaSources(){
     if(!lasts[k]||x.dt>lasts[k])lasts[k]=x.dt;
     if(!firsts[k]||x.dt<firsts[k])firsts[k]=x.dt;
   });
-  const withSrc=S.clients.filter(c=>(c.source||"").trim());
-  const unset=S.clients.length-withSrc.length;
+  /* Clients only: where supervisees come from is a different question with a different answer. */
+  const pool=clinicalClients();
+  const withSrc=pool.filter(c=>(c.source||"").trim());
+  const unset=pool.length-withSrc.length;
   /* One named source is enough to have something to compare Unknown against; a table that is
      nothing but an Unknown row is a prompt, not an analytic, so it stays as the waiting note. */
-  if(!withSrc.length||S.clients.length<3)return {ready:false,unset,
+  if(!withSrc.length||pool.length<3)return {ready:false,unset,
     need:"A referral source on at least one client, and three clients on the books. Open a client and set <b>How they found you</b>."};
   const by={};
-  S.clients.forEach(c=>{
+  pool.forEach(c=>{
     const src=(c.source||"").trim()||ANA_SOURCE_UNKNOWN;
     const k=(c.code||"").toLowerCase(), n=counts[k]||0;
     const g=by[src]||(by[src]={src,n:0,sessions:[],revenue:0,current:0});
@@ -6735,14 +6875,15 @@ function anaFeeErosion(){
 const ANA_SUP_TARGET=6;
 function anaSupervisionCadence(){
   if(!feat("supervision"))return {ready:false,need:"Supervision is switched off."};
-  const t=today(), qs=[], rows=anaPast(anaDer(),t).filter(x=>!isCancelled(x.s));
+  /* Clinical sessions only - this is the ratio, and supervision you give is not client work. */
+  const t=today(), qs=[], rows=anaPast(anaDer(),t).filter(x=>!isCancelled(x.s)&&x.d.clinical);
   const sup=(S.supervision||[]).map(s=>parseD(s.date)).filter(Boolean).sort((a,b)=>a-b);
   if(sup.length<3)return {ready:false,need:"Three supervision sessions. You have "+sup.length+"."};
   for(let i=7;i>=0;i--){
     const qStart=new Date(t.getFullYear(),t.getMonth()-i*3-2,1);
     const qEnd=new Date(qStart.getFullYear(),qStart.getMonth()+3,1);
     if(qStart>t)continue;
-    const clin=rows.filter(x=>x.dt>=qStart&&x.dt<qEnd).length*sessionMins()/60;
+    const clin=rows.filter(x=>x.dt>=qStart&&x.dt<qEnd).reduce((a,x)=>a+x.d.mins,0)/60;
     const sh=sup.filter(d=>d>=qStart&&d<qEnd).length;
     qs.push({l:ANA_MONTHS[qStart.getMonth()]+" ’"+String(qStart.getFullYear()).slice(2),
       clinical:Math.round(clin*10)/10,sup:sh,
@@ -6773,7 +6914,6 @@ function anaLoad(){
   rows.forEach(x=>{const k=isoD(x.dt);(days[k]||(days[k]=[])).push(x);});
   const keys=Object.keys(days).sort();
   const heavy=[],runs=[];
-  const gapMax=sessionMins()+ANA_TURNAROUND;
   keys.forEach(k=>{
     const list=days[k].slice().sort((a,b)=>String(a.s.time||"").localeCompare(String(b.s.time||"")));
     if(list.length>=ANA_HEAVY_DAY)heavy.push({date:list[0].dt,n:list.length});
@@ -6783,7 +6923,8 @@ function anaLoad(){
       if(!p||!c){run=1;continue;}
       const mins=x=>(+x.slice(0,2))*60+(+x.slice(3,5));
       const d=mins(c)-mins(p);
-      if(d>0&&d<=gapMax)run++;else run=1;
+      /* Back-to-back is measured from the end of the PREVIOUS session, whatever its own length. */
+      if(d>0&&d<=list[i-1].d.mins+ANA_TURNAROUND)run++;else run=1;
       if(run>best)best=run;
     }
     if(best>=ANA_RUN_MIN)runs.push({date:list[0].dt,len:best});
@@ -7123,9 +7264,12 @@ function anaSection(seg,cx){
    Two cards on Home asking for it must not mean walking the whole practice twice. */
 function anaCtx(){
   const counts=clientSessionCounts(), lastSeen=lastSessionDates();
-  const withSess=S.clients.map(c=>({c,n:counts[c.code.toLowerCase()]||0}));
+  /* The Clients section is about CLIENTS. Supervisees are a different population - mixing them in
+     puts a two-year supervision contract into "how long clients stay" and the funnel. */
+  const pool=clinicalClients();
+  const withSess=pool.map(c=>({c,n:counts[c.code.toLowerCase()]||0}));
   const cx={counts,lastSeen,withSess,base:withSess.filter(x=>x.n>=1).length,_att:null};
-  cx.att=()=>cx._att||(cx._att=S.clients.map(c=>({c,a:clientAttendance(c)})).filter(x=>x.a&&x.a.n>=2));
+  cx.att=()=>cx._att||(cx._att=pool.map(c=>({c,a:clientAttendance(c)})).filter(x=>x.a&&x.a.n>=2));
   cx.current=c=>trendsIsCurrent(c,lastSeen[((c&&c.code)||"").toLowerCase()]);
   return cx;
 }
@@ -7765,7 +7909,7 @@ VIEWS.practice=function(){
         const li=c=>{
           const r=effRate(c.code,isoD(today()));const ch=c.status==="Ongoing"?'y':c.status==="Paused"?'f':'na';
           const seen=lastSeen[(c.code||"").toLowerCase()];
-          return '<div class="list-item" data-id="'+c._id+'"><div class="li-main"><div class="li-title">'+esc(c.code)+' <span class="chip '+ch+'">'+esc(c.status||"")+'</span></div><div class="li-sub">'+esc(c.frequency||"")+(seen?' · last seen '+fmtDMY(seen):'')+(c.notes?" · "+esc(c.notes):"")+'</div></div><div class="li-right">'+gbp(r)+'</div></div>';};
+          return '<div class="list-item" data-id="'+c._id+'"><div class="li-main"><div class="li-title">'+esc(c.code)+' <span class="chip '+ch+'">'+esc(c.status||"")+'</span>'+(isSupervisee(c)?' <span class="chip na">supervisee</span>':'')+'</div><div class="li-sub">'+esc(c.frequency||"")+(seen?' · last seen '+fmtDMY(seen):'')+(c.notes?" · "+esc(c.notes):"")+'</div></div><div class="li-right">'+gbp(r)+'</div></div>';};
         /* A search is someone looking for a specific person, very possibly one who finished years
            ago - so it never folds. Folding only applies to the unfiltered list, and only once
            there are enough finished clients for it to be worth a tap. */
@@ -10150,6 +10294,11 @@ infoDef("tax-table","What each column means",
   '<div><b>Recv\u2019d</b> \u2014 the part of Billed that has a payment date. <b>Overdue</b> is what is past and unpaid.</div>'+
   '<div><b>Sess</b> \u2014 how many sessions the year held.</div></div>'+
   '<p class="small mt">Which year a session or a cost belongs to depends on the basis you have chosen. '+infoLink("tax-basis","Cash or accruals")+'</p>');
+infoDef("supervising","Supervising others",
+  '<p class="small">A supervisee is a client record marked <b>A supervisee</b>. Their sessions are logged, billed, chased and put in your calendar exactly like a client’s, and their fees are income like any other.</p>'+
+  '<p class="small">What changes is that supervision you <b>give</b> is not client work. It is left out of your clinical hours, the 1:6 ratio on Form 3A, every report, the Clients section of Business analytics, and the schedule shared with GroundWork Notes. Counting it would flatter your ratio in the direction that hides a problem.</p>'+
+  '<p class="small">It still counts toward your working week - capacity, load, the hourly rate - because it is time you worked.</p>'+
+  '<p class="small muted">Supervision usually runs longer than a therapy session. Set a usual length on the supervisee’s record and every session with them counts at that length unless you record a different one.</p>');
 infoDef("peer-counts","What peer supervision counts toward",
   '<p class="small">Peer supervision adds to your <b>total accreditation hours</b> on Supervision \u203a Insights, and to your CPD hours if you have said it should.</p>'+
   '<p class="small">It is deliberately kept out of the <b>1:6 clinical-to-supervision ratio</b>, which only counts formal clinical supervision \u2014 that is the BACP rule, not an app decision.</p>'+
@@ -12653,15 +12802,20 @@ VIEWS.settings=function(){
 /* ============ Suggestions ============ */
 function clientList(){const order={Ongoing:0,"Initial session booked":0,Paused:1,Finished:2};
   return S.clients.slice().sort((a,b)=>(order[a.status]??9)-(order[b.status]??9)||a.code.localeCompare(b.code)).map(c=>c.code)}
-function statusGroups(){
+function statusGroups(keep){
   const order=["Ongoing","Initial session booked","Active enquiry","Active","Paused","Finished"];
-  const g={}; S.clients.forEach(c=>{const k=c.status||"Other";(g[k]=g[k]||[]).push(c.code)});
+  const g={}; S.clients.forEach(c=>{if(keep&&!keep(c))return;const k=c.status||"Other";(g[k]=g[k]||[]).push(c.code)});
   return Object.keys(g).sort((a,b)=>{const ia=order.indexOf(a),ib=order.indexOf(b);return (ia<0?98:ia)-(ib<0?98:ib)||a.localeCompare(b)})
     .map(k=>[k,g[k].sort((x,y)=>x.localeCompare(y))]);
 }
 function clientSelectHTML(sel){
-  return '<option value="">- choose client -</option>'+statusGroups().map(([st,codes])=>
-    '<optgroup label="'+esc(st)+'">'+codes.map(c=>'<option value="'+esc(c)+'"'+(c===sel?" selected":"")+'>'+esc(c)+'</option>').join("")+'</optgroup>').join("");
+  const o=c=>'<option value="'+esc(c)+'"'+(c===sel?" selected":"")+'>'+esc(c)+'</option>';
+  /* Supervisees get one group of their own at the foot, whatever their status - picking who to log
+     a session for is where the two kinds of work are most easily confused. */
+  const sup=supervisees().map(c=>c.code).sort((a,b)=>a.localeCompare(b));
+  return '<option value="">- choose client -</option>'+statusGroups(c=>!isSupervisee(c)).map(([st,codes])=>
+    '<optgroup label="'+esc(st)+'">'+codes.map(o).join("")+'</optgroup>').join("")+
+    (sup.length?'<optgroup label="Supervisees">'+sup.map(o).join("")+'</optgroup>':'');
 }
 function lastSessionFor(code,excludeId){
   const rs=S.sessions.filter(s=>(s.client||"").toLowerCase()===(code||"").toLowerCase()&&s._id!==excludeId);
@@ -12896,6 +13050,10 @@ function sessionForm(s,o){
   const clients=clientList();
   const locs=S.rooms.map(r=>r.location);
   const body=el('<div></div>');
+  /* The Length box (v12). Shown to anybody who supervises - supervision runs longer than therapy -
+     and on any session that already carries a length, so a recorded figure is never invisible.
+     Not rendered = not read: sync() leaves `mins` exactly as it was. */
+  const lenShown=()=>feat("supervising")||+m.mins>0;
   let pendingWarn=false; // a "Save anyway" is armed; any edit disarms it
   let dirty=false;       // something has been typed since this form was opened
   /* msg strings come pre-escaped from validateSession, so inject raw */
@@ -12923,6 +13081,8 @@ function sessionForm(s,o){
        <div><label>Location</label><select id="f_loc">${opts(locs,m.location)}</select>${P(l=>l.location)}</div>
        <div><label>Room number</label><input id="f_room" value="${esc(m.room==='-'?'':m.room)}" placeholder="-">${P(l=>(l.room&&l.room!=='-')?l.room:"")}</div>
      </div>
+     ${lenShown()?`<label>Length <span class="muted small">(minutes · blank = ${esc(sessionLen({client:m.client}))})</span></label>
+       <input type="number" min="5" max="600" step="5" id="f_mins" value="${esc(+m.mins>0?m.mins:"")}" placeholder="${esc(sessionLen({client:m.client}))}" style="max-width:180px">`:""}
      <div class="hint">Rate: <b>${gbp(d.rate)}</b>${d.roomRate?` · Room: ${gbp(d.roomRate)} (${esc(d.due)})`:""} · ${d.taxYear} ${d.past?"· past":"· upcoming"}</div>
      <label>Payment received date <span class="muted small">(blank = not paid)</span></label>
      <input type="date" id="f_paid" value="${esc(m.paidDate||"")}">
@@ -12951,6 +13111,9 @@ function sessionForm(s,o){
     const g=id=>body.querySelector(id);
     const sync=()=>{m.client=g("#f_client").value;m.date=g("#f_date").value;m.time=g("#f_time").value;m.mode=g("#f_mode").value;
       m.num=g("#f_num").value;m.location=g("#f_loc").value;m.room=g("#f_room").value;m.paidDate=g("#f_paid").value;
+      /* Blank stores NOTHING, never the default - see sessionLen(). */
+      if(g("#f_mins")){const mr=g("#f_mins").value.trim();
+        if(mr===""||!(+mr>0))delete m.mins; else m.mins=Math.round(+mr);}
       /* `roomPaid` / `roomPaidDate` are deliberately NOT read back here. The form no longer owns
          them - the room fee this session raises is settled in Money - and reading them from
          controls that no longer exist is exactly how a saved session would blank its own
@@ -13091,7 +13254,7 @@ function sessionForm(s,o){
       if(vr.warnings.length&&!pendingWarn){pendingWarn=true;const sb=body.querySelector("#save");if(sb)sb.textContent="Save anyway";Sfx.error();const vb=body.querySelector("#vbanner");if(vb)vb.scrollIntoView({behavior:"smooth",block:"nearest"});return;}
       const exists=S.sessions.find(x=>x._id===m._id);
       const prevComplete=exists?derive(exists).complete:false;
-      if(exists){Object.assign(exists,m);await commit("Edited session: "+m.client+" "+m.date);}
+      if(exists){Object.assign(exists,m);if(!(+m.mins>0))delete exists.mins;await commit("Edited session: "+m.client+" "+m.date);}
       else{S.sessions.push(m);await commit("Added session: "+m.client+" "+m.date);}
       const dNow=derive(m);const justCompleted=dNow.ended&&dNow.complete&&!prevComplete;
       let milestone=null;
@@ -13173,18 +13336,28 @@ function clientForm(c,cfOpts){
      shadow it silently. */
   cfOpts=cfOpts||{};
   const isNew=!c; const m=c?clone(c):{_id:uid(),code:"",status:"Ongoing",frequency:"Weekly",insurance:"N",notes:"",created:isoD(today()),payer:defaultPayerKey()};
+  if(isNew&&cfOpts.kind==="supervisee")m.kind="supervisee";
+  /* The question only appears for somebody who has said they supervise - or on a record that is
+     already a supervisee, so switching the feature off never hides what a record IS. When it is
+     not rendered, the save below does not read it. */
+  const kindShown=feat("supervising")||isSupervisee(m);
   const statuses=[...new Set(S.clientCategories.map(x=>x.status).concat(["Ongoing","Paused","Finished"]))];
   const body=el('<div></div>');
   const rateNow=isNew?"":effRate(m.code,isoD(today()));
   const hist=S.rateHistory.filter(r=>(r.client||"").toLowerCase()===(m.code||"").toLowerCase()).sort((a,b)=>parseD(b.effectiveFrom)-parseD(a.effectiveFrom));
   body.innerHTML=`
-    <label>Client code</label><input id="c_code" value="${esc(m.code)}" ${isNew?"":"readonly"}>
+    ${kindShown?`<label>This is</label><select id="c_kind">${opts2(Object.keys(CLIENT_KINDS).map(k=>[k,CLIENT_KINDS[k].n]),kindOf(m))}</select>
+    <p class="small muted" id="c_kindNote"></p>`:""}
+    <label id="c_codeLab">Client code</label><input id="c_code" value="${esc(m.code)}" ${isNew?"":"readonly"}>
     <div class="field2"><div><label>Status</label><select id="c_status">${opts(statuses,m.status)}</select></div>
       <div><label>Frequency</label><select id="c_freq">${opts(["Weekly","Every 2 weeks","Every 3 weeks","Monthly"],m.frequency)}</select></div></div>
     <div class="field2">
       <div><label>Usual day</label><select id="c_uday">${opts2([["","From their history"]].concat(SLOT_DAYS.map(d=>[d,SLOT_DAY_NAMES[d]])),m.usualDay||"")}</select></div>
       <div><label>Usual time</label><input type="time" id="c_utime" value="${esc(m.usualTime||"")}"></div></div>
     <p class="small muted" id="c_slotHint"></p>
+    ${kindShown?`<div id="c_minsWrap"><label>Usual length (mins) <span class="muted small">(optional)</span></label>
+      <input type="number" min="5" max="600" step="5" id="c_mins" value="${esc(+m.mins>0?m.mins:"")}" placeholder="${esc(sessionMins())}">
+      <p class="small muted">Every session with them counts at this length unless you record a different one. Blank = your usual ${esc(sessionMins())} minutes.</p></div>`:""}
     <label>Who pays for this work ${infoDot("who-pays","Who pays for this work")}</label>
     <select id="c_payer">${opts2(Object.keys(PAYERS).map(k=>[k,PAYERS[k].n]),payerOf(m))}</select>
     <p class="small muted" id="c_payerNote"></p>
@@ -13271,6 +13444,17 @@ function clientForm(c,cfOpts){
   body.querySelector("#c_payer").onchange=()=>{paintPayer();};
   body.querySelector("#c_auth").oninput=()=>{paintPayer();};
   paintPayer();
+  const paintKind=()=>{
+    const ks=body.querySelector("#c_kind"); if(!ks)return;
+    const k=ks.value;
+    body.querySelector("#c_kindNote").innerHTML=esc(CLIENT_KINDS[k]?CLIENT_KINDS[k].d:"")+
+      (k==="supervisee"?' '+infoLink("supervising","More"):'');
+    body.querySelector("#c_codeLab").textContent=k==="supervisee"?"Supervisee code":"Client code";
+    body.querySelector("#c_minsWrap").hidden=(k!=="supervisee");
+    wireInfo(body);
+  };
+  {const ks=body.querySelector("#c_kind"); if(ks)ks.onchange=paintKind;}
+  paintKind();
   /* Both fields are overrides: blank means "work it out from what actually happened", which is
      right for almost every client and needs nothing typed. The hint says what that comes to, so
      the blank state is visibly doing something rather than looking unfilled. */
@@ -13302,6 +13486,22 @@ function clientForm(c,cfOpts){
        of mind would put this client back on an invoice the next time somebody read it loosely. */
     const payerK=body.querySelector("#c_payer").value;
     m.payer=Object.prototype.hasOwnProperty.call(PAYERS,payerK)?payerK:"client";
+    /* What this record is. Absent means a client, so a client stays absent rather than gaining a
+       field that says what the default already says. Read only when the picker was on screen. */
+    let dropMins=false;
+    const ks=body.querySelector("#c_kind");
+    if(ks){
+      if(ks.value==="supervisee"){
+        m.kind="supervisee";
+        const mr=body.querySelector("#c_mins").value.trim();
+        if(mr===""){delete m.mins;dropMins=true;}
+        else{const mv=Math.round(+mr);
+          if(!(mv>=5&&mv<=600)){toast("Usual length: between 5 and 600 minutes, or blank");Sfx.error();return;}
+          m.mins=mv;}
+      }else delete m.kind;
+      /* A usual length left on a record that is no longer a supervisee is inert (sessionLen reads
+         it for supervisees only) and is kept, so switching back brings it back. */
+    }
     if(m.payer==="org"){
       m.payerId=body.querySelector("#c_payerOrg").value||"";
       const authRaw=body.querySelector("#c_auth").value.trim();
@@ -13325,13 +13525,17 @@ function clientForm(c,cfOpts){
       if(S.clients.find(x=>x.code.toLowerCase()===m.code.toLowerCase())){toast("Code already exists");return}
       m.rate=rate;S.clients.push(m);
       S.rateHistory.push({_id:uid(),client:m.code,effectiveFrom:isoD(today()),rate:rate});
-      await commit("Added client: "+m.code+" @ "+gbp(rate));
+      await commit("Added "+(isSupervisee(m)?"supervisee":"client")+": "+m.code+" @ "+gbp(rate));
       closeSheet();
       /* Reached from the session form's "Add a new client" link - hand the new code straight
          back to it instead of navigating to Practice. */
       if(cfOpts.onCreated)cfOpts.onCreated(m.code);else go(cur);
       celebrateNewClient(m);return;
-    }else{const ex=S.clients.find(x=>x._id===m._id);Object.assign(ex,m);await commit("Edited client: "+m.code);}
+    }else{const ex=S.clients.find(x=>x._id===m._id);Object.assign(ex,m);
+      /* Object.assign cannot delete: a field the form removed has to be removed from the record too. */
+      if(!m.kind)delete ex.kind;
+      if(dropMins)delete ex.mins;
+      await commit("Edited client: "+m.code);}
     closeSheet();toast("Saved");go(cur);
   };
   if(!isNew)body.querySelector("#cDel").onclick=async()=>{if(!confirm("Delete client "+m.code+"? (sessions are kept)"))return;
@@ -13357,9 +13561,13 @@ function supervisionForm(s){
   const isNew=!s;const last=S.supervision.slice(-1)[0];
   const m=s?clone(s):{_id:uid(),date:isoD(today()),supervisor:(last||{}).supervisor||"",count:1,cost:last?last.cost:"",clients:[]};
   const body=el('<div></div>');
-  const allCodes=clientList();
+  /* Clients only: your own supervisees are not "clients discussed" in the supervision you receive. */
+  const allCodes=clientList().filter(code=>!isSupervisee(clientOf(code)));
   const sel=new Set(m.clients||[]);
-  const groups=statusGroups();
+  /* A code already ticked on this entry but no longer offered (a client since marked a supervisee)
+     is kept rather than silently dropped by the save below. */
+  const kept=(m.clients||[]).filter(code=>allCodes.indexOf(code)<0);
+  const groups=statusGroups(c=>!isSupervisee(c));
   const chip=code=>'<button type="button" class="tgl'+(sel.has(code)?" on":"")+'" data-code="'+esc(code)+'"><span class="tbox"></span>'+esc(code)+'</button>';
   const chips=groups.length
     ? groups.map(([st,codes])=>'<div class="cgrp"><div class="cglab">'+esc(st)+'</div><div class="cgchips">'+codes.map(chip).join("")+'</div></div>').join("")
@@ -13378,7 +13586,7 @@ function supervisionForm(s){
     body.querySelector("#s_cnt").value=sel.size||1;});
   body.querySelector("#sSave").onclick=async()=>{m.date=body.querySelector("#s_date").value;m.count=+body.querySelector("#s_cnt").value;
     m.supervisor=body.querySelector("#s_sup").value;m.cost=+body.querySelector("#s_cost").value;
-    m.clients=allCodes.filter(c=>sel.has(c));
+    m.clients=allCodes.filter(c=>sel.has(c)).concat(kept);
     const ex=S.supervision.find(x=>x._id===m._id);if(ex)Object.assign(ex,m);else S.supervision.push(m);
     await commit((ex?"Edited":"Added")+" supervision: "+m.date);closeSheet();toast("Saved");go(cur);};
   if(!isNew)body.querySelector("#sDel").onclick=async()=>{S.supervision=S.supervision.filter(x=>x._id!==m._id);
@@ -13635,7 +13843,7 @@ function clientProfile(c){
           '<div class="kpi'+(owed?' bad':' good')+'"><div class="v">'+gbp(Math.round(owed))+'</div><div class="l">'+(owed?("Outstanding · "+owedRows.length+" session"+(owedRows.length===1?"":"s")):"Nothing owed")+'</div></div>'
         /* Two tiles reading "£0" tell a salaried counsellor nothing. The hours are what her work
            is measured in, so the slots say that instead. */
-        : '<div class="kpi"><div class="v">'+hrsLabel(attended*sessionMins()/60)+'</div><div class="l">Clinical hours</div></div>'+
+        : '<div class="kpi"><div class="v">'+hrsLabel(rows.filter(x=>parseD(x.s.date)<=t&&!isCancelled(x.s)).reduce((a,x)=>a+x.d.mins,0)/60)+'</div><div class="l">'+(isSupervisee(c)?'Hours supervised':'Clinical hours')+'</div></div>'+
           '<div class="kpi"><div class="v">'+(rows.filter(x=>parseD(x.s.date)>t).length)+'</div><div class="l">Booked ahead</div></div>')+
       '<div class="kpi"><div class="v">'+(att?att.pct+"%":"-")+'</div><div class="l">Attendance'+(att&&att.currentPause?' · ⏸ paused '+att.currentPause.days+'d':'')+'</div></div>'+
     '</div>'+
@@ -14110,7 +14318,7 @@ function icsEvent(s,stamp,seq){
     "DTSTAMP:"+stamp,
     "SEQUENCE:"+seq,
     "DTSTART:"+start,
-    "DTEND:"+icsFloating(s.date,s.time,sessionMins()),
+    "DTEND:"+icsFloating(s.date,s.time,sessionLen(s)),
     "SUMMARY:"+icsEsc(icsTitle(s)),
     "TRANSP:OPAQUE"];
   if(s.location)L.push("LOCATION:"+icsEsc(s.location));
@@ -14156,7 +14364,7 @@ function calEventFor(s){
   const start=icsFloating(s.date,s.time,0);
   if(!start)return null;
   return {uid:String(s._id||""),title:icsTitle(s),start:calWall(start),
-          end:calWall(icsFloating(s.date,s.time,sessionMins())),location:String(s.location||"")};
+          end:calWall(icsFloating(s.date,s.time,sessionLen(s))),location:String(s.location||"")};
 }
 function calAddSession(s){
   if(!s||!s.date){toast("This session needs a date first");Sfx.error();return;}
@@ -14225,7 +14433,9 @@ function rosterStatus(c){
 function scheduleRoster(){
   const skipped=[];
   const clients=[];
-  S.clients.forEach(c=>{
+  /* Clients only. GroundWork Notes works out which sessions still need a CLINICAL write-up, and
+     somebody you supervise is not on that list. */
+  clinicalClients().forEach(c=>{
     const code=rosterCode(c.code);
     if(!code){skipped.push(c.code||"(blank)");return;}
     const sched=clientSchedule(c)||{};
@@ -15215,6 +15425,7 @@ const FEATURES=[
   {k:"supervision",  ic:gi("supervision"), n:"Supervision",            d:"A tab for logging supervision sessions, costs and which clients you discussed."},
   {k:"accreditation",ic:gi("accreditation"), n:"Accreditation hours",    d:"Clinical vs supervision hours and the 1:6 ratio, for BACP Form 3A. Lives inside Supervision › Insights.",dep:"supervision"},
   {k:"peer",         ic:gi("peer"), n:"Peer supervision",       d:"A separate log for peer supervision hours - added to your total accreditation hours, kept out of the 1:6 ratio.",dep:"supervision"},
+  {k:"supervising",  ic:gi("supervision"), n:"Supervising others",  d:"For practitioners who also supervise. Mark a client record as a supervisee and their sessions are billed and diarised as usual but kept out of your clinical hours, the 1:6 ratio, reports and client analytics. A Supervising tab inside Supervision.",dep:"supervision"},
   {k:"trends",       ic:gi("trends"), n:"Business analytics",      d:"Retention funnel, attendance against expected frequency, missed sessions and how long clients stay. Lives inside Practice."},
   {k:"reports",      ic:gi("page"), n:"Reports",                d:"Build a report of hours, supervision and CPD over any period — for a course, a placement or a professional body. Lives inside Practice, after Business analytics."},
   {k:"finances",     ic:gi("finances"), n:"Costs & other income",   d:"Business costs (insurance, wifi, monthly room rent) and income that isn’t a client session. Both feed your net income and tax figures.",dep:"money"},
@@ -15269,7 +15480,7 @@ function revealCfg(){const sg=settings();sg.reveal=sg.reveal||{mode:"all",shown:
 function revealApplySimple(w){
   /* accreditation and peer are left alone: stepCPD asks about both directly a couple of screens
      later, and a question the therapist answers beats a default either way. */
-  FEATURES.forEach(f=>{if(REVEAL_CORE.indexOf(f.k)<0&&f.k!=="accreditation"&&f.k!=="peer")w.features[f.k]=false;});
+  FEATURES.forEach(f=>{if(REVEAL_CORE.indexOf(f.k)<0&&f.k!=="accreditation"&&f.k!=="peer"&&f.k!=="supervising")w.features[f.k]=false;});
   REVEAL_CORE.forEach(k=>{if(w.features[k]===false)delete w.features[k];});
 }
 let _revealBusy=false;
@@ -15335,7 +15546,7 @@ function stepDepth(w){return{emoji:gi("depth"), h:"How much do you want to see?"
      result and the therapist can overrule any individual switch there and then. */
   onLeave(){
     if(w.depth==="simple")revealApplySimple(w);
-    else FEATURES.forEach(f=>{if(f.k!=="accreditation"&&w.features[f.k]===false)delete w.features[f.k];});
+    else FEATURES.forEach(f=>{if(f.k!=="accreditation"&&f.k!=="supervising"&&w.features[f.k]===false)delete w.features[f.k];});
   },
   mount(host){
     host.innerHTML='<div class="palgrid choices" id="spDepth">'+
@@ -15374,7 +15585,8 @@ function wireAdvancedMode(v){
         /* everything except accreditation, which is a genuine minority need and is asked
            separately in setup -- switching it on here would put a card in front of someone
            who explicitly said they are not working toward accreditation */
-        FEATURES.forEach(f=>{if(f.k!=="accreditation")sg.features[f.k]=true;});
+        /* …and supervising, for the same reason: it is a fact about the practitioner, asked directly. */
+        FEATURES.forEach(f=>{if(f.k!=="accreditation"&&f.k!=="supervising")sg.features[f.k]=true;});
         REVEAL_STEPS.forEach(s=>{if(c.shown.indexOf(s.keys[0])<0)c.shown.push(s.keys[0]);});
         await commit("Show all features");
       }
@@ -15501,7 +15713,7 @@ function stepLook(w){return{emoji:gi("look"), h:"Pick a look",
   }};}
 function stepFeatures(w){
   /* accreditation and peer supervision both get their own question in stepCPD - asking twice would be noise */
-  const list=FEATURES.filter(f=>f.k!=="accreditation"&&f.k!=="peer");
+  const list=FEATURES.filter(f=>f.k!=="accreditation"&&f.k!=="peer"&&f.k!=="supervising");
   return{emoji:gi("features"), h:"Choose what you need",
   sub:"Switch off anything that isn’t useful - it disappears from the app. Nothing is deleted, and you can turn it back on later.",
   mount(host){
@@ -15547,12 +15759,15 @@ function stepCPD(w){return{emoji:gi("cpd"), h:"CPD, supervision and accreditatio
       '<div style="margin-top:16px">'+ovToggleRow("peer",gi("peer"),"I also attend peer supervision",
         "Logged on its own tab. The hours count toward your CPD and accreditation totals, but never toward the 1:6 supervision ratio.",
         featureOn(w,"peer"))+'</div>'+
+      '<div style="margin-top:10px">'+ovToggleRow("supg",gi("supervision"),"I also supervise other practitioners",
+        "Mark a client record as a supervisee and those sessions are billed and diarised as usual, but never counted as your clinical hours or in the ratio.",
+        featureOn(w,"supervising"))+'</div>'+
       '<div style="margin-top:10px">'+ovToggleRow("acc",gi("accreditation"),"I’m working toward accreditation",
         "Adds the BACP Form 3A card (clinical hours against supervision hours). Leave it off unless you are accruing hours toward accreditation.",
         featureOn(w,"accreditation"))+'</div>'+
       '<div class="ovnote">Any of this can be changed later in <b>'+gi("settings")+' Settings › Features</b>.</div>';
     host.querySelector("#spCpd").oninput=e=>w.cpdTarget=+e.target.value||0;
-    [["acc","accreditation"],["peer","peer"]].forEach(pair=>{
+    [["acc","accreditation"],["peer","peer"],["supg","supervising"]].forEach(pair=>{
       const sw=host.querySelector('[data-sw="'+pair[0]+'"]'); if(!sw)return;
       sw.onclick=()=>{w.features[pair[1]]=!featureOn(w,pair[1]);
         const on=featureOn(w,pair[1]);
@@ -15978,6 +16193,7 @@ function startSetup(opts){
          unticked or the question answers itself. Only for a fresh install: normalize leaves the
          flag absent (= on) and anyone who already has it must keep it. */
       if(fresh&&f.peer==null)f.peer=false;
+      if(f.supervising==null)f.supervising=false;
       return f;
     })(),
     /* A fresh install starts on "simple" - that is the point of the question, and "show me
@@ -16918,7 +17134,7 @@ function retentionRows(){
     const k=(c.code||"").toLowerCase(), ld=last[k];
     if(!ld)return null;                       /* nothing logged - no clock to count from */
     const nd=addYears(ld,cfg.notesYears), fd=addYears(ld,cfg.financeYears);
-    return {code:c.code,status:c.status||"",last:ld,notesDue:nd,finDue:fd,
+    return {code:c.code,status:c.status||"",supervisee:isSupervisee(c),last:ld,notesDue:nd,finDue:fd,
             notesOver:nd<=t,finOver:fd<=t,sessions:count[k]||0};
   }).filter(r=>r&&(r.notesOver||r.finOver)).sort((a,b)=>a.last-b.last);
 }
@@ -16929,6 +17145,7 @@ function retentionCardHTML(){
   const on=new Set(cfg.endedStatuses.map(s=>String(s).toLowerCase()));
   const rowHTML=r=>'<div class="list-item"><div class="li-main">'+
       '<div class="li-title">'+esc(r.code)+' '+
+        (r.supervisee?'<span class="chip na">supervisee</span> ':'')+
         (r.notesOver?'<span class="chip n">notes</span> ':'')+
         (r.finOver?'<span class="chip n">records</span>':'')+'</div>'+
       '<div class="li-sub">Last session '+fmtD(r.last)+' · '+r.sessions+' session'+(r.sessions===1?'':'s')+' · '+esc(r.status)+'</div></div>'+
