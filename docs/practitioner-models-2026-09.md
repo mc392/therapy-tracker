@@ -108,10 +108,15 @@ Out of scope, and each for a reason that would break something load-bearing:
 - **Organisation-side reporting** - an EAP's own dashboard, a charity's service statistics. That is
   a B2B product with a different buyer.
 - **Clinical records.** Already out, deliberately, and GroundWork Notes is the answer.
-- **A supervisee caseload** (model 7). Supervisees are not clients: no fee history, no attendance,
-  no retention clock, and the hours count on the other side of the 1:6 ratio. It is a second
-  entity type with its own screens, which is a bigger change than everything in §5 put together
-  and serves far fewer people. Supervision *income* already has a home in `otherIncome`.
+- ~~**A supervisee caseload** (model 7).~~ **Reversed, Sep 2026 - see
+  `docs/tasks/T11-supervising.md` and CLAUDE.md § *Supervising others*.** The objection here was
+  that supervisees need "a second entity type with its own screens". They turned out not to: a
+  supervisee has exactly the fee history, attendance, diary and retention clock a client has, and
+  the only real difference is that their hours must stay **out** of every clinical figure. So a
+  supervisee is a client record carrying `kind:"supervisee"`, gated behind one choke point
+  (`sessionClinical()` / `derive().clinical`) the same way §3 put the payer on the client - and
+  what the paragraph got right, that the hours sit on the other side of the ratio, is exactly
+  what that choke point enforces. The original text is kept above so the reasoning can be followed.
 
 Everything below stays inside: **one practitioner, one device, one set of records**, however that
 practitioner happens to be paid.

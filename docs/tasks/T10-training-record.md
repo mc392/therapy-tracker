@@ -1,6 +1,16 @@
 # T10 - The trainee record: schema v12
 **Model:** Opus · **Depends on:** nothing · **Touches:** `TherapyTracker-web/index.html`, `CLAUDE.md`, `scripts/make-test-data.mjs` (optional)
 
+> **Note (25 Sep 2026): change 1 has SHIPPED, and v12 went with it.** Per-session duration
+> (`s.mins`, `sessionLen()`) landed as stage 1 of `docs/tasks/T11-supervising.md`, because
+> supervision given runs 60-90 minutes and could not be counted honestly without it. It is
+> exactly the change below, with two additions: a **supervisee's** record can carry a usual
+> length (`client.mins`) that `sessionLen()` reads for supervisees only, and the Length box is
+> shown whenever the `supervising` feature is on or the session already carries a length. When
+> the `training` flag lands, add it to `lenShown()` in `sessionForm` - do not add a second box.
+> `reportHours()` already sums real lengths in all three modes. **Everything else in this task
+> is now schema v13.**
+
 > **Note (14 Sep 2026): v11 went to the practitioner-model work** — `client.payer`,
 > `settings.payers` and `settings.employmentYears` (see CLAUDE.md § *Who pays for the work* and
 > `docs/practitioner-models-2026-09.md`). **This task is now v12.** Nothing in it conflicts: the

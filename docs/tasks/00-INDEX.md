@@ -51,13 +51,14 @@ Same rules and same kickoff prompt.
 
 | # | Task file | Model | Depends on | One-line scope |
 |---|---|---|---|---|
-| T10 | T10-training-record.md | **Opus** | - | The trainee record: per-session duration, type, three-way medium, supervision hours, placements, personal therapy, CPD reflection (schema v12) |
+| T10 | T10-training-record.md | **Opus** | - | The trainee record: session type, three-way medium, supervision hours, placements, personal therapy, CPD reflection (schema **v13** - change 1, per-session duration, shipped with T11 stage 2 under v12) |
+| T11 | T11-supervising.md | **Opus** | T10 change 1 (done) | Supporting a practitioner who also supervises. Stages 1-2 shipped (v12); stages 3-4 open |
 T10 is Stage 1 of `docs/institutional-partnerships-2026-09.md` and is safe to implement
 regardless of how that plan's Stage 0 (find a partner course) turns out - the fields are worth
 having for any trainee. It also contains the one live correction in that plan: supervision is
 counted as entries today, not hours.
 
-- [ ] T10
+- [ ] T10 (change 1 done under v12) · [~] T11 (stages 1-2 done; 3-4 open)
 
 **Shipped outside this list (13 Sep 2026):** the report creator — Practice › Reports, schema
 v9. See CLAUDE.md § *Reports for courses and professional bodies*.
