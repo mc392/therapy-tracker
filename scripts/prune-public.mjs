@@ -15,8 +15,10 @@ const PUBLIC = resolve("ios/App/App/public");
                   bundle is already local, so there is nothing to cache. Registration is
                   skipped on native in index.html; this stops a dead file shipping too.
    demo/        - a synthetic practice backup published on the website for App Review and for
-                  anybody trying the app. Restored from a file, never read from the bundle. */
-const DROP = ["icon-ideas", "sw.js", "demo"];
+                  anybody trying the app. Restored from a file, never read from the bundle.
+   notes/       - GroundWork Notes' privacy and support pages. They belong to the other app and
+                  are only ever opened from its Settings, on the website. */
+const DROP = ["icon-ideas", "sw.js", "demo", "notes"];
 
 let freed = 0;
 for (const rel of DROP) {
