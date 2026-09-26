@@ -28,8 +28,8 @@ GitHub, and your iPhone with the **TestFlight** app installed.
 | Paywall review screenshots | ✅ **Regenerated today** with the real prices and current design. |
 | Store copy (description, keywords, …) | ✅ **Written today**, every field checked against Apple's character limits. |
 | Apple Watch app | ✅ **Held back from 1.0** (26 Sep) — so no Watch screenshots are needed. Returns in a later version. |
-| iPad | ✅ **iPhone-only for 1.0** (26 Sep) — no iPad screenshots or iPad review. Apple lets you *add* iPad later but never remove it. |
-| Real-iPhone test of build 26 | ⚠️ **You** (Step 8). |
+| iPad | ✅ **iPhone and iPad** (chosen 26 Sep) — iPad screenshots made, and the app says "iPad" on an iPad. **Once released this can never be removed** (Apple's rule). |
+| Real-device test of build 27 | ⚠️ **You** (Step 8). |
 | Submit | ⚠️ **You** (Steps 10–13). |
 
 ### What changed in the app since the last guide (15 Sep)
@@ -140,7 +140,27 @@ Reference Name `GroundWork Pro Monthly`, that Product ID, and Duration **1 Month
 - **Free trial (optional, your decision):** *Subscription Prices* → **View all Subscription
   Pricing** → *Introductory Offers* → **Free**, **1 month**, all territories. Skip it if unsure;
   you can add it later without a new build.
-- Status should now read **Ready to Submit**.
+- **What the status should say — and why it won't say "Approved" yet.** A yellow status is
+  normal here. Read the exact words next to the dot:
+  - **Missing Metadata** → something is genuinely missing. Check the four places in the box below.
+  - **Ready to Submit** or **Prepare for Submission** → **this product is finished.** Nothing more
+    to do on this page. The blue banner at the top of the page says why it goes no further: a
+    first subscription **can only be submitted together with an app version**. Its status
+    changes to *Waiting for Review* in Step 11, when you submit the app with it attached (Step 9c).
+
+  > **The four things that keep a subscription on "Missing Metadata"**
+  > 1. **The subscription GROUP's own localisation** — on the *group* page (one level up, click
+  >    the group name `GroundWork`), not this page. The most often missed; see 4a.
+  > 2. **Availability** — at least one country ticked (United Kingdom).
+  > 3. **A price** for that country (the *Subscription Prices* section lists it).
+  > 4. **A localisation** (display name + description) *and* the **review screenshot**.
+  >
+  > The image, the review notes, *App Store Promotion* and *Family Sharing* are optional.
+
+- **The real test is on your phone, not this page:** in the TestFlight app (Step 8), Settings →
+  App preferences → *What you are paying for* → **See what Pro is**. A price of **£1.99 / month**
+  means the product is complete and reachable. "Unavailable" means it is not yet (or Step 3's
+  agreement is not active, or it has not propagated — allow a few hours).
 
 > To download the image files: on GitHub open the file, click **Download raw file** (the ↓ icon).
 
@@ -161,7 +181,10 @@ tax year, and the app reads the year out of the ID.
 | Review Information → Screenshot | `TherapyTracker-web/icon-ideas/groundwork/taxyear-review-screenshot.png` |
 | Review Information → Review Notes | `Offered on the Tax tab (tap any masked figure or "What this needs"), and in Settings > App preferences > What you are paying for. It requires GroundWork Pro first: subscribe to Pro in the sandbox, then buy the tax year, and the Tax tab's figures appear.` |
 
-Status should read **Ready to Submit**.
+Same as Step 4: **Ready to Submit** or **Prepare for Submission** means finished — it is
+submitted with the app version in Step 11. **Missing Metadata** means the availability, price,
+localisation or review screenshot is still missing. The test on your phone is the **Tax year
+2026-27** sheet showing **£7.99**.
 
 **Also create next year now** (5 min, saves a scramble in April): **+** → Non-Consumable →
 Reference Name `UK tax year 2027-28`, Product ID
@@ -175,7 +198,7 @@ it's added in code next spring — tell me then. Don't submit it with this relea
 
 | Field | Enter |
 |---|---|
-| Name | `GroundWork` |
+| Name | `GroundWork for Therapists` — **keep what you already have.** App Store names must be unique, so the record was set up under this name. |
 | Subtitle | `Private practice records` |
 | Category — Primary | **Business** |
 | Category — Secondary | **Productivity** |
@@ -208,14 +231,14 @@ it's added in code next spring — tell me then. Don't submit it with this relea
 Store Connect asks about **DSA trader status**, you can leave the EU out of availability. You can
 add countries later with no new build.
 
-## Step 8 — Test build 26 on your iPhone (30–45 min)
+## Step 8 — Test build 27 on your iPhone (and iPad, if you have one) (30–45 min)
 
-Build **26** is the submission candidate: the privacy manifest, the encryption declaration, the
-new domain, **no Watch app**, and **iPhone-only**. I started it from the PR branch; it is the same code that lands
+Build **27** is the submission candidate: the privacy manifest, the encryption declaration, the
+new domain, **no Watch app**, and **iPhone + iPad**. I started it from the PR branch; it is the same code that lands
 on `main` when you merge. (To rebuild from `main` later: GitHub → **Actions** → **TestFlight** →
 **Run workflow** → branch `main`, build number blank.)
 
-1. App Store Connect → **TestFlight**: build **26** appears ~15 minutes after the run finishes.
+1. App Store Connect → **TestFlight**: build **27** appears ~15 minutes after the run finishes.
    Thanks to the encryption declaration it should go straight to **Ready to Test** — no compliance
    question. If it does say *Missing Compliance*, click it → *"None of the algorithms mentioned
    above"* → Save.
@@ -240,15 +263,35 @@ on `main` when you merge. (To rebuild from `main` later: GitHub → **Actions** 
    - [ ] With nothing bought, **Export backup (.json)** still works. (The one rule that matters most.)
    - [ ] **No Watch app:** if you have an Apple Watch, GroundWork should no longer offer to
          install on it. (If an older TestFlight build put it there, delete it from the watch.)
+4. **On an iPad, if you have one** (App Review *will* test on one — this is the check that
+   matters most for iPad). Install the same build from TestFlight on the iPad, then:
+   - [ ] It opens full screen with the **green sidebar** on the left, not a phone-sized window.
+   - [ ] Settings says **This iPad**, not "This iPhone".
+   - [ ] Turn the iPad sideways and back — the layout follows without anything cut off.
+   - [ ] **Share a receipt PDF** and **choose a records folder** — both open a small popover
+         window. (This is the one place iPad apps commonly crash; the code is written for it.)
+   - [ ] Face ID / Touch ID lock works (it names whichever the iPad has).
 
-Anything wrong → tell me what you saw; I'll fix it and cut build 27.
+   No iPad? Tell me, and it is a judgement call: the layout, the wording and the popovers are all
+   covered by automated checks, but nobody will have tried it on real iPad hardware before review.
+
+Anything wrong → tell me what you saw; I'll fix it and cut build 28.
 
 ## Step 9 — Build the version page (20 min)
 
 **GroundWork** → **iOS App** → **1.0 Prepare for Submission**.
 
-**9a. iPhone screenshots** — *Previews and Screenshots* → **iPhone** tab → **6.9" Display**. Drag in
-these six **promotional** screenshots, in this order, from `docs/app-store-screenshots/promo/`:
+**9a. iPhone screenshots** — *Previews and Screenshots* → **iPhone** tab. App Store Connect needs
+**one** iPhone size, and there are two sets ready — use whichever its page asks for:
+
+| If the box says… | Use the files in | Size |
+|---|---|---|
+| **6.9" Display** (or asks for 1320 × 2868 / 1290 × 2796) | `docs/app-store-screenshots/promo/` | 1320 × 2868 |
+| **6.5" Display** (or asks for 1242 × 2688 / **1284 × 2778**) | `docs/app-store-screenshots/6.5/promo/` | 1284 × 2778 |
+
+An error reading *"The dimensions of one or more screenshots are wrong"* means the files went into
+the other size's box — switch folder, don't resize anything. Drag in these six **promotional**
+screenshots, in this order (same names in both folders):
 
 1. `01-today.png` — *What needs you today*
 2. `02-tax.png` — *Know what you'll owe HMRC* (tagged **Pro + tax year**)
@@ -265,13 +308,15 @@ transparency, from a synthetic practice. Smaller iPhones are scaled from these a
 
 - **Prefer plain screens?** The un-captioned versions are one folder up
   (`docs/app-store-screenshots/`, same content). Either set is fine; don't mix them.
-- **No iPad screenshots are needed.** Version 1.0 is iPhone-only (it still installs on an iPad, in
-  an iPhone-sized window). If App Store Connect shows an **iPad** tab demanding screenshots, you've
-  picked a build older than 26 — those were iPhone + iPad.
+- **iPad screenshots — required, and ready.** Same page → **iPad** tab → **13" Display** (asks
+  for 2064 × 2752 or 2048 × 2732). Drag in the six from `docs/app-store-screenshots/ipad/promo/`,
+  same names and order as the iPhone set. They show the iPad's own layout — the green sidebar —
+  so they are genuine iPad screens, not stretched phone ones.
 - **App Preview video (optional):** a 15–30 second screen recording can sit before the
   screenshots. Not needed to launch; worth adding later.
 - To change a caption, edit `PROMOS` in `scripts/render-store-promo.mjs` and run
-  `node scripts/render-store-promo.mjs`.
+  `node scripts/render-store-promo.mjs` (add `--size 6.5` or `--size ipad` for those sets; make that set's plain
+  screens first with `node scripts/render-store-screenshots.mjs --size 6.5` or `--size ipad`).
 
 **9b. Text fields** — paste exactly:
 
@@ -312,9 +357,9 @@ Terms of Use: https://groundworkpractice.co.uk/terms.html
 Privacy Policy: https://groundworkpractice.co.uk/privacy.html
 ```
 
-**Keywords** (94/100 — no spaces after commas, on purpose)
+**Keywords** (97/100 — no spaces after commas, on purpose. "therapist" is left out because it is already in your app name, which Apple searches anyway.)
 ```
-therapist,counsellor,counselling,psychotherapist,therapy,sessions,supervision,CPD,HMRC,invoice
+psychologist,counsellor,counselling,psychotherapist,therapy,sessions,supervision,CPD,HMRC,invoice
 ```
 
 **Support URL**
@@ -333,7 +378,7 @@ Individual enrolment, your own legal name), e.g. `2026 Jane Smith`.
 **GroundWork Pro Monthly** and **UK tax year 2026-27** → Done. *The first purchases must be
 submitted together with an app version — skip this and review can't see them.*
 
-**9d. Build** → **Add Build** → choose **26** (or whichever build passed Step 8). Builds 1–25 contain the Watch app and iPad support — don't pick those.
+**9d. Build** → **Add Build** → choose **27** (or whichever later build passed Step 8). Don't pick an older one: 1–25 contain the Watch app, and 26 is iPhone-only, so it would not match the iPad screenshots.
 
 ## Step 10 — App Review Information (5 min)
 
@@ -417,13 +462,14 @@ Calendar access is requested only when the user taps "Add to my calendar". Full 
 
 | What you see | What it means |
 |---|---|
-| Paywall says "Unavailable" | Paid Apps agreement not **Active** (Step 3), the product isn't *Ready to Submit*, the subscription group has no display name (4a), or it hasn't propagated — wait a few hours. |
+| Paywall says "Unavailable" | Paid Apps agreement not **Active** (Step 3), the product is still on *Missing Metadata* (see Step 4), the subscription group has no display name (4a), or it hasn't propagated — wait a few hours. |
 | Tax year "Unavailable" but Pro prices fine | The tax year is missing or mistyped. It lives under **In-App Purchases**, not Subscriptions. |
 | Tax figures still masked after buying the year | Pro must be active too. |
 | Build stuck on *Missing Compliance* | Only builds **older** than 25 — answer *"None of the algorithms mentioned above"*. |
 | Upload fails with a 409 "SDK version" | Apple raised the minimum Xcode. Tell me — it's a one-line change to `testflight.yml`. |
 | TestFlight doesn't have a fix you pushed | Pushing updates the website only. Run the TestFlight workflow (Actions tab). |
-| "Missing screenshot for Apple Watch" | You picked a build older than 26 — those still contain the Watch app. Choose build 26. |
+| "Missing screenshot for Apple Watch" | You picked a build older than 26 — those still contain the Watch app. Choose build 27. |
+| iPad screenshots rejected for size | They went into a box other than **13" Display**. Use that box — the files are 2064 × 2752. |
 
 ---
 

@@ -82,11 +82,18 @@ itself and `ios/App/App/public/` is a gitignored copy rebuilt on every sync. Ful
   wires them into each target's Resources phase on every sync; `npm run check` asserts it, and
   that `Info.plist` keeps `ITSAppUsesNonExemptEncryption = NO` (WebCrypto is the OS's own
   cryptography, so builds skip the export-compliance question).
-- **iPhone only: `TARGETED_DEVICE_FAMILY = 1`** (Sep 2026). Capacitor's template says `"1,2"`, which
-  makes an iPad app - and **Apple never lets a shipped app drop iPad support**, so this is the one
-  setting that cannot be walked back. It would also demand 13" iPad screenshots and put the untested
-  desktop layout (`min-width:900px`) in front of App Review on an iPad. An iPhone-only app still
-  installs on an iPad. `npm run check` fails on anything but `1`; widening it is a decision.
+- **iPhone AND iPad: `TARGETED_DEVICE_FAMILY = "1,2"`, chosen 26 Sep 2026** - `package.json`
+  `"groundwork": {"ipad": true}` is the switch and `npm run check` fails if the Xcode project
+  disagrees with it. **Apple never lets a shipped app drop iPad support**, so once a version with it
+  is released the flag cannot go back to `false`. What makes it work: the iPad gets the
+  `min-width:900px` sidebar layout; `sharePDF` and the records-folder picker already set a popover
+  `sourceView`/`sourceRect` (without one, an iPad crashes on present - any NEW sheet or picker
+  presented from Swift must set one too); and the native block says **"iPad" on an iPad** - one
+  MutationObserver swaps "iPhone" for "iPad" in on-screen text (never `iPhone/iPad`), because the
+  copy names the phone ~50 times. iPadOS's WKWebView reports a Mac user agent, so an iPad is
+  detected as `iPad` in the UA **or** a Mac UA with `maxTouchPoints > 1` (`data-device="ipad"`).
+  **`npm run test:ipad`** (11 checks) - verified to fail (5 of 11) with the rule off. Screenshots:
+  `--size ipad` on both render scripts (2064x2752, the 13" size App Store Connect requires).
 - **The launch runbook is `docs/app-store-launch-guide.md`** - status, the store copy to paste
   (character-limit checked) and reviewer notes. App Store screenshots come from
   `scripts/render-store-screenshots.mjs` (real app, synthetic practice, fake phone), and the

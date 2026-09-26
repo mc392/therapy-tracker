@@ -306,16 +306,20 @@ const WATCH_SOURCES = [
 for (const f of [...WATCH_SOURCES, "Info.plist"])
   if (!existsSync(`${WATCH_DIR}/${f}`)) fail(`${WATCH_DIR}/${f} is missing`);
 
-/* iPhone only (Sep 2026). TARGETED_DEVICE_FAMILY "1,2" - Capacitor's default - makes an iPad app,
-   and Apple NEVER lets a shipped app drop iPad support again, so it is the one setting here that
-   cannot be walked back. It would also make App Store Connect demand 13" iPad screenshots and put
-   the untested desktop layout (min-width:900px) in front of App Review on an iPad. An iPhone-only
-   app still installs on an iPad, in an iPhone-sized window. Widening this is a decision, not drift. */
+/* iPhone, or iPhone + iPad: package.json "groundwork.ipad" decides, and the project must agree.
+   TARGETED_DEVICE_FAMILY 1 is iPhone only; "1,2" adds iPad. Apple NEVER lets a shipped app drop
+   iPad support again, so this is the one setting here that cannot be walked back once released -
+   which is why it is a written decision and not whatever the Xcode template happened to say.
+   iPad was chosen for 1.0 on 26 Sep 2026: the layout is the min-width:900px sidebar design, the
+   native share sheet and folder picker already anchor their popovers, and the native block says
+   "iPad" on an iPad (npm run test:ipad). Turning it on needs iPad 13" screenshots as well. */
 if (existsSync("ios/App/App.xcodeproj/project.pbxproj")) {
+  const IPAD_ON = JSON.parse(readFileSync("package.json", "utf8")).groundwork?.ipad === true;
+  const want = IPAD_ON ? "1,2" : "1";
   const fam = [...readFileSync("ios/App/App.xcodeproj/project.pbxproj", "utf8")
     .matchAll(/TARGETED_DEVICE_FAMILY = "?([\d,]+)"?;/g)].map((m) => m[1]).filter((f) => f !== "4");
-  if (!fam.length || fam.some((f) => f !== "1"))
-    fail(`the app targets device family ${fam.join(" / ") || "(none)"}, not 1 (iPhone) - shipping iPad support cannot be undone; set TARGETED_DEVICE_FAMILY = 1`);
+  if (!fam.length || fam.some((f) => f !== want))
+    fail(`the app targets device family ${fam.join(" / ") || "(none)"} but package.json groundwork.ipad is ${IPAD_ON} - set TARGETED_DEVICE_FAMILY = ${IPAD_ON ? '"1,2"' : "1"}`);
 }
 
 /* Held back from 1.0 (package.json "groundwork.watchApp": false): then the target must be ABSENT.
