@@ -1,5 +1,8 @@
 # GroundWork - App Store launch roadmap
 
+> **For the launch itself, follow `docs/app-store-launch-guide.md`** - the current status and every
+> remaining step, with the answers to paste. This file is the history of how it got here.
+
 *Renaming Therapy Tracker → GroundWork, and taking it from an installable PWA to a public App Store listing.*
 
 ## Where this leaves off
@@ -73,9 +76,10 @@ from the web app and restore it in the native one.
 
 ## Monetisation
 
-Decided Sept 2026 and specified in **`docs/monetisation.md`**, and split into two tiers later
-that month - what this paragraph calls "GroundWork Plus" is now **GroundWork Pro**, with a
-cheaper GroundWork Plus below it. An annual "GroundWork Plus"
+Decided Sept 2026 and specified in **`docs/monetisation.md`**. **Superseded in part:** the model is
+now one monthly subscription, **GroundWork Pro** (£1.99), plus a **one-off purchase per UK tax
+year** (£7.99, requires Pro), which is what calculates tax. The paragraph below is the original
+plan: an annual "GroundWork Plus"
 subscription, sold on iOS via StoreKit first, with the web app staying free until a second
 phase adds accounts. The tier is the tax engine (plus costs & other income, which is
 inseparable from it), the MTD export, Trends, Accreditation, GroundWork Notes sync and the

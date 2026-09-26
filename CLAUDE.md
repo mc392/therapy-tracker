@@ -74,6 +74,19 @@ itself and `ios/App/App/public/` is a gitignored copy rebuilt on every sync. Ful
   `GroundWorkNativePlugin.swift` (the `@objc` surface, including `haptic`) and `GroundWorkRecordsFolder.swift` (the
   records folder's bookmark and file IO). Adding a third means adding it to that script's `FILES`
   list, and `npm run check` asserts both are in the Xcode target.
+- **Each target carries a `PrivacyInfo.xcprivacy`** (Sep 2026) - the app's for `UserDefaults` and
+  file dates in `GroundWorkRecordsFolder.swift`, the Watch's for `UserDefaults` in
+  `SessionTimer.swift`. Both declare no tracking and **no collected data**, which must stay in step
+  with the store's "Data Not Collected" label. **Using another required-reason API means adding
+  it to the manifest first**, or the upload is flagged ITMS-91053. `scripts/add-privacy-manifest.mjs`
+  wires them into each target's Resources phase on every sync; `npm run check` asserts it, and
+  that `Info.plist` keeps `ITSAppUsesNonExemptEncryption = NO` (WebCrypto is the OS's own
+  cryptography, so builds skip the export-compliance question).
+- **The launch runbook is `docs/app-store-launch-guide.md`** - status, the store copy to paste
+  (character-limit checked) and reviewer notes. App Store screenshots come from
+  `scripts/render-store-screenshots.mjs` (real app, synthetic practice, fake phone); the website
+  carries `support.html` and a demo backup at `demo/` for App Review, which `prune-public.mjs`
+  keeps out of the iOS bundle. **Terms no longer describe the app as beta** - Guideline 2.2.
 
 ### The records folder (Sep 2026) - where the data actually lives on iOS
 **The counsellor picks a folder, normally in iCloud Drive, and every save is rewritten into it.**

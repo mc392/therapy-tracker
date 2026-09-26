@@ -1,435 +1,446 @@
-# GroundWork — App Store launch guide (the final run)
+# GroundWork — App Store launch runbook
 
-*Written 15 Sep 2026. One place, in order, with every answer already typed out so you can
-copy and paste. This supersedes the scattered "what's left" notes in the older docs and is
-cross-checked against the actual code as it stands today.*
+*Last checked against the app and App Store Connect on **26 Sep 2026**. Follow it top to bottom.
+Every box you have to type into has its answer below, ready to copy. Where a step is marked
+**✅ Done**, there is nothing for you to do.*
 
-**Read this first — what has changed since the older docs were written**
+**How long:** about 2–3 hours of your time, most of it clicking through App Store Connect,
+plus Apple's review (usually 24–48 hours).
 
-The pricing model was simplified in Sep 2026 and some older docs still describe the retired
-two-tier ladder. The truth today, verified against the code:
-
-- There is **one subscription: GroundWork Pro** (gold), monthly.
-- Tax is **not** in Pro. Each **UK tax year is a separate one-off purchase** (a non-consumable)
-  that requires Pro.
-- The old "GroundWork Plus" (chrome, cheaper) tier **does not exist**. Anywhere a doc says
-  "Plus" as a tier, read "Pro". Anywhere it says the tax engine is part of Pro, that is out of
-  date.
-
-Everything else in `docs/releasing.md`, `docs/app-store-listing.md` and
-`docs/plus-launch-checklist.md` about mechanics (signing, TestFlight, sandbox) is still correct;
-this guide pulls the parts you still need to *do* into one sequence and fixes the copy.
+**What you need open:** [App Store Connect](https://appstoreconnect.apple.com), this repo on
+GitHub, and your iPhone with the **TestFlight** app installed.
 
 ---
 
-## What is already done (so you don't redo it)
+## Where things stand
 
-- ✅ Rebrand to GroundWork, Capacitor wrapper, four native features, brand assets installed.
-- ✅ Apple Developer enrolment; App Store Connect records exist for GroundWork **and**
-  GroundWork Notes, both under **Business**.
-- ✅ The two products already exist in App Store Connect as records:
+| | Status |
+|---|---|
+| The app itself (web + iPhone + Watch) | ✅ Built. Latest code is on `main`. |
+| Automatic builds to TestFlight | ✅ Working — 24 successful builds; build **24** was this morning's `main`. |
+| Apple Developer account, App Store Connect record | ✅ Done (Aug 2026). |
+| The two products (Pro monthly, tax year 2026-27) | ⚠️ Created as records — **metadata still to finish** (Steps 4–5). |
+| Privacy manifest + encryption declaration in the app | ✅ **Added today** — ships in build 25. |
+| Terms of Service | ✅ **Fixed today** — still called the app "beta" and "free"; both are App Review rejections. |
+| Privacy Policy | ✅ **Updated today** — now covers the records folder, calendar and purchases. |
+| Support page | ✅ **Created today** — `support.html` (the old Support URL had no contact details). |
+| App Store screenshots (iPhone 6.9") | ✅ **Made today** — 6 images, demo data. |
+| Paywall review screenshots | ✅ **Regenerated today** with the real prices and current design. |
+| Store copy (description, keywords, …) | ✅ **Written today**, every field checked against Apple's character limits. |
+| Apple Watch screenshot | ⚠️ **You** — needs a real watch or a Mac (Step 9c). |
+| Real-iPhone test of build 25 | ⚠️ **You** (Step 8). |
+| Submit | ⚠️ **You** (Steps 10–13). |
 
-  | Product | Product ID (what the app asks StoreKit for) | Apple internal ID |
-  |---|---|---|
-  | GroundWork Pro, monthly | `uk.co.charlottebloortherapy.groundwork.pro.monthly` | `6811661858` |
-  | UK tax year 2026-27 | `uk.co.charlottebloortherapy.groundwork.taxyear.2026` | `6811663965` |
+### What changed in the app since the last guide (15 Sep)
 
-  Both IDs are verified to match the code (`GroundWorkNativePlugin.swift` and
-  `TAX_PACK_PREFIX` in `index.html`). **Nothing needs pasting into the code** — the numbers
-  above are Apple's internal IDs, not used by the app.
-- ✅ `privacy.html` and `terms.html` are live on GitHub Pages.
-- ✅ The TestFlight CI pipeline (`.github/workflows/testflight.yml`) is built and, per the
-  release notes, has produced real builds. Current build number in the project is **3**,
-  marketing version **1.0**.
+Three pull requests merged (#64–#66): a design pass with **haptics** (a new native feature — it
+strengthens the "not just a website" case, so it's now in the reviewer note), **v12 records**
+(practitioners who also supervise; session length), and a fix for the **header under the iPhone
+status bar**. None of them changes anything in the listing, the products or the privacy answers.
 
-**What is genuinely left:** finish the App Store Connect product metadata, fill in the app
-listing, cut a fresh TestFlight build and test it on **real hardware**, take screenshots, then
-submit. That is this guide.
+### What I did for you today, and why each matters
 
----
-
-## The prepared answers — copy/paste block
-
-Keep this open in another window; every step below refers back to it.
-
-```
-Bundle ID          uk.co.charlottebloortherapy.groundwork
-App name           GroundWork
-Subtitle           Private practice records
-Primary category   Business
-Secondary category Productivity
-Age rating         4+
-Price              Free (the app is free; money is made via Pro + tax-year purchases)
-Support URL        https://mc392.github.io/therapy-tracker/
-Privacy Policy URL https://mc392.github.io/therapy-tracker/privacy.html
-Terms of Use URL   https://mc392.github.io/therapy-tracker/terms.html
-Privacy label      Data Not Collected
-Encryption         Exempt — uses standard (WebCrypto) encryption only
-```
-
-Prices (already decided):
-
-```
-GroundWork Pro (monthly)   £1.99 / month
-UK tax year 2026-27        £7.99 one-off (non-consumable, requires Pro)
-```
-
----
-
-## STEP 0 — The blocker that hides everything: the Paid Applications agreement
-
-**Do this before anything else and confirm it is fully active.** If it is not, every product
-returns empty with *no error of any kind* — the paywall just says "unavailable" and nothing
-explains why. This is the single most common cause of "my products don't show up".
-
-1. App Store Connect → **Business** → **Agreements, Tax, and Banking**.
-2. Accept the **Paid Applications** agreement.
-3. Complete **Bank details** and **Tax forms** in full.
-4. Confirm the agreement status shows **Active** (not "Pending").
-
-Until all of that is green, skip ahead and set up the listing text, but know the paywall will
-not work on TestFlight.
+1. **Privacy manifests** (`ios/App/App/PrivacyInfo.xcprivacy` and the Watch's). Apple requires one
+   whenever the app's own code uses certain "required reason" APIs — ours reads `UserDefaults` and
+   file dates. Missing one gets a build flagged (error ITMS-91053). Declared: no tracking, **no data
+   collected**, matching the "Data Not Collected" label. A new script wires them into the Xcode
+   project on every sync, and `npm run check` now fails if they're ever unwired.
+2. **Encryption declaration** (`ITSAppUsesNonExemptEncryption = NO` in `Info.plist`). Without it
+   every build sits in TestFlight as *Missing Compliance* until someone answers a questionnaire by
+   hand. The answer is honest: the only cryptography is WebCrypto, which is the iPhone's own.
+3. **Terms of Service** — removed the "beta software" notice and "Beta terms" section (Apple
+   Guideline 2.2 rejects betas on the store), and replaced "Fees: free during beta" with real
+   subscription terms (auto-renewal, cancelling, refunds via Apple, restore). Section numbers kept,
+   so the app's link to §4 (tax) still works.
+4. **Privacy Policy** — added the iCloud Drive records folder, the calendar, and purchases.
+5. **Support page** — `support.html`: a contact address and answers to the six questions new
+   users will actually ask (web → iPhone move, backups, restore purchases, cancel/refund, "does
+   Pro include tax?", "can you see my records?").
+6. **Demo practice for reviewers** — `demo/groundwork-demo-practice.json` on the website, a
+   synthetic practice (26 clients known only by code). Verified it restores through the app's own
+   import checks.
+7. **Screenshots** — six App Store screenshots and two paywall review screenshots, from the real
+   app. Regenerate any time with `node scripts/render-store-screenshots.mjs`.
+8. Tidied the stale docs (the retired "Plus" tier, the deleted chrome artwork).
 
 ---
 
-## STEP 1 — Finish the GroundWork Pro subscription
+## Step 1 — Merge the pull request (5 min)
 
-App Store Connect → **Apps → GroundWork → Subscriptions**.
+Everything above sits on the branch `claude/app-store-launch-guide-ahs8v1`. Merging it puts the new
+Terms, Privacy Policy and Support page **live on your website**, which App Review will visit.
 
-1. **Subscription group.** There must be exactly **one** group, named `GroundWork`, holding the
-   subscription(s). Give the **group itself** a localised **display name** — the reference name
-   is not enough, and a group without a display name makes every product in it unfetchable.
+1. GitHub → **Pull requests** → open *"Prepare GroundWork for App Store submission"*.
+2. Click **Merge pull request** → **Confirm merge**.
+3. Wait ~1 minute, then open each link and check it loads:
+   - <https://mc392.github.io/therapy-tracker/support.html>
+   - <https://mc392.github.io/therapy-tracker/terms.html> — the top box should say *"Before you add
+     real client data"*, not *"Beta software notice"*.
+   - <https://mc392.github.io/therapy-tracker/privacy.html> — "Last updated 26 September 2026".
 
-2. Open the **GroundWork Pro Monthly** subscription and confirm/complete:
-   - **Product ID:** `uk.co.charlottebloortherapy.groundwork.pro.monthly`
-   - **Duration:** 1 Month
-   - **Price:** **£1.99 / month** (and confirm a price is set for **your own Apple ID's
-     territory** — a price set only in some territories returns nothing in the others).
+## Step 2 — Confirm your contact address works (5 min)
 
-3. **Localization** (App Store display name + description). Required — review rejects without it.
-   Paste:
+The Support page, Terms and Privacy Policy all give **privacy@groundworkpractice.co.uk**. Apple's
+reviewers may email it, and customers will. I couldn't check it from here (this environment
+blocks the lookup).
 
-   - Display name: `GroundWork Pro`
-   - Description:
-     > Business analytics, your business costs, accreditation hours and GroundWork Notes sync.
-     > Does not include tax calculations — each UK tax year is a separate one-off purchase.
+- Send a test email to it from your personal address and confirm it arrives.
+- **If it doesn't exist or you'd rather use another address**, tell me the address and I'll
+  change all four pages in one go.
 
-   > ⚠️ **The Pro copy must not promise tax.** Pro does not calculate tax, and the app says so on
-   > every screen that asks for money. A store description implying otherwise would make the
-   > in-app copy read like a retraction — and is the kind of thing review flags.
+## Step 3 — Paid Applications agreement (5–30 min, do this early)
 
-4. **Subscription image** (1024×1024, opaque, square, no rounded corners):
-   `TherapyTracker-web/icon-ideas/groundwork/subscription-pro-1024.png` (gold).
-   Regenerate if needed: `node scripts/render-subscription-image.mjs subscription-pro-1024`
+**If this isn't fully active, every product silently shows "unavailable" and nothing says why.**
 
-5. **Review screenshot** (*App Review Information* on the subscription — customers never see it;
-   it shows a reviewer where the purchase is offered):
-   `TherapyTracker-web/icon-ideas/groundwork/paywall-review-screenshot.png`
+1. App Store Connect → **Business** (top menu; older accounts: *Agreements, Tax, and Banking*).
+2. **Paid Apps** agreement → status must read **Active**. If not: accept it, then complete:
+   - **Bank account** — the UK account payouts go to (sort code + account number).
+   - **Tax forms** — as a UK individual you'll be asked for a **W-8BEN** (the US form saying you're
+     not a US taxpayer). Tick that you're claiming treaty benefits under the **UK–US treaty**;
+     Apple's form fills in the rest.
+3. **Money tip — join the App Store Small Business Program.** Apple then takes **15%** of each sale
+   instead of 30% (you qualify while proceeds are under $1m/year). Apply at
+   <https://developer.apple.com/app-store/small-business-program/> → *Enroll*. Takes 2 minutes;
+   approval usually within days, and it applies from the next month.
 
-   > The chicken-and-egg: ASC wants this screenshot before the product can leave *Missing
-   > Metadata*, but StoreKit cannot fetch a *Missing Metadata* product — so a TestFlight paywall
-   > says "unavailable" until the screenshot is uploaded. Generate one without a live product:
-   > ```bash
-   > node scripts/render-paywall-screenshot.mjs \
-   >   --price "£1.99" --period month --price-year "£7.99" --sheet both
-   > ```
-   > This renders the real in-app paywall (`--sheet pro` → `paywall-review-screenshot.png`,
-   > `--sheet tax` → `taxyear-review-screenshot.png`). Add `--dark` for the dark pair. Swap in a
-   > genuine device screenshot before final submission.
+## Step 4 — Finish the GroundWork Pro subscription (15 min)
 
-6. **Optional — free trial.** If you want one (a 1-month free trial spanning January is worth
-   more than a discount), add an **Introductory Offer → Free → 1 month**. A non-consumable (the
-   tax year) cannot have a trial, so this only applies to Pro.
+App Store Connect → **Apps** → **GroundWork** → left sidebar **Monetization → Subscriptions**.
 
-7. **The legacy annual product** (`…groundwork.plus.annual`): leave it exactly as it is if it
-   exists; **never re-point or delete its ID**. Nobody holds it, so if it does not exist, skip
-   it. `npm run check` fails the build if the code's mapping for this ID ever changes.
+**4a. The subscription group** (the folder the subscription lives in)
 
-Target state: the subscription reaches at least **Ready to Submit**.
+- There should be exactly **one** group. Open it (create one called `GroundWork` if there is none).
+- Under **App Store Localization** → **Create** → English (U.K.):
 
----
+  | Field | Paste |
+  |---|---|
+  | Subscription Group Display Name | `GroundWork` |
+  | App Name Display Options | *Use App Name* |
 
-## STEP 2 — Finish the tax-year in-app purchase
+  *Without this group-level name, every product in the group is unfetchable.*
+- If **English (U.K.)** is not your app's primary language, also add **English (U.S.)** with the
+  same values. (Check under **App Information → Localizable Information → Primary Language**.)
 
-This lives in a **different section**: App Store Connect → **Apps → GroundWork → In-App
-Purchases** (not Subscriptions). Type = **Non-Consumable**.
+**4b. The product** — open **GroundWork Pro Monthly** (Product ID
+`uk.co.charlottebloortherapy.groundwork.pro.monthly`). If it doesn't exist, **Create** it with
+Reference Name `GroundWork Pro Monthly`, that Product ID, and Duration **1 Month**.
 
-1. **UK tax year 2026-27:**
-   - **Reference name:** `UK tax year 2026-27`
-   - **Product ID:** `uk.co.charlottebloortherapy.groundwork.taxyear.2026`
-     (the **start year only** — the app parses the year out of the ID; `.2026` = 2026-27 tax
-     year, and `npm run check` asserts the Swift and JS agree on the prefix).
-   - **Price:** **£7.99**
+| Field | Enter |
+|---|---|
+| Availability | All territories you'll sell in (at least **United Kingdom** — see Step 7) |
+| Subscription Prices | **£1.99** for United Kingdom (let Apple fill other countries automatically) |
+| Localization → Display Name | `GroundWork Pro` |
+| Localization → Description | `Analytics, costs, CPD hours, reports` |
+| Image (1024×1024) | `TherapyTracker-web/icon-ideas/groundwork/subscription-pro-1024.png` |
+| Review Information → Screenshot | `TherapyTracker-web/icon-ideas/groundwork/paywall-review-screenshot.png` |
+| Review Information → Review Notes | `Offered in Settings > App preferences > What you are paying for > See what Pro is, and from any locked Pro screen (e.g. Practice > Business analytics). Pro does not include tax calculations - those are the separate tax year purchase.` |
 
-2. **Localization** (display name + description). Paste:
-   > Works out your 2026-27 tax, and every earlier tax year: what you are on track to owe,
-   > what to keep back for it, payments on account, and that year's Making Tax Digital export.
-   > A one-off purchase — it does not expire. Requires GroundWork Pro.
+- **Free trial (optional, your decision):** *Subscription Prices* → **View all Subscription
+  Pricing** → *Introductory Offers* → **Free**, **1 month**, all territories. Skip it if unsure;
+  you can add it later without a new build.
+- Status should now read **Ready to Submit**.
 
-3. **Review screenshot** (its **own**, so a reviewer of this product sees where *it* is offered):
-   `TherapyTracker-web/icon-ideas/groundwork/taxyear-review-screenshot.png`
+> To download the image files: on GitHub open the file, click **Download raw file** (the ↓ icon).
 
-4. **Product image:** there is no dedicated tax-year artwork yet — reuse the gold Pro image
-   (`subscription-pro-1024.png`). The tax years wear the same gold.
+## Step 5 — Finish the tax-year purchase (10 min)
 
-5. **Create next year now, too** — `…groundwork.taxyear.2027` (UK tax year 2027-28). A product
-   takes time to propagate and can sit in review; having it ready months early means April is
-   never a scramble. The app only ever *offers* the current tax year, so a product that exists
-   but isn't yet current costs nothing. (When you want the app to offer it, add `"2027-28"` to
-   `taxYearsForSale` in `ios/App/App/GroundWorkNativePlugin.swift` — around line 212 today.)
+App Store Connect → **GroundWork** → **Monetization → In-App Purchases** (*not* Subscriptions).
+Open **UK tax year 2026-27** (Product ID `uk.co.charlottebloortherapy.groundwork.taxyear.2026`,
+type **Non-Consumable**). If missing, create it with exactly that ID — `.2026` means the 2026-27
+tax year, and the app reads the year out of the ID.
 
-Target state: the tax-year IAP reaches at least **Ready to Submit**, priced in your Apple ID's
-territory.
+| Field | Enter |
+|---|---|
+| Availability | Same territories as Pro |
+| Price | **£7.99** (United Kingdom; let Apple fill the rest) |
+| Localization → Display Name | `UK tax year 2026-27` |
+| Localization → Description | `Tax figures for 2026-27 and earlier` |
+| Image (1024×1024, optional) | `TherapyTracker-web/icon-ideas/groundwork/subscription-pro-1024.png` |
+| Review Information → Screenshot | `TherapyTracker-web/icon-ideas/groundwork/taxyear-review-screenshot.png` |
+| Review Information → Review Notes | `Offered on the Tax tab (tap any masked figure or "What this needs"), and in Settings > App preferences > What you are paying for. It requires GroundWork Pro first: subscribe to Pro in the sandbox, then buy the tax year, and the Tax tab's figures appear.` |
 
----
+Status should read **Ready to Submit**.
 
-## STEP 3 — Fill in the app listing (the version record)
+**Also create next year now** (5 min, saves a scramble in April): **+** → Non-Consumable →
+Reference Name `UK tax year 2027-28`, Product ID
+`uk.co.charlottebloortherapy.groundwork.taxyear.2027`, £7.99, Display Name `UK tax year 2027-28`,
+Description `Tax figures for 2027-28 and earlier`, same screenshot. The app won't offer it until
+it's added in code next spring — tell me then. Don't submit it with this release.
 
-App Store Connect → **Apps → GroundWork**.
+## Step 6 — App Information (10 min)
 
-### 3a. App Information
+**GroundWork** → **General → App Information**.
 
-- **Subtitle:** `Private practice records`
-- **Primary category:** Business — **Secondary category:** Productivity
-- **Privacy Policy URL:** `https://mc392.github.io/therapy-tracker/privacy.html`
-- **License Agreement:** leave on Apple's **Standard EULA** (a custom one is entered as text,
-  not a URL; the Terms link in the Description covers Guideline 3.1.2).
-- **Age rating:** answer the questionnaire so it lands on **4+** (no user-generated content, no
-  web browsing, no ads).
+| Field | Enter |
+|---|---|
+| Name | `GroundWork` |
+| Subtitle | `Private practice records` |
+| Category — Primary | **Business** |
+| Category — Secondary | **Productivity** |
+| Content Rights | **No**, it does not contain, show, or access third-party content |
+| Age Rating | **Edit** → answer **None / No to every question** → result **4+**. There are no ads, no chat, no user-generated content, no web browsing, no gambling, and no medical or wellness information *for the user* — it's business admin for the therapist. |
+| License Agreement | Leave as Apple's **Standard License Agreement** |
 
-### 3b. Privacy "nutrition label" — Data Not Collected
+**Privacy Policy URL** is on the **App Privacy** page (Step 7), not here.
 
-Answer **"No"** to *"Do you or your third-party partners collect data from this app?"* The label
-then reads **Data Not Collected**. This is accurate — the app has no backend, no accounts and no
-analytics; everything lives in IndexedDB/localStorage on-device.
+## Step 7 — Privacy, pricing and where it's sold (10 min)
 
-Keep it true:
-- **No analytics SDK, ever** (not Firebase, Sentry, or any crash reporter). Adding one means
-  re-answering the questionnaire.
-- **The share sheet is not collection** — exports go where the therapist sends them; Apple does
-  not count a user-initiated share.
-- **Calendar access is not collection** — the app writes sessions into a calendar the therapist
-  picks and reads back only events it created, by an identifier it stored. Nothing is transmitted.
+**7a. App Privacy** (left sidebar **App Privacy**):
 
-### 3c. Pricing and availability
+1. **Privacy Policy URL:** `https://mc392.github.io/therapy-tracker/privacy.html`
+2. **Data Types** → **Get Started** → *"Do you or your third-party partners collect data from this
+   app?"* → **No, we do not collect data from this app** → **Save** → **Publish**.
+3. The label now reads **Data Not Collected**. This is true because nothing leaves the device to
+   you: the calendar, the iCloud folder and exports all go where *the user* sends them, and Apple
+   handles purchases.
 
-- **Price:** Free.
-- Availability: your chosen territories (at minimum, your own).
+**7b. Pricing and Availability:**
 
-### 3d. Version metadata — the text to paste
+| Field | Enter |
+|---|---|
+| Price | **Free** (£0.00) — money comes from the in-app purchases |
+| Availability | **United Kingdom only** (recommended) |
 
-**Promotional text** (170 chars, editable later without review):
+**Why UK only:** the tax engine is UK-only, and selling in the **EU** requires you to publish a
+"trader" address and phone number under the EU Digital Services Act. UK-only avoids that. If App
+Store Connect asks about **DSA trader status**, you can leave the EU out of availability. You can
+add countries later with no new build.
+
+## Step 8 — Test build 25 on your iPhone (30–45 min)
+
+I started build **25** from the PR branch — it's the first build containing today's privacy
+manifests and encryption declaration. (If you'd rather build from `main` after merging, run
+GitHub → **Actions** → **TestFlight** → **Run workflow** → branch `main`, and leave the build
+number blank.)
+
+1. App Store Connect → **TestFlight**: build **25** appears ~15 minutes after the run finishes.
+   Thanks to the encryption declaration it should go straight to **Ready to Test** — no compliance
+   question. If it does say *Missing Compliance*, click it → *"None of the algorithms mentioned
+   above"* → Save.
+2. On your iPhone, open **TestFlight** → **GroundWork** → **Update**.
+3. Tick off each of these:
+   - [ ] **Face ID:** Settings → This iPhone → *Require Face ID* on. Close the app, reopen —
+         it asks for Face ID. Swipe up to the app switcher — records are hidden.
+   - [ ] **Reminders:** *Daily reminders* on → allow notifications → one arrives next morning.
+   - [ ] **Receipt PDF:** open a client → **Invoice / receipt** → create one → it opens as a PDF you can print or share.
+   - [ ] **Calendar:** open a future session → *Add to my calendar* → the permission prompt appears
+         **then** (not on opening Settings) → the session appears in Calendar. Add it again: still
+         one entry, not two.
+   - [ ] **Records folder:** Settings → This iPhone → *Where your records are saved* → pick a folder
+         in iCloud Drive → make a change → the file appears in the Files app.
+   - [ ] **Status bar:** the green header sits cleanly under the clock/battery (fixed in #66).
+   - [ ] **Prices:** Settings → App preferences → *What you are paying for* → **See what Pro is**
+         shows **£1.99 / month**; **Tax year 2026-27** shows **£7.99**. "Unavailable" = Step 3, 4 or
+         5 isn't finished, or it hasn't propagated yet (can take a few hours).
+   - [ ] **Buy Pro** (TestFlight purchases are free sandbox purchases) → Business analytics unlocks.
+   - [ ] **Buy the tax year** → the Tax tab shows figures instead of `£•,•••`.
+   - [ ] Delete the app, reinstall from TestFlight, **Restore purchases** → both come back.
+   - [ ] With nothing bought, **Export backup (.json)** still works. (The one rule that matters most.)
+   - [ ] **Apple Watch** (if you have one): open GroundWork on the watch → *Start* → it counts down
+         and taps your wrist at ten minutes left. **If it doesn't work, tell me before submitting**
+         — a broken Watch app is a rejection, and we can ship 1.0 without it.
+
+Anything wrong → tell me what you saw; I'll fix it and cut build 26.
+
+## Step 9 — Build the version page (20 min)
+
+**GroundWork** → **iOS App** → **1.0 Prepare for Submission**.
+
+**9a. iPhone screenshots** — *Previews and Screenshots* → **iPhone** tab → **6.9" Display**. Drag in,
+in this order, from `docs/app-store-screenshots/`:
+
+1. `01-home.png` — what needs you today
+2. `02-tax.png` — what you'll owe HMRC
+3. `03-sessions.png` — the week ahead
+4. `04-analytics.png` — practice analytics
+5. `05-money.png` — revenue and net income
+6. `06-iphone.png` — Face ID lock and reminders (the "native app" evidence)
+
+All are 1320×2868, no transparency, from a synthetic practice. Smaller iPhones are scaled from
+these automatically. If an **iPad** tab demands screenshots, the app isn't iPad-targeted and
+shouldn't ask; tell me if it does.
+
+**9b. Text fields** — paste exactly:
+
+**Promotional Text** (150/170)
 ```
-Private, offline records for a therapy practice — sessions, clients, rooms, supervision and tax. Nothing leaves your phone.
+Private, offline records for a therapy practice - sessions, clients, rooms, supervision, CPD and tax. No account, no cloud: nothing leaves your phone.
 ```
 
-**Keywords** (100 chars, comma-separated, no spaces):
+**Description** (2,706/4,000)
 ```
-therapist,therapy,counsellor,counselling,practice,private practice,sessions,supervision,invoice,tax
-```
+GroundWork keeps the admin side of a therapy practice in one place: sessions, clients, room costs, supervision hours and a running estimate of what you will owe HMRC.
 
-**Description** (paste in full — this is the one field where the subscription/Terms disclosure
-must live; note the paid-feature markers below are corrected to the single Pro tier):
-```
-GroundWork keeps the admin side of a therapy practice in one place: sessions, clients,
-room costs, supervision hours and a running estimate of what you will owe HMRC.
+Everything stays on your iPhone. There is no account, no cloud service and no analytics - your records are not sent anywhere, and Face ID keeps them shut when the app is closed.
 
-Everything stays on your phone. There is no account, no cloud, and no analytics — your
-records are not sent anywhere, and Face ID keeps them shut when the app is closed.
+• See at a glance what is unpaid, what still needs writing up, and who is coming up this week
+• Clients known by a code, not a name, if you prefer - nothing identifying is required
+• Room costs per session or as rent, with history kept when rates change
+• Receipts, statements and invoices as PDFs, printed or shared straight from the app
+• Cancellation and DNA charges applied from your own policy
+• Supervision and CPD logs, with a CPD target for the year
+• Accreditation hours and the 1:6 supervision ratio (Pro)
+• Reports for your course or professional body (Pro)
+• Over twenty practice analytics: retention, attendance, seasonality, days to payment and more (Pro)
+• Your business costs and other income, for a true profit figure (Pro)
+• A UK tax estimate that updates as you work, payments on account and Making Tax Digital figures (Pro + that tax year)
+• Records saved to a folder in your iCloud Drive, plus encrypted backups you can export yourself
+• Sessions added to your iPhone calendar - client code, time and room only
 
-• Log a session in seconds
-• See at a glance what is unpaid, what needs notes, and when supervision is due
-• Room costs per session or as monthly rent, with history kept when rates change
-• Receipts and statements for clients as PDFs, printed or shared straight from the app
-• Supervision and CPD hours tracked against the 1:6 ratio, with accreditation totals (Pro)
-• A UK tax estimate that updates as you work, with your business costs counted in (Pro + that tax year)
-• Quarterly figures for Making Tax Digital (Pro + that tax year)
-• Retention and attendance trends across your practice (Pro)
-• Automatic on-device backups kept in your iPhone's own backup, plus encrypted backups you can export yourself
+GroundWork records attendance and money. It is not a clinical record and holds no session notes - keep those where you keep them now. Tax figures are estimates to help you plan, not tax advice, and the app cannot file a return for you.
 
-GroundWork records attendance and money. It is not a clinical record and holds no session
-notes — keep those where you keep them now. Tax figures are estimates to help you plan,
-not advice, and the app cannot file for you.
+Recording sessions, clients, rooms, supervision and payments, receipts, what your rooms cost you, and every backup and export are free and always will be. GroundWork Pro adds business analytics, your business costs, accreditation hours, reports and GroundWork Notes sync.
 
-Logging sessions, clients, rooms, supervision, receipts, what your rooms cost you and every
-backup and export are free and always will be. GroundWork Pro adds business analytics, your
-business costs, accreditation hours and notes sync.
+Working out your tax is not part of Pro. Each UK tax year is a separate one-off purchase on top of Pro, because the bands, thresholds and rules are fixed to a single year and to where you pay tax. Buying one year includes every earlier year, and it does not expire.
 
-Working out your tax is not part of Pro. Each UK tax year is a separate one-off purchase on
-top of Pro, because the bands, thresholds and rules are fixed to a single year and to where
-you pay tax. Buying one year includes every earlier year, and it does not expire.
-
-GroundWork Pro is an auto-renewing monthly subscription. Payment is charged to your Apple ID
-at confirmation of purchase. It renews automatically unless cancelled at least 24 hours
-before the end of the current period. Manage or cancel in your Apple ID account settings.
-Tax years are one-off purchases and do not renew.
+GroundWork Pro is an auto-renewing monthly subscription. Payment is charged to your Apple ID at confirmation of purchase. It renews automatically unless cancelled at least 24 hours before the end of the current period, and your account is charged for renewal within 24 hours before the end of the current period. Manage or cancel in your Apple ID account settings. Tax years are one-off purchases and do not renew.
 
 Terms of Use: https://mc392.github.io/therapy-tracker/terms.html
 Privacy Policy: https://mc392.github.io/therapy-tracker/privacy.html
 ```
 
-**What's New** (first release):
+**Keywords** (94/100 — no spaces after commas, on purpose)
 ```
-First release on the App Store. GroundWork was already a web app; this version adds Face
-ID locking, reminders for what needs you, and proper PDF receipts you can print or share.
-```
-
-**Support URL:** `https://mc392.github.io/therapy-tracker/`
-
-### 3e. Screenshots
-
-Required size class: **6.9" iPhone (1320×2868)**. One set is enough — ASC scales down for
-smaller classes. Capture on an **iPhone 17 Pro Max simulator with demo data — never real client
-records.**
-
-Suggested five, in order:
-1. **Home** — Attention feed with a couple of items, plus the money tiles.
-2. **Sessions** — the list with paid/unpaid states visible.
-3. **Money or Tax** — the tax estimate (the thing that replaces the spreadsheet).
-4. **Settings › This iPhone** — Face ID lock and reminders. *This is the Guideline 4.2 evidence.*
-5. **A receipt PDF in the share sheet** — the native output.
-
----
-
-## STEP 4 — Cut a fresh TestFlight build and test on real hardware
-
-This is roadmap step 9 and the one genuinely outstanding technical task: Face ID, notification
-delivery, AirPrint/PDF and the calendar write have been exercised mostly in the simulator, so
-they need one run on a real device.
-
-### 4a. Cut the build
-
-Two routes, neither needs the products to be live yet (products are fetched at runtime):
-
-**Route A — from GitHub Actions (no Mac, no checkout):**
-1. GitHub → **Actions → TestFlight → Run workflow**.
-2. Pick a branch (any branch is fine).
-3. **Type a build number higher than the last Apple accepted** (the project is on **3**, so use
-   **4** or higher). Left blank it uses the run number, which can collide — and Apple rejects a
-   duplicate build number outright.
-
-**Route B — `npm run release` (needs a local Mac checkout):**
-```bash
-npm run release            # add --version 1.1 to also bump the marketing version
-git push && git push --tags
-```
-This refuses a dirty tree, runs `npm run check`, bumps the build number, runs `npm run sync`
-(rebuilds the bundled web copy in `ios/App/App/public/`), commits, and prints the tag to push.
-
-> ⚠️ **Pushing to GitHub updates the website, not the iPhone app.** A plain push never builds an
-> iOS app — it takes a tag or a manual run. It is very easy to confirm a fix on the live site and
-> wrongly assume TestFlight has it.
-
-**If CI ever fails at the very last step with a 409 "SDK version" / "must be built with the iOS N
-SDK"** — Apple raised the SDK floor. Bump `runs-on` in `testflight.yml` to a newer `macos-*`
-image (it is on `macos-26` today). See `docs/releasing.md` § "What the runner has to match".
-
-**One-time CI setup** (if not already done): the App Store Connect API key and the signing
-certificate secrets. Full walkthrough in `docs/releasing.md` (§ "One-time setup for the
-automated upload" and "… for the signing certificate"). The release notes indicate real builds
-have already run, so these are likely already in place — if a run fails on missing secrets,
-that's the section to revisit.
-
-### 4b. Export compliance (first upload only)
-
-ASC asks whether the app uses encryption. GroundWork encrypts backups with WebCrypto (standard
-cryptography), so answer with the **exemption for standard encryption**. It's remembered for
-later builds.
-
-### 4c. Test on the device
-
-Install from TestFlight and confirm:
-- [ ] **Face ID** locks and unlocks; the app hides in the app switcher.
-- [ ] **Notifications** actually arrive (overdue payments / outstanding notes).
-- [ ] A **receipt PDF** generates and prints/shares.
-- [ ] **Add to calendar** writes a session into a calendar you pick; the permission prompt
-      appears *at that moment* (not on opening Settings) — and re-adding the same session updates
-      the event rather than duplicating it.
-- [ ] Settings → App preferences → **What you are paying for**:
-      - **See what Pro is** shows a **real price** beside GroundWork Pro (if "Unavailable": the
-        product isn't live/propagated, or the paid agreement isn't active — see Step 0).
-      - **Tax year 2026-27** shows a **real price** at step 2 of that sheet.
-- [ ] Tap **Subscribe** — everything Pro unlocks (TestFlight uses the free sandbox).
-- [ ] Buy the **tax year** — tax figures un-mask (Pro must be active first; the sheet shows both
-      steps and ticks each).
-- [ ] Delete and reinstall → **Restore purchases** brings both back.
-- [ ] **Export and backup still work while locked** — the invariant that matters most.
-
-> Sandbox compresses time: a subscription renews every few minutes, so you can watch renewal and
-> the 7-day offline grace without waiting.
-
----
-
-## STEP 5 — Comp yourself / Charlotte / the tester (optional, before submit)
-
-On iOS use Apple's own mechanisms so there's no payment-route argument at review:
-
-- **Pro (subscription):** ASC → the subscription → **Offer Codes** → create a batch. In the app:
-  Settings → App preferences → What you are paying for → **See what Pro is → Redeem a code**.
-- **Tax year (non-consumable):** cannot use offer codes. Use a **promo code** (ASC issues up to
-  100 per product per version, under the app version's *Promo Codes*). Comping Pro does **not**
-  comp tax — they are separate on purpose.
-
-Web/licence keys (`scripts/issue-licence.mjs`) are for Phase 2 and anything Apple can't reach;
-not needed for the App Store launch.
-
----
-
-## STEP 6 — Submit for review
-
-- [ ] Re-read `terms.html` **§4 on tax figures** once more — it's the paragraph most likely to
-      draw a reviewer question, and it must be as plain as the description.
-- [ ] Attach the **6.9" screenshots** and the **paywall review screenshot(s)**.
-- [ ] Add the **reviewer notes** (below).
-- [ ] **Submit the app version, the subscription, and the tax-year IAP together** — a build that
-      references an unsubmitted in-app product fails. (Apple's rule that "the first in-app
-      purchase must be submitted with an app version" is about going live.)
-- [ ] Expect at least one round of questions — most often about the paywall or the privacy label.
-
-### Reviewer notes to paste
-
-**Guideline 4.2 (minimum functionality)** — why this is more than a wrapped website:
-```
-GroundWork stores confidential therapy records entirely on-device. The iOS app adds Face ID /
-Touch ID locking of those records including hiding them in the app switcher, scheduled local
-notifications for overdue payments and outstanding session notes, native PDF generation of
-client receipts with AirPrint and share-sheet delivery, native file access for encrypted
-backups, and automatic on-device backups written to the app's Documents folder on every save.
-None of these are available to the web version.
+therapist,counsellor,counselling,psychotherapist,therapy,sessions,supervision,CPD,HMRC,invoice
 ```
 
-**Calendar permission (Guideline 5.1.1), if asked** — why full access, not write-only:
+**Support URL**
 ```
-GroundWork writes the practitioner's own session times into a calendar she chooses. Full
-calendar access is used solely to update an event the app previously created when a session is
-rescheduled; nothing is read for any other purpose and no calendar data leaves the device.
+https://mc392.github.io/therapy-tracker/support.html
 ```
-(The permission is requested only at the point of use — tapping *Add to my calendar* — never on
-opening Settings. Both `NSCalendarsFullAccessUsageDescription` and `NSCalendarsUsageDescription`
-are present because the deployment target is iOS 15.)
 
----
+**Marketing URL** — leave blank.
 
-## Quick troubleshooting
+**Version** — `1.0`
 
-| Symptom | Almost certainly |
+**Copyright** — `2026 ` followed by the name shown as the seller on your developer account (for an
+Individual enrolment, your own legal name), e.g. `2026 Jane Smith`.
+
+> **Want to mention the Apple Watch timer?** Only after it passes the Step 8 watch test. Then add
+> this bullet after the calendar one: `• An Apple Watch timer that taps your wrist ten minutes
+> before the end of a session`.
+
+**9c. Apple Watch screenshot (required, because the build includes the Watch app)**
+
+App Store Connect will insist on at least one under *Previews and Screenshots* → **Apple Watch**.
+I can't render it — the Watch app is native, not the web app. Pick one route:
+
+- **Real Apple Watch (easiest):** on the iPhone, open the **Watch** app → **General** → turn on
+  **Enable Screenshots**. On the watch, open GroundWork (the *Start* screen). Press the **side button
+  and Digital Crown together**. The screenshot lands in the iPhone's **Photos**. AirDrop/email it to
+  the computer you're using and drag it into the Apple Watch slot — App Store Connect accepts the
+  size of whichever watch you have.
+- **Mac with Xcode:** `npm run ios` → in Xcode pick the **GroundWorkWatch** scheme and any Apple
+  Watch simulator → Run → in the Simulator app, **File → Save Screen**.
+- **No watch and no Mac:** tell me and I'll take the Watch app out of 1.0 (a small project change
+  plus a new build). It can come back in 1.1.
+
+**9d. In-App Purchases and Subscriptions** (same page, further down) → **Add** / **+** → tick
+**GroundWork Pro Monthly** and **UK tax year 2026-27** → Done. *The first purchases must be
+submitted together with an app version — skip this and review can't see them.*
+
+**9e. Build** → **Add Build** → choose **25** (or whichever build passed Step 8).
+
+## Step 10 — App Review Information (5 min)
+
+Same page, **App Review Information**:
+
+| Field | Enter |
 |---|---|
-| Paywall says "Unavailable" against Pro | Paid Applications agreement not fully active (Step 0); or the product is in *Missing Metadata*; or it hasn't propagated (wait minutes–hours); or the group lacks a display name |
-| "Unavailable" against the tax year, but Pro prices fine | The non-consumable is missing/wrong. It lives under **In-App Purchases**, not Subscriptions; ID carries the START year only (`…taxyear.2026` = 2026-27) |
-| Tax figures still masked after buying a year | Pro is a prerequisite — check the subscription is live too |
-| Upload rejected instantly | Duplicate build number — type an explicit one higher than 3, or use `npm run release` |
-| CI fails at upload with a 409 "SDK version" | Apple raised the SDK floor — bump `runs-on` in `testflight.yml` to a newer macOS image |
-| TestFlight missing a fix you pushed | You pushed to GitHub but did not cut a build (tag or manual run) |
-| A tax test fails after a change | The paywall got put inside the tax engine — `npm run check` guards this |
+| Sign-in required | **Untick** — there are no accounts |
+| Contact first/last name, phone, email | Yours (Apple uses them only if they have a question) |
+| Attachment | none |
+
+**Notes** — paste:
+```
+GroundWork is practice-administration software for UK therapists and counsellors. There is no account or sign-in, and no server: all records are stored on the device.
+
+GETTING STARTED
+On first launch a short setup runs; choose "No - starting fresh" when asked about previous records. Tap + to log a session. To see the app with four years of data, a synthetic demo practice is available: open https://mc392.github.io/therapy-tracker/demo/groundwork-demo-practice.json in Safari, tap Share > Save to Files, then in GroundWork go to Settings > Data & backup > Restore from backup and choose that file. It contains no real people.
+
+IN-APP PURCHASES
+- GroundWork Pro (monthly subscription): Settings > App preferences > What you are paying for > See what Pro is, or any locked Pro screen such as Practice > Business analytics.
+- UK tax year 2026-27 (non-consumable): the Tax tab, or the same Settings card. It requires GroundWork Pro first, so please subscribe to Pro before buying the tax year. The Tax tab's figures are masked until both are held; the tab itself and the user's own settings on it are free.
+Logging, receipts, backups and every export are free and never locked.
+
+NATIVE FUNCTIONALITY (Guideline 4.2)
+The iOS app is not a wrapped website. It adds: Face ID / Touch ID locking of the records, including hiding them in the app switcher; scheduled local notifications for overdue payments and outstanding session notes; native PDF generation of receipts with AirPrint and share-sheet delivery; a records folder the user picks with the document picker (typically in iCloud Drive), written on every save with coordinated file access; automatic on-device backups in the app's Documents folder, visible in the Files app; writing sessions into the user's calendar with EventKit; system haptics; and a companion Apple Watch session timer.
+
+CALENDAR ACCESS
+Requested only when the user taps "Add to my calendar". Full access (rather than write-only) is needed solely to update an event the app itself created when a session is rescheduled; nothing else is read, and no calendar data leaves the device.
+
+PRIVACY
+The privacy label is "Data Not Collected": nothing is transmitted to the developer. Client records are entered and controlled by the practitioner.
+```
+
+## Step 11 — Release setting, then submit (2 min)
+
+1. **App Store Version Release** → **Manually release this version** — so it goes live when *you*
+   click, not at 3am the moment it's approved.
+2. Top right → **Add for Review** → check the summary lists the **app version, GroundWork Pro
+   Monthly and UK tax year 2026-27** → **Submit to App Review**.
+
+You'll get emails as the status moves: *Waiting for Review* → *In Review* → *Pending Developer
+Release* (approved) or *Rejected* (with a message in App Store Connect → **App Review**).
+
+## Step 12 — When it's approved
+
+1. **Distribution** → the version → **Release This Version**. It's on the store within ~24 hours.
+2. Search the App Store for "GroundWork" on your phone and check the listing.
+3. Tell existing web-app users (Charlotte first): **records don't carry across automatically** —
+   export a backup in the web app, then *Restore from backup* in the iPhone app. The support page
+   explains this too.
 
 ---
 
-## Source docs (for the deep mechanics)
+## If Apple rejects it — reply templates
 
-- `docs/releasing.md` — the two release tracks, CI signing/key setup, what the runner must match.
-- `docs/app-store-listing.md` — the listing pack (some copy there predates the single-tier
-  correction made here; where they differ, this guide is current).
-- `docs/plus-launch-checklist.md` — the product-creation detail (its Step 4 simulator checklist
-  still mentions the retired "chrome Plus" tier; ignore that — there is only Pro).
-- `docs/monetisation.md` — the pricing design and the reasoning behind Pro + tax-year packs.
-- `docs/groundwork-app-store-roadmap.md` — the original end-to-end roadmap.
+Reply in App Store Connect → **App Review** → the message. Keep it factual. Tell me what they
+said and I'll help fix anything real.
+
+**Guideline 4.2 — "not sufficiently different from a mobile web browsing experience"**
+```
+Thank you for the review. GroundWork uses iOS capabilities a website cannot: Face ID locking of confidential records with app-switcher hiding (Settings > This iPhone), scheduled local notifications for outstanding work, native PDF receipts via AirPrint and the share sheet, a user-chosen records folder in iCloud Drive written through the document picker on every save, EventKit calendar integration, system haptics, and a companion Apple Watch session timer. We would be grateful if you could look again with these in mind.
+```
+
+**Guideline 2.1 — "we couldn't find / load your in-app purchases"**
+```
+Thank you. The subscription is offered in Settings > App preferences > What you are paying for > See what Pro is. The tax year purchase requires GroundWork Pro first, so please subscribe to Pro in the sandbox and then buy the tax year from the same card or from the Tax tab. Both products are attached to this version.
+```
+(Before replying, check both products show **Waiting for Review** alongside the version, and that
+the Paid Apps agreement is **Active** — Step 3.)
+
+**Guideline 3.1.2 — subscription information missing**: the Terms and Privacy links are in the
+paywall and at the end of the Description; if they ask for more, reply pointing to both and tell
+me what they highlighted.
+
+**Guideline 5.1.1 — calendar permission**
+```
+Calendar access is requested only when the user taps "Add to my calendar". Full access is used solely to update an event GroundWork itself created when a session is rescheduled - write-only access cannot read that event back, so every change would create a duplicate. No calendar data leaves the device.
+```
+
+## Troubleshooting
+
+| What you see | What it means |
+|---|---|
+| Paywall says "Unavailable" | Paid Apps agreement not **Active** (Step 3), the product isn't *Ready to Submit*, the subscription group has no display name (4a), or it hasn't propagated — wait a few hours. |
+| Tax year "Unavailable" but Pro prices fine | The tax year is missing or mistyped. It lives under **In-App Purchases**, not Subscriptions. |
+| Tax figures still masked after buying the year | Pro must be active too. |
+| Build stuck on *Missing Compliance* | Only builds **older** than 25 — answer *"None of the algorithms mentioned above"*. |
+| Upload fails with a 409 "SDK version" | Apple raised the minimum Xcode. Tell me — it's a one-line change to `testflight.yml`. |
+| TestFlight doesn't have a fix you pushed | Pushing updates the website only. Run the TestFlight workflow (Actions tab). |
+| "Missing screenshot for Apple Watch" | Step 9c. |
+
+---
+
+## Reference
+
+- Pricing and why: `docs/monetisation.md`. Build pipeline: `docs/releasing.md`.
+  Privacy-label reasoning: `docs/app-store-listing.md`.
+- Regenerate screenshots: `npm i --no-save playwright && node scripts/render-store-screenshots.mjs`
+  (add `--dark` for a dark set). Review screenshots:
+  `node scripts/render-paywall-screenshot.mjs --sheet both`.
+- Product IDs (must match the code exactly):
+  `uk.co.charlottebloortherapy.groundwork.pro.monthly` (subscription) ·
+  `uk.co.charlottebloortherapy.groundwork.taxyear.2026` (non-consumable) ·
+  `uk.co.charlottebloortherapy.groundwork.plus.annual` (legacy — never create, rename or re-point).
