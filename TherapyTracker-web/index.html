@@ -17371,6 +17371,49 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
   const GW = P("GroundWorkNative");
   document.documentElement.setAttribute("data-native","ios");
 
+  /* ---------- An iPad says "iPad" (Sep 2026) ----------
+     The native copy was written for a phone and names it - "This iPhone", "Copy on this iPhone",
+     "iPhone Settings" - fifty-odd times. Since 1.0 also runs on iPad, and App Review tests an iPad
+     build on an iPad, the words have to match the device in the reader's hand. One rule here
+     rather than fifty edits: on an iPad, "iPhone" in on-screen TEXT reads "iPad". Every phrase
+     survives the swap ("On My iPad" is even what iPadOS's own Files app calls it). "iPhone/iPad"
+     is left alone, and web-only copy never reaches here - this block returns on the web.
+     A MutationObserver carries it to everything drawn later (sheets, toasts, redraws); a node is
+     only ever touched if it contains the word, so its own writes settle at once.
+     Detection: iPadOS's WKWebView reports a desktop Mac user agent, so an iPad is "iPad" in the
+     UA or a Mac UA with touch points. A Mac running the app has no touch points, so is left
+     alone. */
+  const IS_IPAD = /iPad/.test(navigator.userAgent) ||
+    (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+  if(IS_IPAD){
+    document.documentElement.setAttribute("data-device","ipad");
+    const DEV_RE = /iPhone(?!\/iPad)/g, DEV_ATTRS = ["aria-label","title","placeholder"];
+    const fixText = n => { const v = n.nodeValue;
+      if(v && v.indexOf("iPhone") >= 0){ const w = v.replace(DEV_RE,"iPad"); if(w !== v) n.nodeValue = w; } };
+    const fixEl = el => { for(const a of DEV_ATTRS){ const v = el.getAttribute(a);
+      if(v && v.indexOf("iPhone") >= 0){ const w = v.replace(DEV_RE,"iPad"); if(w !== v) el.setAttribute(a,w); } } };
+    const sweep = root => {
+      if(root.nodeType === 3){ fixText(root); return; }
+      if(root.nodeType !== 1 || root.tagName === "SCRIPT" || root.tagName === "STYLE") return;
+      fixEl(root);
+      const tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+      for(let n = tw.nextNode(); n; n = tw.nextNode()){
+        if(n.nodeType === 3){ const pe = n.parentNode; if(pe && (pe.tagName === "SCRIPT" || pe.tagName === "STYLE")) continue; fixText(n); }
+        else fixEl(n);
+      }
+    };
+    const startDev = () => {
+      sweep(document.body);
+      new MutationObserver(ms => { for(const m of ms){
+        if(m.type === "characterData") fixText(m.target);
+        else if(m.type === "attributes") fixEl(m.target);
+        else for(const n of m.addedNodes) sweep(n);
+      } }).observe(document.body, {childList:true, subtree:true, characterData:true,
+                                    attributes:true, attributeFilter:DEV_ATTRS});
+    };
+    if(document.body) startDev(); else document.addEventListener("DOMContentLoaded", startDev);
+  }
+
   const LSget = (k,d) => { try{ const v=localStorage.getItem(k); return v==null?d:v; }catch(e){ return d; } };
   const LSset = (k,v) => { try{ localStorage.setItem(k,String(v)); }catch(e){} };
 

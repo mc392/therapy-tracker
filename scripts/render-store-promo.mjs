@@ -28,8 +28,14 @@ catch { console.error("\n  playwright is not installed:  npm i --no-save playwri
    sizes are the same design; only the canvas height differs, by the two phones' own proportions. */
 const argv = process.argv.slice(2);
 const SIZE = (() => { const i = argv.indexOf("--size"); return i >= 0 ? argv[i + 1] : "6.9"; })();
-const OUTPX = { "6.9": [1320, 2868], "6.5": [1284, 2778] }[SIZE];
-if (!OUTPX) { console.error("\n  --size must be 6.9 or 6.5\n"); process.exit(1); }
+/* `ipad` is the 13" iPad (2064x2752) - a squarer canvas, so the headline goes on one line and the
+   frame is a tablet: wider, gentler corners, and more of the screen shown before the bottom edge. */
+const OUTPX = { "6.9": [1320, 2868], "6.5": [1284, 2778], "ipad": [2064, 2752] }[SIZE];
+if (!OUTPX) { console.error("\n  --size must be 6.9, 6.5 or ipad\n"); process.exit(1); }
+const IPAD = SIZE === "ipad";
+const L = IPAD
+  ? { top: 120, h1: 100, p: 46, pw: 1120, gap: 90, fw: 1160, pad: 22, r: 64, ir: 44 }
+  : { top: 190, h1: 116, p: 48, pw: 1000, gap: 110, fw: 1000, pad: 24, r: 132, ir: 110 };
 const CSSW = 1320, DPR = OUTPX[0] / CSSW, CSSH = Math.round(OUTPX[1] / DPR);
 const SRC = resolve("docs/app-store-screenshots", SIZE === "6.9" ? "" : SIZE);
 const OUT = join(SRC, "promo");
@@ -78,23 +84,26 @@ function page(p, imgUrl) {
     /* The launch screen's own greens: --brand to --brand-dark. */
     background:radial-gradient(1200px 900px at 50% -8%, #6E8E80 0%, rgba(110,142,128,0) 70%),
                linear-gradient(180deg,#5C7A6D 0%,#46604F 55%,#3C4F44 100%)}
-  .copy{position:absolute;left:110px;right:110px;top:190px;text-align:center}
+  .copy{position:absolute;left:100px;right:100px;top:${L.top}px;text-align:center}
   .tag{display:inline-block;margin-bottom:34px;padding:12px 30px;border-radius:999px;
     font-weight:800;font-size:34px;letter-spacing:.02em;color:#3C3212;
     background:linear-gradient(180deg,#F3DFA2,#D9B75E);box-shadow:0 6px 18px rgba(0,0,0,.18)}
-  h1{font-weight:800;font-size:116px;line-height:1.04;letter-spacing:-.015em;
+  h1{font-weight:800;font-size:${L.h1}px;line-height:1.04;letter-spacing:-.015em;
     text-shadow:0 2px 24px rgba(0,0,0,.12)}
-  p{margin:40px auto 0;max-width:1000px;font-weight:600;font-size:48px;line-height:1.32;
+  p{margin:${IPAD ? 30 : 40}px auto 0;max-width:${L.pw}px;font-weight:600;font-size:${L.p}px;line-height:1.32;
     color:rgba(255,255,255,.88)}
   /* The frame: a dark bezel with the screen inset, sized to the screenshot's own 1320:2868. */
-  .phone{position:absolute;left:50%;top:0;width:1000px;
-    transform:translateX(-50%);padding:24px;border-radius:132px;background:#141816;
+  /* On the iPad the headline has no hand-placed break, so let the browser even the lines out
+     rather than leave one word stranded ("…you'll owe / HMRC"). */
+  ${IPAD ? "h1,p{text-wrap:balance}" : ""}
+  .phone{position:absolute;left:50%;top:0;width:${L.fw}px;
+    transform:translateX(-50%);padding:${L.pad}px;border-radius:${L.r}px;background:#141816;
     box-shadow:0 0 0 3px #2B322F inset, 0 60px 140px rgba(0,0,0,.40), 0 20px 50px rgba(0,0,0,.25)}
-  .phone img{display:block;width:952px;height:auto;border-radius:110px}
+  .phone img{display:block;width:${L.fw - 2 * L.pad}px;height:auto;border-radius:${L.ir}px}
 </style></head><body>
   <div class="copy">
     ${p.paid ? `<div class="tag">${esc(p.paid)}</div>` : ""}
-    <h1>${typeset(p.h)}</h1>
+    <h1>${IPAD ? typeset(p.h).replace(/<br>/g, " ") : typeset(p.h)}</h1>
     <p>${esc(typeset(p.s))}</p>
   </div>
   <div class="phone"><img src="${imgUrl}" alt=""></div>
@@ -119,13 +128,13 @@ for (const p of PROMOS) {
   });
   if (!loaded) { console.error("  Nunito did not load - refusing to render", p.out); process.exit(1); }
   /* The phone sits a fixed gap below the words, however many lines they took. */
-  await pg.evaluate(() => {
+  await pg.evaluate((GAP) => {
     const bottom = document.querySelector(".copy").getBoundingClientRect().bottom;
-    document.querySelector(".phone").style.top = Math.round(bottom + 110) + "px";
-  });
+    document.querySelector(".phone").style.top = Math.round(bottom + GAP) + "px";
+  }, L.gap);
   const file = join(OUT, `${p.out}.png`);
   await pg.screenshot({ path: file, omitBackground: false });
   console.log(`  wrote ${file.replace(resolve(".") + "/", "")}`);
 }
 await browser.close();
-console.log(`\n  ${OUTPX[0]}x${OUTPX[1]} (iPhone ${SIZE}"), opaque, in upload order.`);
+console.log(`\n  ${OUTPX[0]}x${OUTPX[1]} (${IPAD ? 'iPad 13"' : 'iPhone ' + SIZE + '"'}), opaque, in upload order.`);
