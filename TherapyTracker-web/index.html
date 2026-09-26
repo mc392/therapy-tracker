@@ -206,12 +206,19 @@ body::before{content:"";position:fixed;inset:-10%;z-index:-1;pointer-events:none
 h1,h2,h3{margin:0 0 .4em}
 a{color:var(--brand)}
 .app{max-width:780px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+/* background-COLOR as well as the gradient, and that is load-bearing on iOS 26: the system tints
+   the status-bar strip (and picks white or black clock text) by sampling the solid colour of
+   whatever sticky/fixed element touches the top edge. A gradient is an image, not a colour, so
+   with only a gradient here it fell back to the page's own pale --bg - and drew a light wash
+   over the top of the header with a black clock on it. */
 header.top{position:sticky;top:0;z-index:30;color:#fff;
-  background:linear-gradient(135deg,var(--gs1),var(--gs2));
+  background:var(--gs1) linear-gradient(135deg,var(--gs1),var(--gs2));
   padding:calc(env(safe-area-inset-top) + 14px) 18px 15px;display:flex;align-items:center;gap:10px;
   box-shadow:0 10px 30px -14px color-mix(in srgb,var(--gs2) 85%,transparent)}
-header.top::after{content:"";position:absolute;inset:0;pointer-events:none;
-  background:linear-gradient(180deg,rgba(255,255,255,.16),transparent 60%)}
+/* The sheen starts BELOW the status-bar strip. Spread over the whole header it put a 16% white
+   wash exactly where the clock sits, which read as the top of the app being faded. */
+header.top::after{content:"";position:absolute;inset:env(safe-area-inset-top) 0 0 0;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.10),transparent 60%)}
 header.top>*{position:relative;z-index:1}
 header.top h1{font-size:var(--t-lg);margin:0;font-weight:700;flex:1;letter-spacing:.01em}
 /* The header condenses as the page scrolls (Sep 2026) - pure CSS, driven by the scroll position
@@ -228,7 +235,13 @@ header.top h1{font-size:var(--t-lg);margin:0;font-weight:700;flex:1;letter-spaci
     header.top h1{transform-origin:left center;animation:hdrTitle linear both;animation-timeline:scroll(root);animation-range:0 90px}
   }
 }
-@keyframes hdrCondense{to{padding-top:calc(env(safe-area-inset-top) + 7px);padding-bottom:8px;margin-bottom:14px;
+/* NEVER put env() in these keyframes (and so never animate padding-top, which carries the
+   safe-area inset). WebKit resolves env() inside @keyframes once, when the animation is built -
+   and in the iPhone app that is before the WKWebView has reported its safe area, so the inset
+   was frozen at 0: the first scroll pulled the header up under the clock and battery, and it
+   only came right once a later restyle rebuilt the keyframes. The header condenses from the
+   bottom instead; test:motion fails on an env() in any @keyframes. */
+@keyframes hdrCondense{to{padding-bottom:5px;margin-bottom:10px;
   box-shadow:0 12px 28px -12px color-mix(in srgb,var(--gs2) 95%,transparent)}}
 @keyframes hdrTitle{to{transform:scale(.88)}}
 header.top .ty{font-size:var(--t-sm);background:rgba(0,0,0,.18);color:#fff;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);padding:4px 10px;border-radius:20px;max-width:48vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}

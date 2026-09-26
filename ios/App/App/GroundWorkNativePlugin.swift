@@ -456,6 +456,23 @@ public class GroundWorkNativePlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
+    // MARK: - Top edge
+
+    /// iOS 26 draws a "scroll edge effect" - a soft blur and wash - across the top of a scroll view
+    /// wherever content passes under the status bar. For a page whose own header is the solid brand
+    /// green, that wash is exactly the faded look this app should not have, so it is switched off
+    /// for the web view. `#if compiler` keeps the build working on an Xcode older than 26, whose
+    /// SDK has no such property; `#available` keeps it working on an iPhone older than iOS 26.
+    override public func load() {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            DispatchQueue.main.async { [weak self] in
+                self?.webView?.scrollView.topEdgeEffect.isHidden = true
+            }
+        }
+        #endif
+    }
+
     // MARK: - Haptics
 
     /// A tap the reader can feel, from the web layer's `haptic(kind)`. The generators are the

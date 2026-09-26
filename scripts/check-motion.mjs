@@ -46,6 +46,11 @@ const offScale = literalSizes.filter((v) => v !== 9 && v < 23);
 ok("every text size in the stylesheet is on the type scale", offScale.length === 0, offScale.join(","));
 ok("no half-pixel font sizes anywhere in the file", !/font-size:\d+\.5px/.test(html),
   (html.match(/font-size:\d+\.5px/g) || []).slice(0, 5).join(","));
+/* env() inside @keyframes is resolved once, when the animation is built - in the iPhone app that
+   is before the safe area is known, and it froze the header's top inset at 0. */
+const envInKeyframes = [...css.matchAll(/@keyframes\s+([\w-]+)\s*\{((?:[^{}]*\{[^{}]*\})*)[^{}]*\}/g)]
+  .filter((m) => /env\(/.test(m[2])).map((m) => m[1]);
+ok("no @keyframes reads env() (it freezes at 0 before WebKit reports the safe area)", envInKeyframes.length === 0, envInKeyframes.join(","));
 const curves = [...body.matchAll(/cubic-bezier\([^)]*\)/g)].map((m) => m[0]);
 ok("every animation curve outside the tokens is a named --ease-* token", curves.length === 0, curves.join(" "));
 
@@ -118,6 +123,10 @@ async function openApp(opts) {
   });
   await page.tap('#tabs button[data-tab="money"]');
   await page.waitForTimeout(1700);
+  /* The cascade's own backstop removes the class 1.4s after the screen is drawn, and under a view
+     transition the screen is drawn a frame or more after the tap - so wait for the contract
+     ("eventually gone") rather than a fixed time that a busy machine can outrun. */
+  await page.waitForFunction(() => !document.querySelector(".stagger"), null, { timeout: 3000 }).catch(() => {});
   const nav = await page.evaluate(() => {
     const n = document.getElementById("tabs"), on = n.querySelector("button.on");
     return { cur, over: window.__over, vt: window.__vt, stag: window.__stag,

@@ -280,6 +280,20 @@ covers all of it, and is the **only** harness that runs the animated paths - see
   as `margin-bottom`**, so its footprint never changes - a sticky header that got shorter would move
   the page under the thumb, which changes the scroll, which changes the header. The title shrinks by
   `transform`, never `font-size`. This is not large-title navigation; the brand header stays.
+  **It condenses from the bottom only - never animate `padding-top`, and never put `env()` in any
+  `@keyframes`** (fixed Sep 2026). WebKit resolves `env()` inside keyframes once, when the animation
+  is built, and in the iPhone app that is before the WKWebView reports its safe area: the inset froze
+  at 0 and the first scroll pulled the header up under the clock, putting itself right only after a
+  later restyle. `test:motion` fails on an `env()` in any keyframes.
+- **The top edge on iOS - white clock, no wash** (Sep 2026). Three things together, each for its own
+  build: `header.top` carries a solid **`background-color`** under its gradient, because iOS 26
+  tints the status-bar strip by sampling the solid colour of the sticky element at the top (a
+  gradient is an image, so it fell back to the pale `--bg`); the header's white sheen (`::after`)
+  starts **below** `env(safe-area-inset-top)` instead of washing over the clock; and in the native
+  app `Info.plist` sets **`UIStatusBarStyleLightContent`** (Capacitor reads it at start-up;
+  `check-drift.mjs` asserts it) while the plugin's `load()` hides iOS 26's scroll **top edge
+  effect** on the web view, behind `#if compiler(>=6.2)` + `#available(iOS 26.0, *)` so an older
+  Xcode still builds. Never compiled, like the rest of the Swift.
 - **Checkboxes are drawn** (`appearance:none`): the box fills and the tick is wiped in by a
   shrinking brand-coloured background layer - WebKit gives an `<input>` no `::before`/`::after`. They
   carry `min-width/min-height`, because several containers set `width:auto` on their checkbox and
