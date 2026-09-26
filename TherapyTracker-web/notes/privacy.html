@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy - GroundWork Notes</title>
+<style>
+  :root{ --bg:#F7F9FA; --card:#FFFFFF; --ink:#1E2A26; --muted:#6E7E78; --line:#E6ECEA; --accent:#3f6f6a; }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#1A2220; --card:#222D2A; --ink:#E6EDEA; --muted:#9CADA7; --line:#31403B; --accent:#6fa39d; }
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"SF Pro Rounded",ui-rounded,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55;}
+  .wrap{max-width:720px;margin:0 auto;padding:32px 20px 80px;}
+  h1{font-size:24px;margin:0 0 4px;}
+  .updated{color:var(--muted);font-size:14px;margin:0 0 28px;}
+  h2{font-size:17px;margin:32px 0 8px;color:var(--accent);}
+  p,li{font-size:15px;color:var(--ink);}
+  ul{padding-left:20px;margin:8px 0;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:16px 0;}
+  .callout{background:var(--card);border:1px solid var(--accent);border-radius:14px;padding:16px 20px;margin:20px 0;}
+  .callout p{margin:0;}
+  a{color:var(--accent);}
+  .back{display:inline-block;margin-bottom:20px;color:var(--muted);text-decoration:none;font-size:14px;}
+  footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:13px;}
+  details{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 18px;margin:10px 0;}
+  summary{cursor:pointer;font-weight:600;font-size:15px;}
+  details p{margin:10px 0 2px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Privacy Policy - GroundWork Notes</h1>
+  <p class="updated">Last updated 26 September 2026</p>
+
+  <div class="callout">
+    <p><strong>Short version:</strong> GroundWork Notes encrypts your notes on your own device and writes them into a folder you choose. The app makes no network connection of its own. There is no account, no server, no analytics and no third party involved. We never receive your notes, your passphrase or your recovery key, and we could not read your notes if we did.</p>
+  </div>
+
+  <h2>Who this policy is for</h2>
+  <p>This policy explains how the GroundWork Notes app ("the app") handles data. It is written for the counsellor or therapist who installs and uses it. If you are a client of a practitioner who uses this app, please direct any question about your personal data to your practitioner - see "Data controller" below for why.</p>
+
+  <h2>What the app handles</h2>
+  <p>Only what you type or import yourself:</p>
+  <ul>
+    <li>Client <strong>codes</strong> - the app never asks for a client's name, address or phone number, and has nowhere to store one</li>
+    <li>Session notes, corrections, session dates and any note fields you set up (for example a session number or location)</li>
+    <li>Client status and the details used for retention reminders</li>
+    <li>Your note templates and app settings</li>
+  </ul>
+
+  <h2>Where it's stored</h2>
+  <p><strong>In a folder you choose.</strong> When you create a vault you pick a folder - on your device, or in iCloud Drive if you want your notes on more than one device. Every note is encrypted on your device before it is written there, using the open Cryptomator vault format (AES encryption, with a key derived from your passphrase using scrypt). Note text, file names and folder names are all encrypted: someone with access to the raw folder sees only meaningless names and contents. If the folder is in iCloud Drive, Apple stores and syncs those encrypted files under your own Apple ID and iCloud terms, exactly as it would any other file you keep there. Nothing passes through us.</p>
+  <p><strong>On this device only.</strong> To open quickly, the app keeps an index of your notes and an autosave of any note you are part-way through writing. Both are encrypted with a key held in this device's keychain, and neither leaves the device. If you turn on Face ID or Touch ID unlock, your passphrase is kept in the device's keychain, protected by that check, and is never synced or sent anywhere.</p>
+  <p><strong>Imports and exports.</strong> Files you import (Word, Excel, text and so on) are read on your device and encrypted into the vault. When you export, the app writes plain, readable files to a folder you choose - that copy is <em>not</em> encrypted, so keep it somewhere as protected as the notes themselves.</p>
+  <p><strong>Schedules from GroundWork.</strong> If you use Settings &rarr; GroundWork &rarr; Sync schedules, the app reads a small file that the GroundWork app wrote: client codes and appointment times only. Nothing is sent back.</p>
+
+  <h2>What we (the developer) collect</h2>
+  <p>Nothing. Specifically, the app has:</p>
+  <ul>
+    <li>No user accounts or sign-in</li>
+    <li>No server, and no network connection of its own</li>
+    <li>No analytics, tracking or usage telemetry</li>
+    <li>No crash-reporting service</li>
+    <li>No advertising or third-party SDKs that collect data</li>
+  </ul>
+  <p>Links in the app's Settings (this page and the support page) open in your web browser; the app itself does not contact any website.</p>
+  <p>If any of this ever changes, this policy will be updated first and the change will be opt-in, never silent.</p>
+
+  <h2>If you lose your passphrase</h2>
+  <p>Your recovery key - shown once, when the vault is created - is the only other way in. We hold no copy of either, so we cannot recover your notes for you. That is the trade-off for us being unable to read them.</p>
+
+  <h2>Data controller</h2>
+  <p>Because your notes never leave your control and we never receive, store or process them, we are not a data processor under UK GDPR. You, the practitioner, are the data controller for any personal data you record about your clients, exactly as you would be with paper notes. Clinical notes are very likely to be <strong>special-category data</strong> under UK GDPR; your professional and legal obligations around confidentiality, retention and clients' rights remain yours, and the app is a tool you use to meet them.</p>
+
+  <h2>Security - what's built in, and what's on you</h2>
+  <div class="card">
+    <p><strong>Built in:</strong> encryption before anything is written; client codes instead of names; a check (Face ID, Touch ID or the device passcode) when you come back to the app and before a note is opened; the app is hidden in the app switcher; corrections are added rather than written over; permanent deletion of a client only after an export offer and a typed confirmation.</p>
+    <p><strong>Your responsibility:</strong> choosing a strong passphrase, keeping your recovery key on paper somewhere secure, keeping your device locked with a passcode, and keeping any exported (readable) files safe.</p>
+  </div>
+
+  <h2>Retention and deletion</h2>
+  <p>The app can remind you when a client's notes pass the retention period you set (by default around seven years after last contact, or until age 25 for work with under-18s). It only ever flags - it never deletes anything by itself. You can permanently remove a client's notes from within the app. Nothing is retained by us afterwards, because nothing was held by us in the first place.</p>
+
+  <h2>Children's data</h2>
+  <p>The app is not directed at children and collects nothing from anyone. If you work with young people, the "you are the controller" principle above applies to their records as to any other.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If this policy changes, the date at the top of this page will change. Material changes will be called out in the app itself before you are asked to use them.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy: <a href="mailto:privacy@groundworkpractice.co.uk?subject=GroundWork%20Notes%20privacy">privacy@groundworkpractice.co.uk</a></p>
+
+  <footer>
+    This page describes how the software behaves; it isn't a substitute for your own professional obligations (for example your accrediting body's record-keeping requirements), and hasn't been reviewed by a solicitor. See also <a href="./support.html">Support</a>.
+  </footer>
+</div>
+</body>
+</html>
