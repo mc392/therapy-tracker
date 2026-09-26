@@ -20,8 +20,8 @@
 | Secondary category | Productivity | |
 | Age rating | 4+ | no user-generated content, no web browsing, no ads |
 | Price | Free | |
-| Support URL | https://mc392.github.io/therapy-tracker/support.html | a real contact address and FAQ - the Pages root is the app itself, which gives a reviewer no way to reach anyone |
-| Privacy Policy URL | https://mc392.github.io/therapy-tracker/privacy.html | already live |
+| Support URL | https://groundworkpractice.co.uk/support.html | a real contact address and FAQ - the site root is the web app itself, which gives a reviewer no way to reach anyone |
+| Privacy Policy URL | https://groundworkpractice.co.uk/privacy.html | already live |
 
 The companion app, GroundWork Notes, will also list under Business - the two listings should read as one family, not as a clinical tool paired with an admin tool.
 

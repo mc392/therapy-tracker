@@ -29,6 +29,10 @@
     "check:drift": "node scripts/check-drift.mjs",
     "check:schedules": "node scripts/check-schedule-parity.mjs"
   },
+  "groundwork": {
+    "watchApp": false,
+    "watchAppWhy": "Held back from 1.0 (Sep 2026): never tried on a real watch, and shipping it makes App Store Connect require Apple Watch screenshots. The Swift in ios/App/GroundWorkWatch/ is kept. Set true, run npm run sync, and the target, its embed and its privacy manifest are wired back in."
+  },
   "dependencies": {
     "@capacitor/app": "^8.1.1",
     "@capacitor/cli": "^8.5.0",

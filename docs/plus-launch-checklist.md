@@ -272,7 +272,7 @@ The binary half is already done: on iOS the paywall's two links open the bundled
 sheet rather than leaving for Safari.
 
 - [ ] **App Information → Privacy Policy URL:**
-      `https://mc392.github.io/therapy-tracker/privacy.html`
+      `https://groundworkpractice.co.uk/privacy.html`
 - [ ] **App Store → your version → Description** - paste the subscription block; this is where
       the Terms of Use link actually lives. Drafted in `docs/app-store-listing.md`.
 - [ ] **App Information → License Agreement** - leave it on Apple's Standard EULA. A custom one
@@ -281,9 +281,9 @@ sheet rather than leaving for Safari.
 The URLs, for pasting:
 
 ```
-Privacy Policy   https://mc392.github.io/therapy-tracker/privacy.html
-Terms of Use     https://mc392.github.io/therapy-tracker/terms.html
-Support URL      https://mc392.github.io/therapy-tracker/
+Privacy Policy   https://groundworkpractice.co.uk/privacy.html
+Terms of Use     https://groundworkpractice.co.uk/terms.html
+Support URL      https://groundworkpractice.co.uk/support.html
 ```
 
 ---

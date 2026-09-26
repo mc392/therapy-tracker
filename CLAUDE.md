@@ -39,7 +39,7 @@ TherapyTracker-web/
 
 ## Deployment
 Hosted on GitHub Pages. Push to `main` → GitHub Actions deploys `TherapyTracker-web/` automatically.
-Live URL: `https://<username>.github.io/<repo>/`
+Live URL: **`https://groundworkpractice.co.uk/`** - the custom domain is set in the repo's Settings › Pages (with an Actions deploy the `CNAME` file is informational only); the old `mc392.github.io/therapy-tracker/` address redirects there. **The web app's origin is that domain**, so its IndexedDB lives there too.
 
 ## Native iOS wrapper (Capacitor, added Aug 2026)
 
@@ -82,9 +82,17 @@ itself and `ios/App/App/public/` is a gitignored copy rebuilt on every sync. Ful
   wires them into each target's Resources phase on every sync; `npm run check` asserts it, and
   that `Info.plist` keeps `ITSAppUsesNonExemptEncryption = NO` (WebCrypto is the OS's own
   cryptography, so builds skip the export-compliance question).
+- **iPhone only: `TARGETED_DEVICE_FAMILY = 1`** (Sep 2026). Capacitor's template says `"1,2"`, which
+  makes an iPad app - and **Apple never lets a shipped app drop iPad support**, so this is the one
+  setting that cannot be walked back. It would also demand 13" iPad screenshots and put the untested
+  desktop layout (`min-width:900px`) in front of App Review on an iPad. An iPhone-only app still
+  installs on an iPad. `npm run check` fails on anything but `1`; widening it is a decision.
 - **The launch runbook is `docs/app-store-launch-guide.md`** - status, the store copy to paste
   (character-limit checked) and reviewer notes. App Store screenshots come from
-  `scripts/render-store-screenshots.mjs` (real app, synthetic practice, fake phone); the website
+  `scripts/render-store-screenshots.mjs` (real app, synthetic practice, fake phone), and the
+  captioned promotional set from `scripts/render-store-promo.mjs` (headline + the untouched screen
+  in a phone frame; a paid screen carries a Pro / tax-year tag; Nunito vendored in
+  `scripts/assets/` under the OFL); the website
   carries `support.html` and a demo backup at `demo/` for App Review, which `prune-public.mjs`
   keeps out of the iOS bundle. **Terms no longer describe the app as beta** - Guideline 2.2.
 
@@ -167,6 +175,15 @@ also writes a copy into the app's Documents folder**, 2s debounced:
   folder visible in the Files app. Without them the files exist but nobody can reach them.
 
 ### The watchOS app (Sep 2026) - a timer, and nothing else
+> **HELD BACK FROM 1.0 (26 Sep 2026).** `package.json` `"groundwork": {"watchApp": false}` is the one
+> switch: off, `add-watch-target.mjs` adds nothing, `add-privacy-manifest.mjs` skips the watch
+> manifest, and `npm run check` **fails if the target is in the Xcode project** - so it cannot ship
+> by accident. The target was taken out by reversing `f270a2a`'s project changes (verified: the
+> project file equals its pre-watch state plus the records-folder file, the app's privacy manifest
+> and the build number). Reasons: never tried on a real watch, and a build carrying it makes App
+> Store Connect demand Apple Watch screenshots. Everything below still describes the code, which is
+> kept. To bring it back: set the flag `true`, `npm run sync`, and add Watch screenshots.
+
 `ios/App/GroundWorkWatch/` is a SwiftUI watch app embedded in the iPhone app. It times a
 session and taps the wrist at ten minutes left and at time. **It is the first code here that
 is not the web app**, which is only tolerable because it owns no logic and no data - no

@@ -16,19 +16,20 @@ GitHub, and your iPhone with the **TestFlight** app installed.
 
 | | Status |
 |---|---|
-| The app itself (web + iPhone + Watch) | ✅ Built. Latest code is on `main`. |
+| The app itself (web + iPhone) | ✅ Built. Latest code is on `main`. |
 | Automatic builds to TestFlight | ✅ Working — 24 successful builds; build **24** was this morning's `main`. |
 | Apple Developer account, App Store Connect record | ✅ Done (Aug 2026). |
 | The two products (Pro monthly, tax year 2026-27) | ⚠️ Created as records — **metadata still to finish** (Steps 4–5). |
-| Privacy manifest + encryption declaration in the app | ✅ **Added today** — ships in build 25. |
+| Privacy manifest + encryption declaration in the app | ✅ Added — in builds 25 and 26. |
 | Terms of Service | ✅ **Fixed today** — still called the app "beta" and "free"; both are App Review rejections. |
 | Privacy Policy | ✅ **Updated today** — now covers the records folder, calendar and purchases. |
-| Support page | ✅ **Created today** — `support.html` (the old Support URL had no contact details). |
-| App Store screenshots (iPhone 6.9") | ✅ **Made today** — 6 images, demo data. |
+| Support page | ✅ Live at `groundworkpractice.co.uk/support.html`. |
+| App Store screenshots (iPhone 6.9") | ✅ Made — 6 promotional images with captions, plus plain versions. |
 | Paywall review screenshots | ✅ **Regenerated today** with the real prices and current design. |
 | Store copy (description, keywords, …) | ✅ **Written today**, every field checked against Apple's character limits. |
-| Apple Watch screenshot | ⚠️ **You** — needs a real watch or a Mac (Step 9c). |
-| Real-iPhone test of build 25 | ⚠️ **You** (Step 8). |
+| Apple Watch app | ✅ **Held back from 1.0** (26 Sep) — so no Watch screenshots are needed. Returns in a later version. |
+| iPad | ✅ **iPhone-only for 1.0** (26 Sep) — no iPad screenshots or iPad review. Apple lets you *add* iPad later but never remove it. |
+| Real-iPhone test of build 26 | ⚠️ **You** (Step 8). |
 | Submit | ⚠️ **You** (Steps 10–13). |
 
 ### What changed in the app since the last guide (15 Sep)
@@ -40,7 +41,7 @@ status bar**. None of them changes anything in the listing, the products or the 
 
 ### What I did for you today, and why each matters
 
-1. **Privacy manifests** (`ios/App/App/PrivacyInfo.xcprivacy` and the Watch's). Apple requires one
+1. **Privacy manifest** (`ios/App/App/PrivacyInfo.xcprivacy`). Apple requires one
    whenever the app's own code uses certain "required reason" APIs — ours reads `UserDefaults` and
    file dates. Missing one gets a build flagged (error ITMS-91053). Declared: no tracking, **no data
    collected**, matching the "Data Not Collected" label. A new script wires them into the Xcode
@@ -65,28 +66,29 @@ status bar**. None of them changes anything in the listing, the products or the 
 
 ---
 
-## Step 1 — Merge the pull request (5 min)
+## Step 1 — Merge the second pull request (5 min)
 
-Everything above sits on the branch `claude/app-store-launch-guide-ahs8v1`. Merging it puts the new
-Terms, Privacy Policy and Support page **live on your website**, which App Review will visit.
+The first one (#67 — Terms, Privacy, Support page, privacy manifest) is **✅ merged and live**.
+The second, *"Hold the Watch app and iPad back from 1.0; move the listing to groundworkpractice.co.uk;
+promotional screenshots"*, carries today's follow-up changes.
 
-1. GitHub → **Pull requests** → open *"Prepare GroundWork for App Store submission"*.
-2. Click **Merge pull request** → **Confirm merge**.
-3. Wait ~1 minute, then open each link and check it loads:
-   - <https://mc392.github.io/therapy-tracker/support.html>
-   - <https://mc392.github.io/therapy-tracker/terms.html> — the top box should say *"Before you add
-     real client data"*, not *"Beta software notice"*.
-   - <https://mc392.github.io/therapy-tracker/privacy.html> — "Last updated 26 September 2026".
+1. GitHub → **Pull requests** → open it → **Merge pull request** → **Confirm merge**.
+2. Wait ~1 minute, then check these open on **your own domain**:
+   - <https://groundworkpractice.co.uk/support.html>
+   - <https://groundworkpractice.co.uk/terms.html> — top box says *"Before you add real client
+     data"*, not *"Beta software notice"*.
+   - <https://groundworkpractice.co.uk/privacy.html> — "Last updated 26 September 2026".
+   - <https://groundworkpractice.co.uk/demo/groundwork-demo-practice.json> — a page of data (that's
+     the reviewers' demo practice).
 
-## Step 2 — Confirm your contact address works (5 min)
+   If a page doesn't load on the domain, open GitHub → the repo's **Settings → Pages**: *Custom
+   domain* should read `groundworkpractice.co.uk` with a green *DNS check successful*, and
+   **Enforce HTTPS** should be ticked. The App Store needs `https://` links.
 
-The Support page, Terms and Privacy Policy all give **privacy@groundworkpractice.co.uk**. Apple's
-reviewers may email it, and customers will. I couldn't check it from here (this environment
-blocks the lookup).
+## Step 2 — Contact address ✅ Done
 
-- Send a test email to it from your personal address and confirm it arrives.
-- **If it doesn't exist or you'd rather use another address**, tell me the address and I'll
-  change all four pages in one go.
+`privacy@groundworkpractice.co.uk` is confirmed working (26 Sep). It's on the Support page, Terms
+and Privacy Policy.
 
 ## Step 3 — Paid Applications agreement (5–30 min, do this early)
 
@@ -187,7 +189,7 @@ it's added in code next spring — tell me then. Don't submit it with this relea
 
 **7a. App Privacy** (left sidebar **App Privacy**):
 
-1. **Privacy Policy URL:** `https://mc392.github.io/therapy-tracker/privacy.html`
+1. **Privacy Policy URL:** `https://groundworkpractice.co.uk/privacy.html`
 2. **Data Types** → **Get Started** → *"Do you or your third-party partners collect data from this
    app?"* → **No, we do not collect data from this app** → **Save** → **Publish**.
 3. The label now reads **Data Not Collected**. This is true because nothing leaves the device to
@@ -206,14 +208,14 @@ it's added in code next spring — tell me then. Don't submit it with this relea
 Store Connect asks about **DSA trader status**, you can leave the EU out of availability. You can
 add countries later with no new build.
 
-## Step 8 — Test build 25 on your iPhone (30–45 min)
+## Step 8 — Test build 26 on your iPhone (30–45 min)
 
-I started build **25** from the PR branch — it's the first build containing today's privacy
-manifests and encryption declaration. (If you'd rather build from `main` after merging, run
-GitHub → **Actions** → **TestFlight** → **Run workflow** → branch `main`, and leave the build
-number blank.)
+Build **26** is the submission candidate: the privacy manifest, the encryption declaration, the
+new domain, **no Watch app**, and **iPhone-only**. I started it from the PR branch; it is the same code that lands
+on `main` when you merge. (To rebuild from `main` later: GitHub → **Actions** → **TestFlight** →
+**Run workflow** → branch `main`, build number blank.)
 
-1. App Store Connect → **TestFlight**: build **25** appears ~15 minutes after the run finishes.
+1. App Store Connect → **TestFlight**: build **26** appears ~15 minutes after the run finishes.
    Thanks to the encryption declaration it should go straight to **Ready to Test** — no compliance
    question. If it does say *Missing Compliance*, click it → *"None of the algorithms mentioned
    above"* → Save.
@@ -236,29 +238,40 @@ number blank.)
    - [ ] **Buy the tax year** → the Tax tab shows figures instead of `£•,•••`.
    - [ ] Delete the app, reinstall from TestFlight, **Restore purchases** → both come back.
    - [ ] With nothing bought, **Export backup (.json)** still works. (The one rule that matters most.)
-   - [ ] **Apple Watch** (if you have one): open GroundWork on the watch → *Start* → it counts down
-         and taps your wrist at ten minutes left. **If it doesn't work, tell me before submitting**
-         — a broken Watch app is a rejection, and we can ship 1.0 without it.
+   - [ ] **No Watch app:** if you have an Apple Watch, GroundWork should no longer offer to
+         install on it. (If an older TestFlight build put it there, delete it from the watch.)
 
-Anything wrong → tell me what you saw; I'll fix it and cut build 26.
+Anything wrong → tell me what you saw; I'll fix it and cut build 27.
 
 ## Step 9 — Build the version page (20 min)
 
 **GroundWork** → **iOS App** → **1.0 Prepare for Submission**.
 
-**9a. iPhone screenshots** — *Previews and Screenshots* → **iPhone** tab → **6.9" Display**. Drag in,
-in this order, from `docs/app-store-screenshots/`:
+**9a. iPhone screenshots** — *Previews and Screenshots* → **iPhone** tab → **6.9" Display**. Drag in
+these six **promotional** screenshots, in this order, from `docs/app-store-screenshots/promo/`:
 
-1. `01-home.png` — what needs you today
-2. `02-tax.png` — what you'll owe HMRC
-3. `03-sessions.png` — the week ahead
-4. `04-analytics.png` — practice analytics
-5. `05-money.png` — revenue and net income
-6. `06-iphone.png` — Face ID lock and reminders (the "native app" evidence)
+1. `01-today.png` — *What needs you today*
+2. `02-tax.png` — *Know what you'll owe HMRC* (tagged **Pro + tax year**)
+3. `03-private.png` — *Private by design* (Face ID — also the "real iPhone app" evidence)
+4. `04-week.png` — *Your week in one list*
+5. `05-analytics.png` — *See how your practice is doing* (tagged **Pro**)
+6. `06-money.png` — *Your money, month by month*
 
-All are 1320×2868, no transparency, from a synthetic practice. Smaller iPhones are scaled from
-these automatically. If an **iPad** tab demands screenshots, the app isn't iPad-targeted and
-shouldn't ask; tell me if it does.
+The first three are what people see in **search results**, so they carry the three reasons to
+install. Each is a headline on the brand green above the **real app screen** in a phone frame —
+Apple allows captions as long as the app itself is shown (Guideline 2.3.3), and the gold tags
+say which screens need a purchase, so nothing is sold by implication. All are 1320×2868 with no
+transparency, from a synthetic practice. Smaller iPhones are scaled from these automatically.
+
+- **Prefer plain screens?** The un-captioned versions are one folder up
+  (`docs/app-store-screenshots/`, same content). Either set is fine; don't mix them.
+- **No iPad screenshots are needed.** Version 1.0 is iPhone-only (it still installs on an iPad, in
+  an iPhone-sized window). If App Store Connect shows an **iPad** tab demanding screenshots, you've
+  picked a build older than 26 — those were iPhone + iPad.
+- **App Preview video (optional):** a 15–30 second screen recording can sit before the
+  screenshots. Not needed to launch; worth adding later.
+- To change a caption, edit `PROMOS` in `scripts/render-store-promo.mjs` and run
+  `node scripts/render-store-promo.mjs`.
 
 **9b. Text fields** — paste exactly:
 
@@ -267,7 +280,7 @@ shouldn't ask; tell me if it does.
 Private, offline records for a therapy practice - sessions, clients, rooms, supervision, CPD and tax. No account, no cloud: nothing leaves your phone.
 ```
 
-**Description** (2,706/4,000)
+**Description** (2,692/4,000)
 ```
 GroundWork keeps the admin side of a therapy practice in one place: sessions, clients, room costs, supervision hours and a running estimate of what you will owe HMRC.
 
@@ -295,8 +308,8 @@ Working out your tax is not part of Pro. Each UK tax year is a separate one-off 
 
 GroundWork Pro is an auto-renewing monthly subscription. Payment is charged to your Apple ID at confirmation of purchase. It renews automatically unless cancelled at least 24 hours before the end of the current period, and your account is charged for renewal within 24 hours before the end of the current period. Manage or cancel in your Apple ID account settings. Tax years are one-off purchases and do not renew.
 
-Terms of Use: https://mc392.github.io/therapy-tracker/terms.html
-Privacy Policy: https://mc392.github.io/therapy-tracker/privacy.html
+Terms of Use: https://groundworkpractice.co.uk/terms.html
+Privacy Policy: https://groundworkpractice.co.uk/privacy.html
 ```
 
 **Keywords** (94/100 — no spaces after commas, on purpose)
@@ -306,7 +319,7 @@ therapist,counsellor,counselling,psychotherapist,therapy,sessions,supervision,CP
 
 **Support URL**
 ```
-https://mc392.github.io/therapy-tracker/support.html
+https://groundworkpractice.co.uk/support.html
 ```
 
 **Marketing URL** — leave blank.
@@ -316,30 +329,11 @@ https://mc392.github.io/therapy-tracker/support.html
 **Copyright** — `2026 ` followed by the name shown as the seller on your developer account (for an
 Individual enrolment, your own legal name), e.g. `2026 Jane Smith`.
 
-> **Want to mention the Apple Watch timer?** Only after it passes the Step 8 watch test. Then add
-> this bullet after the calendar one: `• An Apple Watch timer that taps your wrist ten minutes
-> before the end of a session`.
-
-**9c. Apple Watch screenshot (required, because the build includes the Watch app)**
-
-App Store Connect will insist on at least one under *Previews and Screenshots* → **Apple Watch**.
-I can't render it — the Watch app is native, not the web app. Pick one route:
-
-- **Real Apple Watch (easiest):** on the iPhone, open the **Watch** app → **General** → turn on
-  **Enable Screenshots**. On the watch, open GroundWork (the *Start* screen). Press the **side button
-  and Digital Crown together**. The screenshot lands in the iPhone's **Photos**. AirDrop/email it to
-  the computer you're using and drag it into the Apple Watch slot — App Store Connect accepts the
-  size of whichever watch you have.
-- **Mac with Xcode:** `npm run ios` → in Xcode pick the **GroundWorkWatch** scheme and any Apple
-  Watch simulator → Run → in the Simulator app, **File → Save Screen**.
-- **No watch and no Mac:** tell me and I'll take the Watch app out of 1.0 (a small project change
-  plus a new build). It can come back in 1.1.
-
-**9d. In-App Purchases and Subscriptions** (same page, further down) → **Add** / **+** → tick
+**9c. In-App Purchases and Subscriptions** (same page, further down) → **Add** / **+** → tick
 **GroundWork Pro Monthly** and **UK tax year 2026-27** → Done. *The first purchases must be
 submitted together with an app version — skip this and review can't see them.*
 
-**9e. Build** → **Add Build** → choose **25** (or whichever build passed Step 8).
+**9d. Build** → **Add Build** → choose **26** (or whichever build passed Step 8). Builds 1–25 contain the Watch app and iPad support — don't pick those.
 
 ## Step 10 — App Review Information (5 min)
 
@@ -356,7 +350,7 @@ Same page, **App Review Information**:
 GroundWork is practice-administration software for UK therapists and counsellors. There is no account or sign-in, and no server: all records are stored on the device.
 
 GETTING STARTED
-On first launch a short setup runs; choose "No - starting fresh" when asked about previous records. Tap + to log a session. To see the app with four years of data, a synthetic demo practice is available: open https://mc392.github.io/therapy-tracker/demo/groundwork-demo-practice.json in Safari, tap Share > Save to Files, then in GroundWork go to Settings > Data & backup > Restore from backup and choose that file. It contains no real people.
+On first launch a short setup runs; choose "No - starting fresh" when asked about previous records. Tap + to log a session. To see the app with four years of data, a synthetic demo practice is available: open https://groundworkpractice.co.uk/demo/groundwork-demo-practice.json in Safari, tap Share > Save to Files, then in GroundWork go to Settings > Data & backup > Restore from backup and choose that file. It contains no real people.
 
 IN-APP PURCHASES
 - GroundWork Pro (monthly subscription): Settings > App preferences > What you are paying for > See what Pro is, or any locked Pro screen such as Practice > Business analytics.
@@ -364,7 +358,7 @@ IN-APP PURCHASES
 Logging, receipts, backups and every export are free and never locked.
 
 NATIVE FUNCTIONALITY (Guideline 4.2)
-The iOS app is not a wrapped website. It adds: Face ID / Touch ID locking of the records, including hiding them in the app switcher; scheduled local notifications for overdue payments and outstanding session notes; native PDF generation of receipts with AirPrint and share-sheet delivery; a records folder the user picks with the document picker (typically in iCloud Drive), written on every save with coordinated file access; automatic on-device backups in the app's Documents folder, visible in the Files app; writing sessions into the user's calendar with EventKit; system haptics; and a companion Apple Watch session timer.
+The iOS app is not a wrapped website. It adds: Face ID / Touch ID locking of the records, including hiding them in the app switcher; scheduled local notifications for overdue payments and outstanding session notes; native PDF generation of receipts with AirPrint and share-sheet delivery; a records folder the user picks with the document picker (typically in iCloud Drive), written on every save with coordinated file access; automatic on-device backups in the app's Documents folder, visible in the Files app; writing sessions into the user's calendar with EventKit; and system haptics.
 
 CALENDAR ACCESS
 Requested only when the user taps "Add to my calendar". Full access (rather than write-only) is needed solely to update an event the app itself created when a session is rescheduled; nothing else is read, and no calendar data leaves the device.
@@ -400,7 +394,7 @@ said and I'll help fix anything real.
 
 **Guideline 4.2 — "not sufficiently different from a mobile web browsing experience"**
 ```
-Thank you for the review. GroundWork uses iOS capabilities a website cannot: Face ID locking of confidential records with app-switcher hiding (Settings > This iPhone), scheduled local notifications for outstanding work, native PDF receipts via AirPrint and the share sheet, a user-chosen records folder in iCloud Drive written through the document picker on every save, EventKit calendar integration, system haptics, and a companion Apple Watch session timer. We would be grateful if you could look again with these in mind.
+Thank you for the review. GroundWork uses iOS capabilities a website cannot: Face ID locking of confidential records with app-switcher hiding (Settings > This iPhone), scheduled local notifications for outstanding work, native PDF receipts via AirPrint and the share sheet, a user-chosen records folder in iCloud Drive written through the document picker on every save, EventKit calendar integration, and system haptics. We would be grateful if you could look again with these in mind.
 ```
 
 **Guideline 2.1 — "we couldn't find / load your in-app purchases"**
@@ -429,7 +423,7 @@ Calendar access is requested only when the user taps "Add to my calendar". Full 
 | Build stuck on *Missing Compliance* | Only builds **older** than 25 — answer *"None of the algorithms mentioned above"*. |
 | Upload fails with a 409 "SDK version" | Apple raised the minimum Xcode. Tell me — it's a one-line change to `testflight.yml`. |
 | TestFlight doesn't have a fix you pushed | Pushing updates the website only. Run the TestFlight workflow (Actions tab). |
-| "Missing screenshot for Apple Watch" | Step 9c. |
+| "Missing screenshot for Apple Watch" | You picked a build older than 26 — those still contain the Watch app. Choose build 26. |
 
 ---
 
