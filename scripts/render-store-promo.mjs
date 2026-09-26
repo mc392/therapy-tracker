@@ -23,7 +23,15 @@ let chromium;
 try { ({ chromium } = require_("playwright")); }
 catch { console.error("\n  playwright is not installed:  npm i --no-save playwright\n"); process.exit(1); }
 
-const SRC = resolve("docs/app-store-screenshots");
+/* `--size 6.5` reads and writes the 6.5" set (1284x2778) instead of the 6.9" one (1320x2868).
+   The layout is always drawn 1320 CSS pixels wide and scaled by the device pixel ratio, so both
+   sizes are the same design; only the canvas height differs, by the two phones' own proportions. */
+const argv = process.argv.slice(2);
+const SIZE = (() => { const i = argv.indexOf("--size"); return i >= 0 ? argv[i + 1] : "6.9"; })();
+const OUTPX = { "6.9": [1320, 2868], "6.5": [1284, 2778] }[SIZE];
+if (!OUTPX) { console.error("\n  --size must be 6.9 or 6.5\n"); process.exit(1); }
+const CSSW = 1320, DPR = OUTPX[0] / CSSW, CSSH = Math.round(OUTPX[1] / DPR);
+const SRC = resolve("docs/app-store-screenshots", SIZE === "6.9" ? "" : SIZE);
 const OUT = join(SRC, "promo");
 
 /* Upload order. The first three are what search shows, so they carry the three reasons to
@@ -65,7 +73,7 @@ function page(p, imgUrl) {
   @font-face{font-family:"Nunito";font-weight:200 1000;font-display:block;
     src:url(data:font/woff2;base64,${FONT}) format("woff2")}
   *{box-sizing:border-box;margin:0;padding:0}
-  html,body{width:1320px;height:2868px;overflow:hidden}
+  html,body{width:${CSSW}px;height:${CSSH}px;overflow:hidden}
   body{font-family:"Nunito","Liberation Sans",sans-serif;color:#fff;
     /* The launch screen's own greens: --brand to --brand-dark. */
     background:radial-gradient(1200px 900px at 50% -8%, #6E8E80 0%, rgba(110,142,128,0) 70%),
@@ -95,7 +103,7 @@ function page(p, imgUrl) {
 
 const browser = await chromium.launch({ executablePath: ["/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
   "/opt/pw-browsers/chromium/chrome"].find((x) => existsSync(x)) });
-const pg = await browser.newPage({ viewport: { width: 1320, height: 2868 }, deviceScaleFactor: 1 });
+const pg = await browser.newPage({ viewport: { width: CSSW, height: CSSH }, deviceScaleFactor: DPR });
 mkdirSync(OUT, { recursive: true });
 
 for (const p of PROMOS) {
@@ -120,4 +128,4 @@ for (const p of PROMOS) {
   console.log(`  wrote ${file.replace(resolve(".") + "/", "")}`);
 }
 await browser.close();
-console.log("\n  1320x2868, opaque, in upload order.");
+console.log(`\n  ${OUTPX[0]}x${OUTPX[1]} (iPhone ${SIZE}"), opaque, in upload order.`);

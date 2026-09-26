@@ -20,7 +20,7 @@
   - Nothing is gated: every paid screen shows as a subscriber sees it. The listing's Description
      marks which features are paid, which is what Guideline 2.3.2 asks for.
 
-   Usage:  node scripts/render-store-screenshots.mjs [--dark] [--only home,tax]
+   Usage:  node scripts/render-store-screenshots.mjs [--size 6.9|6.5] [--dark] [--only home,tax]
    Output: docs/app-store-screenshots/NN-name.png (outside TherapyTracker-web/, so it never
    deploys to Pages or lands in the iOS bundle). */
 import { createRequire } from "node:module";
@@ -41,7 +41,17 @@ const argv = process.argv.slice(2);
 const DARK = argv.includes("--dark");
 const ONLY = (() => { const i = argv.indexOf("--only"); return i >= 0 ? argv[i + 1].split(",") : null; })();
 const ROOT = resolve("TherapyTracker-web");
-const OUTDIR = resolve("docs/app-store-screenshots");
+/* Two iPhone slots. App Store Connect needs ONE of them, and which one its page offers first
+   varies - so both can be made. 6.9" is the default; `--size 6.5` makes the other set, into its
+   own folder so the two can never be mixed in one upload. */
+const SIZES = {
+  "6.9": { w: 440, h: 956, dir: "" },     // 1320x2868 - iPhone 16/17 Pro Max
+  "6.5": { w: 428, h: 926, dir: "6.5" },  // 1284x2778 - iPhone 14 Plus / 13 Pro Max
+};
+const SIZE = (() => { const i = argv.indexOf("--size"); return i >= 0 ? argv[i + 1] : "6.9"; })();
+if (!SIZES[SIZE]) { console.error(`\n  --size must be ${Object.keys(SIZES).join(" or ")}\n`); process.exit(1); }
+const DIM = SIZES[SIZE];
+const OUTDIR = resolve("docs/app-store-screenshots", DIM.dir);
 const FIXTURE = resolve("tests/test-data/groundwork-testdata-established.json");
 const ANCHOR = JSON.parse(readFileSync(resolve("tests/test-data/index.json"), "utf8")).anchor;
 
@@ -119,8 +129,8 @@ const CHROME = process.env.CHROMIUM_PATH ||
     .find((p) => existsSync(p)) || undefined;
 /* --lang, not just the context locale: Chromium draws date pickers in its own UI language. */
 const browser = await chromium.launch({ executablePath: CHROME, args: ["--lang=en-GB"] });
-/* 440x956 at dsf 3 = 1320x2868, Apple's 6.9" iPhone screenshot size. */
-const ctx = await browser.newContext({ viewport: { width: 440, height: 956 }, deviceScaleFactor: 3,
+/* At dsf 3: 440x956 is 1320x2868 (6.9"), 428x926 is 1284x2778 (6.5"). */
+const ctx = await browser.newContext({ viewport: { width: DIM.w, height: DIM.h }, deviceScaleFactor: 3,
   isMobile: true, hasTouch: true, locale: "en-GB", timezoneId: "Europe/London", colorScheme: DARK ? "dark" : "light" });
 await ctx.clock.setFixedTime(new Date(`${ANCHOR}T09:40:00`));
 await ctx.addInitScript(fakePhone);
@@ -193,4 +203,4 @@ for (const shot of SHOTS) {
 
 await browser.close();
 server.close();
-console.log(`\n  1320x2868 (iPhone 6.9") - demo practice, clock pinned to ${ANCHOR}. Upload in this order.`);
+console.log(`\n  ${DIM.w * 3}x${DIM.h * 3} (iPhone ${SIZE}") - demo practice, clock pinned to ${ANCHOR}. Upload in this order.`);

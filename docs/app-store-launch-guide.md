@@ -270,8 +270,17 @@ Anything wrong → tell me what you saw; I'll fix it and cut build 27.
 
 **GroundWork** → **iOS App** → **1.0 Prepare for Submission**.
 
-**9a. iPhone screenshots** — *Previews and Screenshots* → **iPhone** tab → **6.9" Display**. Drag in
-these six **promotional** screenshots, in this order, from `docs/app-store-screenshots/promo/`:
+**9a. iPhone screenshots** — *Previews and Screenshots* → **iPhone** tab. App Store Connect needs
+**one** iPhone size, and there are two sets ready — use whichever its page asks for:
+
+| If the box says… | Use the files in | Size |
+|---|---|---|
+| **6.9" Display** (or asks for 1320 × 2868 / 1290 × 2796) | `docs/app-store-screenshots/promo/` | 1320 × 2868 |
+| **6.5" Display** (or asks for 1242 × 2688 / **1284 × 2778**) | `docs/app-store-screenshots/6.5/promo/` | 1284 × 2778 |
+
+An error reading *"The dimensions of one or more screenshots are wrong"* means the files went into
+the other size's box — switch folder, don't resize anything. Drag in these six **promotional**
+screenshots, in this order (same names in both folders):
 
 1. `01-today.png` — *What needs you today*
 2. `02-tax.png` — *Know what you'll owe HMRC* (tagged **Pro + tax year**)
@@ -294,7 +303,8 @@ transparency, from a synthetic practice. Smaller iPhones are scaled from these a
 - **App Preview video (optional):** a 15–30 second screen recording can sit before the
   screenshots. Not needed to launch; worth adding later.
 - To change a caption, edit `PROMOS` in `scripts/render-store-promo.mjs` and run
-  `node scripts/render-store-promo.mjs`.
+  `node scripts/render-store-promo.mjs` (add `--size 6.5` for the 6.5" set; make that set's plain
+  screens first with `node scripts/render-store-screenshots.mjs --size 6.5`).
 
 **9b. Text fields** — paste exactly:
 
