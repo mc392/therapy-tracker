@@ -131,9 +131,27 @@ if (existsSync("ios/App/App/GroundWorkNativePlugin.swift")) {
      Info.plist terminates the app. Both keys are needed - the deployment target is iOS 15, and
      iOS 17 reads the full-access one instead of the legacy one. */
   const plist = readFileSync("ios/App/App/Info.plist", "utf8");
+  /* White clock and battery over the green header - Capacitor reads this key at start-up. Without
+     it iOS draws them black, and on iOS 26 adds a pale wash behind them to make black legible. */
+  if (!plist.includes("<string>UIStatusBarStyleLightContent</string>"))
+    fail("Info.plist no longer sets UIStatusBarStyle to UIStatusBarStyleLightContent - the status bar would draw black over the green header");
   for (const k of ["NSCalendarsFullAccessUsageDescription", "NSCalendarsUsageDescription"])
     if (!plist.includes(k))
       fail(`Info.plist is missing ${k} - iOS terminates the app when calendar access is requested without it`);
+}
+
+/* Haptics: the same silent-failure shape, at its mildest - drop the Swift method and the iPhone
+   simply stops tapping, with nothing anywhere to say so. */
+if (existsSync("ios/App/App/GroundWorkNativePlugin.swift")) {
+  const plugin = readFileSync("ios/App/App/GroundWorkNativePlugin.swift", "utf8");
+  if (!plugin.includes('CAPPluginMethod(name: "haptic"'))
+    fail("GroundWorkNativePlugin does not declare `haptic` - every tap the web layer asks for would be rejected, silently, on a phone");
+  if (!plugin.includes("@objc func haptic("))
+    fail("GroundWorkNativePlugin declares `haptic` but does not implement it");
+  if (!html.includes("GW.haptic(") || !html.includes("window.GWHapticsNative"))
+    fail("index.html no longer reaches `GW.haptic()` through `window.GWHapticsNative` - the shared haptic() helper's only seam");
+  if (!html.includes("function haptic("))
+    fail("index.html no longer defines haptic() - the native method has nothing calling it");
 }
 
 /* GroundWork Plus / Pro: the same silent-failure shape as the records folder above, and now

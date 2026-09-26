@@ -100,6 +100,11 @@ async function inPage(profile) {
       for (const st of ["log", "peer", "cpd", "metrics"]) {
         supTab = st; go(tab, opts); await sleep(30); fireInfo(document.getElementById("main"), "practice/supervision/" + st);
       }
+      /* Supervising is off by default (it is asked, not offered), so switch it on to walk its tab. */
+      { const f = S.settings.features, was = f.supervising;
+        f.supervising = true; supTab = "giving"; go(tab, opts); await sleep(30);
+        fireInfo(document.getElementById("main"), "practice/supervision/giving");
+        f.supervising = was; supTab = "log"; }
       continue;
     }
     go(tab, opts); await sleep(30);

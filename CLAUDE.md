@@ -14,7 +14,7 @@ Renamed: the `<title>`, header, `--appname` tab-rail label, `practiceName()` fal
 ### Brand colours - the default palette IS the brand
 `:root` (and its `[data-theme="dark"]` pair) is the **sage/GroundWork** scheme; there is no `[data-palette="sage"]` block because sage is the built-in default. Its values are taken from the artwork: `--brand:#5C7A6D` and `--brand-dark:#3C4F44` are the launch screen's mark and wordmark colours, and `--bg:#F5F8F5` is the launch screen's own top colour so the splash fades into the app rather than stepping to a different white.
 - These had drifted **teal** (`#0C9683`) in the glassmorphic pass, which left the Sage swatch in Settings promising a green the app never rendered. Anything that names a brand colour must be changed here **and** in the artwork together.
-- `--gs1` is deliberately the brand green, a shade darker than the icon's own top stop (`#6A8B7C`): the header title is 18px/700, just under the WCAG large-text threshold, and white on `#6A8B7C` is only 3.75:1. Check contrast before touching the header gradient.
+- `--gs1` is deliberately the brand green, a shade darker than the icon's own top stop (`#6A8B7C`): the header title is 17px/700 (`--t-lg`), under the WCAG large-text threshold, and white on `#6A8B7C` is only 3.75:1. Check contrast before touching the header gradient.
 - `icon-180/192/512.png` are downscales of `icon-ideas/groundwork/icon-1024.png`. Regenerate them from that source (PowerShell + `System.Drawing`, HighQualityBicubic) rather than editing them individually, and bump the SW cache - icons are served cache-first.
 
 ### Launch screen
@@ -71,7 +71,7 @@ itself and `ios/App/App/public/` is a gitignored copy rebuilt on every sync. Ful
 - **`sw.js` is skipped on native** (service workers do not register on Capacitor's scheme and the
   bundle is already local) and pruned from the copied app, along with `icon-ideas/`.
 - **Two Swift files are wired by `scripts/add-native-plugin.mjs`**, not one:
-  `GroundWorkNativePlugin.swift` (the `@objc` surface) and `GroundWorkRecordsFolder.swift` (the
+  `GroundWorkNativePlugin.swift` (the `@objc` surface, including `haptic`) and `GroundWorkRecordsFolder.swift` (the
   records folder's bookmark and file IO). Adding a third means adding it to that script's `FILES`
   list, and `npm run check` asserts both are in the Xcode target.
 
@@ -200,6 +200,9 @@ desktop builds keep looking deliberate. Three things, and the traps in each:
 - **The active tab is a soft tint, not the filled gradient pill.** A pill inside a capsule reads as
   a button inside a button. Pure colour alone was too close to `--muted` to see at a glance on a real
   screen, hence the 16% sage wash behind it. Desktop overrides this with its own white tint.
+  **Since Sep 2026 the tint is one `.tabpill` that glides between tabs** - see *Motion, type and
+  surfaces* below. `button.on` keeps its own tint underneath `.haspill`, so a script failure falls
+  back to exactly this.
 - **`.ftrow` is a grouped list**, not one box per row: hairline separators inset to where the text
   starts, with only the ends of a run rounded. It uses **`:has()`, not `:last-child`** - the setup
   wizard puts an `.ovnote` straight after the last row, so the run does not always end its container.
@@ -209,6 +212,101 @@ desktop builds keep looking deliberate. Three things, and the traps in each:
 Not done, and deliberately: **large-title navigation.** It would retire the sage gradient header that
 carries the brand on every screen, and it is the change that makes the web builds look like they are
 pretending to be an iPhone. See the design comparison referenced in `docs/ios-native.md`.
+
+### Motion, type and surfaces (Sep 2026)
+A pass at making the app feel native rather than merely look it. What made it read as "slightly
+off" was inconsistency, not any one screen - twenty-five font sizes, eight hand-typed animation
+curves, and two colours left over from the teal era - so most of this is **tokens**, and the rest
+is motion that follows the finger. `npm run test:motion` (`scripts/check-motion.mjs`, 34 checks)
+covers all of it, and is the **only** harness that runs the animated paths - see `motionOK()`.
+
+- **Colour.** `--accent` (violet `#8B7BF0`) and `--hi` (cyan `#06B6D4`) never came across in the
+  sage pass. `--accent` is now a dusty heather (`#8C8BC4` / ink `#4E4C8F`) and `--hi` a warm clay
+  (`#A85A36` / ink `#8A4526`); both are redefined for dark. **`--hi` is deliberately warm**: it is
+  the net-income line and dots drawn *over* green chart bars, and a deeper sage there would vanish.
+  `--on-hi` is the text colour on a `--hi` fill (the celebration ribbon) - white in light, near-black
+  in dark, because white on the dark-mode clay is 2.3:1.
+- **Type scale: `--t-2xs` … `--t-3xl`** (10, 11, 12, 13, 14, 15, 16, 17, 19, 22, 25). Every
+  `font-size` in the stylesheet names one; the half-pixel sizes (12.5, 13.5, 14.5, 15.5) are gone
+  from the whole file. **`--t-input` is 16px and must stay 16** - iOS zooms into any form control
+  smaller than that. JS-built markup uses the same numbers as **literals**, because a printed report
+  or receipt opens in its own window where the variables do not exist. Display sizes (emoji, the
+  splash) and the 9px chart labels stay literal. `test:motion` fails on a size off the scale.
+- **`font-variant-numeric:tabular-nums` on `body`** (and on both printed documents): every digit
+  the same width, so money lines up like a ledger and `countUp()` does not jitter sideways.
+- **Three curves: `--ease-out`, `--ease-spring`, `--ease-firm`** (iOS's sheet curve, for anything
+  that follows or springs back from a finger), plus `--dur-fast/--dur/--dur-slow`. No
+  `cubic-bezier()` may appear outside the token block - `test:motion` asserts it.
+- **Cards are solid, not glass.** `.card`, `.kpi` and `.sgrp` have an opaque `--card` fill, a
+  hairline `--edge` and a layered `--shadow` (contact + short + long). Glass everywhere read as one
+  flat grey sheet and was the most expensive thing to paint on an older iPhone - one backdrop blur
+  per card, recomposited every scroll frame. **Glass is kept for chrome that floats over content**
+  (header pills, the tab bar, the sheet scrim, sticky bars). `--glass`/`--blur` still exist for
+  those.
+- **`motionOK()` is the one JS answer to "may this animate?"** - false under Reduce Motion and
+  under automation (`navigator.webdriver`). It gates only the parts that would make a synchronous
+  step asynchronous: the view transition, the sheet's closing ghost, the stack, the card cascade.
+  Every other harness therefore sees the app behave exactly as before; `check-motion.mjs` hides
+  `webdriver` before load so these paths are tested somewhere. **Don't gate CSS-only decoration on
+  it** - that runs under test like anywhere else.
+- **Screens arrive from the direction of travel.** A tab-bar tap goes through `navTo()`, which uses
+  `document.startViewTransition` where it exists: only the **root** snapshot slides (it is exactly
+  what the reader saw, at whatever scroll); `header.top` and `nav.tabs` are named and excluded, so
+  the pill is seen gliding in the live bar. **Never name `<main>`** for a transition - a group morphs
+  between the old and new element boxes, and `<main>` is several screens tall and was scrolled.
+  Every other `go()` stays synchronous and slides in by CSS (`.from-r`/`.from-l`, 12px - the same
+  16px-padding ceiling as the segment slide). A `keepScroll` redraw or a same-tab `go()` gets
+  `.quiet`: **a save must never replay an entrance.**
+- **Cards cascade in** (`staggerIn()`, 35ms apart, first screenful only, max ten) on real
+  navigation. The `.stagger` class is **removed on `animationend`**: a finished animation with
+  `fill-mode:both` still holds `transform:none`, which would outrank every `:active` press-scale on
+  a card for as long as the screen is open.
+- **The tab pill** (`placeTabPill()`) is FLIP-animated because `renderTabs()` rebuilds every button:
+  it is set back to the old rect with transitions off, then released to the new one. `.haspill` is
+  only added once it is placed.
+- **Sheets.** They slide the full height in on `--ease-firm`; the scrim fades. **`closeSheet()`
+  still removes `.open` synchronously** - `sheetPromise`'s observer and every caller depend on it;
+  the slide away is a separate inert `.closing` ghost (`pointer-events:none`), cleared by the next
+  `openSheet()`, and only played for a sheet that was really open. The drag gained velocity (a flick
+  of 0.55px/ms closes from 24px), a rubber band upwards, a spring back, and a haptic detent at the
+  close distance; a drag-close slides away from where the finger let go.
+- **The page steps back behind a sheet** (`sheetStack()`, `html.sheet-up`, phone only).
+  `header.top`, the banners and `<main>` each scale to `--stack-scale` about **the middle of the
+  screen** (a per-element `transform-origin`), so they shrink together. **Never transform `.app`**:
+  `nav.tabs` is `position:fixed` inside it and a transformed ancestor turns fixed into absolute.
+  The fixed Settings title bar (`.sgstick`) is hidden for the same reason while it runs.
+- **The header condenses on scroll** with a CSS scroll-driven animation (`animation-timeline:
+  scroll(root)`, behind `@supports`, phone only). **Every pixel of padding it gives up is handed back
+  as `margin-bottom`**, so its footprint never changes - a sticky header that got shorter would move
+  the page under the thumb, which changes the scroll, which changes the header. The title shrinks by
+  `transform`, never `font-size`. This is not large-title navigation; the brand header stays.
+  **It condenses from the bottom only - never animate `padding-top`, and never put `env()` in any
+  `@keyframes`** (fixed Sep 2026). WebKit resolves `env()` inside keyframes once, when the animation
+  is built, and in the iPhone app that is before the WKWebView reports its safe area: the inset froze
+  at 0 and the first scroll pulled the header up under the clock, putting itself right only after a
+  later restyle. `test:motion` fails on an `env()` in any keyframes.
+- **The top edge on iOS - white clock, no wash** (Sep 2026). Three things together, each for its own
+  build: `header.top` carries a solid **`background-color`** under its gradient, because iOS 26
+  tints the status-bar strip by sampling the solid colour of the sticky element at the top (a
+  gradient is an image, so it fell back to the pale `--bg`); the header's white sheen (`::after`)
+  starts **below** `env(safe-area-inset-top)` instead of washing over the clock; and in the native
+  app `Info.plist` sets **`UIStatusBarStyleLightContent`** (Capacitor reads it at start-up;
+  `check-drift.mjs` asserts it) while the plugin's `load()` hides iOS 26's scroll **top edge
+  effect** on the web view, behind `#if compiler(>=6.2)` + `#available(iOS 26.0, *)` so an older
+  Xcode still builds. Never compiled, like the rest of the Swift.
+- **Checkboxes are drawn** (`appearance:none`): the box fills and the tick is wiped in by a
+  shrinking brand-coloured background layer - WebKit gives an `<input>` no `::before`/`::after`. They
+  carry `min-width/min-height`, because several containers set `width:auto` on their checkbox and
+  an input with no native appearance has no intrinsic size. Radios keep the platform control.
+- **Toasts spring up** from 14px below instead of only fading.
+- **Haptics: `haptic(kind)`** - `select` / `light` / `medium` / `success` / `warn` - reaches the
+  Taptic Engine through **`window.GWHapticsNative`**, declared in the native block only when
+  `GW.haptic` exists, and does nothing anywhere else. Wired to: a tab change, a segment swipe (and
+  its wall), switches and ticks (one delegated listener), the swipe-to-mark-paid detent and success,
+  the sheet-drag detent, `celebrate()`, and a failed save. **Keep them rare** - a tap on every tap is
+  noise. The web Vibration API was deliberately not used. The Swift method uses the system's own
+  feedback generators, so iOS's System Haptics switch governs it; `check-drift.mjs` asserts both
+  halves. **Never compiled**, like the rest of the Swift.
 
 ### Two CSS traps this file has now hit more than once
 - **A later single-class rule beats `.card`, and `.plusgate` did exactly that** (Sep 2026). `.plusgate{padding:4px 2px 2px}` is right for a paid *surface* dropped inside a sheet that already has padding, but on a `.card` it outranked `.card{padding:18px}` on source order alone - so every gate card had **two pixels** of side padding and its full-width CTA sat hard on the gold ring, reading as a second outline on the button rather than as a frame around it. `.card.plusgate{padding:20px 18px 18px}` puts it back; the ring is `::before`/`::after` at `left:0;right:0` and is unaffected.
@@ -252,9 +350,10 @@ Global `S` object - persisted to IndexedDB (`TherapyTrackerDB`) with a localStor
 ```js
 S = {
   clients: [],          // each has _id; usualDay/usualTime override the derived slot;
-                        //   payer/payerId/authorised say who pays for their work (v11)
+                        //   payer/payerId/authorised say who pays for their work (v11);
+                        //   kind:"supervisee" + mins (usual length) for somebody you supervise (v12)
   rooms: [],            // {location, rate, due, billing:"session"|"monthly", pay:{freq,day}}
-  sessions: [],         // therapy sessions
+  sessions: [],         // therapy sessions (and supervision GIVEN); optional mins = its own length (v12)
   supervision: [],      // clinical supervision (counts toward the 1:6 ratio)
   peerSupervision: [],  // peer supervision (total hours only, never the ratio - added Aug 2026)
   cpd: [],              // CPD that is not supervision (v8) - {date, hours, kind, title, provider, notes}
@@ -314,7 +413,8 @@ Key functions:
 - **`tyNet()` and `tyIncome()` are memoised** (`tyMemo`, cleared in `go()`, `commit()` and `normalize()`). Each walks every session and runs `ledgerBetween` twice; the Payments screen asks for several years at once and each year's schedule reaches into the year either side, so uncached the call count grows quadratically with history. Anything that mutates `S` outside those three entry points must call `tyMemoClear()`.
 
 ### Schema versioning
-`SCHEMA_VERSION` (currently `11`) is stamped on `S.meta.schemaVersion` and on every backup envelope. Unstamped data is treated as v1.
+`SCHEMA_VERSION` (currently `12`) is stamped on `S.meta.schemaVersion` and on every backup envelope. Unstamped data is treated as v1.
+- **v12 (Sep 2026)** records how long a session ran (`s.mins`) and that a client record is somebody the practitioner **supervises** (`client.kind:"supervisee"`, plus `client.mins`, their usual length). Nothing migrates: absent means a client, at the practice length. The bump is for the other direction: a v11 build has no `kind`, so every session of supervision *given* goes back to being a clinical hour - into Form 3A, the 1:6 ratio and every report - flattering the ratio in the direction that hides a problem; and it has no `mins`, so a 90-minute session reads as 50. See **Supervising others** below. T10's remaining fields are now v13.
 - **v11 (Sep 2026)** records **who pays** for a client's work (`client.payer`, `payerId`, `authorised`, plus `settings.payers` and `settings.defaultPayer`) and **pay from a job** (`settings.employmentYears`). Nothing migrates: absent means "the client pays me", which is what every record written before it meant. The bump is for the other direction and it matters twice. A v10 build has no payer field, so every salaried or placement session in a v11 backup turns back into a debt - back on the Unpaid worklist, back on its badge, back in the attention feed, with a Chase button over clients who were never billed. And a v10 build has no employment figure, so it puts the personal allowance and the whole basic-rate band back onto practice profit alone and shows a tax estimate thousands of pounds light - then saves both losses back. See **Who pays for the work** below.
 - **v10 (Sep 2026)** added `settings.reports` - the reports a therapist has built and saved, and which one is their default. A v10 backup can hold "CPCAB client log, everything so far, these nine sections, counted as one clinical hour each"; a v9 build has no such field, so it would drop every saved report and save that loss back. **Only the definitions are stored** - the figures are always rebuilt from the sessions, so an older build loses the saved report, never the data behind it.
 - **v9 (Sep 2026)** gave a room-rent step its own **rhythm** (`freq`) and its own **end date** (`endDate`) - "£150 every week from 1 June until 31 August" rather than "£150, monthly, for ever". Both are optional and their absence means what it always meant, so nothing migrates in place. The bump is for the other direction and it matters twice: a v8 build reading a weekly rent charges it 12 times a year instead of 52, and goes on charging a rent that ended two years ago - then saves both wrong figures back. See **Room rent** below.
@@ -424,6 +524,43 @@ by **id**, so renaming an organisation never orphans a caseload.
   pays for. Hiding a control and then saving what it still holds is the same failure the session
   form's `roomPaid` comment warns about, one form along. Nothing is deleted either way: switching
   back to a paying answer brings the block and its history straight back.
+
+### Supervising others (v12, Sep 2026) - supervision GIVEN, kept out of every clinical figure
+A practitioner who also supervises. Task doc and the reasoning, including where it departed from
+the plan it came from: `docs/tasks/T11-supervising.md`. `docs/practitioner-models-2026-09.md` §2
+used to rule this out and has been amended rather than contradicted.
+
+- **A supervisee is a CLIENT RECORD with `kind:"supervisee"`**, not a new entity - so fee history,
+  Unpaid, invoices, chasers, the calendar and the whole tax path work unchanged (a supervision fee
+  is turnover in the same SA103 box). `kindOf(c)` reads it; absent or unrecognised means `client`.
+- **`sessionClinical(s)` / `derive().clinical` is THE choke point**, one axis over from
+  `sessionEarns()`. Loops without a derived row use `clinicalCodeTest()` (a Set, not a scan per
+  session); client lists use `clinicalClients()`. Excluded: `clinicalStats()` (Form 3A - it now
+  counts what it left out in `given`), `reportCtx()` (every report), `anaCtx()` and
+  `anaCohorts`/`anaEpisodes`/`anaDrifting`/`anaSources` (the Clients section), **`anaSupervisionCadence()`**
+  (a per-quarter ratio), Supervision › Insights' discussion recency, `scheduleRoster()`, the
+  `supervisionForm` chips and Home's Longstanding clients. **Included**: all money, Unpaid,
+  Incomplete, capacity/load/slots/hourly rate (time worked), the calendar.
+  **A new clinical reader must ask this question.** Counting supervision given as clinical work
+  flatters the 1:6 ratio in exactly the direction that hides a compliance problem, and nothing throws.
+- **Retention KEEPS supervisees** (with a `supervisee` chip). Leaving them off would mean their
+  personal data is never reviewed for deletion.
+- **`sessionLen(s, cl)`**: the session's own `mins`, then **for supervisees only** `client.mins`,
+  then `sessionMins()`. Clinical clients skip the middle rung on purpose: editing a client record
+  must never move a clinical hours figure. `derive()` computes it once as `d.mins` and passes it to
+  `sessionEnded()` so there is no second client scan per session. **Blank stores nothing** - never 50.
+- **The Length box** (`#f_mins`) shows when `feat("supervising")` is on or the session already has
+  a length; `lenShown()` in `sessionForm` is the one place that decides, and T10's `training` flag
+  joins it there. Not rendered = not read. `Object.assign` cannot delete, so the save removes
+  `mins` (and the client form `kind`/`mins`) from the stored record explicitly.
+- **`supervising` is OFF by default** (asked in `stepCPD`, like peer), except that `normalize()`
+  turns it on for data that already holds a supervisee. The simple preset, the "all" depth and
+  Settings' *Show all* never switch it on.
+- **Practice › Supervision › Supervising** (`supTab="giving"`, between CPD and Insights) is a view
+  over the supervisee records - they are logged, billed and chased where every session is. A nested
+  strip: not in `SWIPE_BARS`, walked by name in `check-guidance.mjs`.
+- **`npm run test:supervising`** (`scripts/check-supervising.mjs`, 75 assertions) - verified to fail
+  (33 of 75) with the choke point disabled.
 
 ### Business finances (added Aug 2026 - one choke point)
 `ledgerBetween(from, to, {toDate})` is the **only** place expenses, other income and monthly room rent are totalled. `tyNet()` adds its `total`; the tax-year table's Net column now prints `tx.netAll` (i.e. `tyNet`) rather than recomputing `billed - room - sup` inline, so the Net and Tax columns cannot drift apart. Anything new that reports money goes through it too.
@@ -665,7 +802,7 @@ Six collapsible `<details class="sgrp">` groups (**business / app** / data / rec
 
 ## Tabs (restructured Aug 2026)
 **Home · Sessions · Practice · Money · Tax.** `TAB_ALIAS` maps the old names (`clients`, `supervision`, `income`, `raw`) onto the new tab **and a segment**, so old deep links land somewhere meaningful; `go(tab,{seg})` sets it. A plain tab tap stays on whatever segment the reader last used.
-- **Practice** - Clients / Rooms / Supervision / Business analytics / **Reports, last** (Sep 2026: the first three are places you go to *do* something, the last two are where you go to read and to produce something, so they stay together at the end rather than splitting the doing screens). The last two carry the `premium` segment class and put `.bizA` on the panel - they are the parts of Practice this practice pays extra for. `supervisionPanel()` and `rawPanel()` are panels, not views: they are mounted whole so their inner sub-tabs keep working. Supervision's own sub-tabs are Log / Peer / **CPD** / Insights.
+- **Practice** - Clients / Rooms / Supervision / Business analytics / **Reports, last** (Sep 2026: the first three are places you go to *do* something, the last two are where you go to read and to produce something, so they stay together at the end rather than splitting the doing screens). The last two carry the `premium` segment class and put `.bizA` on the panel - they are the parts of Practice this practice pays extra for. `supervisionPanel()` and `rawPanel()` are panels, not views: they are mounted whole so their inner sub-tabs keep working. Supervision's own sub-tabs are Log / Peer / **CPD** / **Supervising** (only with `feat("supervising")`) / Insights.
 - **Money** - Overview / Costs & income / Table.
 - **Tax** - Now / Estimate / Pot & payments / Per year / Making Tax Digital (renamed from "Quarterly (MTD)", Sep 2026). **Now** is the default (`taxSeg`) and the only screen most of the year: the standing disclaimer, any live seasonal moments, then three numbers - on track to owe (`taxLiability`), keep in your pot (`taxPot`), next payment (`nextTaxPayment`) - each tapping through to the screen that owns its detail. It **summarises, never replaces**: the pot *summary* card moved off Estimate onto it, so **Estimate** now carries the take-home, the basis and the by-year table, while everything about paying - the buffer, the balance, every due date, and what HMRC actually assessed - still lives on **Pot & payments**, so no figure appears twice with two different explanations behind it. **Per year** is "things set per tax year" (renamed from "Allowances" in T6 - student loan and region aren't allowances): one year strip at the top governs every card below it (`taxYearStripStatus`), then student loan, then use of home. Region is *not* here - it moved to Settings.- The old `income` feature flag became `money` + `tax`; `normalize()` carries `income:false` across to both rather than switching a hidden tab back on.
 
@@ -773,6 +910,8 @@ npm run test:tax             # tests/tax-tests.js in a headless browser instead 
 npm run test:behaviour       # opens the sheets, clicks Save, asserts what landed in S
 npm run test:reports         # the report engine, the gate and the screen, over all eight
 npm run test:rent            # room rent: rhythms, date ranges, the ledger, and the ungated card
+npm run test:supervising     # supervision given: kept out of Form 3A, the ratio, reports and client
+                             #   analytics; still billed and diarised; per-session lengths; the forms
 npm run test:payer           # who pays: the payer field and its choke point, the Unpaid worklist
                              #   and its badge, the money analytics' readiness, the organisation
                              #   documents and batching, and employment income stacked under profit
@@ -790,6 +929,10 @@ npm run test:import          # the spreadsheet importer against the shapes real 
 npm run test:calendar        # the .ics export against RFC 5545: escaping, 75-octet folding,
                              #   floating times across midnight and a DST morning, the stable UID,
                              #   the range filter. Pure node - no browser, no Playwright
+npm run test:motion          # the motion layer with motion ON (webdriver hidden): the tab pill,
+                             #   view transitions, sheets closing synchronously, the page stack,
+                             #   the header never moving the page, Reduce Motion, haptics, and the
+                             #   type scale and curve tokens in the stylesheet
 npm run test:swipe           # swiping between sub-tabs, as real touch events through the browser's
                              #   own input pipeline: every bar end to end, the walls at both ends,
                              #   and everything that owns a sideways drag instead. Builds its own
@@ -1243,13 +1386,13 @@ sections and gets one page — client hours, the in-person share, supervision an
   the mode is `clinical`, and names the pro-rata figure. Counting 90-minute sessions as one
   hour each understates by nearly half, and only the therapist knows which basis her course
   wants — so say it, never quietly pick.
-- **`reportHours()` is the honest bit and must stay that way.** GroundWork stores a session,
-  not a duration, so every figure comes from `sessionMins()` — one practice-wide setting, never
-  a sum of recorded lengths — and every report prints its own arithmetic and the caveat beside
-  it. Per-client rows derive their per-session figure from `h.hours / h.sessions`, so a row can
-  never disagree with the headline above it whatever mode is in force. Per-session duration is
-  `docs/tasks/T10-training-record.md`; when it lands the three modes keep their meanings and
-  only the source of `mins` changes.
+- **`reportHours()` is the honest bit and must stay that way.** Since v12 each session carries
+  its own length where one was recorded (`sessionLen()`, else the practice setting), and
+  `actual`/`prorata` **sum** those lengths; the caveat says how many sessions had their own length.
+  Per-client rows are sums of `h.of(x)` - the same per-session function the headline is built
+  from - so a row can never disagree with the headline whatever mode is in force. The mismatch
+  warning fires on any session outside 45–60 minutes counted as one hour. Supervision *given*
+  never reaches a report (`reportCtx()` filters on `derive().clinical`).
 - **Missed sessions never count toward hours**, whether or not they were charged — what a late
   cancellation earned is a separate question, answered under Money. A future booking is not a
   delivered hour either; `reportCtx` clamps the range end to `today()`. Both are tested by
@@ -1456,9 +1599,9 @@ deleted because the picker and the wizard step still call it.
 - **Every lock and mask paints from six local variables** (`--tg1`..`--tg4`, `--tgglow`, `--tgink`)
   set by `.tier-pro`, rather than naming the ramp. That indirection is kept at one rung because it
   is what made the two-tier build possible in one pass and a second paid colour would then be a
-  class rather than a sweep. The ring is a `::before` rather than a gradient border, because `.card`
-  is a translucent glass surface and a border-box gradient would have to repaint the fill and lose
-  the blur. `--tier3-ink` is the only member of the ramp redefined for dark, because it is the only
+  class rather than a sweep. The ring is a `::before` rather than a gradient border, so the card's
+  own fill and shadow are untouched (it dates from when `.card` was translucent glass; cards are
+  solid since Sep 2026). `--tier3-ink` is the only member of the ramp redefined for dark, because it is the only
   one used as **text** - check any change at 13px on a real screen, not in a swatch.
 - **The launch screen wears the subscription, not the purchases.** A pre-paint script in `<head>`
   reads `tt_plus` and stamps `data-plus="pro"` on `<html>`, so a subscriber's splash never starts

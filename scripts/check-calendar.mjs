@@ -35,6 +35,9 @@ const prelude = `
   let _mins=50, _dl=null, _toast="", _err=0;
   let S={sessions:[]};
   function sessionMins(){return _mins;}
+  /* The app's sessionLen() also reads a supervisee's usual length off the client record; there are
+     no client records here, so this is its session-then-practice half. */
+  function sessionLen(s){return +(s&&s.mins)>0?+s.mins:_mins;}
   function isCancelled(s){return !!s._cancelled;}
   function uid(){return "fallbackid";}
   function toast(m){_toast=String(m);}
@@ -118,6 +121,8 @@ ok("UID is derived from the session's own id", has("UID", "abc123@groundwork.app
 ok("DTSTART is the session's time", has("DTSTART", "20260915T100000"));
 ok("DTEND is DTSTART plus the session length", has("DTEND", "20260915T105000"));
 ok("SUMMARY is the client code alone", has("SUMMARY", "MC392"));
+ok("DTEND honours a length recorded against the session",
+   api.icsEvent(Object.assign({}, s1, { mins: 90 }), "20260913T090000Z", 1234).split("\r\n").includes("DTEND:20260915T113000"));
 ok("LOCATION carries the room", has("LOCATION", "The Practice Room"));
 ok("the event shows as busy", has("TRANSP", "OPAQUE"));
 /* The whole point of the thin event: none of this may reach somebody else's server. */

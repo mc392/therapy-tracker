@@ -38,15 +38,47 @@ try{var p=JSON.parse(localStorage.getItem('tt_plus')||'null');
   color-scheme:light;
   --bg:#F5F8F5; --card:#FFFFFF; --soft:#EAF1EC; --ink:#16211C; --muted:#5F7268; --line:#E2EAE4;
   --brand:#5C7A6D; --brand-dark:#3C4F44; --g1:#A9C9B7; --g2:#7FA391;
-  --accent:#8B7BF0; --accent-ink:#5B49C7;
-  --good:#0C7C46; --bad:#C42A2F; --warn:#96650A; --hi:#06B6D4; --hi-ink:#0A5F73;
-  --glass:64%; --hair:rgba(255,255,255,.7); --on-bright:#0D1A17; --ring:rgba(15,23,42,.06);
-  --shadow:0 1px 2px rgba(16,40,34,.04),0 8px 24px -8px rgba(16,40,34,.16);
+  /* --accent and --hi were a violet and a cyan left over from the teal pass - two colours from a
+     different app sitting beside the sage. --accent is now a dusty heather (supervision, the
+     second series in a chart) and --hi a warm clay (today, the net-income line): both chosen to
+     sit with the greens, and --hi deliberately warm because it is drawn OVER green chart bars and
+     has to separate from them at a glance. --on-hi is the text colour on a --hi fill. */
+  --accent:#8C8BC4; --accent-ink:#4E4C8F;
+  --good:#0C7C46; --bad:#C42A2F; --warn:#96650A; --hi:#A85A36; --hi-ink:#8A4526; --on-hi:#FFFFFF;
+  --glass:64%; --hair:rgba(255,255,255,.7); --edge:rgba(16,40,34,.07); --on-bright:#0D1A17; --ring:rgba(15,23,42,.06);
+  /* Layered, not one blur: a tight contact shadow, a short soft one and a long faint one is how
+     light actually falls, and it is what lets a solid card read as lifted rather than outlined. */
+  --shadow:0 .5px 0 rgba(16,40,34,.05),0 1px 2px rgba(16,40,34,.05),0 4px 10px -2px rgba(16,40,34,.06),0 14px 30px -12px rgba(16,40,34,.14);
   --shadow-lg:0 2px 6px rgba(16,40,34,.06),0 20px 48px -12px rgba(16,40,34,.28);
   --radius:20px; --blur:blur(20px) saturate(1.8);
 
+  /* ====== Type scale (Sep 2026) ======
+     Eleven named sizes, and every font-size in this stylesheet is one of them. The file had grown
+     twenty-five - 12.5, 13.5, 14.5, 15.5 beside 12, 13, 14, 15 - and a half-pixel step between two
+     neighbouring lines is what reads as "slightly off" without anyone being able to say why.
+     --t-input is 16px for a reason, not a taste: iOS zooms the page into any form control whose
+     text is smaller, so inputs must never be moved onto --t-md. Display sizes (the celebration
+     emoji, the splash) stay literal - they are illustrations, not text. JS-built markup uses the
+     same numbers as literals, because a printed document opens in its own window where these
+     variables do not exist. */
+  --t-2xs:10px; --t-xs:11px; --t-sm:12px; --t-s:13px; --t-base:14px; --t-md:15px;
+  --t-input:16px; --t-lg:17px; --t-xl:19px; --t-2xl:22px; --t-3xl:25px;
+
+  /* ====== Motion (Sep 2026) ======
+     Three curves and three speeds. Every transition and animation below names one of them, so
+     the whole app moves with one hand - there were eight hand-typed curves before.
+       --ease-out     settles quickly and lands softly: screens, sheets, anything arriving.
+       --ease-spring  overshoots a little and comes back: switches, rings, badges, "done" moments.
+       --ease-firm    iOS's own sheet curve: anything that follows or springs back from a finger.
+     Motion that is decoration is wrapped in prefers-reduced-motion; see motionOK() for the JS. */
+  --ease-out:cubic-bezier(.2,.85,.25,1); --ease-spring:cubic-bezier(.18,1.4,.5,1);
+  --ease-firm:cubic-bezier(.32,.72,0,1);
+  --dur-fast:.18s; --dur:.3s; --dur-slow:.6s;
+  /* What sits behind a sheet steps back by this much (sheetStack()). */
+  --stack-scale:.94;
+
   /* Header gradient: brand → brand-dark, the same construction every other palette uses. It is a
-     shade darker than the icon's own top stop (#6A8B7C) on purpose - the 18px/700 header title
+     shade darker than the icon's own top stop (#6A8B7C) on purpose - the 17px/700 header title
      falls just under the WCAG large-text threshold, and white on #6A8B7C is only 3.75:1. */
   --gs1:#5C7A6D; --gs2:#3C4F44;
   /* ===== GOLD - the one paid accent =====
@@ -71,10 +103,10 @@ html[data-theme="dark"]{
   color-scheme:dark;
   --bg:#0C1512; --card:#16211E; --soft:#1E2C28; --ink:#E9F2EE; --muted:#93A8A1; --line:#243430;
   --brand:#8FBBA2; --brand-dark:#BCDCC7; --g1:#8FCFAB; --g2:#5E9E7E;
-  --accent:#A99BF7; --accent-ink:#C7BDFB;
-  --good:#3DD68C; --bad:#FF6369; --warn:#F5B544; --hi:#22D3EE; --hi-ink:#9DECFB;
-  --glass:56%; --hair:rgba(255,255,255,.13); --on-bright:#0D1A17; --ring:rgba(0,0,0,.4);
-  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -10px rgba(0,0,0,.6);
+  --accent:#A7A6DA; --accent-ink:#CBCAF0;
+  --good:#3DD68C; --bad:#FF6369; --warn:#F5B544; --hi:#D98B63; --hi-ink:#F3C4A6; --on-hi:#1A0F09;
+  --glass:56%; --hair:rgba(255,255,255,.13); --edge:rgba(255,255,255,.07); --on-bright:#0D1A17; --ring:rgba(0,0,0,.4);
+  --shadow:0 .5px 0 rgba(0,0,0,.3),0 1px 2px rgba(0,0,0,.35),0 6px 14px -4px rgba(0,0,0,.35),0 18px 36px -14px rgba(0,0,0,.55);
   --shadow-lg:0 2px 8px rgba(0,0,0,.5),0 24px 56px -14px rgba(0,0,0,.75);
 
   --gs1:#5C7A6D; --gs2:#3C4F44;
@@ -155,8 +187,11 @@ html[data-palette="slate"][data-theme="dark"]{
   --good:#3DD68C; --bad:#FF6369; --warn:#F5B544;}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
+/* tabular-nums: every digit the same width, so a column of fees lines up like a ledger and a
+   figure counting up (countUp) does not jitter sideways as its digits change. */
 body{font-family:"SF Pro Rounded",ui-rounded,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  background:var(--bg);color:var(--ink);font-size:16px;line-height:1.45;
+  font-variant-numeric:tabular-nums;
+  background:var(--bg);color:var(--ink);font-size:var(--t-input);line-height:1.45;
   padding-bottom:env(safe-area-inset-bottom);transition:background .25s,color .25s}
 /* The colour wash the frosted surfaces sit on -- without something behind them, "glass" just
    looks grey. Fixed so it never repaints while scrolling. */
@@ -166,65 +201,133 @@ body::before{content:"";position:fixed;inset:-10%;z-index:-1;pointer-events:none
     radial-gradient(48vmax 48vmax at 106% 2%, color-mix(in srgb,var(--g2) 62%,transparent), transparent 62%),
     radial-gradient(58vmax 44vmax at 30% 108%, color-mix(in srgb,var(--g1) 45%,transparent), transparent 66%);}
 @media (prefers-reduced-motion:no-preference){
-  .card,.kpi,.btn,.seg button,nav.tabs button{transition:transform .18s cubic-bezier(.2,.8,.2,1),box-shadow .18s,background .18s,color .18s}
+  .card,.kpi,.btn,.seg button,nav.tabs button{transition:transform .18s var(--ease-out),box-shadow .18s,background .18s,color .18s}
 }
 h1,h2,h3{margin:0 0 .4em}
 a{color:var(--brand)}
 .app{max-width:780px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+/* background-COLOR as well as the gradient, and that is load-bearing on iOS 26: the system tints
+   the status-bar strip (and picks white or black clock text) by sampling the solid colour of
+   whatever sticky/fixed element touches the top edge. A gradient is an image, not a colour, so
+   with only a gradient here it fell back to the page's own pale --bg - and drew a light wash
+   over the top of the header with a black clock on it. */
 header.top{position:sticky;top:0;z-index:30;color:#fff;
-  background:linear-gradient(135deg,var(--gs1),var(--gs2));
+  background:var(--gs1) linear-gradient(135deg,var(--gs1),var(--gs2));
   padding:calc(env(safe-area-inset-top) + 14px) 18px 15px;display:flex;align-items:center;gap:10px;
   box-shadow:0 10px 30px -14px color-mix(in srgb,var(--gs2) 85%,transparent)}
-header.top::after{content:"";position:absolute;inset:0;pointer-events:none;
-  background:linear-gradient(180deg,rgba(255,255,255,.16),transparent 60%)}
+/* The sheen starts BELOW the status-bar strip. Spread over the whole header it put a 16% white
+   wash exactly where the clock sits, which read as the top of the app being faded. */
+header.top::after{content:"";position:absolute;inset:env(safe-area-inset-top) 0 0 0;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.10),transparent 60%)}
 header.top>*{position:relative;z-index:1}
-header.top h1{font-size:18px;margin:0;font-weight:700;flex:1;letter-spacing:.01em}
-header.top .ty{font-size:12px;background:rgba(0,0,0,.18);color:#fff;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);padding:4px 10px;border-radius:20px;max-width:48vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
-.themebtn{background:rgba(0,0,0,.18);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border:0;color:#fff;width:34px;height:34px;border-radius:12px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+header.top h1{font-size:var(--t-lg);margin:0;font-weight:700;flex:1;letter-spacing:.01em}
+/* The header condenses as the page scrolls (Sep 2026) - pure CSS, driven by the scroll position
+   itself, so nothing runs in script on a scroll. The trap is height: a sticky header that got
+   shorter would pull the page up under the reader's thumb, which changes the scroll position,
+   which changes the height again. So every pixel of padding it gives up is handed straight back
+   as margin-bottom - the header's footprint in the page never changes, only what it paints.
+   Browsers without scroll-driven animations keep the full header, which is exactly what they had.
+   Phone only; the desktop header is already compact. The title shrinks by transform, never by
+   font-size, which would re-lay-out the text on every frame. */
+@supports (animation-timeline:scroll()){
+  @media (max-width:899px) and (prefers-reduced-motion:no-preference){
+    header.top{animation:hdrCondense linear both;animation-timeline:scroll(root);animation-range:0 90px}
+    header.top h1{transform-origin:left center;animation:hdrTitle linear both;animation-timeline:scroll(root);animation-range:0 90px}
+  }
+}
+/* NEVER put env() in these keyframes (and so never animate padding-top, which carries the
+   safe-area inset). WebKit resolves env() inside @keyframes once, when the animation is built -
+   and in the iPhone app that is before the WKWebView has reported its safe area, so the inset
+   was frozen at 0: the first scroll pulled the header up under the clock and battery, and it
+   only came right once a later restyle rebuilt the keyframes. The header condenses from the
+   bottom instead; test:motion fails on an env() in any @keyframes. */
+@keyframes hdrCondense{to{padding-bottom:5px;margin-bottom:10px;
+  box-shadow:0 12px 28px -12px color-mix(in srgb,var(--gs2) 95%,transparent)}}
+@keyframes hdrTitle{to{transform:scale(.88)}}
+header.top .ty{font-size:var(--t-sm);background:rgba(0,0,0,.18);color:#fff;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);padding:4px 10px;border-radius:20px;max-width:48vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.themebtn{background:rgba(0,0,0,.18);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border:0;color:#fff;width:34px;height:34px;border-radius:12px;font-size:var(--t-input);cursor:pointer;display:flex;align-items:center;justify-content:center}
 .themebtn:active{transform:scale(.94)}
 main{flex:1;padding:18px 16px 108px}   /* clears the floating tab bar */
 .bkbar{display:none;align-items:center;justify-content:space-between;gap:8px 14px;flex-wrap:wrap;
   background:color-mix(in srgb,var(--warn) 16%,var(--card));border-bottom:1px solid color-mix(in srgb,var(--warn) 45%,transparent);
-  color:var(--ink);padding:9px 16px;font-size:13px}
+  color:var(--ink);padding:9px 16px;font-size:var(--t-s)}
 .bkbar.show{display:flex}
 .bkbar.err{background:color-mix(in srgb,var(--bad) 17%,var(--card));border-bottom-color:color-mix(in srgb,var(--bad) 52%,transparent)}
 .bkbar.err .btn{background:var(--bad)}
-.dzchk{display:flex;align-items:flex-start;gap:9px;margin:16px 0 0;font-size:13.5px;color:var(--ink);font-weight:600;line-height:1.4;cursor:pointer}
+.dzchk{display:flex;align-items:flex-start;gap:9px;margin:16px 0 0;font-size:var(--t-s);color:var(--ink);font-weight:600;line-height:1.4;cursor:pointer}
 .dzchk input{width:auto;flex:0 0 auto;margin-top:2px}
 details.dz{margin-top:10px}
-details.dz>summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--muted);padding:8px 0;list-style:none}
+details.dz>summary{cursor:pointer;font-size:var(--t-s);font-weight:700;color:var(--muted);padding:8px 0;list-style:none}
 details.dz>summary::-webkit-details-marker{display:none}
 details.dz>summary::before{content:"▸ ";display:inline-block;transition:transform .15s}
 details.dz[open]>summary::before{content:"▾ "}
 .dzpick{max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:2px 12px;margin-top:8px}
-.dzpick label{display:flex;align-items:center;gap:10px;margin:0;padding:11px 2px;border-bottom:1px solid var(--line);font-size:14.5px;color:var(--ink);font-weight:600;cursor:pointer}
+.dzpick label{display:flex;align-items:center;gap:10px;margin:0;padding:11px 2px;border-bottom:1px solid var(--line);font-size:var(--t-base);color:var(--ink);font-weight:600;cursor:pointer}
 .dzpick label:last-child{border-bottom:0}
 .dzpick input{width:auto;flex:0 0 auto}
-.dzpick .dzsub{font-size:12px;color:var(--muted);font-weight:500;margin-left:auto;text-align:right}
+.dzpick .dzsub{font-size:var(--t-sm);color:var(--muted);font-weight:500;margin-left:auto;text-align:right}
 .bkbar .bkmsg{flex:1;min-width:170px;line-height:1.4}
 .bkbar .bkdetail{color:var(--muted)}
 .bkbar .btn{white-space:nowrap}
 .view{display:none}
-.view.active{display:block;animation:f .2s ease}
-@keyframes f{from{opacity:.3;transform:translateY(5px)}to{opacity:1;transform:none}}
-.card{background:color-mix(in srgb,var(--card) var(--glass),transparent);
-  -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
-  border:1px solid var(--hair);border-radius:var(--radius);padding:18px;margin:0 0 14px;
+/* A screen arrives from the side the reader moved towards along the tab bar (go() sets .from-r /
+   .from-l), or rises a touch when there is no direction. 12px, never more: main carries 16px of
+   side padding, and a shift wider than that gives the document a horizontal scroll axis - the
+   same ceiling as the segment slide. */
+.view.active{display:block;animation:f var(--dur) var(--ease-out)}
+.view.active.from-r{animation-name:fR} .view.active.from-l{animation-name:fL}
+@keyframes f{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes fR{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
+@keyframes fL{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:none}}
+/* Cards on a freshly opened screen arrive one after another (staggerIn()), 35ms apart. Only on
+   real navigation - a keepScroll redraw must never replay it - and only the first ten, so a long
+   list is not still assembling itself a second later. */
+.stagger{animation:rise .42s var(--ease-out) both;animation-delay:calc(var(--i,0) * 35ms)}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.view.active,.stagger{animation:none}}
+.view.active.quiet{animation:none}
+/* View Transitions for tab-bar taps (navTo()). Only the ROOT snapshot moves: it is exactly the
+   screen as the reader saw it, whatever they had scrolled to. Naming <main> instead was tried on
+   paper and rejected - a group morphs from the old element's box to the new one's, and <main> is
+   several screens tall and was scrolled, so the whole page would visibly travel. The header and
+   the tab bar are named so they can be left OUT of the slide: their old snapshot is hidden and the
+   new one is live, which is what lets the tab pill be seen gliding. */
+header.top{view-transition-name:gw-head}
+nav.tabs{view-transition-name:gw-tabs}
+::view-transition-old(gw-head),::view-transition-old(gw-tabs){display:none}
+::view-transition-new(gw-head),::view-transition-new(gw-tabs),
+::view-transition-group(gw-head),::view-transition-group(gw-tabs){animation:none}
+html.vt-fwd::view-transition-old(root){animation:vtOutL .22s var(--ease-out) both}
+html.vt-fwd::view-transition-new(root){animation:vtInR .36s var(--ease-out) both}
+html.vt-back::view-transition-old(root){animation:vtOutR .22s var(--ease-out) both}
+html.vt-back::view-transition-new(root){animation:vtInL .36s var(--ease-out) both}
+@keyframes vtOutL{to{opacity:0;transform:translateX(-28px)}}
+@keyframes vtOutR{to{opacity:0;transform:translateX(28px)}}
+@keyframes vtInR{from{opacity:0;transform:translateX(28px)}}
+@keyframes vtInL{from{opacity:0;transform:translateX(-28px)}}
+/* SOLID, not glass (Sep 2026). Every card and figure tile used to blur whatever was behind it, and
+   when everything is frosted nothing is: a screen of twenty glass cards reads as one flat grey
+   sheet, and it is the single most expensive thing to paint on an older iPhone - each card is a
+   separate backdrop blur, recomposited on every frame of a scroll. Glass is kept for the CHROME
+   that floats over content (header pills, the tab bar, the sheet scrim, sticky bars), where there
+   is actually something behind it to see. Cards get an opaque surface, a hairline --edge and the
+   layered --shadow, which is what makes them read as lifted rather than outlined. */
+.card{background:var(--card);
+  border:1px solid var(--edge);border-radius:var(--radius);padding:18px;margin:0 0 14px;
   box-shadow:var(--shadow),inset 0 1px 0 var(--hair)}
-.card h2{font-size:13.5px;color:var(--brand-dark);letter-spacing:.045em;text-transform:uppercase;font-weight:800}
-.grp-h{font-size:12px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--brand-dark);margin:16px 0 6px;padding-top:12px;border-top:1px solid var(--line)}
+.card h2{font-size:var(--t-s);color:var(--brand-dark);letter-spacing:.045em;text-transform:uppercase;font-weight:800}
+.grp-h{font-size:var(--t-sm);font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--brand-dark);margin:16px 0 6px;padding-top:12px;border-top:1px solid var(--line)}
 .grp-h:first-of-type{border-top:0;padding-top:0;margin-top:8px}
 .kpis{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.kpi{background:color-mix(in srgb,var(--card) var(--glass),transparent);
-  -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
-  border:1px solid var(--hair);border-radius:calc(var(--radius) - 4px);padding:15px;
+.kpi{background:var(--card);
+  border:1px solid var(--edge);border-radius:calc(var(--radius) - 4px);padding:15px;
   box-shadow:var(--shadow),inset 0 1px 0 var(--hair)}
-.kpi .v{font-size:25px;font-weight:800;letter-spacing:-.02em;color:var(--brand-dark);
+.kpi .v{font-size:var(--t-3xl);font-weight:800;letter-spacing:-.02em;color:var(--brand-dark);
   background:linear-gradient(135deg,var(--brand-dark),var(--brand));-webkit-background-clip:text;background-clip:text;
   -webkit-text-fill-color:transparent}
 /* a status colour has to win over the gradient, or good/bad stop reading as good/bad */
 .kpi.good .v,.kpi.bad .v{background:none;-webkit-text-fill-color:currentColor}
-.kpi .l{font-size:12px;color:var(--muted);margin-top:3px}
+.kpi .l{font-size:var(--t-sm);color:var(--muted);margin-top:3px}
 .kpi.good .v{color:var(--good)} .kpi.bad .v{color:var(--bad)}
 .kpi.clk{cursor:pointer} .kpi.clk:active{transform:scale(.98)}
 /* A figure that is behind the gate: the reader's OWN number, blurred rather than replaced or
@@ -244,13 +347,13 @@ details.dz[open]>summary::before{content:"▾ "}
 .nowcard .nv{font-size:34px;font-weight:800;letter-spacing:-.02em;line-height:1.1;margin-top:6px;color:var(--brand-dark);
   background:linear-gradient(135deg,var(--brand-dark),var(--brand));-webkit-background-clip:text;background-clip:text;
   -webkit-text-fill-color:transparent}
-.nowcard .nv.nvtext{font-size:21px}
-.nowcard .nl{font-size:13px;color:var(--muted);margin-top:4px}
+.nowcard .nv.nvtext{font-size:var(--t-2xl)}
+.nowcard .nl{font-size:var(--t-s);color:var(--muted);margin-top:4px}
 /* A seasonal moment: a job that only matters for a few weeks a year, marked so it does not read
    as one more permanent card that is always there. */
 .mom{border-left:3px solid var(--brand)}
 .row{display:flex;gap:10px;align-items:center}
-.btn{appearance:none;border:0;border-radius:14px;padding:13px 18px;font-size:15px;font-weight:650;
+.btn{appearance:none;border:0;border-radius:14px;padding:13px 18px;font-size:var(--t-md);font-weight:650;
   background:linear-gradient(135deg,var(--gs1),var(--gs2));color:#fff;cursor:pointer;
   display:inline-flex;align-items:center;gap:8px;justify-content:center;
   box-shadow:0 1px 2px var(--ring),0 8px 18px -10px color-mix(in srgb,var(--gs2) 80%,transparent),inset 0 1px 0 rgba(255,255,255,.28)}
@@ -260,7 +363,7 @@ details.dz[open]>summary::before{content:"▾ "}
 .btn.ghost{background:transparent;color:var(--brand);border:1px solid color-mix(in srgb,var(--brand) 34%,transparent);box-shadow:none}
 .btn.danger{background:linear-gradient(135deg,color-mix(in srgb,var(--bad) 78%,#fff),var(--bad));
   box-shadow:0 8px 18px -10px color-mix(in srgb,var(--bad) 80%,transparent),inset 0 1px 0 rgba(255,255,255,.25)}
-.btn.sm{padding:9px 13px;font-size:13px;border-radius:11px}
+.btn.sm{padding:9px 13px;font-size:var(--t-s);border-radius:11px}
 .btn.full{width:100%}
 .fab{position:fixed;right:18px;bottom:calc(92px + env(safe-area-inset-bottom));z-index:40;
   width:60px;height:60px;border-radius:50%;color:#fff;border:0;cursor:pointer;
@@ -269,14 +372,34 @@ details.dz[open]>summary::before{content:"▾ "}
   box-shadow:0 10px 26px -6px color-mix(in srgb,var(--gs2) 65%,transparent),inset 0 1px 0 rgba(255,255,255,.3)}
 .fab svg{width:26px;height:26px;display:block;fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round}
 .fab:active{transform:scale(.95)}
-label{display:block;font-size:13px;color:var(--muted);margin:12px 0 5px;font-weight:600}
+label{display:block;font-size:var(--t-s);color:var(--muted);margin:12px 0 5px;font-weight:600}
 /* Text fields only. A checkbox picked up width:100% and 14px of padding from the bare
    `input` selector, which made it a ~160px flex item that squeezed its own label off the
    row - visible on the beta gate and anywhere else a tickbox sits beside text. WebKit
    pushed the label clean off the screen edge; Chrome merely made it narrow. */
-input:not([type=checkbox]):not([type=radio]),select,textarea{width:100%;min-width:0;padding:12px 14px;font-size:16px;border:1px solid var(--line);border-radius:13px;
+input:not([type=checkbox]):not([type=radio]),select,textarea{width:100%;min-width:0;padding:12px 14px;font-size:var(--t-input);border:1px solid var(--line);border-radius:13px;
   background:color-mix(in srgb,var(--card) 82%,transparent);color:var(--ink);font-family:inherit}
-input[type=checkbox],input[type=radio]{flex:none;accent-color:var(--brand);width:18px;height:18px}
+/* Ticks are drawn, not swapped (Sep 2026). A native checkbox changes state in one frame; this one
+   fills with the brand colour and then the tick is WIPED IN left to right - the first background
+   layer is a strip of solid brand that shrinks from full width to nothing, uncovering the tick
+   underneath, which reads as the stroke being drawn. A pseudo-element would be simpler and does
+   not work: WebKit gives an <input> no ::before/::after. min-width/min-height rather than only
+   width/height, because several containers set `width:auto` on their checkbox and an input with
+   no native appearance has no intrinsic size to fall back on. Radios keep the platform control. */
+input[type=checkbox]{-webkit-appearance:none;appearance:none;flex:none;width:18px;height:18px;min-width:18px;min-height:18px;
+  border:1.5px solid color-mix(in srgb,var(--muted) 60%,transparent);border-radius:6px;background-color:var(--card);
+  cursor:pointer;vertical-align:-3px;transition:background-color var(--dur-fast),border-color var(--dur-fast)}
+input[type=checkbox]:checked{border-color:var(--brand);
+  background:linear-gradient(var(--brand),var(--brand)) right center/0% 100% no-repeat,url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.6 8.4l2.8 2.8 6-6.4' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/82% 82% no-repeat,var(--brand);
+  animation:chkDraw .34s var(--ease-out) .05s both,chkPop .42s var(--ease-spring)}
+html[data-theme="dark"] input[type=checkbox]:checked{
+  background:linear-gradient(var(--brand),var(--brand)) right center/0% 100% no-repeat,url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.6 8.4l2.8 2.8 6-6.4' fill='none' stroke='%230D1A17' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/82% 82% no-repeat,var(--brand)}
+input[type=checkbox]:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+input[type=checkbox]:disabled{opacity:.45;cursor:not-allowed}
+@keyframes chkDraw{from{background-size:100% 100%,82% 82%}to{background-size:0% 100%,82% 82%}}
+@keyframes chkPop{0%{transform:scale(1)}35%{transform:scale(.86)}70%{transform:scale(1.08)}100%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){input[type=checkbox]:checked{animation:none}}
+input[type=radio]{flex:none;accent-color:var(--brand);width:18px;height:18px}
 input:not([type=checkbox]):not([type=radio]):focus,select:focus,textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 22%,transparent)}
 /* min-width:0 on the columns AND the controls: a grid item defaults to min-width:auto,
    and WebKit gives date/time inputs a much larger intrinsic minimum than Blink does, so
@@ -323,15 +446,15 @@ input[type=time]::-webkit-datetime-edit{padding:0}
   100%{box-shadow:0 0 0 0 transparent}}
 .flash{animation:cardflash 1.5s ease-out 1}
 @media (prefers-reduced-motion:reduce){.flash{animation:none;outline:2px solid var(--brand);outline-offset:2px}}
-.chip{display:inline-block;padding:3.5px 11px;border-radius:20px;font-size:12px;font-weight:650}
+.chip{display:inline-block;padding:3.5px 11px;border-radius:20px;font-size:var(--t-sm);font-weight:650}
 .chip.y{background:color-mix(in srgb,var(--good) 22%,transparent);color:var(--good)}
 .chip.n{background:color-mix(in srgb,var(--bad) 22%,transparent);color:var(--bad)}
 .chip.na{background:color-mix(in srgb,var(--muted) 18%,transparent);color:var(--muted)}
 .chip.f{background:color-mix(in srgb,var(--accent) 30%,transparent);color:var(--accent-ink)}
 .chip.s{background:color-mix(in srgb,var(--brand) 16%,transparent);color:var(--brand-dark)}
-table{width:100%;border-collapse:collapse;font-size:14px}
+table{width:100%;border-collapse:collapse;font-size:var(--t-base)}
 th,td{text-align:left;padding:9px 6px;border-bottom:1px solid var(--line)}
-th{font-size:11px;text-transform:uppercase;color:var(--muted);letter-spacing:.03em}
+th{font-size:var(--t-xs);text-transform:uppercase;color:var(--muted);letter-spacing:.03em}
 td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .list-item{display:flex;gap:10px;align-items:center;padding:13px 4px;border-bottom:1px solid var(--line);cursor:pointer}
 .list-item:last-child{border-bottom:0}
@@ -349,14 +472,14 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .nyopt.on{background:var(--card);box-shadow:0 0 0 2px color-mix(in srgb,var(--brand) 22%,transparent)}
 .nyopt.on .li-title{color:var(--brand-dark)}
 .li-main{flex:1;min-width:0}
-.li-title{font-weight:600;font-size:15px}
-.li-sub{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li-title{font-weight:600;font-size:var(--t-md)}
+.li-sub{font-size:var(--t-s);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* A list row is one line and truncates, which is right for "12 Aug · 10:00 · Room 2" and
    wrong for a paragraph. `.wrap` is the opt-out for rows whose sub IS the content - the tax
    disclaimer read as four sentences cut off mid-word on a phone. */
 .li-sub.wrap{white-space:normal;overflow:visible;text-overflow:clip}
 .li-right{text-align:right;font-variant-numeric:tabular-nums}
-.muted{color:var(--muted)} .small{font-size:12.5px} .mt{margin-top:12px} .mb{margin-bottom:12px}
+.muted{color:var(--muted)} .small{font-size:var(--t-s)} .mt{margin-top:12px} .mb{margin-bottom:12px}
 .center{text-align:center}
 .search{position:relative;margin-bottom:12px}
 .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
@@ -397,12 +520,12 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
    and they sit in the space the fade has just cleared, so they never collide with a label. `›` is
    the same character the tap-through links on these screens already use. */
 .seg::before,.seg::after{position:absolute;top:50%;transform:translateY(-50%);
-  font-size:17px;font-weight:700;line-height:1;color:var(--muted);
+  font-size:var(--t-lg);font-weight:700;line-height:1;color:var(--muted);
   opacity:0;transition:opacity .15s;pointer-events:none}
 .seg::before{content:"\2039";left:7px}
 .seg::after{content:"\203A";right:7px}
 .seg.fade-l::before,.seg.fade-r::after{opacity:.8}
-.seg button{border:0;background:transparent;padding:8px 13px;border-radius:9px;font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap;cursor:pointer}
+.seg button{border:0;background:transparent;padding:8px 13px;border-radius:9px;font-size:var(--t-s);font-weight:600;color:var(--muted);white-space:nowrap;cursor:pointer}
 .seg button.on{background:var(--card);color:var(--brand-dark);box-shadow:0 1px 2px var(--ring),0 2px 8px -4px var(--ring)}
 /* ===== Swiping between sub-tabs - the movement the gesture draws =====
    A swipe moves one chip along the bar and the content below slides in from the side the finger
@@ -468,14 +591,14 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
   border-bottom:1px solid var(--hair)}
 .uohbar .uohnav{flex:none;border:1px solid var(--hair);background:var(--card);color:var(--brand-dark);
-  width:32px;height:32px;border-radius:10px;font-size:17px;line-height:1;cursor:pointer;font-weight:700;font-family:inherit}
+  width:32px;height:32px;border-radius:10px;font-size:var(--t-lg);line-height:1;cursor:pointer;font-weight:700;font-family:inherit}
 .uohbar .uohnav:disabled{opacity:.32;cursor:default}
 .uohyrs{display:flex;gap:6px;overflow-x:auto;flex:1;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .uohyrs::-webkit-scrollbar{display:none}
 .uohyr{flex:none;display:flex;flex-direction:column;align-items:flex-start;gap:1px;
   border:1px solid var(--hair);background:transparent;border-radius:11px;padding:6px 11px;cursor:pointer;font-family:inherit}
-.uohyr b{font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap}
-.uohyr .st{font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+.uohyr b{font-size:var(--t-s);font-weight:700;color:var(--ink);white-space:nowrap}
+.uohyr .st{font-size:var(--t-2xs);font-weight:800;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
 .uohyr.on{background:var(--card);border-color:var(--brand);box-shadow:0 0 0 2px color-mix(in srgb,var(--brand) 20%,transparent)}
 .uohyr.on b{color:var(--brand-dark)}
 .uohyr .st.set{color:var(--good)}
@@ -497,20 +620,58 @@ nav.tabs{position:fixed;z-index:35;
   display:flex;justify-content:space-around;gap:4px;padding:7px 6px;max-width:560px;margin:0 auto}
 nav.tabs button{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:4px;
   flex:1;color:var(--muted);padding:7px 2px 6px;cursor:pointer;font-weight:600;border-radius:16px;transition:color .2s,background .2s}
-nav.tabs button>span:last-child{font-size:10px;line-height:1.1;text-align:center;overflow-wrap:anywhere}
+nav.tabs button>span:last-child{font-size:var(--t-2xs);line-height:1.1;text-align:center;overflow-wrap:anywhere}
 nav.tabs button .ic{position:relative;width:24px;height:24px;display:flex;align-items:center;justify-content:center}
 /* Anchored to the icon and overlapping it, the way a notification badge is drawn everywhere
    else. It used to sit inline after the label, where it wrapped onto a second line and made
    that one tab taller than the other four - the whole capsule grew a step in it. Absolutely
    positioned, so it is out of flow and can never change the bar's height again. */
 nav.tabs .tabbadge{position:absolute;top:-6px;right:-10px;min-width:16px;height:16px;padding:0 4px;
-  font-size:10px;line-height:1;border-radius:8px;box-shadow:0 0 0 2px var(--card);pointer-events:none}
+  font-size:var(--t-2xs);line-height:1;border-radius:8px;box-shadow:0 0 0 2px var(--card);pointer-events:none}
 nav.tabs button .ic svg{width:23px;height:23px;display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
   background:color-mix(in srgb,var(--brand) 16%,transparent)}
+/* The gliding pill (Sep 2026). One tint that travels between tabs rather than a background that
+   blinks off one button and on at the next. placeTabPill() positions it after every renderTabs() -
+   which rebuilds the buttons - by FLIP: it is put back where it was, then released to the new tab,
+   so the move animates even though every button under it is new. `.haspill` is only added once
+   the pill is really placed, so if the script fails the buttons keep their own tint as before. */
+nav.tabs{--pill-x:0px;--pill-y:0px;--pill-w:0px;--pill-h:0px}
+nav.tabs .tabpill{position:absolute;left:0;top:0;width:var(--pill-w);height:var(--pill-h);border-radius:16px;
+  transform:translate(var(--pill-x),var(--pill-y));background:color-mix(in srgb,var(--brand) 16%,transparent);
+  pointer-events:none;z-index:0;opacity:0;
+  transition:transform .46s var(--ease-firm),width .46s var(--ease-firm),height .46s var(--ease-firm),opacity var(--dur-fast)}
+nav.tabs.haspill .tabpill{opacity:1}
+nav.tabs .tabpill.still{transition:none}
+nav.tabs button{position:relative;z-index:1}
+nav.tabs.haspill button.on{background:transparent}
+@media (prefers-reduced-motion:reduce){nav.tabs .tabpill{transition:opacity var(--dur-fast)}}
 .sheet{position:fixed;inset:0;z-index:50;background:rgba(10,18,16,.42);display:none;align-items:flex-end;justify-content:center;
   -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
-.sheet.open{display:flex}
+.sheet.open{display:flex;animation:scrimIn var(--dur) var(--ease-out)}
+/* Closing plays out (Sep 2026). "open" still comes off at once - sheetPromise's observer and
+   every caller read that class, and a close that waited for an animation would make all of them
+   asynchronous. `.closing` is a separate, inert ghost of the sheet that slides away underneath:
+   it cannot be tapped, and the next openSheet() clears it immediately. */
+.sheet.closing{display:flex;pointer-events:none;animation:scrimOut .28s var(--ease-out) both}
+.sheet.closing .sheet-inner{animation:down .28s var(--ease-firm) both}
+@keyframes scrimIn{from{background-color:rgba(10,18,16,0)}}
+@keyframes scrimOut{to{background-color:rgba(10,18,16,0)}}
+@keyframes down{to{transform:translateY(100%)}}
+@media (prefers-reduced-motion:reduce){.sheet.open,.sheet.closing,.sheet.closing .sheet-inner{animation:none}.sheet.closing{display:none}}
+/* The page behind steps back while a sheet is up - iOS's card stack. sheetStack() sets each
+   element's transform-origin to the MIDDLE OF THE SCREEN (not of the element, which for <main> can
+   be many screens tall), so the header and the content shrink towards one point and stay
+   together. Never `.app` itself: the tab bar is position:fixed inside it, and a transform on an
+   ancestor turns fixed into absolute - the bar would jump to the foot of the whole page. The same
+   rule is why the fixed Settings title bar is hidden for the duration. Phone only: a desktop
+   dialog is centred over a page that has no reason to move. */
+@media (max-width:899px) and (prefers-reduced-motion:no-preference){
+  .app>header.top,.app>.bkbar,.app>main{transition:transform .5s var(--ease-firm),opacity .5s var(--ease-firm)}
+  html.sheet-up .app>header.top,html.sheet-up .app>.bkbar,html.sheet-up .app>main{transform:scale(var(--stack-scale));opacity:.85}
+  html.sheet-up .app>header.top{border-radius:14px}
+  html.sheet-up .sgstick,html.sheet-down .sgstick{visibility:hidden}
+}
 /* The sheet surface is SOLID, and the sticky header is the same solid colour, so the two cannot
    read as separate panels. They used to be two translucent layers - 88% here and another 82% on
    the header - which composite to about 98% and drew a pale bar across the top of every form.
@@ -525,8 +686,12 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
 .sheet-inner{background:var(--bg);
   width:100%;max-width:780px;max-height:94vh;overflow-y:auto;overflow-x:hidden;border-radius:28px 28px 0 0;
   border-top:1px solid var(--hair);box-shadow:var(--shadow-lg);
-  padding:0 18px calc(22px + env(safe-area-inset-bottom));animation:up .3s cubic-bezier(.2,.9,.25,1)}
-@keyframes up{from{transform:translateY(40px);opacity:.6}to{transform:none;opacity:1}}
+  padding:0 18px calc(22px + env(safe-area-inset-bottom));animation:up .44s var(--ease-firm)}
+/* The whole height, like a real sheet - 40px and a fade read as a panel appearing, not arriving. */
+@keyframes up{from{transform:translateY(100%)}to{transform:none}}
+@media (min-width:900px){.sheet-inner{animation:upD var(--dur) var(--ease-out)}}
+@keyframes upD{from{transform:translateY(12px) scale(.97);opacity:0}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.sheet-inner{animation:none}}
 /* Full-bleed, and the sheet's own top padding lives here instead of on .sheet-inner. A sticky
    element measures `top` from the padding box, so any padding-top on the container leaves a
    strip above the header that scrolling content shows through. Side margins are negative so the
@@ -537,8 +702,8 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
    already-positioned (sticky) header, so it needs no markup and can't shift the title/✕ row. */
 .sheet-head::before{content:"";position:absolute;top:8px;left:50%;transform:translateX(-50%);
   width:36px;height:4px;border-radius:2px;background:var(--hair)}
-.sheet-head h2{flex:1;margin:0;font-size:17px;text-transform:none;color:var(--ink)}
-.sheet-inner h3{font-size:14px;margin:0 0 4px;color:var(--brand-dark)}
+.sheet-head h2{flex:1;margin:0;font-size:var(--t-lg);text-transform:none;color:var(--ink)}
+.sheet-inner h3{font-size:var(--t-base);margin:0 0 4px;color:var(--brand-dark)}
 .taxlink{color:var(--brand);font-weight:700;cursor:pointer;border-bottom:1px dashed var(--brand)}
 /* Circled-i. Deliberately small and quiet - it must read as "there is more if you want it",
    never as a warning or a required step. 22px is under the 44px tap target guidance, so the
@@ -584,19 +749,19 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
    than as blocks the app decided to show. */
 .pinlead{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
   margin:2px 0 6px}
-.pinlead .pintitle{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;
+.pinlead .pintitle{display:flex;align-items:center;gap:6px;font-size:var(--t-xs);font-weight:800;
   letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .pinlead .pintitle .gi{width:13px;height:13px}
-.pinlead .taxlink{font-size:12px}
-.x{font-size:22px;color:var(--muted);background:none;border:0;cursor:pointer;padding:4px 8px}
-.suggest{font-size:11px;color:var(--accent-ink);font-weight:700;margin-left:6px}
-.hint{background:color-mix(in srgb,var(--brand) 10%,transparent);border:1px solid color-mix(in srgb,var(--brand) 24%,transparent);border-radius:14px;padding:10px 12px;font-size:13px;color:var(--brand-dark);margin:10px 0}
+.pinlead .taxlink{font-size:var(--t-sm)}
+.x{font-size:var(--t-2xl);color:var(--muted);background:none;border:0;cursor:pointer;padding:4px 8px}
+.suggest{font-size:var(--t-xs);color:var(--accent-ink);font-weight:700;margin-left:6px}
+.hint{background:color-mix(in srgb,var(--brand) 10%,transparent);border:1px solid color-mix(in srgb,var(--brand) 24%,transparent);border-radius:14px;padding:10px 12px;font-size:var(--t-s);color:var(--brand-dark);margin:10px 0}
 /* A hint that carries a button gives it a column of its own. It used to be floated, so a
    second line of text ran underneath it and the button sat on top of the words. */
 .hint.withbtn{display:flex;gap:10px;align-items:flex-start;justify-content:space-between}
 .hint.withbtn>.btn{flex:none}
 .vbanner{margin:10px 0 2px}
-.vmsg{border-radius:14px;padding:10px 13px;font-size:13px;margin-bottom:8px;font-weight:650;line-height:1.35}
+.vmsg{border-radius:14px;padding:10px 13px;font-size:var(--t-s);margin-bottom:8px;font-weight:650;line-height:1.35}
 .vmsg.err{background:color-mix(in srgb,var(--bad) 14%,var(--card));border:1px solid color-mix(in srgb,var(--bad) 45%,transparent);color:var(--bad)}
 .vmsg.warn{background:color-mix(in srgb,var(--warn) 14%,var(--card));border:1px solid color-mix(in srgb,var(--warn) 42%,transparent);color:var(--warn)}
 .vmsg.ok{background:color-mix(in srgb,var(--good) 14%,var(--card));border:1px solid color-mix(in srgb,var(--good) 40%,transparent);color:var(--good)}
@@ -610,8 +775,8 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
   border:1.5px dashed color-mix(in srgb,var(--brand) 34%,transparent);color:var(--muted);font-weight:600}
 .vmsg.calm b{color:var(--ink);font-weight:750}
 .vmsg.calm .gi{color:var(--brand)}
-.prev{font-size:11px;color:var(--muted);margin-top:3px}
-.acc-work{margin-top:10px;padding:11px 13px;border:1px solid var(--line);border-radius:12px;background:var(--soft);font-size:12.5px;line-height:1.75;color:var(--ink)}
+.prev{font-size:var(--t-xs);color:var(--muted);margin-top:3px}
+.acc-work{margin-top:10px;padding:11px 13px;border:1px solid var(--line);border-radius:12px;background:var(--soft);font-size:var(--t-s);line-height:1.75;color:var(--ink)}
 .acc-work div{margin:1px 0} .acc-work b{font-weight:700}
 /* Report creator (Practice > Reports). The preview draws the SAME block shape the printed
    document does, so what is on screen is what comes out of the printer. `.rsline` is the
@@ -619,17 +784,17 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
 .repnote{margin:8px 0 0;line-height:1.6}
 .repdecl{margin-top:6px}
 .repsig{margin:14px 0 4px;padding:12px 13px;border:1px solid var(--line);border-radius:12px;background:var(--soft)}
-.repsig .rsl{font-weight:700;font-size:13px}
-.repsig .rsd{font-size:12px;color:var(--muted);margin-bottom:10px}
-.repsig .rsline{border-bottom:1px solid var(--muted);margin:18px 0 0;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding-bottom:2px}
+.repsig .rsl{font-weight:700;font-size:var(--t-s)}
+.repsig .rsd{font-size:var(--t-sm);color:var(--muted);margin-bottom:10px}
+.repsig .rsline{border-bottom:1px solid var(--muted);margin:18px 0 0;font-size:var(--t-xs);text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding-bottom:2px}
 .repmeta{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0}
-.repmeta span{font-size:11.5px;background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:3px 9px;color:var(--muted)}
+.repmeta span{font-size:var(--t-sm);background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:3px 9px;color:var(--muted)}
 .tplrow{display:flex;gap:11px;align-items:flex-start;width:100%;text-align:left;padding:12px 13px;border:1px solid var(--line);
   border-radius:12px;background:var(--card);margin-bottom:8px;cursor:pointer;color:inherit;font:inherit}
 .tplrow:hover{border-color:var(--brand)}
-.tplrow .tn{font-weight:700;font-size:14px;display:block}
-.tplrow .tb{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--brand);display:block;margin-top:1px}
-.tplrow .td{font-size:12.5px;color:var(--muted);display:block;margin-top:4px;line-height:1.55}
+.tplrow .tn{font-weight:700;font-size:var(--t-base);display:block}
+.tplrow .tb{font-size:var(--t-xs);text-transform:uppercase;letter-spacing:.04em;color:var(--brand);display:block;margin-top:1px}
+.tplrow .td{font-size:var(--t-s);color:var(--muted);display:block;margin-top:4px;line-height:1.55}
 /* The three steps of getting a quarter filed (Tax > Making Tax Digital). Two are already done
    by the time the reader is looking at them and one is not ours to do, so the marker carries
    that distinction: a tick in brand green against the outstanding step's outline. */
@@ -641,18 +806,17 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
 .mtdstep.on>.mtdn{background:color-mix(in srgb,var(--brand) 16%,transparent);color:var(--brand)}
 .mtdstep.todo>.mtdn{border:1px dashed var(--line);color:var(--muted)}
 /* Settings groups: collapsed sections so the page opens as a short menu, not a wall of cards */
-.sgrp{background:color-mix(in srgb,var(--card) var(--glass),transparent);
-  -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
-  border:1px solid var(--hair);border-radius:var(--radius);margin:0 0 10px;overflow:hidden;
+.sgrp{background:var(--card);
+  border:1px solid var(--edge);border-radius:var(--radius);margin:0 0 10px;overflow:hidden;
   box-shadow:var(--shadow),inset 0 1px 0 var(--hair)}
 .sgrp>summary{list-style:none;cursor:pointer;padding:14px 16px;display:flex;flex-direction:column;gap:2px;position:relative;user-select:none}
 .sgrp>summary::-webkit-details-marker{display:none}
 .sgrp>summary::after{content:"›";position:absolute;right:16px;top:50%;transform:translateY(-50%) rotate(90deg);
-  font-size:20px;color:var(--muted);transition:transform .18s ease}
+  font-size:var(--t-xl);color:var(--muted);transition:transform .18s ease}
 .sgrp[open]>summary::after{transform:translateY(-50%) rotate(-90deg)}
 .sgrp>summary:hover{background:color-mix(in srgb,var(--brand) 6%,transparent)}
-.sgrp .sgt{font-weight:700;font-size:15.5px;padding-right:24px}
-.sgrp .sgs{font-size:12.5px;color:var(--muted);padding-right:24px}
+.sgrp .sgt{font-weight:700;font-size:var(--t-md);padding-right:24px}
+.sgrp .sgs{font-size:var(--t-s);color:var(--muted);padding-right:24px}
 .sgrp[open]>summary{border-bottom:1px solid var(--line)}
 .sgb{padding:2px 10px 10px}
 /* One shared bar naming whichever open group's own title (never its subheading) has scrolled
@@ -662,23 +826,23 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
    clipped/misrendered on WebKit the moment it tries to stick past its parent's edge. Fixed sits
    outside all of that, positioned and sized from JS against the real header and content box
    (see wireSettingsSticky) rather than a guessed offset, the same reasoning as `.uohbar`. */
-.sgstick{position:fixed;z-index:20;background:var(--card);font-weight:700;font-size:15.5px;
+.sgstick{position:fixed;z-index:20;background:var(--card);font-weight:700;font-size:var(--t-md);
   padding:12px 16px;box-shadow:var(--shadow);border-bottom:1px solid var(--hair)}
 .sgstick[hidden]{display:none}
 .setsearchwrap{position:relative}
 .setsearchwrap input{padding-right:40px}
 .setsearchx{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:28px;height:28px;
-  border:0;border-radius:50%;background:var(--soft);color:var(--muted);font-size:13px;cursor:pointer;
+  border:0;border-radius:50%;background:var(--soft);color:var(--muted);font-size:var(--t-s);cursor:pointer;
   display:flex;align-items:center;justify-content:center}
 .setsearchx:active{transform:translateY(-50%) scale(.92)}
 .sgb>.card{border:1px solid var(--hair);border-radius:14px;margin:10px 0 0;background:color-mix(in srgb,var(--bg) 45%,transparent);backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:none}
 .svgwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:6px -4px 0}
 .svgwrap svg{display:block}
 .calnav{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
-.calnav b{font-size:16px;color:var(--brand-dark)}
+.calnav b{font-size:var(--t-input);color:var(--brand-dark)}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
-.cal .dow{font-size:10px;color:var(--muted);text-align:center;font-weight:700;padding:2px 0}
-.cal .cell{min-height:56px;border:1px solid var(--line);border-radius:11px;padding:4px 5px;font-size:11px;background:var(--card);position:relative;cursor:pointer;color:var(--muted)}
+.cal .dow{font-size:var(--t-2xs);color:var(--muted);text-align:center;font-weight:700;padding:2px 0}
+.cal .cell{min-height:56px;border:1px solid var(--line);border-radius:11px;padding:4px 5px;font-size:var(--t-xs);background:var(--card);position:relative;cursor:pointer;color:var(--muted)}
 .cal .cell.empty{background:transparent;border:0;cursor:default}
 .cal .cell.today{border-color:var(--hi);box-shadow:0 0 0 1.5px var(--hi)}
 .cal .cell.sup{border-color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent)}
@@ -689,15 +853,15 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
 .cal .cc{display:block;margin-top:16px;font-size:9px;color:var(--brand-dark);white-space:normal;line-height:1.3;word-break:break-word;font-weight:600}
 .payrow{display:flex;align-items:center;gap:11px;padding:10px 4px;border-bottom:1px solid var(--line)}
 .payrow input[type=checkbox]{width:23px;height:23px;flex:none;accent-color:var(--brand)}
-.payrow input[type=date]{width:135px;padding:8px;font-size:13px;flex:none}
+.payrow input[type=date]{width:135px;padding:8px;font-size:var(--t-s);flex:none}
 .payrow .li-main{flex:1;min-width:0;cursor:pointer}
 .paybar{position:sticky;top:0;background:var(--bg);z-index:2;padding:8px 0}
-.legend{display:flex;flex-wrap:wrap;gap:13px;margin:10px 0 2px;font-size:12px;color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:13px;margin:10px 0 2px;font-size:var(--t-sm);color:var(--muted)}
 .legend .lgi{display:inline-flex;align-items:center;gap:5px}
 .legend .lgi i{width:11px;height:11px;border-radius:3px;display:inline-block}
 .legend .lgi i.line{width:18px;height:0;border-top:3px solid var(--hi);border-radius:0}
 .legend .lgi i.dash{width:18px;height:0;border-top:2px dashed var(--muted);border-radius:0}
-.grphead{background:var(--soft);color:var(--brand-dark);font-weight:700;font-size:12px;padding:8px 10px;border-radius:8px;margin:12px 0 2px}
+.grphead{background:var(--soft);color:var(--brand-dark);font-weight:700;font-size:var(--t-sm);padding:8px 10px;border-radius:8px;margin:12px 0 2px}
 .rawscroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
 /* The Trends headline strip. Scrolls sideways rather than wrapping: three tiles that wrap become
    a three-row block on a narrow phone, which is the opposite of a glance. The scroller is
@@ -711,14 +875,14 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
 .trtile:active{transform:scale(.97)}
 .trtile .tre{line-height:1;display:inline-block}
 .trtile .tre .gi{width:17px;height:17px;color:var(--brand-dark)}
-.trtile .trv{font-size:21px;font-weight:750;color:var(--ink);line-height:1.15;margin-top:3px;font-variant-numeric:tabular-nums}
-.trtile .trl{font-size:12px;color:var(--muted)}
-.trtile .trs{font-size:11px;font-weight:700;color:var(--brand-dark);margin-top:5px;letter-spacing:.02em}
-#rtable{font-size:12px;white-space:nowrap;min-width:100%}
+.trtile .trv{font-size:var(--t-2xl);font-weight:750;color:var(--ink);line-height:1.15;margin-top:3px;font-variant-numeric:tabular-nums}
+.trtile .trl{font-size:var(--t-sm);color:var(--muted)}
+.trtile .trs{font-size:var(--t-xs);font-weight:700;color:var(--brand-dark);margin-top:5px;letter-spacing:.02em}
+#rtable{font-size:var(--t-sm);white-space:nowrap;min-width:100%}
 #rtable th{cursor:pointer;position:sticky;top:0;background:var(--card);user-select:none}
 #rtable td,#rtable th{padding:7px 9px}
 #colsBox{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px 10px}
-.colchk{display:flex;align-items:center;gap:7px;font-size:13.5px;color:var(--ink);font-weight:500}
+.colchk{display:flex;align-items:center;gap:7px;font-size:var(--t-s);color:var(--ink);font-weight:500}
 .colchk input[type=checkbox]{width:18px;height:18px;flex:none;margin:0;accent-color:var(--brand)}
 /* One tickable line per outstanding room fee, in the settle sheet. */
 .rdrow{padding:9px 2px;border-bottom:1px solid var(--line)}
@@ -736,14 +900,14 @@ nav.tabs button.on{color:var(--brand-dark);font-weight:700;box-shadow:none;
    be able to see at a glance that the button is not the next thing to press. */
 .btn:disabled,.btn[disabled]{opacity:.45;cursor:default;box-shadow:none;filter:saturate(.6)}
 .btn:disabled:active,.btn[disabled]:active{transform:none}
-optgroup{font-size:12px;color:var(--muted)} optgroup option{font-size:16px;color:var(--ink)}
-.toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--brand);color:#fff;
-  padding:11px 18px;border-radius:24px;font-size:14px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.3)}
-.toast.show{opacity:1}
-.badge{display:inline-flex;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;font-weight:700;align-items:center;justify-content:center}
+optgroup{font-size:var(--t-sm);color:var(--muted)} optgroup option{font-size:var(--t-input);color:var(--ink)}
+.toast{position:fixed;bottom:100px;left:50%;transform:translate(-50%,14px) scale(.96);background:var(--brand);color:#fff;
+  padding:11px 18px;border-radius:24px;font-size:var(--t-base);z-index:60;opacity:0;transition:opacity .2s,transform .42s var(--ease-spring);pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.3)}
+.toast.show{opacity:1;transform:translate(-50%,0) scale(1)}
+.badge{display:inline-flex;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--bad);color:#fff;font-size:var(--t-xs);font-weight:700;align-items:center;justify-content:center}
 details{border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:10px;background:var(--card)}
 summary{font-weight:600;cursor:pointer}
-.audit-row{font-size:12.5px;padding:7px 2px;border-bottom:1px solid var(--line);color:var(--muted)}
+.audit-row{font-size:var(--t-s);padding:7px 2px;border-bottom:1px solid var(--line);color:var(--muted)}
 .audit-row b{color:var(--ink)}
 @media(min-width:560px){.kpis{grid-template-columns:repeat(4,1fr)}}
 /* Hidden by default, shown by the desktop block below. Both rules have to name
@@ -763,34 +927,36 @@ nav.tabs button.navset{display:none}
     background:linear-gradient(165deg,var(--gs1),var(--gs2));
     -webkit-backdrop-filter:none;backdrop-filter:none;
     padding:calc(env(safe-area-inset-top) + 20px) 12px 20px;gap:3px}
-  nav.tabs::before{content:var(--appname,"⬡ GroundWork");display:block;color:#fff;font-weight:700;font-size:16px;padding:6px 14px 18px;opacity:.96;
+  nav.tabs::before{content:var(--appname,"⬡ GroundWork");display:block;color:#fff;font-weight:700;font-size:var(--t-input);padding:6px 14px 18px;opacity:.96;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   /* The nav is a list of items, not a set of panes: without this the buttons inherit `flex:1`
      from the phone's bottom bar and each one stretches to a fifth of the window height. */
   nav.tabs button{flex:0 0 auto;flex-direction:row;justify-content:flex-start;gap:12px;width:100%;
-    color:rgba(255,255,255,.82);padding:11px 14px;border-radius:11px;font-size:14.5px;
+    color:rgba(255,255,255,.82);padding:11px 14px;border-radius:11px;font-size:var(--t-base);
     transition:background .15s,color .15s}
   nav.tabs button .ic{width:22px;height:22px}
   /* The badge ring exists to separate the pill from the icon behind it, so it has to be the
      colour it actually sits on - here that is the sidebar gradient, not var(--card). */
   nav.tabs .tabbadge{top:-5px;right:-8px;box-shadow:0 0 0 2px var(--gs2)}
   nav.tabs button .ic svg{width:21px;height:21px}
-  nav.tabs button>span:last-child{font-size:14.5px;text-align:left;flex:1}
+  nav.tabs button>span:last-child{font-size:var(--t-base);text-align:left;flex:1}
   /* Flat, not the phone's raised gradient pill - the sidebar IS the gradient here, and a
      gradient on a gradient reads as a mistake. */
   nav.tabs button.on{background:rgba(255,255,255,.18);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.16)}
+  nav.tabs .tabpill{border-radius:11px;background:rgba(255,255,255,.18);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16)}
+  nav.tabs.haspill button.on{background:transparent;box-shadow:none}
   .app{max-width:960px;margin:0 auto}
   /* The header keeps the brand gradient it has on the phone. It went white here, which left the
      sidebar as the only coloured thing on screen and made the two read as separate apps. */
   header.top{padding:16px 26px}
-  header.top h1{font-size:19px}
+  header.top h1{font-size:var(--t-xl)}
   /* The practice name is already the sidebar's title, so the header pill was the same words a
      second time, six inches away. */
   header.top .ty{display:none}
   main{padding:24px 26px 72px}
   /* A round floating + is a phone idiom. With room for words, use them. */
   .fab{bottom:26px;right:26px;width:auto;height:auto;border-radius:14px;padding:13px 19px;gap:9px;line-height:1.1}
-  .fab::after{content:"New session";font-size:14.5px;font-weight:650;letter-spacing:.01em}
+  .fab::after{content:"New session";font-size:var(--t-base);font-weight:650;letter-spacing:.01em}
   .fab svg{width:20px;height:20px}
   .sheet{align-items:center}
   .sheet-inner{border-radius:18px;max-width:640px;max-height:88vh}
@@ -836,15 +1002,15 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:0
 .celebr.show{display:flex}
 .celebr .cb{background:var(--card);border:1px solid var(--line);border-radius:26px;padding:26px 30px;text-align:center;
   box-shadow:0 24px 70px rgba(0,0,0,.4),0 0 0 1px color-mix(in srgb,var(--brand) 20%,transparent);max-width:340px;
-  transform:scale(.6);opacity:0;animation:pop-in .55s cubic-bezier(.18,1.4,.5,1) forwards;position:relative;overflow:hidden}
+  transform:scale(.6);opacity:0;animation:pop-in .55s var(--ease-spring) forwards;position:relative;overflow:hidden}
 .celebr .cb::after{content:"";position:absolute;inset:-40%;background:conic-gradient(from 0deg,transparent 0 80%,color-mix(in srgb,var(--brand) 35%,transparent) 88%,transparent 96%);
   animation:sweep 2.4s linear infinite;opacity:.5;pointer-events:none}
 .celebr .cb>*{position:relative;z-index:1}
 .celebr .cemoji{font-size:62px;line-height:1;display:block;margin-bottom:6px;animation:bounce-emoji 1s ease 1}
-.celebr .ctitle{font-size:21px;font-weight:800;color:var(--brand-dark);margin:6px 0 2px;letter-spacing:.01em}
-.celebr .csub{font-size:14px;color:var(--muted);line-height:1.4}
-.celebr .cribbon{display:inline-block;margin-top:10px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
-  color:#fff;background:var(--hi);padding:5px 12px;border-radius:20px}
+.celebr .ctitle{font-size:var(--t-2xl);font-weight:800;color:var(--brand-dark);margin:6px 0 2px;letter-spacing:.01em}
+.celebr .csub{font-size:var(--t-base);color:var(--muted);line-height:1.4}
+.celebr .cribbon{display:inline-block;margin-top:10px;font-size:var(--t-sm);font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--on-hi);background:var(--hi);padding:5px 12px;border-radius:20px}
 @keyframes pop-in{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.06)}100%{transform:scale(1);opacity:1}}
 @keyframes bounce-emoji{0%{transform:translateY(0) scale(.6)}30%{transform:translateY(-16px) scale(1.18)}55%{transform:translateY(0) scale(1)}72%{transform:translateY(-7px)}100%{transform:translateY(0)}}
 @keyframes sweep{to{transform:rotate(360deg)}}
@@ -857,24 +1023,24 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:0
 .ring{position:relative;width:104px;text-align:center}
 .ring svg{display:block;margin:0 auto;transform:rotate(-90deg)}
 .ring .rbg{stroke:var(--soft)}
-.ring .rfg{stroke:var(--brand);transition:stroke-dashoffset 1.1s cubic-bezier(.2,.85,.25,1);stroke-linecap:round}
+.ring .rfg{stroke:var(--brand);transition:stroke-dashoffset 1.1s var(--ease-out);stroke-linecap:round}
 .ring.done .rfg{stroke:var(--good)}
-.ring .rpct{position:absolute;top:0;left:0;right:0;height:80px;display:flex;align-items:center;justify-content:center;font-size:21px;font-weight:800;color:var(--brand-dark);font-variant-numeric:tabular-nums}
+.ring .rpct{position:absolute;top:0;left:0;right:0;height:80px;display:flex;align-items:center;justify-content:center;font-size:var(--t-2xl);font-weight:800;color:var(--brand-dark);font-variant-numeric:tabular-nums}
 .ring.done .rpct{color:var(--good)}
-.ring .rpct .chk{font-size:24px}
-.ring .rlab{font-size:11.5px;color:var(--muted);margin-top:7px;line-height:1.25}
-.ring.done svg{animation:ringpop .7s cubic-bezier(.18,1.4,.5,1)}
+.ring .rpct .chk{font-size:var(--t-3xl)}
+.ring .rlab{font-size:var(--t-sm);color:var(--muted);margin-top:7px;line-height:1.25}
+.ring.done svg{animation:ringpop .7s var(--ease-spring)}
 @keyframes ringpop{0%{transform:rotate(-90deg) scale(1)}45%{transform:rotate(-90deg) scale(1.12)}100%{transform:rotate(-90deg) scale(1)}}
 
 /* badges / records */
 .badgegrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px}
 .bdg{display:flex;align-items:center;gap:10px;background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:11px 12px}
-.bdg .be{font-size:24px;flex:none}
-.bdg .bv{font-size:17px;font-weight:800;color:var(--brand-dark);line-height:1}
-.bdg .bl{font-size:11px;color:var(--muted);margin-top:2px}
-.bdg .bbest{font-size:11px;font-weight:600;color:var(--muted)}
+.bdg .be{font-size:var(--t-3xl);flex:none}
+.bdg .bv{font-size:var(--t-lg);font-weight:800;color:var(--brand-dark);line-height:1}
+.bdg .bl{font-size:var(--t-xs);color:var(--muted);margin-top:2px}
+.bdg .bbest{font-size:var(--t-xs);font-weight:600;color:var(--muted)}
 .bdg.locked{opacity:.55}
-.bdg.fresh{animation:freshpop .8s cubic-bezier(.18,1.4,.5,1);border-color:color-mix(in srgb,var(--hi) 55%,transparent)}
+.bdg.fresh{animation:freshpop .8s var(--ease-spring);border-color:color-mix(in srgb,var(--hi) 55%,transparent)}
 @keyframes freshpop{0%{transform:scale(.85);box-shadow:0 0 0 0 color-mix(in srgb,var(--hi) 50%,transparent)}50%{transform:scale(1.04)}100%{transform:scale(1);box-shadow:0 0 0 0 transparent}}
 
 
@@ -883,26 +1049,26 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:0
 .irow:last-child{border-bottom:0}
 .irow .itop{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
 .irow .itop.clk{cursor:pointer} .irow .itop.clk:active{opacity:.65}
-.irow .ittl{font-weight:600;font-size:15px}
-.irow .isub{font-size:12.5px;color:var(--muted)}
+.irow .ittl{font-weight:600;font-size:var(--t-md)}
+.irow .isub{font-size:var(--t-s);color:var(--muted)}
 .irow .ctrls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .irow.flash{animation:rowflash 1.1s ease}
 @keyframes rowflash{0%{background:color-mix(in srgb,var(--good) 32%,transparent)}100%{background:transparent}}
 .irow.cleared{opacity:.45}
 .tgl{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line);background:var(--card);color:var(--muted);
-  border-radius:20px;padding:8px 13px;font-size:13px;font-weight:700;cursor:pointer;user-select:none;
+  border-radius:20px;padding:8px 13px;font-size:var(--t-s);font-weight:700;cursor:pointer;user-select:none;
   transition:transform .1s,background .15s,color .15s,border-color .15s}
 .tgl:active{transform:scale(.93)}
-.tgl .tbox{width:16px;height:16px;border-radius:5px;border:2px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:11px}
+.tgl .tbox{width:16px;height:16px;border-radius:5px;border:2px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:var(--t-xs)}
 .tgl.on{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good);border-color:color-mix(in srgb,var(--good) 50%,transparent)}
 .tgl.on .tbox{background:var(--good);border-color:var(--good);color:#fff}
 /* A missed session is answered, not good news - so the chosen chip is amber rather than green.
    Same control, same weight; only the colour says which kind of answer it is. */
 .tgl.miss.on{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 50%,transparent)}
 .tgl.miss.on .tbox{background:var(--warn);border-color:var(--warn);color:#fff}
-.irow .attnote{display:none;font-size:12.5px;color:var(--warn);line-height:1.45;padding:0 2px}
+.irow .attnote{display:none;font-size:var(--t-s);color:var(--warn);line-height:1.45;padding:0 2px}
 .irow .attnote.show{display:block}
-.tgl.pop{animation:tglpop .42s cubic-bezier(.18,1.5,.5,1)}
+.tgl.pop{animation:tglpop .42s var(--ease-spring)}
 @keyframes tglpop{0%{transform:scale(1)}45%{transform:scale(1.2)}100%{transform:scale(1)}}
 .bulkbar{position:sticky;top:0;background:var(--bg);z-index:2;padding:8px 0}
 .bulkbar .bbtns{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;align-items:center}
@@ -916,10 +1082,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:0
 
 /* ===== client retention funnel ===== */
 .funnel{display:flex;flex-direction:column;gap:13px}
-.funnel .ftop{display:flex;justify-content:space-between;gap:8px;font-size:13px;margin-bottom:5px;color:var(--muted)}
+.funnel .ftop{display:flex;justify-content:space-between;gap:8px;font-size:var(--t-s);margin-bottom:5px;color:var(--muted)}
 .funnel .ftop b{color:var(--brand-dark)}
 .funnel .fbar{height:24px;border-radius:9px;background:var(--soft);overflow:hidden}
-.funnel .fbar>i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,var(--brand),var(--hi));transition:width 1.05s cubic-bezier(.2,.85,.25,1)}
+.funnel .fbar>i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,var(--brand),var(--hi));transition:width 1.05s var(--ease-out)}
 
 /* Bars in the Trends SVG charts rise in the same way the funnel's do - grown from their own
    baseline via a transform (not height/y), which animates reliably across browsers without
@@ -935,28 +1101,28 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:0
    otherwise replay the whole grow-in every time the reader opened a tooltip. */
 @keyframes cbarIn{from{transform:scaleY(0)}to{transform:scaleY(1)}}
 .cbar{transform-box:fill-box;transform-origin:center bottom;
-  animation:cbarIn .65s cubic-bezier(.2,.85,.25,1) both}
+  animation:cbarIn .65s var(--ease-out) both}
 .cbar.top{transform-origin:center top}
 .cbar.still{animation:none}
 @media (prefers-reduced-motion:reduce){.cbar{animation-duration:.01ms}}
 
 /* ===== grouped client chips (supervision clients-discussed) ===== */
 .cgrp{margin-top:9px}
-.cglab{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;margin-bottom:5px}
+.cglab{font-size:var(--t-xs);text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;margin-bottom:5px}
 .cgchips{display:flex;flex-wrap:wrap;gap:8px}
 
 /* ===== attention feed (Home) ===== */
 .attn{display:flex;flex-direction:column;gap:8px}
 .acard{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--muted);border-radius:0 12px 12px 0;padding:11px 12px;transition:opacity .3s,transform .3s}
 .acard.bad{border-left-color:var(--bad)} .acard.warn{border-left-color:var(--warn)} .acard.brand{border-left-color:var(--brand)} .acard.acc{border-left-color:var(--accent)}
-.acard .ae{font-size:20px;flex:none;line-height:1;color:var(--muted)}
+.acard .ae{font-size:var(--t-xl);flex:none;line-height:1;color:var(--muted)}
 .acard.bad .ae{color:var(--bad)} .acard.warn .ae{color:var(--warn)}
 .acard.brand .ae{color:var(--brand)} .acard.acc .ae{color:var(--accent-ink)}
-.acard .am{flex:1;min-width:0;font-size:13.5px;line-height:1.35}
+.acard .am{flex:1;min-width:0;font-size:var(--t-s);line-height:1.35}
 .acard .am b{color:var(--brand-dark)}
-.acard .am .sub{font-size:12px;color:var(--muted)}
+.acard .am .sub{font-size:var(--t-sm);color:var(--muted)}
 .acard.gone{opacity:0;transform:translateX(30px)}
-.allclear{text-align:center;padding:14px 8px;color:var(--good);font-weight:600;font-size:14px}
+.allclear{text-align:center;padding:14px 8px;color:var(--good);font-weight:600;font-size:var(--t-base)}
 .allclear .ace{font-size:30px;display:block;margin-bottom:3px}
 .allclear .ace .gi{width:28px;height:28px;vertical-align:middle}
 
@@ -974,7 +1140,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:0
 #splash.out{opacity:0;pointer-events:none;visibility:hidden;
   transition:opacity .42s ease,visibility 0s .42s}
 #splash .sp-in{display:flex;flex-direction:column;align-items:center;gap:34px;
-  transform:translateY(-3vh);animation:spRise .62s cubic-bezier(.2,.8,.25,1) both}
+  transform:translateY(-3vh);animation:spRise .62s var(--ease-out) both}
 #splash .sp-mark{width:min(31vw,132px);height:auto;overflow:visible}
 #splash .sp-bars .b1{fill:#B0BFB8}
 #splash .sp-bars .b2{fill:#8AA197}
@@ -1034,11 +1200,11 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 .aged>summary{list-style:none;cursor:pointer;padding:11px 13px;display:flex;flex-direction:column;gap:2px;position:relative;user-select:none}
 .aged>summary::-webkit-details-marker{display:none}
 .aged>summary::after{content:"›";position:absolute;right:13px;top:50%;
-  transform:translateY(-50%) rotate(90deg);color:var(--muted);font-size:17px;transition:transform .18s}
+  transform:translateY(-50%) rotate(90deg);color:var(--muted);font-size:var(--t-lg);transition:transform .18s}
 .aged[open]>summary::after{transform:translateY(-50%) rotate(-90deg)}
 .aged>summary:hover{background:color-mix(in srgb,var(--brand) 5%,transparent);border-radius:12px}
-.aged .agl{font-weight:700;font-size:13.5px;color:var(--ink);padding-right:24px}
-.aged .ags{font-size:12px;color:var(--muted);padding-right:24px}
+.aged .agl{font-weight:700;font-size:var(--t-s);color:var(--ink);padding-right:24px}
+.aged .ags{font-size:var(--t-sm);color:var(--muted);padding-right:24px}
 .aged[open]>summary{border-bottom:1px solid var(--line)}
 .aged .agbody{padding:2px 9px 6px}
 
@@ -1059,7 +1225,7 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
    to whatever was left, which is exactly how the digits came to be clipped. Same trap, and the
    same fix, as the date/time block further up. */
 .cxrow input:not([type=checkbox]):not([type=radio]){width:74px;flex:none;margin:0;padding:9px 10px;text-align:right}
-.cxrow .cxl{font-size:13px;color:var(--muted);white-space:nowrap}
+.cxrow .cxl{font-size:var(--t-s);color:var(--muted);white-space:nowrap}
 .cxrow .rmx{margin-left:auto;flex:none;background:none;border:0;cursor:pointer;
   color:var(--muted);padding:7px;border-radius:10px;line-height:0}
 .cxrow .rmx .gi{width:15px;height:15px}
@@ -1067,7 +1233,7 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 
 /* ===== swipeable session rows ===== */
 .swrow{position:relative;overflow:hidden;border-radius:10px}
-.swrow .swunder{position:absolute;inset:0;background:var(--good);color:#fff;display:flex;align-items:center;justify-content:flex-end;gap:7px;padding-right:16px;font-weight:700;font-size:13px}
+.swrow .swunder{position:absolute;inset:0;background:var(--good);color:#fff;display:flex;align-items:center;justify-content:flex-end;gap:7px;padding-right:16px;font-weight:700;font-size:var(--t-s)}
 .swrow .swover{position:relative;background:var(--card);touch-action:pan-y}
 .swrow .swover.snap{transition:transform .2s ease}
 
@@ -1077,11 +1243,11 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 .hmgrid i.l1{background:color-mix(in srgb,var(--brand) 32%,var(--soft))}
 .hmgrid i.l2{background:color-mix(in srgb,var(--brand) 62%,var(--soft))}
 .hmgrid i.l3{background:var(--brand)}
-.hmleg{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);margin-top:6px;justify-content:flex-end}
+.hmleg{display:flex;align-items:center;gap:4px;font-size:var(--t-xs);color:var(--muted);margin-top:6px;justify-content:flex-end}
 .hmleg i{width:10px;height:10px;border-radius:2px;display:inline-block}
 
 /* ===== client profile ===== */
-.avatar{width:44px;height:44px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex:none}
+.avatar{width:44px;height:44px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--t-md);flex:none}
 .wkdots{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
 .wkdots i{width:15px;height:15px;border-radius:4px;background:var(--soft);flex:none}
 .wkdots i.att{background:var(--brand)} .wkdots i.lc{background:color-mix(in srgb,var(--bad) 45%,var(--soft))} .wkdots i.up{border:1.5px dashed var(--brand);background:transparent;box-sizing:border-box}
@@ -1107,16 +1273,16 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 #coach.show{display:block}
 #coach .cmask{position:absolute;border-radius:14px;box-shadow:0 0 0 9999px rgba(12,22,18,.62);
   outline:2px solid var(--brand);outline-offset:3px;pointer-events:none;
-  transition:top .3s cubic-bezier(.4,0,.2,1),left .3s cubic-bezier(.4,0,.2,1),width .3s,height .3s}
+  transition:top .3s var(--ease-out),left .3s var(--ease-out),width .3s,height .3s}
 #coach.center .cmask{outline:none}
 #coach .ccatch{position:absolute;inset:0}          /* swallows taps on the page behind */
 #coach .cbub{position:absolute;width:min(360px,calc(100vw - 24px));background:var(--card);
   border:1px solid var(--line);border-radius:16px;padding:14px 15px 12px;
-  box-shadow:0 16px 44px rgba(0,0,0,.3);transition:top .3s cubic-bezier(.4,0,.2,1),left .3s cubic-bezier(.4,0,.2,1)}
+  box-shadow:0 16px 44px rgba(0,0,0,.3);transition:top .3s var(--ease-out),left .3s var(--ease-out)}
 #coach .cbh{display:flex;gap:9px;align-items:baseline;margin-bottom:5px}
-#coach .cbh .ce{font-size:18px;line-height:1;flex:none}
-#coach .cbh b{font-size:15.5px;font-weight:750;color:var(--brand-dark);line-height:1.25}
-#coach .cbb{font-size:13.5px;line-height:1.5;color:var(--ink)}
+#coach .cbh .ce{font-size:var(--t-xl);line-height:1;flex:none}
+#coach .cbh b{font-size:var(--t-md);font-weight:750;color:var(--brand-dark);line-height:1.25}
+#coach .cbb{font-size:var(--t-s);line-height:1.5;color:var(--ink)}
 #coach .cbb b{color:var(--brand-dark)}
 #coach .cbb p{margin:6px 0 0}
 #coach .cbf{display:flex;align-items:center;gap:7px;margin-top:12px}
@@ -1124,7 +1290,7 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 #coach .cdots i{width:5px;height:5px;border-radius:50%;background:var(--line);flex:none;transition:width .25s,background .25s}
 #coach .cdots i.on{background:var(--brand);width:14px;border-radius:3px}
 #coach .cdots i.done{background:color-mix(in srgb,var(--brand) 50%,var(--line))}
-#coach .cbtn{border:0;font:inherit;font-size:13px;font-weight:650;padding:8px 14px;border-radius:20px;
+#coach .cbtn{border:0;font:inherit;font-size:var(--t-s);font-weight:650;padding:8px 14px;border-radius:20px;
   background:var(--soft);color:var(--ink);cursor:pointer}
 #coach .cbtn.on{background:var(--brand);color:#fff}
 #coach .cbtn.ghost{background:none;color:var(--muted);padding:8px 6px}
@@ -1153,8 +1319,8 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 .ov>*{position:relative;z-index:1}
 .ov.show{display:flex}
 .ovtop{background:var(--brand);color:#fff;padding:calc(env(safe-area-inset-top) + 14px) 18px 12px;display:flex;align-items:center;gap:10px}
-.ovtop .ovttl{flex:1;font-weight:700;font-size:15.5px;letter-spacing:.01em;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ovtop .ovskip{background:rgba(255,255,255,.18);border:0;color:#fff;font:inherit;font-size:13px;font-weight:600;padding:7px 13px;border-radius:20px;cursor:pointer}
+.ovtop .ovttl{flex:1;font-weight:700;font-size:var(--t-md);letter-spacing:.01em;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ovtop .ovskip{background:rgba(255,255,255,.18);border:0;color:#fff;font:inherit;font-size:var(--t-s);font-weight:600;padding:7px 13px;border-radius:20px;cursor:pointer}
 .ovtop .ovskip:active{transform:scale(.96)}
 .ovdots{display:flex;gap:5px;justify-content:center;padding:11px 16px 3px;flex-wrap:wrap}
 .ovdots i{width:7px;height:7px;border-radius:50%;background:var(--line);transition:background .25s,width .25s}
@@ -1164,7 +1330,7 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 .ovinner{max-width:560px;margin:0 auto}
 .ovhero{font-size:52px;line-height:1.1;text-align:center;margin:10px 0 6px;animation:bounce-emoji .9s ease 1}
 .ovh{font-size:23px;font-weight:800;color:var(--brand-dark);text-align:center;margin:0 0 8px;line-height:1.22}
-.ovsub{font-size:14.5px;color:var(--muted);text-align:center;line-height:1.5;margin:0 0 18px}
+.ovsub{font-size:var(--t-base);color:var(--muted);text-align:center;line-height:1.5;margin:0 0 18px}
 .ovsub b{color:var(--ink)}
 .ovfoot{background:var(--bg);border-top:1px solid var(--line);padding:12px 18px calc(14px + env(safe-area-inset-bottom))}
 .ovbtns{display:flex;gap:10px}
@@ -1172,12 +1338,12 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 .ovbtns .btn.ghost{flex:0 0 96px}
 .ovpts{display:flex;flex-direction:column;gap:11px;margin:4px 0 6px}
 .ovpt{display:flex;gap:12px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 14px}
-.ovpt .pe{font-size:21px;line-height:1.25;flex:none}
-.ovpt .pt{flex:1;min-width:0;font-size:14px;line-height:1.5}
+.ovpt .pe{font-size:var(--t-2xl);line-height:1.25;flex:none}
+.ovpt .pt{flex:1;min-width:0;font-size:var(--t-base);line-height:1.5}
 .ovpt .pt b{color:var(--brand-dark)}
-.ovpt .pt .sub{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+.ovpt .pt .sub{display:block;color:var(--muted);font-size:var(--t-s);margin-top:2px}
 .ovnote{background:color-mix(in srgb,var(--warn) 13%,var(--card));border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);
-  border-radius:13px;padding:12px 14px;font-size:13.5px;line-height:1.5;margin:12px 0 0}
+  border-radius:13px;padding:12px 14px;font-size:var(--t-s);line-height:1.5;margin:12px 0 0}
 .ovnote b{color:var(--ink)}
 /* palette picker */
 .palgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:4px}
@@ -1191,8 +1357,8 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 /* Both are `display:block` deliberately - as inline spans the name and the description ran
    together into one paragraph ("Start simpleSessions, clients, …"), which reads as a typo rather
    than as a heading with a description under it. Same shape as `.ftrow .fn`/`.fd`. */
-.palopt .pn{display:block;font-size:14px;font-weight:700;line-height:1.25}
-.palopt .pd{display:block;font-size:11.5px;color:var(--muted);line-height:1.45;margin-top:2px}
+.palopt .pn{display:block;font-size:var(--t-base);font-weight:700;line-height:1.25}
+.palopt .pd{display:block;font-size:var(--t-sm);color:var(--muted);line-height:1.45;margin-top:2px}
 /* ---- long-form choices (the setup wizard's "how much do you want to see?") ----
    The palette grid packs 150px columns because a swatch plus two words fits one. A choice
    carrying a sentence or three does not: two of them on a phone gave 40-character columns and a
@@ -1205,12 +1371,12 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
   display:grid;place-items:center;background:color-mix(in srgb,var(--brand) 14%,transparent);color:var(--brand)}
 .palgrid.choices .pswatch .gi{width:21px;height:21px;vertical-align:0}
 .palgrid.choices .pt{flex:1;min-width:0}
-.palgrid.choices .pn{font-size:15px}
-.palgrid.choices .pd{font-size:13px;line-height:1.5;margin-top:4px}
+.palgrid.choices .pn{font-size:var(--t-md)}
+.palgrid.choices .pd{font-size:var(--t-s);line-height:1.5;margin-top:4px}
 /* Locked schemes stay legible and still show their colours - a greyed-out swatch advertises
    nothing. The lock is a tag, not a disabled state: the button still opens the paywall. */
 .palopt.locked{opacity:.78}
-.paltag{display:inline-block;font-size:10px;font-weight:700;vertical-align:1px;padding:1px 6px;
+.paltag{display:inline-block;font-size:var(--t-2xs);font-weight:700;vertical-align:1px;padding:1px 6px;
   border-radius:999px;margin-left:5px;background:color-mix(in srgb,var(--brand) 16%,transparent);color:var(--brand-dark)}
 /* GroundWork Pro and the tax year packages - the paywall sheets, the in-place lock that replaces
    a paid view, and the mask that stands in for a tax figure.
@@ -1230,8 +1396,9 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 /* A lock card wears the same edge and glow as its tier's App Store image, so the paid tier
    looks like one thing wherever it is met - the tab, the screen it opens, the card that stands
    in for a screen not bought yet, and the picture on the redemption sheet. The ring is a
-   ::before rather than a gradient border, because .card is a translucent glass surface and a
-   border-box gradient would have to repaint the fill and lose the blur behind it. */
+   ::before rather than a gradient border, so the card's own fill and --shadow are untouched. (It
+   was chosen when .card was translucent glass, which a border-box gradient would have repainted;
+   cards are solid since Sep 2026 and the ::before is still the simpler construction.) */
 /* `.plusgate` above sets `padding:4px 2px 2px` for a paid SURFACE dropped inside a sheet that
    already has its own padding. On a `.card` that same rule beat `.card{padding:18px}` on source
    order - equal specificity, later in the file - so a gate card had two pixels of side padding and
@@ -1250,9 +1417,9 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
 .plusgate .plmark{width:46px;height:46px;margin:0 auto 10px;border-radius:14px;display:grid;place-items:center;
   background:color-mix(in srgb,var(--tg3) 13%,transparent);color:var(--tgink)}
 .plusgate .plmark .gi{width:24px;height:24px}
-.plusgate h2{margin:0 0 4px;font-size:17px}
+.plusgate h2{margin:0 0 4px;font-size:var(--t-lg)}
 .plusgate .plfeat{text-align:left;margin-top:14px}
-.plusgate .plfeat div{font-size:12.5px;color:var(--muted);padding:6px 0;border-top:1px solid var(--line)}
+.plusgate .plfeat div{font-size:var(--t-s);color:var(--muted);padding:6px 0;border-top:1px solid var(--line)}
 .plusgate .plfeat b{color:var(--ink);font-weight:700}
 .plusgate input{text-align:center}
 /* ===== The offer card =====
@@ -1269,16 +1436,16 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
    and is deliberately not dimmed - hiding it would make the ladder invisible. */
 .tiercard.needed{box-shadow:0 0 16px -3px var(--tgglow)}
 .tiercard .tcname{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}
-.tiercard .tcname b{font-size:15.5px;color:var(--tgink);letter-spacing:.005em}
-.tiercard .tcprice{font-size:12.5px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
-.tiercard .tcinc{font-size:12.5px;color:var(--muted);line-height:1.5;margin:7px 0 0}
+.tiercard .tcname b{font-size:var(--t-md);color:var(--tgink);letter-spacing:.005em}
+.tiercard .tcprice{font-size:var(--t-s);font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+.tiercard .tcinc{font-size:var(--t-s);color:var(--muted);line-height:1.5;margin:7px 0 0}
 .tiercard .tcinc b{color:var(--ink);font-weight:700}
 .tiercard .btn{margin-top:11px}
-.tiertag{display:inline-block;font-size:10px;font-weight:800;vertical-align:1px;padding:1px 7px;
+.tiertag{display:inline-block;font-size:var(--t-2xs);font-weight:800;vertical-align:1px;padding:1px 7px;
   border-radius:999px;margin-left:5px;letter-spacing:.02em;
   background:color-mix(in srgb,var(--tg3) 15%,transparent);color:var(--tgink);
   border:1px solid color-mix(in srgb,var(--tg3) 34%,transparent)}
-.tcchip{font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:999px;letter-spacing:.02em;
+.tcchip{font-size:var(--t-xs);font-weight:800;padding:2px 8px;border-radius:999px;letter-spacing:.02em;
   background:color-mix(in srgb,var(--tg3) 16%,transparent);color:var(--tgink)}
 /* ===== "Tax is bought by the year, separately" =====
    The mis-selling guard, on the sheet where the money is asked for. Deliberately NOT styled as a
@@ -1286,21 +1453,21 @@ html[data-theme="dark"] #splash .sp-word span{color:#B7C7BC}
    heading, at full width, so it cannot be skimmed past on the way to the Subscribe button. */
 .taxsep{text-align:left;margin-top:14px;padding:12px 13px;border-radius:14px;
   background:color-mix(in srgb,var(--muted) 9%,transparent);border:1px solid var(--line)}
-.taxsep .tsh{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:800;color:var(--ink)}
+.taxsep .tsh{display:flex;align-items:center;gap:7px;font-size:var(--t-s);font-weight:800;color:var(--ink)}
 .taxsep .tsh .gi{width:16px;height:16px;flex:none}
-.taxsep p{font-size:12.5px;line-height:1.5;color:var(--muted);margin:7px 0 0}
+.taxsep p{font-size:var(--t-s);line-height:1.5;color:var(--muted);margin:7px 0 0}
 .taxsep .btn{margin-top:10px}
 /* ===== The tax year sheet's two steps =====
    Pro is step 1 and the year is step 2, and they are drawn as steps rather than as two cards so
    the order reads as a requirement rather than as a choice between them. */
 .tstep{display:flex;gap:11px;text-align:left;margin-top:14px}
 .tstep .tsn{flex:none;width:26px;height:26px;border-radius:999px;display:grid;place-items:center;
-  font-size:13px;font-weight:800;background:color-mix(in srgb,var(--tg3) 16%,transparent);color:var(--tgink)}
+  font-size:var(--t-s);font-weight:800;background:color-mix(in srgb,var(--tg3) 16%,transparent);color:var(--tgink)}
 .tstep .tsn .gi{width:15px;height:15px}
 .tstep.done .tsn{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good)}
 .tstep .tsb{flex:1;min-width:0}
-.tstep .tst{font-size:14px;font-weight:700;color:var(--ink);margin-bottom:5px}
-.tstep .tsd{font-size:12.5px;line-height:1.5;color:var(--muted);margin:7px 0 0}
+.tstep .tst{font-size:var(--t-base);font-weight:700;color:var(--ink);margin-bottom:5px}
+.tstep .tsd{font-size:var(--t-s);line-height:1.5;color:var(--muted);margin:7px 0 0}
 .tstep .btn{margin-top:10px}
 .tstep .plfeat{margin-top:8px}
 /* ===== The tax mask =====
@@ -1350,7 +1517,7 @@ td .taxmask{white-space:nowrap;padding:0 .22em}
   margin:0 0 10px;color:#fff;background:linear-gradient(135deg,var(--gs1),var(--gs2));
   box-shadow:0 6px 14px -9px color-mix(in srgb,var(--brand) 90%,transparent)}
 .compmark .gi{width:20px;height:20px}
-.compeyebrow{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+.compeyebrow{font-size:var(--t-xs);font-weight:800;letter-spacing:.06em;text-transform:uppercase;
   color:var(--brand-dark);margin:0 0 2px}
 /* The sneak peek: a locked card that still says something true about THIS practice. Left-aligned
    inside a centred gate, because these are rows of fact rather than sales copy. */
@@ -1363,15 +1530,15 @@ td .taxmask{white-space:nowrap;padding:0 .22em}
    the column is a fixed width and the figures are not - "1 client" and "£79.48" ranged left
    against a 74px column look like two different indents. */
 .peekrow{display:flex;gap:12px;align-items:baseline;padding:11px 0;border-top:1px solid var(--line)}
-.peekfig{flex:none;min-width:78px;text-align:center;font-weight:800;font-size:15px;color:var(--brand-dark);
+.peekfig{flex:none;min-width:78px;text-align:center;font-weight:800;font-size:var(--t-md);color:var(--brand-dark);
   font-variant-numeric:tabular-nums;line-height:1.35}
-.peekh{font-size:13.5px;font-weight:700;color:var(--ink);line-height:1.35}
-.peeks{font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.45}
+.peekh{font-size:var(--t-s);font-weight:700;color:var(--ink);line-height:1.35}
+.peeks{font-size:var(--t-s);color:var(--muted);margin-top:2px;line-height:1.45}
 /* "This one is yours to keep" under the funnel the gate does NOT take away. In the paid colour,
    so it reads as a promise from the thing being offered rather than as a caption somebody forgot
    to style. */
 .plkeep{display:flex;align-items:center;justify-content:center;gap:6px;margin:14px 0 0;
-  font-size:12.5px;font-weight:800;letter-spacing:.01em;color:var(--tier3-ink);
+  font-size:var(--t-s);font-weight:800;letter-spacing:.01em;color:var(--tier3-ink);
   text-shadow:0 0 12px var(--tier3-glow)}
 .plkeep .gi{width:15px;height:15px}
 /* ---- Trends ---- */
@@ -1380,7 +1547,7 @@ td .taxmask{white-space:nowrap;padding:0 .22em}
    warning: nothing is wrong, there just is not enough yet. */
 .anawait{display:flex;gap:9px;align-items:flex-start;padding:12px 13px;border-radius:12px;
   background:color-mix(in srgb,var(--muted) 9%,transparent);color:var(--muted);
-  font-size:13px;line-height:1.5}
+  font-size:var(--t-s);line-height:1.5}
 .anawait svg{width:16px;height:16px;flex:none;margin-top:1px;fill:none;stroke:currentColor;stroke-width:1.8}
 /* The drifting-away card is the one thing in Trends that is a to-do list rather than a picture. */
 .driftcard{border:1px solid color-mix(in srgb,var(--accent) 55%,transparent)}
@@ -1390,14 +1557,14 @@ td .taxmask{white-space:nowrap;padding:0 .22em}
 /* Funnel bars are reused for proportion rows outside the funnel, where they need their own
    transition and spacing rather than inheriting the funnel's animation-on-mount. */
 .card>.fr{margin:9px 0}
-.card>.fr .ftop{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;
+.card>.fr .ftop{display:flex;justify-content:space-between;gap:10px;font-size:var(--t-s);
   margin-bottom:4px;color:var(--muted)}
 .card>.fr .ftop b{color:var(--ink)}
 .card>.fr .fbar{height:14px;border-radius:7px;background:var(--soft);overflow:hidden}
 .card>.fr .fbar>i{display:block;height:100%;border-radius:7px;
   background:linear-gradient(90deg,var(--brand),var(--hi))}
 .palopt.locked{opacity:.55}
-.palopt .paltag{font-size:10px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:1px 5px;margin-left:2px;vertical-align:1px;white-space:nowrap}
+.palopt .paltag{font-size:var(--t-2xs);font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:1px 5px;margin-left:2px;vertical-align:1px;white-space:nowrap}
 /* feature toggles */
 /* One group with hairlines between the rows, instead of every row being its own floating
    box. `:has()` rather than :last-child because a run does not always end the container -
@@ -1409,10 +1576,10 @@ td .taxmask{white-space:nowrap;padding:0 .22em}
 /* Separator starts where the text starts, not at the icon - the inset is what reads as
    "these rows belong together" rather than "these rows are stacked". */
 .ftrow+.ftrow::before{content:"";position:absolute;left:45px;right:0;top:-1px;height:1px;background:var(--line)}
-.ftrow .fic{font-size:19px;flex:none;line-height:1.3}
+.ftrow .fic{font-size:var(--t-xl);flex:none;line-height:1.3}
 .ftrow .fmain{flex:1;min-width:0}
-.ftrow .fn{display:block;font-size:14.5px;font-weight:700}
-.ftrow .fd{font-size:12.5px;color:var(--muted);line-height:1.45;margin-top:2px}
+.ftrow .fn{display:block;font-size:var(--t-base);font-weight:700}
+.ftrow .fd{font-size:var(--t-s);color:var(--muted);line-height:1.45;margin-top:2px}
 /* Settings lists twelve of these at once. Inline, the descriptions turn the card into a wall of
    prose nobody reads past the third row of; behind a button they are one tap away at the moment
    somebody actually wants them. Setup keeps its descriptions inline on purpose - that is where
@@ -1421,27 +1588,27 @@ td .taxmask{white-space:nowrap;padding:0 .22em}
   cursor:pointer;line-height:0;border-radius:50%;transition:color .15s,background .15s}
 .ftrow .fq .gi{width:18px;height:18px;vertical-align:middle}
 .ftrow.compact{align-items:center}
-.ftrow.compact .fn{font-size:14.5px}
+.ftrow.compact .fn{font-size:var(--t-base)}
 .ftrow.off{opacity:.62}
 /* 51×31 with a 27px knob - the size iOS uses, which is also a bigger tap target than the
    48×28 this was. The knob overshoots slightly on the way across; a linear slide is the
    thing that makes a copied switch feel like a copy. */
 .sw{flex:none;width:51px;height:31px;border-radius:31px;border:0;background:var(--line);position:relative;cursor:pointer;transition:background .2s;padding:0;margin-top:2px}
 .sw::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;
-  box-shadow:0 3px 8px rgba(0,0,0,.15),0 1px 1px rgba(0,0,0,.16);transition:transform .25s cubic-bezier(.32,1.35,.5,1)}
+  box-shadow:0 3px 8px rgba(0,0,0,.15),0 1px 1px rgba(0,0,0,.16);transition:transform .25s var(--ease-spring)}
 .sw.on{background:var(--brand)}
 .sw.on::after{transform:translateX(20px)}
 .sw:disabled{opacity:.4;cursor:not-allowed}
 /* setup room rows */
 .rmrow{display:grid;grid-template-columns:1fr 84px 88px 34px;gap:7px;align-items:center;margin-bottom:8px}
-.rmrow input,.rmrow select{padding:10px 9px;font-size:14px;border-radius:10px}
-.rmrow .rmx{background:none;border:0;color:var(--muted);font-size:19px;cursor:pointer;padding:2px}
-.rmhead{display:grid;grid-template-columns:1fr 84px 88px 34px;gap:7px;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);font-weight:700;margin-bottom:5px}
+.rmrow input,.rmrow select{padding:10px 9px;font-size:var(--t-base);border-radius:10px}
+.rmrow .rmx{background:none;border:0;color:var(--muted);font-size:var(--t-xl);cursor:pointer;padding:2px}
+.rmhead{display:grid;grid-template-columns:1fr 84px 88px 34px;gap:7px;font-size:var(--t-xs);text-transform:uppercase;letter-spacing:.03em;color:var(--muted);font-weight:700;margin-bottom:5px}
 /* live header preview */
 .brandprev{background:var(--brand);color:#fff;border-radius:13px;padding:12px 14px;display:flex;align-items:center;gap:9px;margin-top:12px}
-.brandprev .bpt{font-size:14px;font-weight:700;flex:none}
-.brandprev .bpn{font-size:11.5px;background:rgba(255,255,255,.18);padding:4px 10px;border-radius:20px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.setsum{background:var(--soft);border:1px solid var(--line);border-radius:13px;padding:12px 14px;font-size:13.5px;line-height:1.85}
+.brandprev .bpt{font-size:var(--t-base);font-weight:700;flex:none}
+.brandprev .bpn{font-size:var(--t-sm);background:rgba(255,255,255,.18);padding:4px 10px;border-radius:20px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.setsum{background:var(--soft);border:1px solid var(--line);border-radius:13px;padding:12px 14px;font-size:var(--t-s);line-height:1.85}
 .setsum div{display:flex;gap:10px;justify-content:space-between}
 .setsum b{color:var(--brand-dark);text-align:right}
 </style>
@@ -1607,7 +1774,7 @@ const MAX_SNAP=120;
 /* Data schema version, stamped on state and on every backup. Bump when a change would be
    misread by an older build, and add the matching step to migrate(). Data with no stamp is v1
    (everything written before versioning existed). */
-const SCHEMA_VERSION=11;
+const SCHEMA_VERSION=12;
 function stateSchemaVersion(st){const v=st&&st.meta&&+st.meta.schemaVersion;return v>0?v:1;}
 
 function clone(o){return JSON.parse(JSON.stringify(o))}
@@ -1651,6 +1818,11 @@ function normalize(st){
      new, but anyone already running with it keeps it: pulling a feature out from under someone
      mid-accreditation would lose them the one screen they're keeping records for. */
   if(sg.features.accreditation==null)sg.features.accreditation=hasData?true:false;
+  /* Supervising others (v12) is a minority need no session count can reveal, so it is OFF until
+     asked for - in setup or in Settings - exactly like peer supervision is asked rather than
+     offered. The one exception is data that already holds a supervisee: a restore must never
+     hide the screen those records are kept on. */
+  if(sg.features.supervising==null)sg.features.supervising=(st.clients||[]).some(c=>c&&c.kind==="supervisee");
   if(sg.cpdTarget==null)sg.cpdTarget=30;
   /* v8: does supervision count toward the CPD target? Both default TRUE, which is exactly what
      the app did before the question could be asked, so no existing install's figure moves. It is
@@ -1840,6 +2012,17 @@ function normalize(st){
      place. Import refuses it outright (see validateImport); this path only guards the unlikely
      case of a newer build having written to this device's own database.
 
+     v11 → v12 records how long a session actually ran (`s.mins`, blank = the practice length)
+     and that a "client" is in fact somebody the practitioner SUPERVISES (`client.kind`, plus
+     `client.mins`, the usual length of their supervision). Nothing migrates in place: absent
+     means a 50-minute-or-whatever-the-practice-says session with a client, which is what every
+     record written before this build meant. The bump is for the other direction and it matters
+     twice. A v11 build has no `kind`, so every session of supervision GIVEN in a v12 backup goes
+     back to being a clinical hour - into Form 3A, the 1:6 ratio and every report submitted to a
+     course, flattering the ratio in exactly the direction that hides a compliance problem. And a
+     v11 build has no `mins`, so a 90-minute session reads as 50 in every hours figure. Then it
+     saves both losses back. validateImport refuses it.
+
      v10 → v11 records WHO PAYS for a client's work (`client.payer`, and `payerId` naming the
      organisation where one does), and what the practitioner earns from employment in a given tax
      year (`settings.employmentYears`). Nothing migrates in place: absent means "the client pays
@@ -1946,6 +2129,7 @@ function noteSaveFailure(e){
   _saveFail={ts:Date.now(),msg:(e&&e.message)||String(e||"unknown error")};
   updateSaveBanner();
   try{Sfx.error();}catch(_){}
+  haptic("warn");
   // the caller toasts "Saved" immediately after awaiting us - correct it on the next tick
   setTimeout(()=>{try{toast("⚠️ NOT saved - see the red banner");}catch(_){}},60);
 }
@@ -2039,6 +2223,48 @@ function payerOfCode(code){return payerOf(clientOf(code));}
    readers used to add their own `rate > 0` test and two forgot, which is exactly how the Unpaid
    worklist came to hold every session of a practice that charges nothing. */
 function sessionEarns(s){return payerOfCode(s&&s.client)!=="none";}
+/* ============ Somebody you supervise, not a client ============
+   A practitioner who also supervises sees supervisees on the same rhythm, bills them the same way
+   and wants them in the same diary - so a supervisee is a CLIENT RECORD carrying `kind`, not a new
+   entity, and the fee history, the Unpaid worklist, invoices, chasers, the calendar and the whole
+   tax path work for them unchanged (a supervision fee is turnover in the same SA103 box).
+
+   What must NOT happen is that work counting as CLINICAL work. Supervision given is not client
+   contact: counted into Form 3A or the 1:6 ratio it flatters the ratio in exactly the direction
+   that hides a compliance problem, and counted into a report it inflates the hours on a form
+   somebody submits to a course. So every clinical reader goes through ONE question - the same
+   shape as sessionEarns() one axis over - and a session whose client record is missing is
+   clinical, which is what it was before this existed.
+
+   Absent = "client". An unrecognised stored key falls back the same way. */
+const CLIENT_KINDS={
+  client:    {n:"A client",     d:"Therapy. Counts toward your clinical hours, the supervision ratio, reports and client analytics."},
+  supervisee:{n:"A supervisee", d:"Somebody you supervise. Billed and diarised like a client, but kept out of every clinical figure."}
+};
+function kindOf(c){return c&&c.kind==="supervisee"?"supervisee":"client";}
+function isSupervisee(c){return kindOf(c)==="supervisee";}
+/* THE choke point for the clinical half. derive() reads it as `d.clinical`; loops that do not
+   already have a derived row use clinicalCodeTest() so they do not scan the client list per session. */
+function sessionClinical(s){return !isSupervisee(clientOf(s&&s.client));}
+function clinicalCodeTest(){
+  const sup=new Set();
+  (S.clients||[]).forEach(c=>{if(isSupervisee(c))sup.add((c.code||"").toLowerCase());});
+  return s=>!sup.has(((s&&s.client)||"").toLowerCase());
+}
+function clinicalClients(){return (S.clients||[]).filter(c=>!isSupervisee(c));}
+function supervisees(){return (S.clients||[]).filter(isSupervisee);}
+/* How long a session ran, in minutes. Its own recorded length wins; then, for a supervisee only,
+   the usual length on their record; then the practice-wide setting. The supervisee rung is
+   deliberately NOT offered to clinical clients: every clinical hours figure should move only when
+   somebody records a length against a session, never because a client record was edited. Blank
+   is stored as nothing, never as 50 - a stored default would freeze the session against a later
+   change to the practice setting. */
+function sessionLen(s,cl){
+  const own=+(s&&s.mins); if(own>0)return own;
+  if(cl===undefined)cl=clientOf(s&&s.client);
+  const u=isSupervisee(cl)?+(cl.mins):0;
+  return u>0?u:sessionMins();
+}
 /* Does anybody at all pay this practice per session? Answers the practice-wide version for the
    screens that have to decide whether to exist - the Money section of Trends, the revenue trend on
    Home - rather than draw a confident chart of zeroes. A practice with no clients yet has not said
@@ -2123,6 +2349,9 @@ function derive(s){
   const cl=S.clients.find(c=>(c.code||"").toLowerCase()===(s.client||"").toLowerCase());
   const payer=payerOf(cl);
   const earns=payer!=="none";
+  /* Supervision GIVEN is real work and real income, never clinical work - see sessionClinical(). */
+  const clinical=!isSupervisee(cl);
+  const mins=sessionLen(s,cl||null);
   const clientPaid=!!s.paidDate;
   const past=d?d<t:false;
   /* `past` is a whole-DAY test and it is what money runs on: a payment is not overdue until the
@@ -2130,7 +2359,7 @@ function derive(s){
      actually finished - and it is what the Incomplete worklist runs on, because "did it go
      ahead?" cannot be answered before it has. The two differ only for sessions dated today,
      which is exactly the case somebody logging this morning's client falls into. */
-  const ended=sessionEnded(s,d,t);
+  const ended=sessionEnded(s,d,t,mins);
   const overdue=earns&&past&&!clientPaid;
   let roomBooked = s.room==="-"||s.location==="At home" ? "n/a" : (s.room?"Y":"N");
   /* Three ways a session can have no room fee to settle, and they all mean the same thing to
@@ -2166,7 +2395,7 @@ function derive(s){
   if(d){ const tm=(s.time||"00:00").split(":"); const dt=new Date(d); dt.setHours(+tm[0]||0,+tm[1]||0);
     cancelBy=addDays(dt,-3); canCancel=cancelBy>new Date(); }
   return {rate,fullRate,cancelPct,cancelKind:(s.cancelKind||(isLateCancel(s)?"late":null)),
-    roomRate,due,roomPaidNA,roomOwed,earns,payer,clientPaid,past,ended,overdue,roomBooked,roomDue,status,category,complete,cancelBy,canCancel,
+    roomRate,due,roomPaidNA,roomOwed,earns,payer,clinical,mins,clientPaid,past,ended,overdue,roomBooked,roomDue,status,category,complete,cancelBy,canCancel,
     week:d?weekNum(d):"",year:d?d.getFullYear():"",taxYear:d?taxYear(d):""};
 }
 /* The Incomplete worklist, in ONE place - the list itself, the count the attention feed raises
@@ -2186,8 +2415,131 @@ function el(html){const t=document.createElement("template");t.innerHTML=html.tr
 function emptyNote(text){return '<p class="muted small center" style="padding:18px">'+text+'</p>';}
 let _toastT;
 function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("show");clearTimeout(_toastT);_toastT=setTimeout(()=>t.classList.remove("show"),2200)}
-function openSheet(title,bodyEl){$("#sheetTitle").textContent=title;const b=$("#sheetBody");b.innerHTML="";b.appendChild(bodyEl);$("#sheet").classList.add("open")}
-function closeSheet(){$("#sheet").classList.remove("open")}
+/* ============ Motion & touch helpers (Sep 2026) ============
+   motionOK() is the one JS answer to "may this animate?". Two things say no. The reader's own
+   Reduce Motion setting - the CSS honours it with media queries, and anything script-driven has
+   to ask here. And a browser under automation (navigator.webdriver): the behaviour tests drive
+   real screens and read the DOM straight after a click, and everything gated on this is the
+   part of the motion that would make a synchronous step asynchronous - a view transition runs
+   its update a frame later, a closing sheet lingers for a quarter of a second. CSS-only
+   decoration is NOT gated on it and runs under test like anywhere else. */
+function motionOK(){
+  try{ if(navigator.webdriver)return false;
+       return !(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
+  catch(e){ return false; }
+}
+/* haptic(kind) - a tap the reader can feel. iPhone only, through window.GWHapticsNative, which the
+   native block declares when the plugin has the method; everywhere else it does nothing. The web
+   Vibration API was deliberately not used: Android's buzz is a different, coarser thing, iOS
+   Safari has none, and a PWA that buzzes is a PWA people switch off.
+   Kinds: "select" (moving between options), "light" (a switch, a tick), "medium" (something
+   committed with a gesture), "success", "warn". Keep them rare - a tap on every tap is noise. */
+function haptic(kind){ try{ const h=window.GWHapticsNative; if(h)h(kind||"light"); }catch(e){} }
+document.addEventListener("click",e=>{
+  const t=e.target&&e.target.closest&&e.target.closest(".sw,.tgl");
+  if(t&&!t.disabled)haptic("light");
+},true);
+document.addEventListener("change",e=>{
+  const t=e.target; if(t&&t.type==="checkbox")haptic(t.checked?"light":"select");
+},true);
+/* Cards on a freshly opened screen arrive one after another. Only what is on the first screenful
+   (nobody sees the rest arrive), at most ten, and a nested card is carried by its parent. The
+   class comes OFF when the animation ends: a finished animation with fill-mode `both` still
+   holds its final transform, and that would outrank every `:active` press-scale on a card for as
+   long as the screen is open. */
+function staggerIn(root){
+  if(!root||!motionOK())return;
+  const vh=window.innerHeight||800; let i=0;
+  const picks=[];
+  root.querySelectorAll(".card,.kpi").forEach(el=>{
+    if(i>=10)return;
+    if(picks.some(p=>p.contains(el)))return;
+    const r=el.getBoundingClientRect(); if(r.height===0||r.top>vh)return;
+    picks.push(el); el.style.setProperty("--i",i++);
+  });
+  picks.forEach(el=>{
+    el.classList.add("stagger");
+    const done=()=>{el.classList.remove("stagger");el.style.removeProperty("--i");};
+    el.addEventListener("animationend",function h(ev){if(ev.target===el&&ev.animationName==="rise"){el.removeEventListener("animationend",h);done();}});
+    setTimeout(done,1400);
+  });
+}
+/* The page behind a sheet steps back (CSS: html.sheet-up). Each element scales towards the
+   middle of the SCREEN, so header and content shrink together instead of each towards its own
+   centre - <main> can be several screens tall, and its own centre may be nowhere near the eye. */
+let _stackT=null;
+function sheetStack(on){
+  const de=document.documentElement;
+  if(!on){ if(!de.classList.contains("sheet-up"))return;
+    de.classList.remove("sheet-up"); de.classList.add("sheet-down");
+    clearTimeout(_stackT); _stackT=setTimeout(()=>de.classList.remove("sheet-down"),520); return; }
+  if(!motionOK()||wideLayout())return;
+  const mid=(window.innerHeight||800)/2;
+  document.querySelectorAll(".app>header.top,.app>.bkbar,.app>main").forEach(el=>{
+    const r=el.getBoundingClientRect(); el.style.transformOrigin="50% "+Math.round(mid-r.top)+"px";
+  });
+  clearTimeout(_stackT); de.classList.remove("sheet-down"); de.classList.add("sheet-up");
+}
+/* Tab-bar taps cross-fade through the View Transitions API where there is one (Chrome, Safari 18+):
+   the old screen slides out as the new one slides in, in the direction of travel. The header and
+   the tab bar are named and excluded from the fade (see the ::view-transition CSS) so the pill can
+   be seen gliding in the LIVE bar rather than two snapshots of it dissolving into each other.
+   Everything else - a deep link, a swipe, go() from code - takes the plain path, which is
+   synchronous, and whose screen still slides in by CSS (.from-r/.from-l). */
+let _vtNav=false;
+function navTo(tab){
+  if(tab!==cur)haptic("select");
+  const dir=tabDir(cur,tab);
+  if(!dir||!motionOK()||!document.startViewTransition){go(tab);return;}
+  const de=document.documentElement;
+  de.classList.add(dir>0?"vt-fwd":"vt-back");
+  try{
+    const vt=document.startViewTransition(()=>{_vtNav=true;try{go(tab);}finally{_vtNav=false;}});
+    vt.finished.finally(()=>de.classList.remove("vt-fwd","vt-back"));
+  }catch(e){de.classList.remove("vt-fwd","vt-back");go(tab);}
+}
+/* +1 moving right along the bar, -1 left, 0 when either end is not on the bar (Settings on a
+   phone, a tab switched off) - no direction is better than a wrong one. */
+function tabDir(from,to){
+  if(!from||from===to)return 0;
+  const ids=visibleTabs().map(t=>t.id).concat("settings");
+  const a=ids.indexOf(from), b=ids.indexOf(to);
+  return (a<0||b<0)?0:(b>a?1:-1);
+}
+/* The gliding pill behind the active tab - see the CSS. FLIP: the bar's buttons were all just
+   rebuilt, so the pill is first put back exactly where it was (no transition), then released to
+   the new tab; the browser animates the difference. The first placement, a resize and a tab that
+   is not on the bar do not animate. */
+let _pillAt=null;
+function placeTabPill(animate){
+  const nav=$("#tabs"); if(!nav)return;
+  let pill=nav.querySelector(".tabpill");
+  if(!pill){pill=document.createElement("i");pill.className="tabpill";pill.setAttribute("aria-hidden","true");nav.insertBefore(pill,nav.firstChild);}
+  const on=nav.querySelector("button.on");
+  if(!on||!on.offsetWidth){nav.classList.remove("haspill");return;}
+  const to={x:on.offsetLeft,y:on.offsetTop,w:on.offsetWidth,h:on.offsetHeight};
+  const set=p=>{nav.style.setProperty("--pill-x",p.x+"px");nav.style.setProperty("--pill-y",p.y+"px");
+                nav.style.setProperty("--pill-w",p.w+"px");nav.style.setProperty("--pill-h",p.h+"px");};
+  const from=_pillAt;
+  pill.classList.add("still");
+  if(animate&&from&&nav.classList.contains("haspill")){ set(from); void pill.offsetWidth; pill.classList.remove("still"); set(to); }
+  else { set(to); void pill.offsetWidth; pill.classList.remove("still"); }
+  _pillAt=to; nav.classList.add("haspill");
+}
+window.addEventListener("resize",()=>{try{placeTabPill(false);}catch(e){}});
+function openSheet(title,bodyEl){$("#sheetTitle").textContent=title;const b=$("#sheetBody");b.innerHTML="";b.appendChild(bodyEl);
+  const sh=$("#sheet"),was=sh.classList.contains("open");
+  clearTimeout(_closeT);sh.classList.remove("closing");$("#sheet .sheet-inner").style.transform="";
+  sh.classList.add("open");if(!was)sheetStack(true);}
+/* "open" comes off synchronously - every caller and sheetPromise's observer depend on that. The
+   slide away is a separate inert `.closing` state, played only for a sheet that was really up. */
+let _closeT=null;
+function closeSheet(){const sh=$("#sheet");const was=sh.classList.contains("open");
+  sh.classList.remove("open");sheetStack(false);
+  if(!was||!motionOK())return;
+  const inner=$("#sheet .sheet-inner");
+  sh.classList.add("closing");clearTimeout(_closeT);
+  _closeT=setTimeout(()=>{sh.classList.remove("closing");inner.style.transform="";},300);}
 $("#sheetClose").onclick=closeSheet;
 $("#sheet").addEventListener("click",e=>{if(e.target.id==="sheet")closeSheet()});
 /* Swipe-down-to-close. Touch/pen only - a mouse drag is text selection, not a gesture, and
@@ -2198,25 +2550,34 @@ $("#sheet").addEventListener("click",e=>{if(e.target.id==="sheet")closeSheet()})
 (function(){
   const SHEET_CLOSE_PX=100;
   const inner=$("#sheet .sheet-inner");
-  let dragId=null,startY=0,dy=0;
+  let dragId=null,startY=0,dy=0,lastY=0,lastT=0,vel=0,armed=false;
   function draggable(t){return !t.closest("input,textarea,select,button,a,canvas,[contenteditable],.rawscroll,.svgwrap,.hmgrid")}
   inner.addEventListener("pointerdown",e=>{
     if(e.pointerType==="mouse"||inner.scrollTop>0||!draggable(e.target))return;
-    dragId=e.pointerId;startY=e.clientY;dy=0;
+    dragId=e.pointerId;startY=e.clientY;dy=0;lastY=e.clientY;lastT=e.timeStamp;vel=0;armed=false;
     inner.setPointerCapture(dragId);
     inner.style.transition="none";inner.style.touchAction="none";
   });
   inner.addEventListener("pointermove",e=>{
     if(dragId===null||e.pointerId!==dragId)return;
-    dy=Math.max(0,e.clientY-startY);
+    /* velocity over the last move, smoothed, in px per ms - a flick closes even when short */
+    const dt=Math.max(1,e.timeStamp-lastT); vel=vel*0.4+((e.clientY-lastY)/dt)*0.6; lastY=e.clientY; lastT=e.timeStamp;
+    const raw=e.clientY-startY;
+    /* upward: rubber-band. The sheet gives a little and resists, rather than stopping dead. */
+    dy=raw>=0?raw:-Math.pow(-raw,0.6);
     inner.style.transform=dy?`translateY(${dy}px)`:"";
+    const past=dy>SHEET_CLOSE_PX; if(past!==armed){armed=past;if(past)haptic("select");}
   });
   function endDrag(e){
     if(dragId===null||e.pointerId!==dragId)return;
     inner.releasePointerCapture(dragId);dragId=null;
-    inner.style.transition="";inner.style.touchAction="";inner.style.transform="";
-    if(dy>SHEET_CLOSE_PX)closeSheet();
-    dy=0;
+    inner.style.touchAction="";
+    const close=dy>SHEET_CLOSE_PX||(dy>24&&vel>0.55);
+    if(close){inner.style.transition="";closeSheet();   /* the closing slide starts from where the finger left it */
+      if(!$("#sheet").classList.contains("closing"))inner.style.transform="";}
+    else{inner.style.transition="transform .42s var(--ease-firm)";inner.style.transform="";
+      setTimeout(()=>{if(dragId===null)inner.style.transition="";},450);}
+    dy=0;vel=0;armed=false;
   }
   inner.addEventListener("pointerup",endDrag);
   inner.addEventListener("pointercancel",endDrag);
@@ -2965,6 +3326,7 @@ const Confetti=(function(){
 /* ---- Celebration overlay + floating reward pill ---- */
 let _celT;
 function celebrate(o){o=o||{};
+  haptic("success");
   if(!feat("gamify")){ // celebrations switched off - still acknowledge the action quietly
     if(o.title)toast((o.emoji?o.emoji+" ":"")+o.title);
     if(o.sound==="record")Sfx.record();else Sfx.complete();
@@ -3220,7 +3582,8 @@ function renderTabs(){const overdue=S.sessions.filter(s=>derive(s).overdue).leng
   $("#tabs").innerHTML=visibleTabs().map(t=>`<button data-tab="${t.id}" class="${t.id===cur?"on":""}">
     <span class="ic">${t.ic}${t.id==="sessions"&&overdue?`<span class="badge tabbadge" aria-label="${overdue} overdue">${overdue}</span>`:""}</span><span>${t.label}</span></button>`).join("")+
     `<button data-tab="settings" class="navset${cur==="settings"?" on":""}"><span class="ic">${SETTINGS_IC}</span><span>Settings</span></button>`;
-  $("#tabs").querySelectorAll("button").forEach(b=>b.onclick=()=>go(b.dataset.tab));
+  $("#tabs").querySelectorAll("button").forEach(b=>b.onclick=()=>navTo(b.dataset.tab));
+  try{placeTabPill(true);}catch(e){}
   paintFab();
 }
 /* Home already carries a New session button of its own, so the floating one beside it was the
@@ -3279,6 +3642,7 @@ function go(tab,opts){
      answered it. Applied AFTER the reset above, or it would be wiped by it. */
   if(tab==="settings"&&opts.openGroup)_setGrpOpen[opts.openGroup]=true;
   const keep=opts.keepScroll?(window.scrollY||window.pageYOffset||0):null;
+  const prevTab=cur;
   cur=tab;
   try{tyMemoClear();}catch(e){}
   try{renderTabs();applyBranding();}catch(e){console.error("Chrome render failed",e);}
@@ -3289,6 +3653,14 @@ function go(tab,opts){
   const m=main();
   try{
     m.innerHTML="";m.appendChild(VIEWS[tab]());
+    /* how the new screen arrives: not at all on a redraw of the screen already there (a save,
+       a segment toggle), by the View Transition when navTo() started one, otherwise sliding in
+       from the direction of travel along the tab bar */
+    const vw=m.firstElementChild;
+    if(vw&&vw.classList){
+      if(keep!=null||_vtNav||prevTab===tab)vw.classList.add("quiet");
+      else{const d=tabDir(prevTab,tab);if(d)vw.classList.add(d>0?"from-r":"from-l");}
+    }
   }catch(e){
     console.error("Render failed for tab:",tab,e);
     try{crashScreen(e,tab);}catch(e2){m.innerHTML='<div class="card"><h2>Something went wrong</h2><p class="small">Reload the app.</p></div>';}
@@ -3296,6 +3668,7 @@ function go(tab,opts){
   if(keep!=null)window.scrollTo(0,Math.min(keep,Math.max(0,document.body.scrollHeight-window.innerHeight)));
   else window.scrollTo(0,0);
   paintFab();
+  if(keep==null&&prevTab!==tab)try{staggerIn(m.firstElementChild);}catch(e){}
   if(opts.focus)focusCard(opts.focus);
   try{updateBackupBanner();updateSaveBanner();}catch(e){}
   try{coachMaybeTip(tab);}catch(e){}
@@ -3561,7 +3934,7 @@ VIEWS.home=function(){
     mk("⚡",(rec.mostClearedAtOnce||0),"Most cleared at once",!rec.mostClearedAtOnce)+
     mk("✅",goals.complete,"Sessions completed",!goals.complete)+
     '</div></div>';
-  const topClients=S.clients.map(c=>({code:c.code,_id:c._id,n:cCounts[c.code.toLowerCase()]||0,status:c.status})).filter(x=>x.n>=6).sort((a,b)=>b.n-a.n).slice(0,3);
+  const topClients=clinicalClients().map(c=>({code:c.code,_id:c._id,n:cCounts[c.code.toLowerCase()]||0,status:c.status})).filter(x=>x.n>=6).sort((a,b)=>b.n-a.n).slice(0,3);
   const loyalCard=topClients.length?'<div class="card"><h2>Longstanding clients</h2>'+topClients.map((x,i)=>{const medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":"•";return'<div class="list-item" data-cid="'+x._id+'"><div class="li-main"><div class="li-title">'+medal+' '+esc(x.code)+'</div><div class="li-sub">'+esc(x.status||"")+'</div></div><div class="li-right"><b style="color:var(--brand-dark)">'+x.n+'</b> <span class="small muted">sessions</span></div></div>';}).join("")+'</div>':'';
   const weekRev={};
   der.forEach(x=>{const dd=parseD(x.s.date);if(!dd||!x.d.earns)return;const k=isoD(weekStart(x.s.date));weekRev[k]=(weekRev[k]||0)+(x.d.rate||0);});
@@ -3863,7 +4236,8 @@ function swipeSeg(dir){
   const i=btns.findIndex(b=>b.classList.contains("on"));
   if(i<0)return false;
   const j=i+dir;
-  if(j<0||j>=btns.length){segSlide(id,dir,"segbump");return false;}
+  if(j<0||j>=btns.length){segSlide(id,dir,"segbump");haptic("light");return false;}
+  haptic("select");
   btns[j].click();
   segSlide(id,dir,"segslide");
   return true;
@@ -4091,17 +4465,17 @@ function attendConfirmed(s){return !!(s&&s.attendConfirmed);}
 /* When a session finished, to the minute - its start plus the practice's session length. Null
    when there is no time on the record, which is a real shape: an imported row from a sheet with
    no Time column has a date and nothing else. */
-function sessionEndsAt(s,d){
+function sessionEndsAt(s,d,mins){
   d=d||parseD(s&&s.date); if(!d)return null;
   const tm=String((s&&s.time)||"").match(/^(\d{1,2}):(\d{2})/); if(!tm)return null;
   const dt=new Date(d); dt.setHours(+tm[1]||0,+tm[2]||0,0,0);
-  return new Date(dt.getTime()+sessionMins()*60000);
+  return new Date(dt.getTime()+(mins||sessionLen(s))*60000);
 }
 /* Has this session actually happened yet? The Incomplete worklist's clock - see derive().ended.
    A session with no time recorded has no minute to test, so it falls back to the whole-day test
    `past` uses, which is the only honest reading of a date with nothing else on it. */
-function sessionEnded(s,d,t){
-  const e=sessionEndsAt(s,d);
+function sessionEnded(s,d,t,mins){
+  const e=sessionEndsAt(s,d,mins);
   if(e)return e<=new Date();
   d=d||parseD(s&&s.date);
   return d?d<(t||today()):false;
@@ -4170,10 +4544,13 @@ function cancelPctFor(s){
   return (v==null||isNaN(+v))?100:Math.max(0,Math.min(100,+v));
 }
 /* clinical (client-contact) hours from logged sessions: each session that has taken place = 1 hr (50-min min); missed / late-cancelled excluded */
-function clinicalStats(){const t=today();let inP=0,onl=0;
+function clinicalStats(){const t=today();let inP=0,onl=0,given=0;
+  const clin=clinicalCodeTest();
   S.sessions.forEach(s=>{const d=parseD(s.date);if(!d||d>t||isCancelled(s))return;
+    /* Supervision you GIVE is not client contact - counted here it would flatter the 1:6 ratio. */
+    if(!clin(s)){given++;return;}
     if((s.mode||"")==="Online")onl++;else inP++;});
-  return {inPerson:inP,online:onl,logged:inP+onl};}
+  return {inPerson:inP,online:onl,logged:inP+onl,given:given};}
 /* ===== CPD hours =====
    What nearly every practising therapist actually needs: hours done in the last 12 months against
    their annual CPD requirement. Supervision and peer supervision both count toward it. The Form 3A
@@ -4377,7 +4754,7 @@ function mountAccreditation(host){if(!host||!feat("accreditation"))return;
         :ratio<=6?'<div class="vmsg ok" style="margin-top:10px">✓ Within the 1:6 requirement - 1 supervision hr per '+r1(ratio)+' client hrs.</div>'
         :'<div class="vmsg err" style="margin-top:10px">'+gi("blocked")+' Over the 1:6 limit - '+r1(clinical)+' clinical hrs need ≥ '+r1(minSup)+' supervision hrs ('+r1(minSup-sup)+' more).</div>')+
       '<div class="acc-work">'+
-        '<div><b>Clinical</b> = logged sessions '+cs.logged+(other?' + other '+r1(other):'')+' = <b>'+r1(clinical)+' hrs</b> <span class="muted">(late cancellations excluded)</span></div>'+
+        '<div><b>Clinical</b> = logged sessions '+cs.logged+(other?' + other '+r1(other):'')+' = <b>'+r1(clinical)+' hrs</b> <span class="muted">(late cancellations excluded'+(cs.given?'; '+cs.given+' session'+(cs.given===1?'':'s')+' of supervision you gave are not clinical hours and are left out':'')+')</span></div>'+
         '<div><b>Supervision</b> = logged sessions '+supSess+' + training '+r1(train)+' + placement '+r1(place)+' = <b>'+r1(sup)+' hrs</b></div>'+
         (peer?'<div><b>Peer supervision</b> = '+r1(peer)+' hrs <span class="muted">(counted in your total hours, never in the ratio)</span></div>':'')+
         '<div><b>Ratio</b> = '+r1(clinical)+' ÷ '+r1(sup)+' = <b>'+(ratio!=null?r1(ratio):'-')+'</b> &nbsp;(must be ≤ 6; lower = more supervision)</div>'+
@@ -4480,7 +4857,10 @@ function reportCtx(spec){
      delivered, however firmly it is in the diary. */
   const end=rg.to>t?t:rg.to;
   const inRange=d=>{const x=d?parseD(d):null;return !!x&&x>=rg.from&&x<=end;};
+  /* Supervision GIVEN never reaches a report: every section here is client work, and a supervisee's
+     sessions counted as client hours would inflate a form somebody submits to a course. */
   const sess=(S.sessions||[]).filter(s=>inRange(s.date)).map(s=>({s:s,d:derive(s)}))
+    .filter(x=>x.d.clinical)
     .sort((a,b)=>parseD(a.s.date)-parseD(b.s.date));
   return {
     spec:spec, range:rg, end:end, inRange:inRange,
@@ -4534,36 +4914,58 @@ function reportHourMode(spec){
   return REPORT_HOUR_MODES.some(x=>x[0]===m)?m:"clinical";   /* an unknown stored mode falls back */
 }
 function reportHours(ctx){
-  const n=ctx.attended.length, mins=sessionMins(), mode=reportHourMode(ctx.spec);
+  const n=ctx.attended.length, mode=reportHourMode(ctx.spec);
   const plural=n===1?"":"s";
+  /* Each session's own length (v12): what was recorded against it, else the practice length. */
+  const lenOf=x=>(x.d&&x.d.mins)||sessionLen(x.s);
+  const lens=ctx.attended.map(lenOf);
+  const total=lens.reduce((a,b)=>a+b,0);
+  const own=ctx.attended.filter(x=>+(x.s&&x.s.mins)>0).length;
+  const uniform=!n||lens.every(m=>m===lens[0]);
+  const mins=n?(uniform?lens[0]:Math.round(total/n)):sessionMins();
+  /* Hours for ONE session in the mode in force, so a per-client row is a sum of these and can
+     never disagree with the headline built from the same function. */
+  const of=x=>mode==="actual"?lenOf(x)/60:mode==="prorata"?lenOf(x)/CLINICAL_HOUR_MINS:1;
   let hours, basis;
   if(mode==="actual"){
-    hours=n*mins/60;
-    basis=n+" attended session"+plural+" × "+mins+" minutes of elapsed time = "+hrsLabel(hours);
+    hours=total/60;
+    basis=uniform
+      ? n+" attended session"+plural+" × "+mins+" minutes of elapsed time = "+hrsLabel(hours)
+      : n+" attended sessions, "+total+" minutes of elapsed time between them = "+hrsLabel(hours);
   }else if(mode==="prorata"){
-    const per=mins/CLINICAL_HOUR_MINS;
-    hours=n*per;
-    basis=n+" attended session"+plural+" × "+mins+" minutes ÷ the "+CLINICAL_HOUR_MINS+
-      "-minute clinical hour = "+r1(per)+" clinical hours each = "+hrsLabel(hours);
+    hours=total/CLINICAL_HOUR_MINS;
+    basis=uniform
+      ? n+" attended session"+plural+" × "+mins+" minutes ÷ the "+CLINICAL_HOUR_MINS+
+        "-minute clinical hour = "+r1(mins/CLINICAL_HOUR_MINS)+" clinical hours each = "+hrsLabel(hours)
+      : n+" attended sessions, "+total+" minutes between them ÷ the "+CLINICAL_HOUR_MINS+
+        "-minute clinical hour = "+hrsLabel(hours);
   }else{
     hours=n;
     basis=n+" attended session"+plural+" counted as one clinical hour each — the "+
-      CLINICAL_HOUR_MINS+"-minute therapeutic hour, which is what your sessions are set to"+
-      (mins===CLINICAL_HOUR_MINS?"":" (yours are "+mins+" minutes)")+".";
+      CLINICAL_HOUR_MINS+"-minute therapeutic hour"+
+      (uniform?(", which is what your sessions are set to"+(mins===CLINICAL_HOUR_MINS?"":" (yours are "+mins+" minutes)")):
+        " (your sessions vary in length)")+".";
   }
-  /* A practice whose sessions are not a standard hour, still counting one hour each. The
-     therapist is the only person who can know which their course wants, so say it, don't fix it. */
-  const standard=mins>=45&&mins<=60;
-  const mismatch=(mode==="clinical"&&!standard)
-    ? ("Your sessions are "+mins+" minutes, which is not the standard 50-to-60-minute hour, and "+
-       "this report is counting each of them as one clinical hour. Pro rata they would be "+
-       hrsLabel(n*mins/CLINICAL_HOUR_MINS)+". Check which your course asks for.")
+  /* Sessions that are not a standard hour, still counting one hour each. The therapist is the
+     only person who can know which their course wants, so say it, don't fix it. */
+  const odd=lens.filter(m=>m<45||m>60).length;
+  const mismatch=(mode==="clinical"&&n&&odd)
+    ? ((uniform?"Your sessions are "+mins+" minutes, which is not":odd+" of these sessions "+(odd===1?"is":"are")+" not")+
+       " the standard 50-to-60-minute hour, and this report is counting each of them as one clinical hour. "+
+       "Pro rata they would be "+hrsLabel(total/CLINICAL_HOUR_MINS)+". Check which your course asks for.")
+    : (mode==="clinical"&&!n&&!(sessionMins()>=45&&sessionMins()<=60))
+    ? ("Your sessions are "+sessionMins()+" minutes, which is not the standard 50-to-60-minute hour, and "+
+       "this report counts each session as one clinical hour. Check which your course asks for.")
     : "";
   return {
-    sessions:n, mins:mins, mode:mode, hours:hours, basis:basis, mismatch:mismatch,
-    caveat:"GroundWork records a session, not its length, so every session is counted at the "+
-      "practice session length ("+mins+" minutes). A session that actually ran longer or shorter "+
-      "is not reflected here."
+    sessions:n, mins:mins, total:total, own:own, uniform:uniform, mode:mode, hours:hours, of:of,
+    basis:basis, mismatch:mismatch,
+    caveat:own
+      ? (own+" of "+n+" session"+plural+" carr"+(own===1?"ies":"y")+" its own recorded length; the rest are counted "+
+         "at the practice session length ("+sessionMins()+" minutes).")
+      : ("GroundWork counts every session at the practice session length ("+sessionMins()+" minutes) unless a "+
+         "length was recorded against it. A session that actually ran longer or shorter and was not recorded is "+
+         "not reflected here.")
   };
 }
 
@@ -4608,15 +5010,15 @@ const REPORT_SECTIONS={
       if(!ctx.attended.length)return null;
       /* One session's worth of hours, whichever mode is in force — derived from the block
          total so a per-client row can never disagree with the headline above it. */
-      const h=reportHours(ctx), per=h.sessions?(h.hours/h.sessions):0;
+      const h=reportHours(ctx);
       const by={};
       ctx.attended.forEach(x=>{const c=(x.s.client||"—").trim()||"—";
-        const e=by[c]||(by[c]={n:0,first:null,last:null,modes:{}});
-        e.n++;const d=parseD(x.s.date);
+        const e=by[c]||(by[c]={n:0,h:0,first:null,last:null,modes:{}});
+        e.n++;e.h+=h.of(x);const d=parseD(x.s.date);
         if(!e.first||d<e.first)e.first=d; if(!e.last||d>e.last)e.last=d;
         const m=(x.s.mode||"").trim();if(m)e.modes[m]=(e.modes[m]||0)+1;});
       const rows=Object.keys(by).sort((a,b)=>by[b].n-by[a].n||a.localeCompare(b))
-        .map(c=>[c,String(by[c].n),String(r1(by[c].n*per)),fmtRD(by[c].first),fmtRD(by[c].last)]);
+        .map(c=>[c,String(by[c].n),String(r1(by[c].h)),fmtRD(by[c].first),fmtRD(by[c].last)]);
       return {title:"Client work by client",
         table:{head:["Client","Sessions","Hours","First","Last"],rows:rows,align:["","num","num","",""]},
         note:"Clients appear by their confidential code only. No names, no fees and nothing clinical is included."};
@@ -4854,7 +5256,7 @@ function reportDocHTML(built){
   const t=built.generated, sp=built.spec, tpl=built.template;
   const body=built.blocks.map(b=>reportBlockHTML(b,true)).join("");
   const html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+esc(sp.name||"Practice report")+'</title><style>'+
-    'body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1E2A26;margin:40px;font-size:13px}'+
+    'body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1E2A26;margin:40px;font-size:13px;font-variant-numeric:tabular-nums}'+
     'h1{font-size:22px;color:'+PD+';margin:0}h2{font-size:15px;color:'+PD+';margin:22px 0 6px;border-bottom:1px solid #E6ECEA;padding-bottom:4px}'+
     '.sub{color:#6E7E78;font-size:12px}'+
     '.head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid '+PB+';padding-bottom:14px;margin-bottom:6px}'+
@@ -5052,6 +5454,9 @@ function validateSession(m){
   const cl=m.client?S.clients.find(c=>(c.code||"").toLowerCase()===(m.client||"").toLowerCase()):null;
   const sameClient=s=>(s.client||"").toLowerCase()===(m.client||"").toLowerCase();
   const hasNum=m.num!==""&&m.num!=null;
+  /* BLOCK: a recorded length outside anything a session could be. Blank is fine - it means the usual. */
+  if(m.mins!=null&&m.mins!==""&&!(+m.mins>=5&&+m.mins<=600))
+    errors.push({code:"mins",msg:"Length has to be between 5 and 600 minutes - or leave it blank for the usual."});
   /* BLOCK: exact time clash (can't be in two places at once) */
   if(m.date&&m.time){const clash=S.sessions.find(s=>s._id!==id&&s.date===m.date&&(s.time||"")===(m.time||""));
     if(clash)errors.push({code:"timeclash",msg:"Time clash with "+esc(clash.client||"another session")+" at "+esc(m.time)+" on "+fmtDMY(m.date)});}
@@ -5458,6 +5863,7 @@ function supervisionPanel(){
   v.innerHTML='<div class="seg mb" id="suptab" style="display:inline-flex"><button data-st="log" class="'+(supTab==="log"?"on":"")+'">Log</button>'+
     (feat("peer")?'<button data-st="peer" class="'+(supTab==="peer"?"on":"")+'">Peer</button>':'')+
     '<button data-st="cpd" class="'+(supTab==="cpd"?"on":"")+'">CPD</button>'+
+    (feat("supervising")?'<button data-st="giving" class="'+(supTab==="giving"?"on":"")+'">Supervising</button>':'')+
     '<button data-st="metrics" class="'+(supTab==="metrics"?"on":"")+'">Insights</button></div><div id="supbody"></div>';
   const sb=v.querySelector("#supbody");
   {
@@ -5517,6 +5923,49 @@ function supervisionPanel(){
       sb.querySelector("#addCpd").onclick=()=>cpdForm(null);
       sb.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>cpdForm((S.cpd||[]).find(x=>x._id===li.dataset.id)));
     }
+    /* Supervision GIVEN. The other three tabs are supervision received; this one is the other side
+       of the table. Supervisees are client records (see kindOf), so this is a view over them
+       rather than a log of its own - the sessions are logged, billed and chased where every
+       session is. */
+    function drawGiving(){
+      const t=today(), from=addYears(t,-1), list=supervisees();
+      const lc=new Set(list.map(c=>(c.code||"").toLowerCase()));
+      const rows=derivedSessions().filter(x=>lc.has((x.s.client||"").toLowerCase()));
+      const yr=rows.filter(x=>{const d=parseD(x.s.date);return d&&d>from&&d<=t;});
+      const went=yr.filter(x=>!isCancelled(x.s));
+      const hrs=went.reduce((a,x)=>a+x.d.mins,0)/60;
+      const billed=yr.filter(x=>x.d.earns).reduce((a,x)=>a+(x.d.rate||0),0);
+      const current=list.filter(c=>clientCategory(c.status)!=="Finished");
+      const last={},n={};
+      rows.forEach(x=>{const k=(x.s.client||"").toLowerCase(),d=parseD(x.s.date);if(!d||d>t||isCancelled(x.s))return;
+        n[k]=(n[k]||0)+1; if(!last[k]||d>last[k])last[k]=d;});
+      const next={};
+      rows.forEach(x=>{const k=(x.s.client||"").toLowerCase(),d=parseD(x.s.date);if(!d||d<=t||isCancelled(x.s))return;
+        if(!next[k]||d<next[k])next[k]=d;});
+      const li=c=>{const k=(c.code||"").toLowerCase();
+        return '<div class="list-item" data-id="'+esc(c._id)+'"><div class="li-main">'+
+          '<div class="li-title">'+esc(c.code)+' <span class="chip '+(clientCategory(c.status)==="Finished"?"na":"y")+'">'+esc(c.status||"")+'</span></div>'+
+          '<div class="li-sub">'+esc(c.frequency||"")+' · '+sessionLen({},c)+' min'+
+            (last[k]?' · last '+fmtDMY(last[k]):' · not seen yet')+(next[k]?' · next '+fmtDshort(next[k]):'')+'</div></div>'+
+          '<div class="li-right"><b>'+(n[k]||0)+'</b> <span class="small muted">sessions</span></div></div>';};
+      const sorted=list.slice().sort((a,b)=>(clientCategory(a.status)==="Finished")-(clientCategory(b.status)==="Finished")||a.code.localeCompare(b.code));
+      sb.innerHTML='<div class="toolbar"><button class="btn sm" id="addSupee">＋ Add supervisee</button>'+
+          (list.length?'<button class="btn sm sec" id="logSupee">＋ Log a session</button>':'')+'</div>'+
+        '<div class="kpis mb">'+
+          '<div class="kpi"><div class="v">'+current.length+'</div><div class="l">Supervisees now</div></div>'+
+          '<div class="kpi"><div class="v">'+went.length+'</div><div class="l">Sessions, last 12 months</div></div>'+
+          '<div class="kpi"><div class="v">'+hrsLabel(hrs)+'</div><div class="l">Supervision given</div></div>'+
+          '<div class="kpi"><div class="v">'+gbp(Math.round(billed))+'</div><div class="l">Billed, last 12 months</div></div>'+
+        '</div>'+
+        '<div class="card" style="padding:4px 12px">'+(sorted.length?sorted.map(li).join("")
+          :emptyNote("Nobody yet. Add a supervisee, or open an existing client record and set “This is” to a supervisee."))+'</div>'+
+        '<p class="small muted center">Kept out of your clinical hours, the ratio, reports and client analytics. '+infoLink("supervising","What counts where")+'</p>';
+      wireInfo(sb);
+      sb.querySelector("#addSupee").onclick=()=>clientForm(null,{kind:"supervisee"});
+      const lg=sb.querySelector("#logSupee"); if(lg)lg.onclick=()=>sessionForm(null);
+      sb.querySelectorAll(".list-item[data-id]").forEach(el2=>el2.onclick=()=>{
+        const c=(S.clients||[]).find(x=>x._id===el2.dataset.id); if(c)clientForm(c);});
+    }
     function drawMetrics(){
       const t=today();
       const sup=(S.supervision||[]).slice().filter(s=>s.date).sort((a,b)=>parseD(a.date)-parseD(b.date));
@@ -5529,7 +5978,7 @@ function supervisionPanel(){
       if(sup.length>=2)avgGap=Math.round((parseD(sup[sup.length-1].date)-parseD(sup[0].date))/86400000/(sup.length-1));
       const lastDisc={};
       sup.forEach(s=>{const d=parseD(s.date);if(!d)return;(s.clients||[]).forEach(code=>{const k=code.toLowerCase();if(!lastDisc[k]||d>lastDisc[k])lastDisc[k]=d;});});
-      const active=S.clients.filter(c=>clientCategory(c.status)==="Active");
+      const active=clinicalClients().filter(c=>clientCategory(c.status)==="Active");
       const rows=active.map(c=>{const ld=lastDisc[c.code.toLowerCase()];
         return {code:c.code,date:ld||null,days:ld?Math.floor((t-ld)/86400000):null};})
         .sort((a,b)=>{if(a.days==null&&b.days==null)return a.code.localeCompare(b.code);if(a.days==null)return -1;if(b.days==null)return 1;return b.days-a.days;});
@@ -5549,7 +5998,8 @@ function supervisionPanel(){
       mountAccreditation(sb.querySelector("#accMount"));
     }
     if(supTab==="peer"&&!feat("peer"))supTab="log";   // feature switched off since it was last open
-    const route=()=>supTab==="metrics"?drawMetrics():supTab==="cpd"?drawCPD():supTab==="peer"?drawPeer():drawLog();
+    if(supTab==="giving"&&!feat("supervising"))supTab="log";
+    const route=()=>supTab==="metrics"?drawMetrics():supTab==="cpd"?drawCPD():supTab==="peer"?drawPeer():supTab==="giving"?drawGiving():drawLog();
     v.querySelector("#suptab").querySelectorAll("button").forEach(bt=>bt.onclick=()=>{supTab=bt.dataset.st;
       v.querySelector("#suptab").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===bt));route();});
     route();
@@ -5907,7 +6357,8 @@ function anaHourlyRate(){
     : "Sessions that carry a fee. None of yours do, so there is no hourly rate to work out."};
   const attended=rows.filter(x=>!isCancelled(x.s));
   const revenue=rows.filter(x=>x.d.earns).reduce((a,x)=>a+(x.d.rate||0),0);
-  const clinicalH=attended.length*sessionMins()/60;
+  /* Every hour worked, supervision given included - this is a question about the working week. */
+  const clinicalH=attended.reduce((a,x)=>a+x.d.mins,0)/60;
   /* Admin is charged on every session logged: a cancellation still costs you the rearranging. */
   const adminH=rows.length*adminMinsPerSession()/60;
   const inWin=d=>{const x=d?parseD(d):null;return x&&x>from&&x<=t;};
@@ -6017,7 +6468,7 @@ const ANA_COHORT_MARKS=[4,8,12,24];
 function anaCohorts(){
   const t=today();
   const firsts={},lasts={};
-  anaPast(anaDer(),t).filter(x=>!isCancelled(x.s)).forEach(x=>{
+  anaPast(anaDer(),t).filter(x=>!isCancelled(x.s)&&x.d.clinical).forEach(x=>{
     const k=(x.s.client||"").toLowerCase(); if(!k)return;
     if(!firsts[k]||x.dt<firsts[k])firsts[k]=x.dt;
     if(!lasts[k]||x.dt>lasts[k])lasts[k]=x.dt;
@@ -6075,7 +6526,7 @@ function anaEpisodes(){
     g.n++; if(!g.first||x.dt<g.first)g.first=x.dt; if(!g.last||x.dt>g.last)g.last=x.dt;
   });
   const eps=[],live=[];
-  S.clients.forEach(c=>{
+  clinicalClients().forEach(c=>{
     const g=byClient[(c.code||"").toLowerCase()]; if(!g||!g.n)return;
     const fd=freqDays(c), gap=(t-g.last)/86400000;
     /* clientCategory, not catOf - catOf is the expenses/income category lookup and takes
@@ -6115,7 +6566,7 @@ const ANA_DRIFT_FACTOR=1.5;
 function anaDrifting(){
   const t=today(), rows=anaDer();
   const out=[],review=[];
-  S.clients.forEach(c=>{
+  clinicalClients().forEach(c=>{
     /* clientCategory, not catOf - see anaEpisodes. catOf(c.status) never equalled "Finished",
        so every finished client was landing on a list headed "clients you have NOT marked as
        finished". */
@@ -6157,14 +6608,16 @@ function anaSources(){
     if(!lasts[k]||x.dt>lasts[k])lasts[k]=x.dt;
     if(!firsts[k]||x.dt<firsts[k])firsts[k]=x.dt;
   });
-  const withSrc=S.clients.filter(c=>(c.source||"").trim());
-  const unset=S.clients.length-withSrc.length;
+  /* Clients only: where supervisees come from is a different question with a different answer. */
+  const pool=clinicalClients();
+  const withSrc=pool.filter(c=>(c.source||"").trim());
+  const unset=pool.length-withSrc.length;
   /* One named source is enough to have something to compare Unknown against; a table that is
      nothing but an Unknown row is a prompt, not an analytic, so it stays as the waiting note. */
-  if(!withSrc.length||S.clients.length<3)return {ready:false,unset,
+  if(!withSrc.length||pool.length<3)return {ready:false,unset,
     need:"A referral source on at least one client, and three clients on the books. Open a client and set <b>How they found you</b>."};
   const by={};
-  S.clients.forEach(c=>{
+  pool.forEach(c=>{
     const src=(c.source||"").trim()||ANA_SOURCE_UNKNOWN;
     const k=(c.code||"").toLowerCase(), n=counts[k]||0;
     const g=by[src]||(by[src]={src,n:0,sessions:[],revenue:0,current:0});
@@ -6435,14 +6888,15 @@ function anaFeeErosion(){
 const ANA_SUP_TARGET=6;
 function anaSupervisionCadence(){
   if(!feat("supervision"))return {ready:false,need:"Supervision is switched off."};
-  const t=today(), qs=[], rows=anaPast(anaDer(),t).filter(x=>!isCancelled(x.s));
+  /* Clinical sessions only - this is the ratio, and supervision you give is not client work. */
+  const t=today(), qs=[], rows=anaPast(anaDer(),t).filter(x=>!isCancelled(x.s)&&x.d.clinical);
   const sup=(S.supervision||[]).map(s=>parseD(s.date)).filter(Boolean).sort((a,b)=>a-b);
   if(sup.length<3)return {ready:false,need:"Three supervision sessions. You have "+sup.length+"."};
   for(let i=7;i>=0;i--){
     const qStart=new Date(t.getFullYear(),t.getMonth()-i*3-2,1);
     const qEnd=new Date(qStart.getFullYear(),qStart.getMonth()+3,1);
     if(qStart>t)continue;
-    const clin=rows.filter(x=>x.dt>=qStart&&x.dt<qEnd).length*sessionMins()/60;
+    const clin=rows.filter(x=>x.dt>=qStart&&x.dt<qEnd).reduce((a,x)=>a+x.d.mins,0)/60;
     const sh=sup.filter(d=>d>=qStart&&d<qEnd).length;
     qs.push({l:ANA_MONTHS[qStart.getMonth()]+" ’"+String(qStart.getFullYear()).slice(2),
       clinical:Math.round(clin*10)/10,sup:sh,
@@ -6473,7 +6927,6 @@ function anaLoad(){
   rows.forEach(x=>{const k=isoD(x.dt);(days[k]||(days[k]=[])).push(x);});
   const keys=Object.keys(days).sort();
   const heavy=[],runs=[];
-  const gapMax=sessionMins()+ANA_TURNAROUND;
   keys.forEach(k=>{
     const list=days[k].slice().sort((a,b)=>String(a.s.time||"").localeCompare(String(b.s.time||"")));
     if(list.length>=ANA_HEAVY_DAY)heavy.push({date:list[0].dt,n:list.length});
@@ -6483,7 +6936,8 @@ function anaLoad(){
       if(!p||!c){run=1;continue;}
       const mins=x=>(+x.slice(0,2))*60+(+x.slice(3,5));
       const d=mins(c)-mins(p);
-      if(d>0&&d<=gapMax)run++;else run=1;
+      /* Back-to-back is measured from the end of the PREVIOUS session, whatever its own length. */
+      if(d>0&&d<=list[i-1].d.mins+ANA_TURNAROUND)run++;else run=1;
       if(run>best)best=run;
     }
     if(best>=ANA_RUN_MIN)runs.push({date:list[0].dt,len:best});
@@ -6823,9 +7277,12 @@ function anaSection(seg,cx){
    Two cards on Home asking for it must not mean walking the whole practice twice. */
 function anaCtx(){
   const counts=clientSessionCounts(), lastSeen=lastSessionDates();
-  const withSess=S.clients.map(c=>({c,n:counts[c.code.toLowerCase()]||0}));
+  /* The Clients section is about CLIENTS. Supervisees are a different population - mixing them in
+     puts a two-year supervision contract into "how long clients stay" and the funnel. */
+  const pool=clinicalClients();
+  const withSess=pool.map(c=>({c,n:counts[c.code.toLowerCase()]||0}));
   const cx={counts,lastSeen,withSess,base:withSess.filter(x=>x.n>=1).length,_att:null};
-  cx.att=()=>cx._att||(cx._att=S.clients.map(c=>({c,a:clientAttendance(c)})).filter(x=>x.a&&x.a.n>=2));
+  cx.att=()=>cx._att||(cx._att=pool.map(c=>({c,a:clientAttendance(c)})).filter(x=>x.a&&x.a.n>=2));
   cx.current=c=>trendsIsCurrent(c,lastSeen[((c&&c.code)||"").toLowerCase()]);
   return cx;
 }
@@ -7465,7 +7922,7 @@ VIEWS.practice=function(){
         const li=c=>{
           const r=effRate(c.code,isoD(today()));const ch=c.status==="Ongoing"?'y':c.status==="Paused"?'f':'na';
           const seen=lastSeen[(c.code||"").toLowerCase()];
-          return '<div class="list-item" data-id="'+c._id+'"><div class="li-main"><div class="li-title">'+esc(c.code)+' <span class="chip '+ch+'">'+esc(c.status||"")+'</span></div><div class="li-sub">'+esc(c.frequency||"")+(seen?' · last seen '+fmtDMY(seen):'')+(c.notes?" · "+esc(c.notes):"")+'</div></div><div class="li-right">'+gbp(r)+'</div></div>';};
+          return '<div class="list-item" data-id="'+c._id+'"><div class="li-main"><div class="li-title">'+esc(c.code)+' <span class="chip '+ch+'">'+esc(c.status||"")+'</span>'+(isSupervisee(c)?' <span class="chip na">supervisee</span>':'')+'</div><div class="li-sub">'+esc(c.frequency||"")+(seen?' · last seen '+fmtDMY(seen):'')+(c.notes?" · "+esc(c.notes):"")+'</div></div><div class="li-right">'+gbp(r)+'</div></div>';};
         /* A search is someone looking for a specific person, very possibly one who finished years
            ago - so it never folds. Folding only applies to the unfiltered list, and only once
            there are enough finished clients for it to be worth a tap. */
@@ -9850,6 +10307,11 @@ infoDef("tax-table","What each column means",
   '<div><b>Recv\u2019d</b> \u2014 the part of Billed that has a payment date. <b>Overdue</b> is what is past and unpaid.</div>'+
   '<div><b>Sess</b> \u2014 how many sessions the year held.</div></div>'+
   '<p class="small mt">Which year a session or a cost belongs to depends on the basis you have chosen. '+infoLink("tax-basis","Cash or accruals")+'</p>');
+infoDef("supervising","Supervising others",
+  '<p class="small">A supervisee is a client record marked <b>A supervisee</b>. Their sessions are logged, billed, chased and put in your calendar exactly like a client’s, and their fees are income like any other.</p>'+
+  '<p class="small">What changes is that supervision you <b>give</b> is not client work. It is left out of your clinical hours, the 1:6 ratio on Form 3A, every report, the Clients section of Business analytics, and the schedule shared with GroundWork Notes. Counting it would flatter your ratio in the direction that hides a problem.</p>'+
+  '<p class="small">It still counts toward your working week - capacity, load, the hourly rate - because it is time you worked.</p>'+
+  '<p class="small muted">Supervision usually runs longer than a therapy session. Set a usual length on the supervisee’s record and every session with them counts at that length unless you record a different one.</p>');
 infoDef("peer-counts","What peer supervision counts toward",
   '<p class="small">Peer supervision adds to your <b>total accreditation hours</b> on Supervision \u203a Insights, and to your CPD hours if you have said it should.</p>'+
   '<p class="small">It is deliberately kept out of the <b>1:6 clinical-to-supervision ratio</b>, which only counts formal clinical supervision \u2014 that is the BACP rule, not an app decision.</p>'+
@@ -12127,7 +12589,7 @@ VIEWS.settings=function(){
     items.sort((a,b)=>(a.sev==="err"?0:1)-(b.sev==="err"?0:1));
     const nE=items.filter(i=>i.sev==="err").length,nW=items.length-nE;
     out.innerHTML='<p class="small muted" style="margin:10px 0 4px">'+nE+' error'+(nE===1?'':'s')+' · '+nW+' warning'+(nW===1?'':'s')+' - tap a session row to open and fix. '+scanned+'</p>'+
-      '<div class="card" style="padding:4px 12px">'+items.map(i=>'<div class="list-item"'+(i.id?' data-id="'+esc(i.id)+'"':'')+'><div class="li-main"><div class="li-title" style="font-size:13.5px;font-weight:600;color:'+(i.sev==="err"?'var(--bad)':'var(--warn)')+'">'+(i.sev==="err"?'⛔ ':'⚠️ ')+i.msg+'</div></div></div>').join("")+'</div>';
+      '<div class="card" style="padding:4px 12px">'+items.map(i=>'<div class="list-item"'+(i.id?' data-id="'+esc(i.id)+'"':'')+'><div class="li-main"><div class="li-title" style="font-size:13px;font-weight:600;color:'+(i.sev==="err"?'var(--bad)':'var(--warn)')+'">'+(i.sev==="err"?'⛔ ':'⚠️ ')+i.msg+'</div></div></div>').join("")+'</div>';
     out.querySelectorAll(".list-item[data-id]").forEach(li=>li.onclick=()=>{const ss=S.sessions.find(x=>x._id===li.dataset.id);if(ss)sessionForm(ss);});
     Sfx.error();
   };
@@ -12353,15 +12815,20 @@ VIEWS.settings=function(){
 /* ============ Suggestions ============ */
 function clientList(){const order={Ongoing:0,"Initial session booked":0,Paused:1,Finished:2};
   return S.clients.slice().sort((a,b)=>(order[a.status]??9)-(order[b.status]??9)||a.code.localeCompare(b.code)).map(c=>c.code)}
-function statusGroups(){
+function statusGroups(keep){
   const order=["Ongoing","Initial session booked","Active enquiry","Active","Paused","Finished"];
-  const g={}; S.clients.forEach(c=>{const k=c.status||"Other";(g[k]=g[k]||[]).push(c.code)});
+  const g={}; S.clients.forEach(c=>{if(keep&&!keep(c))return;const k=c.status||"Other";(g[k]=g[k]||[]).push(c.code)});
   return Object.keys(g).sort((a,b)=>{const ia=order.indexOf(a),ib=order.indexOf(b);return (ia<0?98:ia)-(ib<0?98:ib)||a.localeCompare(b)})
     .map(k=>[k,g[k].sort((x,y)=>x.localeCompare(y))]);
 }
 function clientSelectHTML(sel){
-  return '<option value="">- choose client -</option>'+statusGroups().map(([st,codes])=>
-    '<optgroup label="'+esc(st)+'">'+codes.map(c=>'<option value="'+esc(c)+'"'+(c===sel?" selected":"")+'>'+esc(c)+'</option>').join("")+'</optgroup>').join("");
+  const o=c=>'<option value="'+esc(c)+'"'+(c===sel?" selected":"")+'>'+esc(c)+'</option>';
+  /* Supervisees get one group of their own at the foot, whatever their status - picking who to log
+     a session for is where the two kinds of work are most easily confused. */
+  const sup=supervisees().map(c=>c.code).sort((a,b)=>a.localeCompare(b));
+  return '<option value="">- choose client -</option>'+statusGroups(c=>!isSupervisee(c)).map(([st,codes])=>
+    '<optgroup label="'+esc(st)+'">'+codes.map(o).join("")+'</optgroup>').join("")+
+    (sup.length?'<optgroup label="Supervisees">'+sup.map(o).join("")+'</optgroup>':'');
 }
 function lastSessionFor(code,excludeId){
   const rs=S.sessions.filter(s=>(s.client||"").toLowerCase()===(code||"").toLowerCase()&&s._id!==excludeId);
@@ -12596,6 +13063,10 @@ function sessionForm(s,o){
   const clients=clientList();
   const locs=S.rooms.map(r=>r.location);
   const body=el('<div></div>');
+  /* The Length box (v12). Shown to anybody who supervises - supervision runs longer than therapy -
+     and on any session that already carries a length, so a recorded figure is never invisible.
+     Not rendered = not read: sync() leaves `mins` exactly as it was. */
+  const lenShown=()=>feat("supervising")||+m.mins>0;
   let pendingWarn=false; // a "Save anyway" is armed; any edit disarms it
   let dirty=false;       // something has been typed since this form was opened
   /* msg strings come pre-escaped from validateSession, so inject raw */
@@ -12623,6 +13094,8 @@ function sessionForm(s,o){
        <div><label>Location</label><select id="f_loc">${opts(locs,m.location)}</select>${P(l=>l.location)}</div>
        <div><label>Room number</label><input id="f_room" value="${esc(m.room==='-'?'':m.room)}" placeholder="-">${P(l=>(l.room&&l.room!=='-')?l.room:"")}</div>
      </div>
+     ${lenShown()?`<label>Length <span class="muted small">(minutes · blank = ${esc(sessionLen({client:m.client}))})</span></label>
+       <input type="number" min="5" max="600" step="5" id="f_mins" value="${esc(+m.mins>0?m.mins:"")}" placeholder="${esc(sessionLen({client:m.client}))}" style="max-width:180px">`:""}
      <div class="hint">Rate: <b>${gbp(d.rate)}</b>${d.roomRate?` · Room: ${gbp(d.roomRate)} (${esc(d.due)})`:""} · ${d.taxYear} ${d.past?"· past":"· upcoming"}</div>
      <label>Payment received date <span class="muted small">(blank = not paid)</span></label>
      <input type="date" id="f_paid" value="${esc(m.paidDate||"")}">
@@ -12651,6 +13124,9 @@ function sessionForm(s,o){
     const g=id=>body.querySelector(id);
     const sync=()=>{m.client=g("#f_client").value;m.date=g("#f_date").value;m.time=g("#f_time").value;m.mode=g("#f_mode").value;
       m.num=g("#f_num").value;m.location=g("#f_loc").value;m.room=g("#f_room").value;m.paidDate=g("#f_paid").value;
+      /* Blank stores NOTHING, never the default - see sessionLen(). */
+      if(g("#f_mins")){const mr=g("#f_mins").value.trim();
+        if(mr===""||!(+mr>0))delete m.mins; else m.mins=Math.round(+mr);}
       /* `roomPaid` / `roomPaidDate` are deliberately NOT read back here. The form no longer owns
          them - the room fee this session raises is settled in Money - and reading them from
          controls that no longer exist is exactly how a saved session would blank its own
@@ -12791,7 +13267,7 @@ function sessionForm(s,o){
       if(vr.warnings.length&&!pendingWarn){pendingWarn=true;const sb=body.querySelector("#save");if(sb)sb.textContent="Save anyway";Sfx.error();const vb=body.querySelector("#vbanner");if(vb)vb.scrollIntoView({behavior:"smooth",block:"nearest"});return;}
       const exists=S.sessions.find(x=>x._id===m._id);
       const prevComplete=exists?derive(exists).complete:false;
-      if(exists){Object.assign(exists,m);await commit("Edited session: "+m.client+" "+m.date);}
+      if(exists){Object.assign(exists,m);if(!(+m.mins>0))delete exists.mins;await commit("Edited session: "+m.client+" "+m.date);}
       else{S.sessions.push(m);await commit("Added session: "+m.client+" "+m.date);}
       const dNow=derive(m);const justCompleted=dNow.ended&&dNow.complete&&!prevComplete;
       let milestone=null;
@@ -12873,18 +13349,28 @@ function clientForm(c,cfOpts){
      shadow it silently. */
   cfOpts=cfOpts||{};
   const isNew=!c; const m=c?clone(c):{_id:uid(),code:"",status:"Ongoing",frequency:"Weekly",insurance:"N",notes:"",created:isoD(today()),payer:defaultPayerKey()};
+  if(isNew&&cfOpts.kind==="supervisee")m.kind="supervisee";
+  /* The question only appears for somebody who has said they supervise - or on a record that is
+     already a supervisee, so switching the feature off never hides what a record IS. When it is
+     not rendered, the save below does not read it. */
+  const kindShown=feat("supervising")||isSupervisee(m);
   const statuses=[...new Set(S.clientCategories.map(x=>x.status).concat(["Ongoing","Paused","Finished"]))];
   const body=el('<div></div>');
   const rateNow=isNew?"":effRate(m.code,isoD(today()));
   const hist=S.rateHistory.filter(r=>(r.client||"").toLowerCase()===(m.code||"").toLowerCase()).sort((a,b)=>parseD(b.effectiveFrom)-parseD(a.effectiveFrom));
   body.innerHTML=`
-    <label>Client code</label><input id="c_code" value="${esc(m.code)}" ${isNew?"":"readonly"}>
+    ${kindShown?`<label>This is</label><select id="c_kind">${opts2(Object.keys(CLIENT_KINDS).map(k=>[k,CLIENT_KINDS[k].n]),kindOf(m))}</select>
+    <p class="small muted" id="c_kindNote"></p>`:""}
+    <label id="c_codeLab">Client code</label><input id="c_code" value="${esc(m.code)}" ${isNew?"":"readonly"}>
     <div class="field2"><div><label>Status</label><select id="c_status">${opts(statuses,m.status)}</select></div>
       <div><label>Frequency</label><select id="c_freq">${opts(["Weekly","Every 2 weeks","Every 3 weeks","Monthly"],m.frequency)}</select></div></div>
     <div class="field2">
       <div><label>Usual day</label><select id="c_uday">${opts2([["","From their history"]].concat(SLOT_DAYS.map(d=>[d,SLOT_DAY_NAMES[d]])),m.usualDay||"")}</select></div>
       <div><label>Usual time</label><input type="time" id="c_utime" value="${esc(m.usualTime||"")}"></div></div>
     <p class="small muted" id="c_slotHint"></p>
+    ${kindShown?`<div id="c_minsWrap"><label>Usual length (mins) <span class="muted small">(optional)</span></label>
+      <input type="number" min="5" max="600" step="5" id="c_mins" value="${esc(+m.mins>0?m.mins:"")}" placeholder="${esc(sessionMins())}">
+      <p class="small muted">Every session with them counts at this length unless you record a different one. Blank = your usual ${esc(sessionMins())} minutes.</p></div>`:""}
     <label>Who pays for this work ${infoDot("who-pays","Who pays for this work")}</label>
     <select id="c_payer">${opts2(Object.keys(PAYERS).map(k=>[k,PAYERS[k].n]),payerOf(m))}</select>
     <p class="small muted" id="c_payerNote"></p>
@@ -12971,6 +13457,17 @@ function clientForm(c,cfOpts){
   body.querySelector("#c_payer").onchange=()=>{paintPayer();};
   body.querySelector("#c_auth").oninput=()=>{paintPayer();};
   paintPayer();
+  const paintKind=()=>{
+    const ks=body.querySelector("#c_kind"); if(!ks)return;
+    const k=ks.value;
+    body.querySelector("#c_kindNote").innerHTML=esc(CLIENT_KINDS[k]?CLIENT_KINDS[k].d:"")+
+      (k==="supervisee"?' '+infoLink("supervising","More"):'');
+    body.querySelector("#c_codeLab").textContent=k==="supervisee"?"Supervisee code":"Client code";
+    body.querySelector("#c_minsWrap").hidden=(k!=="supervisee");
+    wireInfo(body);
+  };
+  {const ks=body.querySelector("#c_kind"); if(ks)ks.onchange=paintKind;}
+  paintKind();
   /* Both fields are overrides: blank means "work it out from what actually happened", which is
      right for almost every client and needs nothing typed. The hint says what that comes to, so
      the blank state is visibly doing something rather than looking unfilled. */
@@ -13002,6 +13499,22 @@ function clientForm(c,cfOpts){
        of mind would put this client back on an invoice the next time somebody read it loosely. */
     const payerK=body.querySelector("#c_payer").value;
     m.payer=Object.prototype.hasOwnProperty.call(PAYERS,payerK)?payerK:"client";
+    /* What this record is. Absent means a client, so a client stays absent rather than gaining a
+       field that says what the default already says. Read only when the picker was on screen. */
+    let dropMins=false;
+    const ks=body.querySelector("#c_kind");
+    if(ks){
+      if(ks.value==="supervisee"){
+        m.kind="supervisee";
+        const mr=body.querySelector("#c_mins").value.trim();
+        if(mr===""){delete m.mins;dropMins=true;}
+        else{const mv=Math.round(+mr);
+          if(!(mv>=5&&mv<=600)){toast("Usual length: between 5 and 600 minutes, or blank");Sfx.error();return;}
+          m.mins=mv;}
+      }else delete m.kind;
+      /* A usual length left on a record that is no longer a supervisee is inert (sessionLen reads
+         it for supervisees only) and is kept, so switching back brings it back. */
+    }
     if(m.payer==="org"){
       m.payerId=body.querySelector("#c_payerOrg").value||"";
       const authRaw=body.querySelector("#c_auth").value.trim();
@@ -13025,13 +13538,17 @@ function clientForm(c,cfOpts){
       if(S.clients.find(x=>x.code.toLowerCase()===m.code.toLowerCase())){toast("Code already exists");return}
       m.rate=rate;S.clients.push(m);
       S.rateHistory.push({_id:uid(),client:m.code,effectiveFrom:isoD(today()),rate:rate});
-      await commit("Added client: "+m.code+" @ "+gbp(rate));
+      await commit("Added "+(isSupervisee(m)?"supervisee":"client")+": "+m.code+" @ "+gbp(rate));
       closeSheet();
       /* Reached from the session form's "Add a new client" link - hand the new code straight
          back to it instead of navigating to Practice. */
       if(cfOpts.onCreated)cfOpts.onCreated(m.code);else go(cur);
       celebrateNewClient(m);return;
-    }else{const ex=S.clients.find(x=>x._id===m._id);Object.assign(ex,m);await commit("Edited client: "+m.code);}
+    }else{const ex=S.clients.find(x=>x._id===m._id);Object.assign(ex,m);
+      /* Object.assign cannot delete: a field the form removed has to be removed from the record too. */
+      if(!m.kind)delete ex.kind;
+      if(dropMins)delete ex.mins;
+      await commit("Edited client: "+m.code);}
     closeSheet();toast("Saved");go(cur);
   };
   if(!isNew)body.querySelector("#cDel").onclick=async()=>{if(!confirm("Delete client "+m.code+"? (sessions are kept)"))return;
@@ -13057,9 +13574,13 @@ function supervisionForm(s){
   const isNew=!s;const last=S.supervision.slice(-1)[0];
   const m=s?clone(s):{_id:uid(),date:isoD(today()),supervisor:(last||{}).supervisor||"",count:1,cost:last?last.cost:"",clients:[]};
   const body=el('<div></div>');
-  const allCodes=clientList();
+  /* Clients only: your own supervisees are not "clients discussed" in the supervision you receive. */
+  const allCodes=clientList().filter(code=>!isSupervisee(clientOf(code)));
   const sel=new Set(m.clients||[]);
-  const groups=statusGroups();
+  /* A code already ticked on this entry but no longer offered (a client since marked a supervisee)
+     is kept rather than silently dropped by the save below. */
+  const kept=(m.clients||[]).filter(code=>allCodes.indexOf(code)<0);
+  const groups=statusGroups(c=>!isSupervisee(c));
   const chip=code=>'<button type="button" class="tgl'+(sel.has(code)?" on":"")+'" data-code="'+esc(code)+'"><span class="tbox"></span>'+esc(code)+'</button>';
   const chips=groups.length
     ? groups.map(([st,codes])=>'<div class="cgrp"><div class="cglab">'+esc(st)+'</div><div class="cgchips">'+codes.map(chip).join("")+'</div></div>').join("")
@@ -13078,7 +13599,7 @@ function supervisionForm(s){
     body.querySelector("#s_cnt").value=sel.size||1;});
   body.querySelector("#sSave").onclick=async()=>{m.date=body.querySelector("#s_date").value;m.count=+body.querySelector("#s_cnt").value;
     m.supervisor=body.querySelector("#s_sup").value;m.cost=+body.querySelector("#s_cost").value;
-    m.clients=allCodes.filter(c=>sel.has(c));
+    m.clients=allCodes.filter(c=>sel.has(c)).concat(kept);
     const ex=S.supervision.find(x=>x._id===m._id);if(ex)Object.assign(ex,m);else S.supervision.push(m);
     await commit((ex?"Edited":"Added")+" supervision: "+m.date);closeSheet();toast("Saved");go(cur);};
   if(!isNew)body.querySelector("#sDel").onclick=async()=>{S.supervision=S.supervision.filter(x=>x._id!==m._id);
@@ -13250,7 +13771,8 @@ function attachSwipe(container,refresh){
     over.addEventListener("pointermove",e=>{if(sx==null)return;
       const mx=e.clientX-sx,my=e.clientY-sy;
       if(!drag){if(Math.abs(mx)>12&&Math.abs(mx)>Math.abs(my)*1.2){drag=true;try{over.setPointerCapture(e.pointerId);}catch(_){}}else return;}
-      dx=Math.min(0,Math.max(-130,mx));over.style.transform="translateX("+dx+"px)";});
+      const was=dx<-80; dx=Math.min(0,Math.max(-130,mx));over.style.transform="translateX("+dx+"px)";
+      if((dx<-80)!==was)haptic("select");});   /* a detent at the point where letting go would mark it paid */
     const end=async()=>{if(sx==null)return;
       const fired=drag&&dx<-80;sx=null;
       over.classList.add("snap");over.style.transform="translateX(0)";
@@ -13262,7 +13784,7 @@ function attachSwipe(container,refresh){
           const amt=derive(ss).rate||0;
           gameNoteBatch({cleared:1});
           await commit("Marked paid (swipe): "+ss.client+" "+ss.date);renderTabs();
-          Sfx.complete();Confetti.burst(16,{up:8,spread:0.8});
+          Sfx.complete();haptic("success");Confetti.burst(16,{up:8,spread:0.8});
           toast(ss.client+" marked paid ✓");
           if(refresh)refresh();}}};
     over.addEventListener("pointerup",end);over.addEventListener("pointercancel",end);
@@ -13334,7 +13856,7 @@ function clientProfile(c){
           '<div class="kpi'+(owed?' bad':' good')+'"><div class="v">'+gbp(Math.round(owed))+'</div><div class="l">'+(owed?("Outstanding · "+owedRows.length+" session"+(owedRows.length===1?"":"s")):"Nothing owed")+'</div></div>'
         /* Two tiles reading "£0" tell a salaried counsellor nothing. The hours are what her work
            is measured in, so the slots say that instead. */
-        : '<div class="kpi"><div class="v">'+hrsLabel(attended*sessionMins()/60)+'</div><div class="l">Clinical hours</div></div>'+
+        : '<div class="kpi"><div class="v">'+hrsLabel(rows.filter(x=>parseD(x.s.date)<=t&&!isCancelled(x.s)).reduce((a,x)=>a+x.d.mins,0)/60)+'</div><div class="l">'+(isSupervisee(c)?'Hours supervised':'Clinical hours')+'</div></div>'+
           '<div class="kpi"><div class="v">'+(rows.filter(x=>parseD(x.s.date)>t).length)+'</div><div class="l">Booked ahead</div></div>')+
       '<div class="kpi"><div class="v">'+(att?att.pct+"%":"-")+'</div><div class="l">Attendance'+(att&&att.currentPause?' · ⏸ paused '+att.currentPause.days+'d':'')+'</div></div>'+
     '</div>'+
@@ -13644,7 +14166,7 @@ function receiptHTML(c,rows,label,paidOnly){
     (x.d.cancelKind?(x.d.cancelKind==="dna"?"Did not attend":"Late cancellation")+(x.d.cancelPct<100?" ("+x.d.cancelPct+"% fee)":""):esc(x.s.mode||""))+
     '</td><td class="r">'+gbp(x.d.rate)+'</td>'+(isInv?'':'<td>'+(x.d.clientPaid?("Paid "+fmtDMY(x.s.paidDate)):"Due")+'</td>')+'</tr>').join("");
   const html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+esc(num)+'</title><style>'+
-    'body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1E2A26;margin:40px;font-size:14px}'+
+    'body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1E2A26;margin:40px;font-size:14px;font-variant-numeric:tabular-nums}'+
     'h1{font-size:22px;color:'+PD+';margin:0}.sub{color:#6E7E78;font-size:12px}'+
     '.head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid '+PB+';padding-bottom:14px;margin-bottom:18px}'+
     'table{width:100%;border-collapse:collapse;margin-top:10px}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #E6ECEA;font-size:13px}'+
@@ -13809,7 +14331,7 @@ function icsEvent(s,stamp,seq){
     "DTSTAMP:"+stamp,
     "SEQUENCE:"+seq,
     "DTSTART:"+start,
-    "DTEND:"+icsFloating(s.date,s.time,sessionMins()),
+    "DTEND:"+icsFloating(s.date,s.time,sessionLen(s)),
     "SUMMARY:"+icsEsc(icsTitle(s)),
     "TRANSP:OPAQUE"];
   if(s.location)L.push("LOCATION:"+icsEsc(s.location));
@@ -13855,7 +14377,7 @@ function calEventFor(s){
   const start=icsFloating(s.date,s.time,0);
   if(!start)return null;
   return {uid:String(s._id||""),title:icsTitle(s),start:calWall(start),
-          end:calWall(icsFloating(s.date,s.time,sessionMins())),location:String(s.location||"")};
+          end:calWall(icsFloating(s.date,s.time,sessionLen(s))),location:String(s.location||"")};
 }
 function calAddSession(s){
   if(!s||!s.date){toast("This session needs a date first");Sfx.error();return;}
@@ -13924,7 +14446,9 @@ function rosterStatus(c){
 function scheduleRoster(){
   const skipped=[];
   const clients=[];
-  S.clients.forEach(c=>{
+  /* Clients only. GroundWork Notes works out which sessions still need a CLINICAL write-up, and
+     somebody you supervise is not on that list. */
+  clinicalClients().forEach(c=>{
     const code=rosterCode(c.code);
     if(!code){skipped.push(c.code||"(blank)");return;}
     const sched=clientSchedule(c)||{};
@@ -14914,6 +15438,7 @@ const FEATURES=[
   {k:"supervision",  ic:gi("supervision"), n:"Supervision",            d:"A tab for logging supervision sessions, costs and which clients you discussed."},
   {k:"accreditation",ic:gi("accreditation"), n:"Accreditation hours",    d:"Clinical vs supervision hours and the 1:6 ratio, for BACP Form 3A. Lives inside Supervision › Insights.",dep:"supervision"},
   {k:"peer",         ic:gi("peer"), n:"Peer supervision",       d:"A separate log for peer supervision hours - added to your total accreditation hours, kept out of the 1:6 ratio.",dep:"supervision"},
+  {k:"supervising",  ic:gi("supervision"), n:"Supervising others",  d:"For practitioners who also supervise. Mark a client record as a supervisee and their sessions are billed and diarised as usual but kept out of your clinical hours, the 1:6 ratio, reports and client analytics. A Supervising tab inside Supervision.",dep:"supervision"},
   {k:"trends",       ic:gi("trends"), n:"Business analytics",      d:"Retention funnel, attendance against expected frequency, missed sessions and how long clients stay. Lives inside Practice."},
   {k:"reports",      ic:gi("page"), n:"Reports",                d:"Build a report of hours, supervision and CPD over any period — for a course, a placement or a professional body. Lives inside Practice, after Business analytics."},
   {k:"finances",     ic:gi("finances"), n:"Costs & other income",   d:"Business costs (insurance, wifi, monthly room rent) and income that isn’t a client session. Both feed your net income and tax figures.",dep:"money"},
@@ -14968,7 +15493,7 @@ function revealCfg(){const sg=settings();sg.reveal=sg.reveal||{mode:"all",shown:
 function revealApplySimple(w){
   /* accreditation and peer are left alone: stepCPD asks about both directly a couple of screens
      later, and a question the therapist answers beats a default either way. */
-  FEATURES.forEach(f=>{if(REVEAL_CORE.indexOf(f.k)<0&&f.k!=="accreditation"&&f.k!=="peer")w.features[f.k]=false;});
+  FEATURES.forEach(f=>{if(REVEAL_CORE.indexOf(f.k)<0&&f.k!=="accreditation"&&f.k!=="peer"&&f.k!=="supervising")w.features[f.k]=false;});
   REVEAL_CORE.forEach(k=>{if(w.features[k]===false)delete w.features[k];});
 }
 let _revealBusy=false;
@@ -15034,7 +15559,7 @@ function stepDepth(w){return{emoji:gi("depth"), h:"How much do you want to see?"
      result and the therapist can overrule any individual switch there and then. */
   onLeave(){
     if(w.depth==="simple")revealApplySimple(w);
-    else FEATURES.forEach(f=>{if(f.k!=="accreditation"&&w.features[f.k]===false)delete w.features[f.k];});
+    else FEATURES.forEach(f=>{if(f.k!=="accreditation"&&f.k!=="supervising"&&w.features[f.k]===false)delete w.features[f.k];});
   },
   mount(host){
     host.innerHTML='<div class="palgrid choices" id="spDepth">'+
@@ -15073,7 +15598,8 @@ function wireAdvancedMode(v){
         /* everything except accreditation, which is a genuine minority need and is asked
            separately in setup -- switching it on here would put a card in front of someone
            who explicitly said they are not working toward accreditation */
-        FEATURES.forEach(f=>{if(f.k!=="accreditation")sg.features[f.k]=true;});
+        /* …and supervising, for the same reason: it is a fact about the practitioner, asked directly. */
+        FEATURES.forEach(f=>{if(f.k!=="accreditation"&&f.k!=="supervising")sg.features[f.k]=true;});
         REVEAL_STEPS.forEach(s=>{if(c.shown.indexOf(s.keys[0])<0)c.shown.push(s.keys[0]);});
         await commit("Show all features");
       }
@@ -15148,7 +15674,7 @@ function featureInfoSheet(f){
   const on=sg.features[f.k]!==false, dep=f.dep?FEATURES.find(x=>x.k===f.dep):null;
   const blocked=dep&&sg.features[dep.k]===false;
   body.innerHTML='<div class="row" style="gap:11px;align-items:center;margin-bottom:12px">'+
-      '<span class="fic" style="font-size:24px;color:var(--brand)">'+f.ic+'</span>'+
+      '<span class="fic" style="font-size:25px;color:var(--brand)">'+f.ic+'</span>'+
       '<span class="chip '+(on&&!blocked?"y":"na")+'">'+(blocked?"Unavailable":on?"On":"Off")+'</span></div>'+
     '<p class="small">'+esc(f.d)+'</p>'+
     (dep?'<p class="prev">Needs <b>'+esc(dep.n)+'</b> switched on'+(blocked?' \u2014 which it is not at the moment.':'.')+'</p>':'')+
@@ -15200,7 +15726,7 @@ function stepLook(w){return{emoji:gi("look"), h:"Pick a look",
   }};}
 function stepFeatures(w){
   /* accreditation and peer supervision both get their own question in stepCPD - asking twice would be noise */
-  const list=FEATURES.filter(f=>f.k!=="accreditation"&&f.k!=="peer");
+  const list=FEATURES.filter(f=>f.k!=="accreditation"&&f.k!=="peer"&&f.k!=="supervising");
   return{emoji:gi("features"), h:"Choose what you need",
   sub:"Switch off anything that isn’t useful - it disappears from the app. Nothing is deleted, and you can turn it back on later.",
   mount(host){
@@ -15246,12 +15772,15 @@ function stepCPD(w){return{emoji:gi("cpd"), h:"CPD, supervision and accreditatio
       '<div style="margin-top:16px">'+ovToggleRow("peer",gi("peer"),"I also attend peer supervision",
         "Logged on its own tab. The hours count toward your CPD and accreditation totals, but never toward the 1:6 supervision ratio.",
         featureOn(w,"peer"))+'</div>'+
+      '<div style="margin-top:10px">'+ovToggleRow("supg",gi("supervision"),"I also supervise other practitioners",
+        "Mark a client record as a supervisee and those sessions are billed and diarised as usual, but never counted as your clinical hours or in the ratio.",
+        featureOn(w,"supervising"))+'</div>'+
       '<div style="margin-top:10px">'+ovToggleRow("acc",gi("accreditation"),"I’m working toward accreditation",
         "Adds the BACP Form 3A card (clinical hours against supervision hours). Leave it off unless you are accruing hours toward accreditation.",
         featureOn(w,"accreditation"))+'</div>'+
       '<div class="ovnote">Any of this can be changed later in <b>'+gi("settings")+' Settings › Features</b>.</div>';
     host.querySelector("#spCpd").oninput=e=>w.cpdTarget=+e.target.value||0;
-    [["acc","accreditation"],["peer","peer"]].forEach(pair=>{
+    [["acc","accreditation"],["peer","peer"],["supg","supervising"]].forEach(pair=>{
       const sw=host.querySelector('[data-sw="'+pair[0]+'"]'); if(!sw)return;
       sw.onclick=()=>{w.features[pair[1]]=!featureOn(w,pair[1]);
         const on=featureOn(w,pair[1]);
@@ -15677,6 +16206,7 @@ function startSetup(opts){
          unticked or the question answers itself. Only for a fresh install: normalize leaves the
          flag absent (= on) and anyone who already has it must keep it. */
       if(fresh&&f.peer==null)f.peer=false;
+      if(f.supervising==null)f.supervising=false;
       return f;
     })(),
     /* A fresh install starts on "simple" - that is the point of the question, and "show me
@@ -16617,7 +17147,7 @@ function retentionRows(){
     const k=(c.code||"").toLowerCase(), ld=last[k];
     if(!ld)return null;                       /* nothing logged - no clock to count from */
     const nd=addYears(ld,cfg.notesYears), fd=addYears(ld,cfg.financeYears);
-    return {code:c.code,status:c.status||"",last:ld,notesDue:nd,finDue:fd,
+    return {code:c.code,status:c.status||"",supervisee:isSupervisee(c),last:ld,notesDue:nd,finDue:fd,
             notesOver:nd<=t,finOver:fd<=t,sessions:count[k]||0};
   }).filter(r=>r&&(r.notesOver||r.finOver)).sort((a,b)=>a.last-b.last);
 }
@@ -16628,6 +17158,7 @@ function retentionCardHTML(){
   const on=new Set(cfg.endedStatuses.map(s=>String(s).toLowerCase()));
   const rowHTML=r=>'<div class="list-item"><div class="li-main">'+
       '<div class="li-title">'+esc(r.code)+' '+
+        (r.supervisee?'<span class="chip na">supervisee</span> ':'')+
         (r.notesOver?'<span class="chip n">notes</span> ':'')+
         (r.finOver?'<span class="chip n">records</span>':'')+'</div>'+
       '<div class="li-sub">Last session '+fmtD(r.last)+' · '+r.sessions+' session'+(r.sessions===1?'':'s')+' · '+esc(r.status)+'</div></div>'+
@@ -16975,8 +17506,8 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
       'background:var(--bg,#F5F8F5);color:var(--ink,#1E2A26);text-align:center;padding:32px}'+
     '#natlock.on{display:flex}'+
     '#natlock .nl-mark{color:var(--brand,#5C7A6D)}'+
-    '#natlock .nl-t{font-weight:700;font-size:18px}'+
-    '#natlock .nl-s{font-size:13.5px;color:var(--muted,#6E7E78);max-width:22em;line-height:1.5}'+
+    '#natlock .nl-t{font-weight:700;font-size:19px}'+
+    '#natlock .nl-s{font-size:13px;color:var(--muted,#6E7E78);max-width:22em;line-height:1.5}'+
     '#natlock .btn{margin-top:6px;min-width:180px}'+
     /* Anything that only makes sense in a browser tab. Marked in index.html. */
     '[data-native] .webonly{display:none}';
@@ -17194,6 +17725,13 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
      through to the .ics exactly as it did before. */
   if(GW && GW.calendarAdd && GW.calendarList)
     window.GWCalendarNative = { add: calAddNative };
+
+  /* ================= Haptics =================
+     The shared haptic() helper reaches the Taptic Engine through this one seam, declared only when
+     the plugin really has the method - an older build simply has no taps. Fire-and-forget: a tap
+     that arrives late is worse than none, so nothing ever awaits it, and a rejection is dropped. */
+  if(GW && GW.haptic)
+    window.GWHapticsNative = kind => { try{ GW.haptic({kind:String(kind||"light")}).catch(()=>{}); }catch(e){} };
 
   /* ================= Where your records are kept =================
      GroundWork Notes keeps the counsellor's records in a folder she picks - normally inside her
@@ -17881,17 +18419,17 @@ window.addEventListener("pageshow",e=>{if(e.persisted)splashShow(SPLASH_RESUME);
   const LEGAL_TITLE = {terms:"Terms of Service", privacy:"Privacy Policy"};
   const LEGAL_CSS =
     '<style>'+
-    '.legalDoc{font-size:14.5px;line-height:1.55;color:var(--ink)}'+
+    '.legalDoc{font-size:14px;line-height:1.55;color:var(--ink)}'+
     '.legalDoc h1{font-size:19px;margin:0 0 4px}'+
     '.legalDoc .updated{color:var(--muted);font-size:13px;margin:0 0 18px}'+
     '.legalDoc h2{font-size:15px;margin:22px 0 8px;color:var(--brand-dark)}'+
-    '.legalDoc p,.legalDoc li{font-size:14.5px;color:var(--ink)}'+
+    '.legalDoc p,.legalDoc li{font-size:14px;color:var(--ink)}'+
     '.legalDoc ul{padding-left:18px;margin:8px 0}'+
     '.legalDoc .card{margin:14px 0}'+
     '.legalDoc .callout{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:16px 0}'+
     '.legalDoc .callout p{margin:0}'+
     '.legalDoc .callout strong{color:var(--brand-dark)}'+
-    '.legalDoc footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);color:var(--muted);font-size:12.5px}'+
+    '.legalDoc footer{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}'+
     '</style>';
 
   async function openLegalSheet(kind, anchor){
