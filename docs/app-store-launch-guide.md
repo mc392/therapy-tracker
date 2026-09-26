@@ -140,7 +140,27 @@ Reference Name `GroundWork Pro Monthly`, that Product ID, and Duration **1 Month
 - **Free trial (optional, your decision):** *Subscription Prices* → **View all Subscription
   Pricing** → *Introductory Offers* → **Free**, **1 month**, all territories. Skip it if unsure;
   you can add it later without a new build.
-- Status should now read **Ready to Submit**.
+- **What the status should say — and why it won't say "Approved" yet.** A yellow status is
+  normal here. Read the exact words next to the dot:
+  - **Missing Metadata** → something is genuinely missing. Check the four places in the box below.
+  - **Ready to Submit** or **Prepare for Submission** → **this product is finished.** Nothing more
+    to do on this page. The blue banner at the top of the page says why it goes no further: a
+    first subscription **can only be submitted together with an app version**. Its status
+    changes to *Waiting for Review* in Step 11, when you submit the app with it attached (Step 9c).
+
+  > **The four things that keep a subscription on "Missing Metadata"**
+  > 1. **The subscription GROUP's own localisation** — on the *group* page (one level up, click
+  >    the group name `GroundWork`), not this page. The most often missed; see 4a.
+  > 2. **Availability** — at least one country ticked (United Kingdom).
+  > 3. **A price** for that country (the *Subscription Prices* section lists it).
+  > 4. **A localisation** (display name + description) *and* the **review screenshot**.
+  >
+  > The image, the review notes, *App Store Promotion* and *Family Sharing* are optional.
+
+- **The real test is on your phone, not this page:** in the TestFlight app (Step 8), Settings →
+  App preferences → *What you are paying for* → **See what Pro is**. A price of **£1.99 / month**
+  means the product is complete and reachable. "Unavailable" means it is not yet (or Step 3's
+  agreement is not active, or it has not propagated — allow a few hours).
 
 > To download the image files: on GitHub open the file, click **Download raw file** (the ↓ icon).
 
@@ -161,7 +181,10 @@ tax year, and the app reads the year out of the ID.
 | Review Information → Screenshot | `TherapyTracker-web/icon-ideas/groundwork/taxyear-review-screenshot.png` |
 | Review Information → Review Notes | `Offered on the Tax tab (tap any masked figure or "What this needs"), and in Settings > App preferences > What you are paying for. It requires GroundWork Pro first: subscribe to Pro in the sandbox, then buy the tax year, and the Tax tab's figures appear.` |
 
-Status should read **Ready to Submit**.
+Same as Step 4: **Ready to Submit** or **Prepare for Submission** means finished — it is
+submitted with the app version in Step 11. **Missing Metadata** means the availability, price,
+localisation or review screenshot is still missing. The test on your phone is the **Tax year
+2026-27** sheet showing **£7.99**.
 
 **Also create next year now** (5 min, saves a scramble in April): **+** → Non-Consumable →
 Reference Name `UK tax year 2027-28`, Product ID
@@ -175,7 +198,7 @@ it's added in code next spring — tell me then. Don't submit it with this relea
 
 | Field | Enter |
 |---|---|
-| Name | `GroundWork` |
+| Name | `GroundWork for Therapists` — **keep what you already have.** App Store names must be unique, so the record was set up under this name. |
 | Subtitle | `Private practice records` |
 | Category — Primary | **Business** |
 | Category — Secondary | **Productivity** |
@@ -312,9 +335,9 @@ Terms of Use: https://groundworkpractice.co.uk/terms.html
 Privacy Policy: https://groundworkpractice.co.uk/privacy.html
 ```
 
-**Keywords** (94/100 — no spaces after commas, on purpose)
+**Keywords** (97/100 — no spaces after commas, on purpose. "therapist" is left out because it is already in your app name, which Apple searches anyway.)
 ```
-therapist,counsellor,counselling,psychotherapist,therapy,sessions,supervision,CPD,HMRC,invoice
+psychologist,counsellor,counselling,psychotherapist,therapy,sessions,supervision,CPD,HMRC,invoice
 ```
 
 **Support URL**
@@ -417,7 +440,7 @@ Calendar access is requested only when the user taps "Add to my calendar". Full 
 
 | What you see | What it means |
 |---|---|
-| Paywall says "Unavailable" | Paid Apps agreement not **Active** (Step 3), the product isn't *Ready to Submit*, the subscription group has no display name (4a), or it hasn't propagated — wait a few hours. |
+| Paywall says "Unavailable" | Paid Apps agreement not **Active** (Step 3), the product is still on *Missing Metadata* (see Step 4), the subscription group has no display name (4a), or it hasn't propagated — wait a few hours. |
 | Tax year "Unavailable" but Pro prices fine | The tax year is missing or mistyped. It lives under **In-App Purchases**, not Subscriptions. |
 | Tax figures still masked after buying the year | Pro must be active too. |
 | Build stuck on *Missing Compliance* | Only builds **older** than 25 — answer *"None of the algorithms mentioned above"*. |
