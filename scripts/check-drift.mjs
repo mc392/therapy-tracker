@@ -131,6 +131,10 @@ if (existsSync("ios/App/App/GroundWorkNativePlugin.swift")) {
      Info.plist terminates the app. Both keys are needed - the deployment target is iOS 15, and
      iOS 17 reads the full-access one instead of the legacy one. */
   const plist = readFileSync("ios/App/App/Info.plist", "utf8");
+  /* White clock and battery over the green header - Capacitor reads this key at start-up. Without
+     it iOS draws them black, and on iOS 26 adds a pale wash behind them to make black legible. */
+  if (!plist.includes("<string>UIStatusBarStyleLightContent</string>"))
+    fail("Info.plist no longer sets UIStatusBarStyle to UIStatusBarStyleLightContent - the status bar would draw black over the green header");
   for (const k of ["NSCalendarsFullAccessUsageDescription", "NSCalendarsUsageDescription"])
     if (!plist.includes(k))
       fail(`Info.plist is missing ${k} - iOS terminates the app when calendar access is requested without it`);
