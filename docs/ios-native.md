@@ -537,6 +537,6 @@ the share sheet's iPad popover anchor, and the automatic backups above.
 
 ## Data does not carry over from the PWA
 
-The native app is a different origin from `mc392.github.io`, so its IndexedDB starts empty.
+The native app is a different origin from the web app at `groundworkpractice.co.uk`, so its IndexedDB starts empty.
 Anyone moving from the installed PWA must export a `.json` backup from the web app and
 restore it in the native one. This is worth saying out loud in the TestFlight notes.

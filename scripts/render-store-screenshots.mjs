@@ -175,13 +175,13 @@ for (const shot of SHOTS) {
     go(...args);
     if (open) {
       const d = document.querySelector(`details[data-g="${open}"]`);
-      if (d) { d.open = true; d.scrollIntoView({ block: "start" }); window.scrollBy(0, -104); }
+      if (d) { d.open = true; d.scrollIntoView({ block: "start" }); window.scrollBy(0, -64); }
     } else if (scrollTo) {
       /* Frame the shot on a card by its heading, clear of the sticky header. */
       const h = [...document.querySelectorAll("#main h2, #main h3, #main .ch, #main .card *")]
         .find((e) => e.children.length === 0 && e.textContent.trim().toLowerCase() === scrollTo.toLowerCase());
       const card = h && (h.closest(".card") || h);
-      if (card) { card.scrollIntoView({ block: "start" }); window.scrollBy(0, -112); }
+      if (card) { card.scrollIntoView({ block: "start" }); window.scrollBy(0, -64); }
     } else window.scrollTo(0, 0);
   }, { args: shot.go, open: shot.open || null, pre: shot.pre ? String(shot.pre) : null,
        scrollTo: shot.scrollTo || null });

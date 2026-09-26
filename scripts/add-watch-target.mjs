@@ -9,8 +9,15 @@
 
    Idempotent. Wired into `npm run sync`, asserted by `npm run check`. */
 import xcode from "xcode";
-import { writeFileSync } from "node:fs";
+import { writeFileSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+
+/* package.json "groundwork.watchApp" is the one switch. Off, this adds nothing - and
+   check-drift fails if the target is in the project anyway, so it cannot ship by accident. */
+if (JSON.parse(readFileSync(resolve("package.json"), "utf8")).groundwork?.watchApp !== true) {
+  console.log("  watch app held back (package.json groundwork.watchApp is false) - not adding it");
+  process.exit(0);
+}
 
 const PROJ = resolve("ios/App/App.xcodeproj/project.pbxproj");
 const TARGET = "GroundWorkWatch";

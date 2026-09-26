@@ -26,6 +26,11 @@ const TARGETS = [
     ref: "6D1A0C0E2F00000000000003", build: "6D1A0C0E2F00000000000004" },
 ];
 
+/* The watch manifest is wired only while the watch app is in the build (package.json
+   "groundwork.watchApp"). Without its target there is no Resources phase to put it in. */
+const WATCH_ON = JSON.parse(readFileSync(resolve("package.json"), "utf8")).groundwork?.watchApp === true;
+if (!WATCH_ON) TARGETS.splice(TARGETS.findIndex((t) => t.target === "GroundWorkWatch"), 1);
+
 let src = readFileSync(PROJ, "utf8");
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 

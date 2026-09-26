@@ -199,6 +199,8 @@ the first runs this pipeline ever had:
 
 ## What still needs a human
 
+- **The watch app is held back from 1.0** (`package.json` `groundwork.watchApp: false`) - the note
+  below applies again only when it is switched back on.
 - **The watch app's bundle identifier**, on the first archive that includes it.
   `uk.co.charlottebloortherapy.groundwork.watchkitapp` has to exist in the developer
   account. CI archives with `-allowProvisioningUpdates` and an App Store Connect key, which

@@ -140,6 +140,9 @@ if (existsSync("ios/App/App/GroundWorkNativePlugin.swift")) {
       fail(`Info.plist is missing ${k} - iOS terminates the app when calendar access is requested without it`);
 }
 
+/* Is the watch app in this build? One switch, in package.json - see section 6. */
+const WATCH_ON = JSON.parse(readFileSync("package.json", "utf8")).groundwork?.watchApp === true;
+
 /* Export compliance and the privacy manifests. Neither fails a build - both fail at App Store
    Connect, after the upload: without ITSAppUsesNonExemptEncryption every build sits on "Missing
    Compliance" until somebody answers the questionnaire by hand, and a bundle whose code reads a
@@ -154,8 +157,9 @@ if (existsSync("ios/App/App/Info.plist")) {
 }
 if (existsSync("ios/App/App.xcodeproj/project.pbxproj")) {
   const pbx = readFileSync("ios/App/App.xcodeproj/project.pbxproj", "utf8");
-  for (const [file, ref] of [["ios/App/App/PrivacyInfo.xcprivacy", "6D1A0C0E2F00000000000002"],
-                             ["ios/App/GroundWorkWatch/PrivacyInfo.xcprivacy", "6D1A0C0E2F00000000000004"]]) {
+  const manifests = [["ios/App/App/PrivacyInfo.xcprivacy", "6D1A0C0E2F00000000000002"]];
+  if (WATCH_ON) manifests.push(["ios/App/GroundWorkWatch/PrivacyInfo.xcprivacy", "6D1A0C0E2F00000000000004"]);
+  for (const [file, ref] of manifests) {
     if (!existsSync(file)) fail(`${file} is missing - Apple flags a bundle that reads required-reason APIs without one`);
     else if (!pbx.includes(`${ref} /* PrivacyInfo.xcprivacy in Resources */,`))
       fail(`${file} is not in its target's Resources phase - run node scripts/add-privacy-manifest.mjs`);
@@ -302,7 +306,28 @@ const WATCH_SOURCES = [
 for (const f of [...WATCH_SOURCES, "Info.plist"])
   if (!existsSync(`${WATCH_DIR}/${f}`)) fail(`${WATCH_DIR}/${f} is missing`);
 
+/* iPhone only (Sep 2026). TARGETED_DEVICE_FAMILY "1,2" - Capacitor's default - makes an iPad app,
+   and Apple NEVER lets a shipped app drop iPad support again, so it is the one setting here that
+   cannot be walked back. It would also make App Store Connect demand 13" iPad screenshots and put
+   the untested desktop layout (min-width:900px) in front of App Review on an iPad. An iPhone-only
+   app still installs on an iPad, in an iPhone-sized window. Widening this is a decision, not drift. */
 if (existsSync("ios/App/App.xcodeproj/project.pbxproj")) {
+  const fam = [...readFileSync("ios/App/App.xcodeproj/project.pbxproj", "utf8")
+    .matchAll(/TARGETED_DEVICE_FAMILY = "?([\d,]+)"?;/g)].map((m) => m[1]).filter((f) => f !== "4");
+  if (!fam.length || fam.some((f) => f !== "1"))
+    fail(`the app targets device family ${fam.join(" / ") || "(none)"}, not 1 (iPhone) - shipping iPad support cannot be undone; set TARGETED_DEVICE_FAMILY = 1`);
+}
+
+/* Held back from 1.0 (package.json "groundwork.watchApp": false): then the target must be ABSENT.
+   Shipping it would make App Store Connect demand Apple Watch screenshots, and a watch app nobody
+   has tried on a wrist is a rejection risk - so a target that crept back in is the failure. The
+   Swift stays, and the checks on it below still run, so it is ready to switch back on. */
+if (!WATCH_ON && existsSync("ios/App/App.xcodeproj/project.pbxproj")) {
+  const pbx = readFileSync("ios/App/App.xcodeproj/project.pbxproj", "utf8");
+  if (/GroundWorkWatch|Embed Watch Content|watchkitapp/.test(pbx))
+    fail("the watch app is in the Xcode project but package.json groundwork.watchApp is false - it would ship; remove the target or switch it on deliberately");
+}
+if (WATCH_ON && existsSync("ios/App/App.xcodeproj/project.pbxproj")) {
   const pbx = readFileSync("ios/App/App.xcodeproj/project.pbxproj", "utf8");
   if (!pbx.includes("GroundWorkWatch")) {
     fail("the watch target is not in the Xcode project - run `node scripts/add-watch-target.mjs`");
@@ -333,4 +358,4 @@ if (problems.length) {
   console.error("");
   process.exit(1);
 }
-console.log(`  no drift - ${SEAMS.length} seams intact, one copy of the app, watch app wired in`);
+console.log(`  no drift - ${SEAMS.length} seams intact, one copy of the app, ${WATCH_ON ? "watch app wired in" : "watch app held back from the build"}`);
