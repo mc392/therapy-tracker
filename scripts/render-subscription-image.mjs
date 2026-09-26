@@ -6,7 +6,7 @@
    drift from the one shipping in index.html.
 
    Usage: node scripts/render-subscription-image.mjs [basename]
-     basename defaults to subscription-plus-1024 (GroundWork Plus, the middle tier, chrome).
+     basename defaults to subscription-pro-1024 (GroundWork Pro, gold - the only tier since Sep 2026).
      Pass subscription-pro-1024 for the top tier (gold). Either must exist as <basename>.html
      in TherapyTracker-web/icon-ideas/groundwork/. There is one image per subscription in App
      Store Connect, so both need regenerating whenever the mark or the plate changes. */
@@ -30,7 +30,7 @@ try {
   process.exit(1);
 }
 
-const basename = process.argv[2] || "subscription-plus-1024";
+const basename = process.argv[2] || "subscription-pro-1024";
 const SRC = resolve(`TherapyTracker-web/icon-ideas/groundwork/${basename}.html`);
 const OUT = resolve(`TherapyTracker-web/icon-ideas/groundwork/${basename}.png`);
 if (!existsSync(SRC)) throw new Error(`missing source: ${SRC}`);

@@ -319,6 +319,10 @@ already on your phone starts working the moment App Store Connect is right.
 
 ## Step 4 - Test in the simulator ☐
 
+> **Out of date:** the checks below were written for the two-tier ladder. There is no chrome
+> "Plus" tier any more - one Pro subscription and the tax years. The real-device checklist in
+> `docs/app-store-launch-guide.md` Step 8 is the current one.
+
 No Apple approval needed for this - StoreKit can fake the purchase locally.
 
 ```bash

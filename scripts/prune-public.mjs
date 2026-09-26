@@ -13,8 +13,10 @@ const PUBLIC = resolve("ios/App/App/public");
    icon-ideas/  - design sources + preview pages; the app icon/splash come from Assets.xcassets
    sw.js        - service workers do not register on Capacitor's custom scheme, and the
                   bundle is already local, so there is nothing to cache. Registration is
-                  skipped on native in index.html; this stops a dead file shipping too. */
-const DROP = ["icon-ideas", "sw.js"];
+                  skipped on native in index.html; this stops a dead file shipping too.
+   demo/        - a synthetic practice backup published on the website for App Review and for
+                  anybody trying the app. Restored from a file, never read from the bundle. */
+const DROP = ["icon-ideas", "sw.js", "demo"];
 
 let freed = 0;
 for (const rel of DROP) {

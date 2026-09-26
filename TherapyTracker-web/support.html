@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Support - GroundWork</title>
+<style>
+  :root{ --bg:#F7F9FA; --card:#FFFFFF; --ink:#1E2A26; --muted:#6E7E78; --line:#E6ECEA; --accent:#3f6f6a; }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#1A2220; --card:#222D2A; --ink:#E6EDEA; --muted:#9CADA7; --line:#31403B; --accent:#6fa39d; }
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"SF Pro Rounded",ui-rounded,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55;}
+  .wrap{max-width:720px;margin:0 auto;padding:32px 20px 80px;}
+  h1{font-size:24px;margin:0 0 4px;}
+  .updated{color:var(--muted);font-size:14px;margin:0 0 28px;}
+  h2{font-size:17px;margin:32px 0 8px;color:var(--accent);}
+  p,li{font-size:15px;color:var(--ink);}
+  ul{padding-left:20px;margin:8px 0;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:16px 0;}
+  .callout{background:var(--card);border:1px solid var(--accent);border-radius:14px;padding:16px 20px;margin:20px 0;}
+  .callout p{margin:0;}
+  a{color:var(--accent);}
+  .back{display:inline-block;margin-bottom:20px;color:var(--muted);text-decoration:none;font-size:14px;}
+  footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:13px;}
+  details{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 18px;margin:10px 0;}
+  summary{cursor:pointer;font-weight:600;font-size:15px;}
+  details p{margin:10px 0 2px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="./index.html">← Back to GroundWork</a>
+  <h1>Support</h1>
+  <p class="updated">GroundWork - private records for a therapy practice</p>
+
+  <div class="callout">
+    <p><strong>Get in touch:</strong> <a href="mailto:privacy@groundworkpractice.co.uk?subject=GroundWork%20support">privacy@groundworkpractice.co.uk</a><br>
+    We aim to reply within two working days. Please never send client names or records by email - a description of what you see, and a screenshot with client details covered, is all we need.</p>
+  </div>
+
+  <h2>Common questions</h2>
+
+  <details>
+    <summary>I used GroundWork in a web browser. Why is the iPhone app empty?</summary>
+    <p>The iPhone app and the web app keep separate copies of your records on your device - nothing is stored on a server, so nothing can sync between them by itself. In the web app, go to Settings → Data &amp; backup → <strong>Export backup (.json)</strong>, save the file somewhere your iPhone can reach (iCloud Drive, or email it to yourself), then in the iPhone app go to Settings → Data &amp; backup → <strong>Restore from backup</strong> and choose that file.</p>
+  </details>
+
+  <details>
+    <summary>How do I back up my records?</summary>
+    <p>On iPhone, the simplest way is Settings → This iPhone → <strong>Where your records are saved</strong>, and choose a folder in iCloud Drive: every change is then written there automatically. Without one, the app keeps automatic copies on the iPhone itself. On any device you can also export a backup file from Settings → Data &amp; backup, and protect it with a passphrase.</p>
+  </details>
+
+  <details>
+    <summary>I've bought GroundWork Pro or a tax year on a new phone - how do I get it back?</summary>
+    <p>Sign in to the App Store with the same Apple ID, open GroundWork, go to Settings → App preferences → What you are paying for, and tap <strong>Restore purchases</strong>. Purchases are tied to your Apple ID, not to your records.</p>
+  </details>
+
+  <details>
+    <summary>How do I cancel my subscription or ask for a refund?</summary>
+    <p>Subscriptions are managed by Apple: on your iPhone open Settings → your name → <strong>Subscriptions</strong> → GroundWork. Cancelling stops the next renewal; you keep Pro until the end of the period you've paid for. Refunds are handled by Apple at <a href="https://reportaproblem.apple.com">reportaproblem.apple.com</a>. Your records, and every backup and export, stay free whether or not you subscribe.</p>
+  </details>
+
+  <details>
+    <summary>Does Pro include working out my tax?</summary>
+    <p>No. GroundWork Pro covers business analytics, costs and other income, accreditation hours, reports and GroundWork Notes sync. Tax calculations are bought separately, one UK tax year at a time; each tax year includes every earlier year and does not expire. Tax figures are estimates to help you plan, not tax advice, and the app cannot file a return for you.</p>
+  </details>
+
+  <details>
+    <summary>Can you see or recover my records?</summary>
+    <p>No. Everything is stored on your own device; we run no server and never receive a copy. That is why a backup matters - see above. The <a href="./privacy.html">Privacy Policy</a> explains this in full.</p>
+  </details>
+
+  <h2>Policies</h2>
+  <p><a href="./privacy.html">Privacy Policy</a> · <a href="./terms.html">Terms of Service</a></p>
+
+  <footer>
+    GroundWork keeps the admin side of a therapy practice - sessions, clients, rooms, supervision and money - on your own device.
+  </footer>
+</div>
+</body>
+</html>

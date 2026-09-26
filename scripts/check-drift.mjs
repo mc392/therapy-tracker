@@ -140,6 +140,28 @@ if (existsSync("ios/App/App/GroundWorkNativePlugin.swift")) {
       fail(`Info.plist is missing ${k} - iOS terminates the app when calendar access is requested without it`);
 }
 
+/* Export compliance and the privacy manifests. Neither fails a build - both fail at App Store
+   Connect, after the upload: without ITSAppUsesNonExemptEncryption every build sits on "Missing
+   Compliance" until somebody answers the questionnaire by hand, and a bundle whose code reads a
+   required-reason API (UserDefaults, file dates) with no PrivacyInfo.xcprivacy is flagged
+   ITMS-91053. A manifest that is not in the target's Resources phase is not in the bundle. The
+   encryption answer is honest because the only cryptography is WebCrypto, which is the operating
+   system's own - see docs/app-store-launch-guide.md. */
+if (existsSync("ios/App/App/Info.plist")) {
+  const plist = readFileSync("ios/App/App/Info.plist", "utf8");
+  if (!/<key>ITSAppUsesNonExemptEncryption<\/key>\s*<false\/>/.test(plist))
+    fail("Info.plist no longer declares ITSAppUsesNonExemptEncryption = NO - every build would stop on Missing Compliance");
+}
+if (existsSync("ios/App/App.xcodeproj/project.pbxproj")) {
+  const pbx = readFileSync("ios/App/App.xcodeproj/project.pbxproj", "utf8");
+  for (const [file, ref] of [["ios/App/App/PrivacyInfo.xcprivacy", "6D1A0C0E2F00000000000002"],
+                             ["ios/App/GroundWorkWatch/PrivacyInfo.xcprivacy", "6D1A0C0E2F00000000000004"]]) {
+    if (!existsSync(file)) fail(`${file} is missing - Apple flags a bundle that reads required-reason APIs without one`);
+    else if (!pbx.includes(`${ref} /* PrivacyInfo.xcprivacy in Resources */,`))
+      fail(`${file} is not in its target's Resources phase - run node scripts/add-privacy-manifest.mjs`);
+  }
+}
+
 /* Haptics: the same silent-failure shape, at its mildest - drop the Swift method and the iPhone
    simply stops tapping, with nothing anywhere to say so. */
 if (existsSync("ios/App/App/GroundWorkNativePlugin.swift")) {

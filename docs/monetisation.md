@@ -394,7 +394,7 @@ The chrome ramp existed only to distinguish two tiers. What changed:
 | `.plkeep` ("this one is yours to keep") | Gold |
 | Splash `html[data-plus="plus"]` rules and the `spChrome` SVG gradient | Deleted. Only `data-plus="pro"` remains: bar 3, gold, "Pro" on the wordmark |
 | Pre-paint script in `<head>` | Any live entitlement stamps `data-plus="pro"` |
-| `icon-ideas/groundwork/subscription-plus-1024.{html,png}` | **Still on disk and now obsolete.** Delete when the App Store images are next regenerated |
+| `icon-ideas/groundwork/subscription-plus-1024.{html,png}` | **Deleted (Sep 2026)** with the tier it drew |
 
 The six-variable indirection (`--tg1..--tg4`) is kept even with one ramp to point at: it is what made
 the two-tier build possible in one pass, it costs nothing, and a second paid colour (a regional tax

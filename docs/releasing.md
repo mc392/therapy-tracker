@@ -213,10 +213,11 @@ the first runs this pipeline ever had:
   on the command line, which applies to every target at once, and `npm run release` bumps
   both targets by regex. A watch app whose build number differs from its host is rejected
   at upload.
-- **Export compliance.** First upload asks whether the app uses encryption. GroundWork
-  encrypts backups with WebCrypto, which is standard cryptography, so the honest answer
-  is the exemption for standard encryption - answer it in App Store Connect once and it
-  is remembered for later builds.
+- **Export compliance** - **answered in the binary since build 25** (Sep 2026):
+  `ITSAppUsesNonExemptEncryption = NO` in `Info.plist`, so a build no longer stops on *Missing
+  Compliance*. It is honest because the only cryptography is WebCrypto - the operating system's
+  own - used to encrypt the user's own backups. If a build ever does ask, the matching answer is
+  *"None of the algorithms mentioned above"*. `npm run check` fails if the key goes.
 - **Screenshots**, from demo data, never from real records.
 - **Submitting for review** - deliberately not automated. A build reaching TestFlight
   should never be able to reach the public without you deciding it should.
